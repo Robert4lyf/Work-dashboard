@@ -27,8 +27,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Stamp service worker version
         run: |
-          sed -i "s/^const VERSION = '.*';/const VERSION = 'cockpit-${GITHUB_SHA::7}';/" sw.js
-          grep -q "cockpit-${GITHUB_SHA::7}" sw.js
+          sed -i "s/^const VERSION = '.*';/const VERSION = 'dashboard-${GITHUB_SHA::7}';/" sw.js
+          grep -q "dashboard-${GITHUB_SHA::7}" sw.js
           rm -rf .github tests node_modules package.json package-lock.json playwright.config.js .prettierrc .gitignore
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

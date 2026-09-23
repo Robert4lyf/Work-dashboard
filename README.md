@@ -1,4 +1,4 @@
-# Work Cockpit: setup
+# Dashboard: setup
 
 About 20 minutes, done once from a computer. Everything used here is free.
 
@@ -24,11 +24,11 @@ The anon key is designed to be public. Row-level security (from the SQL file) is
 
 ## 3. Put it online (GitHub Pages)
 
-1. Create a free account at https://github.com and make a new **public** repository, e.g. `cockpit`.
+1. Create a free account at https://github.com and make a new **public** repository, e.g. `dashboard`.
 2. Click **Add file > Upload files** and upload everything in this folder, keeping the `icons`, `js` and `.github` folders. Commit.
 3. Go to **Settings > Pages**. Under *Build and deployment*, set **Source** to **GitHub Actions**.
 4. Open the **Actions** tab. The "Deploy to GitHub Pages" workflow runs on every upload to `main` (run it by hand the first time if it hasn't started).
-5. After a minute your app is live at `https://YOUR-USERNAME.github.io/cockpit/`.
+5. After a minute your app is live at `https://YOUR-USERNAME.github.io/dashboard/`.
 
 If you'd rather use **Deploy from a branch** (branch `main`, folder `/ (root)`), delete `.github/workflows/pages.yml`, otherwise that workflow fails on every upload.
 
@@ -55,7 +55,7 @@ In the old claude.ai version: **Save backup**. In the new app: open **Settings**
 
 Upload the changed files to the repository. The deploy workflow stamps a new `VERSION` in `sw.js` automatically, so installed copies pick up the update. Close and reopen the app twice to see it.
 
-If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js` by hand on each upload (e.g. `cockpit-v3`).
+If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js` by hand on each upload (e.g. `dashboard-v5`).
 
 **Upgrading from the first version:** run the updated `supabase-setup.sql` once in the SQL Editor. It's safe to re-run and adds the server-side version history.
 

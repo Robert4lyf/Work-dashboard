@@ -1,7 +1,7 @@
-// Work Cockpit service worker: makes the app installable and usable offline.
+// Dashboard service worker: makes the app installable and usable offline.
 // VERSION is stamped automatically by .github/workflows/pages.yml on each deploy.
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
-const VERSION = 'cockpit-v3';
+const VERSION = 'dashboard-v4';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
 const APP = ['state', 'tree', 'merge', 'header', 'today', 'inbox', 'focus', 'history', 'sync', 'events']
   .map(n => `./js/${n}.js`);
