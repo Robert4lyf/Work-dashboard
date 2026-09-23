@@ -162,6 +162,7 @@ textarea.fld{min-height:90px;resize:vertical}
 .links{display:flex;flex-wrap:wrap;gap:4px 20px;margin-top:10px}
 .links .dellink{margin:0;padding:6px 0}
 .listbar{display:flex;justify-content:flex-end;margin:-6px 0 6px}
+.mv[data-top]{width:auto;padding:0 8px;font-weight:600}
 .mv{flex:none;width:36px;height:36px;border:3px solid var(--edge);background:var(--yellow);color:var(--on-accent);cursor:pointer;padding:0;font-size:14px}
 .mv[disabled]{opacity:.3;cursor:default}
 .soon{padding:12px 14px;margin-bottom:22px;border-color:var(--edge);background:var(--panel)}
@@ -324,7 +325,15 @@ function snapshot(){
   (function w(ns,trail){ns.forEach(n=>{m.set(n.id,{done:isDone(n),top:!trail.length,text:n.text,trail});w(n.children,[...trail,n.text]);});})(S.quests,[]);
   return m;
 }
+// Finished quests sink below open ones at every level; open ones keep their order,
+// so the top open quest is always "Next up".
+function sinkDone(ns){
+  const open=ns.filter(n=>!isDone(n)),done=ns.filter(isDone);
+  ns.splice(0,ns.length,...open,...done);
+  ns.forEach(n=>sinkDone(n.children));
+}
 function settle(before){
+  sinkDone(S.quests);
   const after=snapshot();let gain=0;
   after.forEach((v,id)=>{if(!before.has(id))return;const was=before.get(id).done;const pts=v.top?30:10;
     if(v.done&&!was){gain+=pts;S.log.push({id,d:today(),text:v.text,trail:v.trail});}
@@ -439,7 +448,7 @@ function dueTag(n){
   const t=today(),cls=n.due<t?'late':n.due===t?'now':'due';
   return `<span class="tag ${cls}">${n.due<t?'Overdue':n.due===t?'Due today':'Due '+niceDate(n.due)}</span>`;
 }
-function row(n,i,len){
+function row(n,i,len,sib){
   const d=isDone(n),kids=n.children.length;
   let left;
   if(kids){
@@ -452,14 +461,14 @@ function row(n,i,len){
   const rt=tplFor(n);
   const meta=tagBadge(n.tag)+(n.opt?'<span class="tag opt">Optional</span>':'')+(repeats(rt)?`<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>`:'')+dueTag(n)+(nx?'Next: '+esc(nx.text):'');
   const right=reorder
-    ?`<button class="mv" data-up="${n.id}" aria-label="Move up" ${i===0?'disabled':''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i===len-1?'disabled':''}>&#9660;</button>`
+    ?`${d?'':`<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i===0?'disabled':''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i===0||(d&&!isDone(sib[i-1]))?'disabled':''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i===len-1||(!d&&isDone(sib[i+1]))?'disabled':''}>&#9660;</button>`
     :`<span class="chev" aria-hidden="true">&gt;</span><button class="x" data-del="${n.id}" aria-label="Delete ${esc(n.text)}">×</button>`;
   return `<div class="row box${d?' done':''}">${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta?'<small>'+meta+'</small>':''}</button>${right}</div>`;
 }
 function list(ns){
   let h='';
   if(ns.length>1) h+=`<div class="listbar"><button class="linkbtn" id="reorder">${reorder?'Done reordering':'Reorder'}</button></div>`;
-  ns.forEach((c,i)=>h+=row(c,i,ns.length));
+  ns.forEach((c,i)=>h+=row(c,i,ns.length,ns));
   return h;
 }
 function renderToday(){
@@ -911,8 +920,9 @@ document.addEventListener('click',e=>{
   if(d.up||d.down){
     const r=find(d.up||d.down),i=r.arr.indexOf(r.n),j=d.up?i-1:i+1;
     if(j<0||j>=r.arr.length)return;
-    [r.arr[i],r.arr[j]]=[r.arr[j],r.arr[i]];save();renderToday();
+    [r.arr[i],r.arr[j]]=[r.arr[j],r.arr[i]];save();renderAll();
   }
+  if(d.top){const r=find(d.top);if(r){r.arr.splice(r.arr.indexOf(r.n),1);r.arr.unshift(r.n);save();renderAll();}}
   if(b.id==='reorder'){reorder=!reorder;renderToday();}
   if(d.savetpl){
     const n=find(d.savetpl).n,t=Object.assign({id:uid(),days:[]},strip(n)),i=S.templates.findIndex(x=>x.text===n.text);
