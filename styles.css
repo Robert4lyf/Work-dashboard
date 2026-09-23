@@ -1056,6 +1056,54 @@ textarea.fld {
 .uprow .btn {
   padding: 4px 10px;
 }
+/* single-task mode */
+body.zen .wrap,
+body.zen nav {
+  display: none;
+}
+#v-zen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  max-width: 720px;
+  margin: 0 auto;
+}
+.zx {
+  align-self: flex-end;
+}
+.zbody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+.ztrail {
+  color: var(--muted);
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.zt {
+  font-family: var(--display);
+  font-size: clamp(18px, 5vw, 28px);
+  line-height: 1.5;
+  margin: 0 0 28px;
+  overflow-wrap: anywhere;
+}
+.zclock {
+  font-family: var(--display);
+  font-size: clamp(44px, 16vw, 88px);
+  margin-bottom: 24px;
+}
+.zbody .acts {
+  justify-content: center;
+}
+.zbody .acts .btn {
+  min-width: 140px;
+  padding: 14px 18px;
+}
 [hidden] {
   display: none !important;
 }

@@ -36,6 +36,51 @@ function focusTarget() {
   const nx = nextStep();
   return nx ? nx.n.id : null;
 }
+function startTimer(q) {
+  const top = topOf(q);
+  askNotify();
+  beep([440]);
+  S.timer = { end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
+  save();
+  renderAll();
+}
+
+/* single-task mode: a full-screen view of just the current step and the timer */
+let zen = false;
+function zenTarget() {
+  const id = S.timer ? S.timer.q : focusTarget(),
+    r = id && find(id);
+  if (!r || S.timer || !r.n.children.length) return r;
+  const leaf = nextLeaf(r.n);
+  return leaf ? find(leaf.id) : r;
+}
+function renderZen() {
+  document.body.classList.toggle('zen', zen);
+  const el = $('#v-zen');
+  el.hidden = !zen;
+  if (!zen) return;
+  const t = S.timer,
+    r = zenTarget(),
+    leaf = r && !r.n.children.length && !r.n.done;
+  let h = '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
+  if (!r) h += '<p class="zt">Nothing left to do.</p>';
+  else {
+    const trail = r.parents.map(p => p.text).join(' / ');
+    h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>`;
+  }
+  if (t) {
+    h += `<div class="zclock" id="zclock">${mmss(remaining())}</div><div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : '<button class="btn" data-stop="save">Stop and save</button>'}</div>`;
+  } else if (r) {
+    h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
+  }
+  el.innerHTML = h + '</div>';
+}
+function setZen(on) {
+  zen = on;
+  renderZen();
+  window.scrollTo(0, 0);
+}
+
 function renderFocus() {
   let h = '<h2>Focus</h2>';
   if (S.timer) {
@@ -206,4 +251,6 @@ function timerTick() {
   if (c) c.firstChild.nodeValue = txt;
   const hc = $('#hclock');
   if (hc) hc.textContent = txt;
+  const zc = $('#zclock');
+  if (zc) zc.textContent = txt;
 }

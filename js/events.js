@@ -7,6 +7,7 @@ function renderAll() {
   renderFocus();
   renderLog();
   renderAccount();
+  renderZen();
 }
 function go(v) {
   view = v;
@@ -402,16 +403,10 @@ document.addEventListener('click', e => {
     save();
     renderFocus();
   }
-  if (b.id === 'start') {
-    const q = focusTarget(),
-      top = topOf(q);
-    askNotify();
-    beep([440]);
-    S.timer = { end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
-    save();
-    renderHeader();
-    renderFocus();
-  }
+  if (b.id === 'start') startTimer(focusTarget());
+  if (d.zstart) startTimer(d.zstart);
+  if (d.zen) setZen(true);
+  if (b.id === 'zenexit') setZen(false);
   if (b.id === 'plus5') {
     const t = S.timer;
     if (!t) return;
@@ -428,8 +423,8 @@ document.addEventListener('click', e => {
     renderHeader();
     renderFocus();
   }
-  if (b.id === 'stopsave') stopAndSave(false);
-  if (b.id === 'stopdone') stopAndSave(true);
+  if (b.id === 'stopsave' || d.stop === 'save') stopAndSave(false);
+  if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) {
     const t = S.timer;
     if (!t) return;
@@ -440,6 +435,7 @@ document.addEventListener('click', e => {
     save();
     renderHeader();
     renderFocus();
+    renderZen();
   }
   if (b.id === 'undo') undo();
   if (b.id === 'copylog') copyLog();
@@ -493,7 +489,8 @@ document.addEventListener(
 );
 
 /* keyboard shortcuts (desktop) */
-const KEYS = 'n new quest · i capture · t today · f focus · l history · s settings · p pause · Esc back';
+const KEYS =
+  'n new quest · i capture · t today · f focus · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const el = e.target;
@@ -525,8 +522,10 @@ document.addEventListener('keydown', e => {
     if (b) b.click();
   } else if (k === '?') toast(KEYS, false, 5000);
   else if (k === 's') go('account');
+  else if (k === 'z') setZen(!zen);
   else if (k === 'Escape') {
-    if (view === 'today' && path.length) openPath(path.slice(0, -1));
+    if (zen) setZen(false);
+    else if (view === 'today' && path.length) openPath(path.slice(0, -1));
   }
 });
 
