@@ -17,6 +17,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script>
+  // Apply this device's appearance before first paint (see "Appearance" in Settings).
+  try {
+    const l = JSON.parse(localStorage.getItem('dashboard-look')) || {};
+    if (l.font) document.documentElement.dataset.font = l.font;
+    if (l.theme) document.documentElement.dataset.theme = l.theme;
+  } catch (e) {}
+</script>
 </head>
 <body>
 <div class="wrap">

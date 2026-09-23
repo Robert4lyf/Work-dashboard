@@ -208,6 +208,22 @@ function renderHistory() {
   });
   return h;
 }
+// Per-device appearance, kept out of synced data (a phone and laptop can differ).
+const LOOK_KEY = 'dashboard-look';
+let look = {};
+try {
+  look = JSON.parse(localStorage.getItem(LOOK_KEY)) || {};
+} catch (e) {}
+function setLook(k, v) {
+  if (v) look[k] = v;
+  else delete look[k];
+  try {
+    localStorage.setItem(LOOK_KEY, JSON.stringify(look));
+  } catch (e) {}
+  const root = document.documentElement.dataset;
+  if (v) root[k] = v;
+  else delete root[k];
+}
 function renderAccount() {
   let h = '<h2>Sync</h2>';
   if (!sb) {
@@ -219,6 +235,11 @@ function renderAccount() {
   }
   if (pending)
     h += `<div class="banner box"><p>Replace everything with this backup? It has ${pending.quests.length} quests and ${(pending.inbox || []).length} inbox items. Your current data${session ? ' on every synced device' : ''} will be replaced.</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
+  const opt = (k, v, label) =>
+    `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
+  h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
+    <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
+    <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>`;
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
   S.tags.forEach(
     (t, i) =>

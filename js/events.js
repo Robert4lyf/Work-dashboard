@@ -371,6 +371,10 @@ document.addEventListener('click', e => {
     save();
     renderAll();
   }
+  if (d.look) {
+    setLook(d.look, d.val);
+    renderAccount();
+  }
   if (d.edittags) {
     renderAccount();
     go('account');
