@@ -498,50 +498,46 @@ nav {
   bottom: 0;
   background: var(--panel);
   border-top: 3px solid var(--edge);
-  padding: 8px 6px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+}
+/* Tabs keep their full labels; on narrow phones the strip scrolls sideways, and the edge with
+   more tabs beyond it fades out as a hint. */
+.tabs {
   display: flex;
-  justify-content: center;
-  gap: 4px;
+  gap: 2px;
+  padding: 0 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabs.more-right {
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.tabs.more-left {
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+.tabs.more-left.more-right {
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
+/* Centred when everything fits, without clipping the first tab when it doesn't. */
+nav button:first-child {
+  margin-left: auto;
+}
+nav button:last-child {
+  margin-right: auto;
 }
 nav button {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 140px;
+  flex: 0 0 auto;
   background: none;
   border: 3px solid transparent;
-  padding: 8px 2px;
+  padding: 8px 7px;
   cursor: pointer;
   font-weight: 600;
   font-size: 16px;
-}
-nav .gear {
-  flex: 0 0 52px;
-  display: grid;
-  place-items: center;
-}
-@media (max-width: 374px) {
-  nav {
-    gap: 2px;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-  nav button {
-    font-size: 14px;
-    padding: 8px 1px;
-  }
-  nav .gear {
-    flex-basis: 40px;
-  }
-  nav .badge {
-    min-width: 18px;
-    margin-left: 2px;
-    padding: 0 2px;
-    font-size: 12px;
-  }
-}
-nav .gear svg {
-  width: 22px;
-  height: 22px;
+  white-space: nowrap;
 }
 nav button[aria-current='page'] {
   background: var(--yellow);

@@ -9,6 +9,14 @@ function renderAll() {
   renderAccount();
   renderZen();
 }
+// Fade whichever edge of the tab strip has more tabs beyond it.
+function fadeTabs() {
+  const t = $('#tabs');
+  t.classList.toggle('more-left', t.scrollLeft > 6);
+  t.classList.toggle('more-right', t.scrollLeft + t.clientWidth < t.scrollWidth - 6);
+}
+$('#tabs').addEventListener('scroll', fadeTabs, { passive: true });
+window.addEventListener('resize', fadeTabs);
 function go(v) {
   view = v;
   renderHeader();
@@ -21,6 +29,10 @@ function go(v) {
   ['today', 'inbox', 'focus', 'log', 'account'].forEach(
     k => ($('#v-' + k).hidden = board ? !['today', 'inbox', 'focus'].includes(k) : k !== v),
   );
+  // Keep the current tab visible when the tab bar is scrolled sideways.
+  const tab = document.querySelector(`nav [data-v="${v}"]`);
+  if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  fadeTabs();
   if (board) $('#v-' + v).scrollIntoView({ block: 'nearest' });
   else window.scrollTo(0, 0);
 }
