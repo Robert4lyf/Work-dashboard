@@ -31,7 +31,7 @@
   :root:not([data-theme="light"]){ --bg:#1D2B53; --panel:#29366F; --ink:#FFF1E8; --muted:#C2C3C7; --edge:#000000; }
 }
 :root[data-theme="dark"]{ --bg:#1D2B53; --panel:#29366F; --ink:#FFF1E8; --muted:#C2C3C7; --edge:#000000; }
-html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%;scrollbar-gutter:stable}
 *,*::before,*::after{box-sizing:inherit}
 body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:18px;line-height:1.35;-webkit-tap-highlight-color:transparent}
 button,input{font:inherit;color:inherit}
