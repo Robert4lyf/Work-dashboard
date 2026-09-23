@@ -42,7 +42,9 @@ function startTimer(q) {
   beep([440]);
   S.timer = { end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
   save();
+  zen = true; // a focus session opens in single-task mode
   renderAll();
+  window.scrollTo(0, 0);
 }
 
 /* single-task mode: a full-screen view of just the current step and the timer */
@@ -69,7 +71,10 @@ function renderZen() {
     h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>`;
   }
   if (t) {
-    h += `<div class="zclock" id="zclock">${mmss(remaining())}</div><div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : '<button class="btn" data-stop="save">Stop and save</button>'}</div>`;
+    h += `<div class="zclock" id="zclock">${mmss(remaining())}</div>
+      <div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button><button class="btn" data-plus5="1">+5 min</button></div>
+      <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
+      <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
   } else if (r) {
     h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
   }

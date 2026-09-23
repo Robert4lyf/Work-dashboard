@@ -23,7 +23,18 @@
     const l = JSON.parse(localStorage.getItem('dashboard-look')) || {};
     if (l.font) document.documentElement.dataset.font = l.font;
     if (l.theme) document.documentElement.dataset.theme = l.theme;
+    if (l.style) document.documentElement.dataset.style = l.style;
+    if (l.style === 'botanical') loadStyleFonts();
   } catch (e) {}
+  // The botanical style's fonts, fetched only when that style is in use.
+  function loadStyleFonts() {
+    if (document.getElementById('botanical-fonts')) return;
+    const f = document.createElement('link');
+    f.id = 'botanical-fonts';
+    f.rel = 'stylesheet';
+    f.href = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Nunito:wght@400;600;700&display=swap';
+    document.head.appendChild(f);
+  }
 </script>
 </head>
 <body>

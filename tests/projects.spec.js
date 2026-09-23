@@ -27,7 +27,8 @@ test('projects group quests, count progress and focus time', async ({ app, page 
   await app.go('focus');
   await page.click('#start');
   await page.clock.fastForward('10:00');
-  await page.click('#stopdone');
+  await page.click('#v-zen [data-stop="done"]');
+  await page.keyboard.press('Escape');
   s = await app.state();
   expect(s.sessions[0].p).toBe(pid);
   expect(s.pdaily['2026-09-23'][pid]).toBe(10);
