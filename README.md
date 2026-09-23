@@ -62,7 +62,7 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 ## How sync behaves
 
 - Changes save instantly on the device and sync about a second later, and whenever the app is reopened.
-- If you edit on two devices while both are offline, the most recent edit wins and the other device's offline changes are overwritten. Avoid editing the same day's list on two offline devices.
+- If two devices change things at the same time (or while offline), their changes are merged item by item: new quests, inbox items and focus time from both are kept, and a deletion on one device sticks unless the other edited that item. Only when the *same* quest or setting was changed on both does the newer edit win.
 - Every time sync replaces your data, the server keeps the previous version (the newest 200). If something goes missing, open **Settings > Previous versions** and restore one.
 
 ## Features worth knowing
@@ -73,8 +73,18 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 - **History:** where your focus time went (week, month or year, by tag) and what you finished over the last two weeks. **Copy last 7 days** gives you a ready-made standup update.
 - **Tags:** a tag belongs to a quest. Set it on the quest (Today) or inbox item (Tag and subquests); subquests and focus sessions use it. Add, rename or delete tags in the Settings tab.
 - **Undo:** deleting a quest, clearing an inbox item, or deleting a template or tag shows an Undo button for 5 seconds.
+- **Upcoming:** on a quest (or an inbox item's Tag and subquests), use **Do later** (Tomorrow, Next Mon, or a date) to move it off Today. It waits under Today > Upcoming, where you can change the date or bring it back, and joins the end of Today's list on its day.
+- **Share to Inbox (Android):** once the app is installed, choose it from any app's Share menu to drop a link or text straight into the inbox. iPhone doesn't let home-screen apps receive shares.
 - **Repeating quests:** open a quest and use **Repeat** to pick days (every day, weekdays, any mix) and/or a day of the month. A fresh copy, subquests included, is added to Today on those days, even if the app wasn't opened on the day itself. An unfinished copy carries over instead of doubling up. Choose **Off** to stop it. All repeats are listed under Today > Repeating quests.
 - **Focus timer:** pick what you're working on (defaults to Next up) and a length. While it runs: pause, +5 min, stop and keep the minutes, or **Done** to save and tick off the quest.
 - **Timer alerts:** the first time you start a timer, the app asks to show notifications. On a computer you get an alert when the timer ends, even from another tab (it can arrive up to a minute late). On phones, the operating system pauses the app in the background, so the alert only comes when you reopen it.
 - **Keyboard shortcuts (computer):** `n` new quest, `i` capture to inbox, `t` today, `f` focus, `l` history, `s` settings, `p` pause/resume the timer, `Esc` back, `?` show these.
 - Free Supabase projects pause after a week with no activity. Opening the app regularly keeps it awake. If it pauses, click **Restore** in the Supabase dashboard; your data is kept.
+
+## Working on the code
+
+The app is plain HTML, CSS and JavaScript with no build step: `index.html` loads `styles.css` and the scripts in `js/` in order (they share globals).
+
+- `npm install` once, then `npm test` runs the browser tests in `tests/` (Playwright, Chromium).
+- `npm run format` tidies the code with Prettier.
+- Every pull request runs the format check and tests on GitHub (`.github/workflows/test.yml`).

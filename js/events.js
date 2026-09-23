@@ -450,6 +450,7 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'exp') exportData();
   if (b.id === 'doRestore') {
+    saveBase(null); // a restore replaces everything rather than merging
     norm(pending);
     pending = null;
     path = [];

@@ -34,6 +34,29 @@ function renderSyncBadge() {
   b.textContent = badgeText();
   b.dataset.state = !sb || !session ? 'off' : syncStatus;
 }
+// The version this device last agreed with the server, used as the base for merging.
+const BASE_KEY = KEY + '-base';
+function loadBase() {
+  try {
+    return JSON.parse(localStorage.getItem(BASE_KEY));
+  } catch (e) {
+    return null;
+  }
+}
+function saveBase(json) {
+  try {
+    if (json) localStorage.setItem(BASE_KEY, json);
+    else localStorage.removeItem(BASE_KEY);
+  } catch (e) {}
+}
+function applyRemote(data, at) {
+  dropUndo();
+  norm(data);
+  S.editedAt = at;
+  persistLocal();
+  rollover();
+  renderAll();
+}
 function schedulePush() {
   if (!sb || !session) return;
   clearTimeout(pushT);
@@ -60,19 +83,42 @@ async function sync() {
       .maybeSingle();
     if (error) throw error;
     const remoteAt = data ? Number(data.edited_at) : 0,
-      localAt = S.editedAt || 0;
-    if (data && remoteAt > localAt) {
-      dropUndo();
-      norm(data.data);
-      S.editedAt = remoteAt;
-      persistLocal();
-      rollover();
-      renderAll();
-    } else if (localAt > remoteAt || !data) {
-      const { error: e2 } = await sb
-        .from('cockpit_state')
-        .upsert({ user_id: uid_, data: S, edited_at: localAt, updated_at: new Date().toISOString() });
-      if (e2) throw e2;
+      base = loadBase(),
+      baseAt = base ? base.editedAt || 0 : null;
+    let localAt = S.editedAt || 0,
+      push = false;
+    if (!data) push = true;
+    else if (remoteAt === localAt) saveBase(JSON.stringify(data.data));
+    else if (baseAt === null || remoteAt <= baseAt || localAt <= baseAt) {
+      // Only one side changed since the last agreed version (or no base yet): newer copy wins.
+      if (remoteAt > localAt) {
+        saveBase(JSON.stringify(data.data));
+        applyRemote(data.data, remoteAt);
+      } else push = true;
+    } else {
+      // Both changed: merge, show the result here, then send it back.
+      const merged = mergeState(base, JSON.parse(JSON.stringify(S)), { ...data.data, editedAt: remoteAt });
+      localAt = Date.now();
+      applyRemote(merged, localAt);
+      push = true;
+    }
+    if (push) {
+      const row = { user_id: uid_, data: S, edited_at: localAt, updated_at: new Date().toISOString() };
+      if (!data) {
+        const { error: e2 } = await sb.from('cockpit_state').upsert(row);
+        if (e2) throw e2;
+      } else {
+        // Only overwrite the version we read; if another device saved meanwhile, sync again.
+        const { data: done, error: e2 } = await sb
+          .from('cockpit_state')
+          .update(row)
+          .eq('user_id', uid_)
+          .eq('edited_at', remoteAt)
+          .select('user_id');
+        if (e2) throw e2;
+        if (!done || !done.length) again = true;
+      }
+      if (!again) saveBase(JSON.stringify(S));
     }
     lastSync = Date.now();
     setSync('ok');

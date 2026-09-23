@@ -3,7 +3,7 @@
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
 const VERSION = 'cockpit-v3';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
-const APP = ['state', 'tree', 'header', 'today', 'inbox', 'focus', 'history', 'sync', 'events']
+const APP = ['state', 'tree', 'merge', 'header', 'today', 'inbox', 'focus', 'history', 'sync', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', SUPABASE_JS];
