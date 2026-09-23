@@ -192,7 +192,8 @@ function renameTag(i, v) {
   }
   if (S.timer && S.timer.tag === old) S.timer.tag = v;
 }
-setInterval(() => {
+// Runs twice a second once the app has loaded (started from events.js).
+function timerTick() {
   const t = S.timer;
   if (!t) {
     if (document.title !== TITLE) document.title = TITLE;
@@ -205,4 +206,4 @@ setInterval(() => {
   if (c) c.firstChild.nodeValue = txt;
   const hc = $('#hclock');
   if (hc) hc.textContent = txt;
-}, 500);
+}

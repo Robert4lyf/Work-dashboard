@@ -1,0 +1,14 @@
+{
+  "name": "work-cockpit",
+  "private": true,
+  "description": "Work Cockpit: quests, inbox and focus timer (static PWA).",
+  "scripts": {
+    "test": "playwright test",
+    "format": "prettier --write \"js/*.js\" styles.css \"tests/*.js\"",
+    "format:check": "prettier --check \"js/*.js\" styles.css \"tests/*.js\""
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "prettier": "3.8.1"
+  }
+}

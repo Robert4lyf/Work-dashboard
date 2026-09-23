@@ -10,7 +10,7 @@ function renderInbox() {
       open = expanded.has(it.id);
     h += `<div class="item box"><p>${esc(it.text)} ${tagBadge(it.tag)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide' : 'Tag and subquests'}</button></p>`;
     if (open) {
-      h += tagPicker('i', it.id, it.tag);
+      h += tagPicker('i', it.id, it.tag) + laterPicker('i', it.id);
       if (kids.length) {
         h += '<ul class="subs">';
         kids.forEach(
@@ -40,6 +40,29 @@ function capture(v) {
   renderAll();
   beep([880]);
   return items.length;
+}
+
+/* share to inbox: Android's Share menu opens index.html?title=…&text=…&url=… */
+function receiveShare() {
+  const q = new URLSearchParams(location.search);
+  if (!['title', 'text', 'url'].some(k => q.has(k))) return;
+  history.replaceState(null, '', location.pathname);
+  const title = (q.get('title') || '').trim(),
+    text = (q.get('text') || '').trim(),
+    url = (q.get('url') || '').trim();
+  // Apps often repeat the title in the text, or the link in the text; keep each once.
+  const parts = [text.startsWith(title) ? '' : title, text, url && !text.includes(url) ? url : ''].filter(
+    Boolean,
+  );
+  if (!parts.length) return;
+  const full = parts.join('\n'),
+    item = { id: uid(), text: parts.join(' · ').replace(/\s+/g, ' ').slice(0, 200) };
+  if (full.length > 200) item.node = fix({ id: uid(), text: item.text, notes: full });
+  S.inbox.unshift(item);
+  save();
+  renderAll();
+  go('inbox');
+  toast('Added to inbox');
 }
 
 /* voice capture: browsers with speech recognition only */

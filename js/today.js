@@ -44,6 +44,9 @@ function list(ns) {
   return h;
 }
 function renderToday() {
+  $('#v-today')
+    .querySelectorAll('details[id]')
+    .forEach(d => (panels[d.id] = d.open));
   path = path.filter((id, i) => {
     const r = find(id);
     return r && (i === 0 ? S.quests.includes(r.n) : find(path[i - 1]).n.children.includes(r.n));
@@ -88,7 +91,52 @@ function renderToday() {
     h += '</details>';
   }
   if (!qs.length) h += '<div class="slot">No quests yet.</div>';
+  h += renderUpcoming();
   $('#v-today').innerHTML = h;
+}
+
+/* upcoming: top-level quests scheduled for a later day (S.later, each with a start date) */
+const nextMonday = () => shift(today(), (8 - new Date().getDay()) % 7 || 7);
+function laterPicker(kind, id) {
+  const b = (when, label) =>
+    `<button class="chip" data-sched="${id}" data-kind="${kind}" data-when="${when}">${label}</button>`;
+  return `<div class="later"><span>Do later:</span>${b(shift(today(), 1), 'Tomorrow')}${b(nextMonday(), 'Next Mon')}<input type="date" class="fld" data-schedpick="${id}" data-kind="${kind}" min="${shift(today(), 1)}" aria-label="Do on a later date"></div>`;
+}
+function renderUpcoming() {
+  if (!S.later.length) return '';
+  let h = `<details id="upd"${panels.upd ? ' open' : ''}><summary>Upcoming (${S.later.length})</summary>`;
+  S.later.forEach(n => {
+    const c = count(n);
+    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</div>
+      <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
+      <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
+  });
+  return h + '</details>';
+}
+// Move a top-level quest ('q') or inbox item ('i') to Upcoming.
+function schedule(kind, id, date) {
+  if (!date || date <= today()) return;
+  let n;
+  if (kind === 'q') {
+    const r = find(id);
+    if (!r || r.parents.length) return;
+    r.arr.splice(r.arr.indexOf(r.n), 1);
+    n = r.n;
+    path = [];
+  } else {
+    const i = S.inbox.findIndex(x => x.id === id);
+    if (i < 0) return;
+    const it = S.inbox.splice(i, 1)[0];
+    n = it.node
+      ? Object.assign(it.node, { tag: it.tag || it.node.tag })
+      : fix({ id: uid(), text: it.text, tag: it.tag });
+  }
+  n.start = date;
+  S.later.push(n);
+  S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
+  save();
+  renderAll();
+  toast('Moved to ' + dayLabel(date));
 }
 function renderNode({ n, parents }) {
   const d = isDone(n),
@@ -131,6 +179,7 @@ function renderNode({ n, parents }) {
       <div class="days">${WEEK.map(i => `<button class="day" data-rday="${i}" data-id="${n.id}" aria-pressed="${days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0, 2)}</button>`).join('')}</div>
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${md === i + 1 ? ' selected' : ''}>${ord(i + 1)}${i + 1 > 28 ? ' (or last day)' : ''}</option>`).join('')}</select>
       </details>`;
+    h += laterPicker('q', n.id);
   }
   h += '</div>';
   h += '<h2>Subquests</h2>';

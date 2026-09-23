@@ -107,6 +107,20 @@ document.addEventListener('change', e => {
     renderAll();
     return;
   }
+  if (el.dataset.schedpick) {
+    schedule(el.dataset.kind, el.dataset.schedpick, el.value);
+    return;
+  }
+  if (el.dataset.restart) {
+    const n = S.later.find(x => x.id === el.dataset.restart);
+    if (n && el.value > today()) {
+      n.start = el.value;
+      S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
+      save();
+    }
+    renderToday();
+    return;
+  }
   if (el.id === 'fq') {
     S.focusQ = el.value;
     save();
@@ -274,6 +288,26 @@ document.addEventListener('click', e => {
     settle(bf);
     toast('Moved to inbox');
   }
+  if (d.sched) schedule(d.kind, d.sched, d.when);
+  if (d.now) {
+    const i = S.later.findIndex(x => x.id === d.now);
+    if (i >= 0) {
+      const n = S.later.splice(i, 1)[0];
+      delete n.start;
+      const bf = snapshot();
+      S.quests.push(n);
+      settle(bf);
+      toast('Added to today');
+    }
+  }
+  if (d.dellater) {
+    if (!arm(b, 'Delete?')) return;
+    withUndo('Deleted', () => {
+      S.later = S.later.filter(x => x.id !== d.dellater);
+      save();
+      renderAll();
+    });
+  }
   if (d.focuson) {
     S.focusQ = d.focuson;
     save();
@@ -407,7 +441,7 @@ document.addEventListener('click', e => {
   if (b.id === 'copylog') copyLog();
   if (b.id === 'hist') loadHistory();
   if (d.hist) {
-    const r = history.find(x => String(x.id) === d.hist);
+    const r = versions.find(x => String(x.id) === d.hist);
     if (r && r.data && Array.isArray(r.data.quests)) {
       pending = r.data;
       renderAccount();
@@ -437,7 +471,7 @@ document.addEventListener('click', e => {
     sb.auth.signOut().then(() => {
       session = null;
       syncStatus = '';
-      history = null;
+      versions = null;
       renderSyncBadge();
       renderAccount();
     });
@@ -511,6 +545,8 @@ load();
 rollover();
 if (timerDue()) finishTimer(true);
 else renderAll();
+receiveShare();
+setInterval(timerTick, 500);
 if (sb) {
   sb.auth.onAuthStateChange((ev, s) => {
     session = s;

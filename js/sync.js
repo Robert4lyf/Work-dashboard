@@ -130,26 +130,26 @@ function syncLine() {
         '.'
     : 'Not synced yet.';
 }
-let history = null; // null: not loaded, 'loading', 'none' (table missing), or rows
+let versions = null; // null: not loaded, 'loading', 'none' (table missing), or rows
 async function loadHistory() {
-  history = 'loading';
+  versions = 'loading';
   renderAccount();
   const { data, error } = await sb
     .from('cockpit_history')
     .select('id,data,saved_at')
     .order('id', { ascending: false })
     .limit(20);
-  history = error ? 'none' : data;
+  versions = error ? 'none' : data;
   renderAccount();
 }
 function renderHistory() {
-  if (history === null) return '<button class="linkbtn" id="hist">Show previous versions</button>';
-  if (history === 'loading') return '<p class="hint">Loading...</p>';
-  if (history === 'none')
+  if (versions === null) return '<button class="linkbtn" id="hist">Show previous versions</button>';
+  if (versions === 'loading') return '<p class="hint">Loading...</p>';
+  if (versions === 'none')
     return '<p class="hint">Server history isn\'t set up. Run the updated supabase-setup.sql (see the README).</p>';
-  if (!history.length) return '<p class="hint">No previous versions yet.</p>';
+  if (!versions.length) return '<p class="hint">No previous versions yet.</p>';
   let h = '';
-  history.forEach(r => {
+  versions.forEach(r => {
     const d = r.data || {},
       when = new Date(r.saved_at).toLocaleString([], {
         weekday: 'short',

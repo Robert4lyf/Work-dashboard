@@ -986,6 +986,47 @@ textarea.fld {
 .logday li small {
   color: var(--muted);
 }
+/* upcoming */
+.later {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0 4px;
+}
+.later span {
+  color: var(--muted);
+  font-size: 16px;
+}
+.later .chip {
+  padding: 4px 10px;
+  font-size: 15px;
+}
+.later input.fld,
+.uprow input.fld {
+  width: auto;
+  flex: 1 1 140px;
+  min-height: 0;
+  padding: 4px 8px;
+}
+.uprow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 2px dashed var(--muted);
+}
+.uprow:first-of-type {
+  border-top: 0;
+}
+.uptxt {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+.uprow .btn {
+  padding: 4px 10px;
+}
 [hidden] {
   display: none !important;
 }

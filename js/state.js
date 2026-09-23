@@ -62,11 +62,13 @@ function norm(s) {
       log: [],
       tags: null,
       daily: null,
+      later: [],
     },
     s || {},
   );
   delete S.streak;
   S.quests = S.quests.map(fix);
+  S.later = S.later.map(fix);
   S.inbox = S.inbox.map(i => (i.node ? Object.assign(i, { node: fix(i.node) }) : i));
   S.templates.forEach(t => {
     if (!Array.isArray(t.days)) t.days = [];
@@ -130,5 +132,12 @@ function rollover() {
       }
     });
   }
+  // Scheduled quests whose day has come join the end of Today's list.
+  S.later = S.later.filter(n => {
+    if (n.start > today()) return true;
+    delete n.start;
+    S.quests.push(n);
+    return false;
+  });
   persistLocal();
 }
