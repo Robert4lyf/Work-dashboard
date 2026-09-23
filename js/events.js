@@ -7,7 +7,16 @@ function renderAll() {
   renderFocus();
   renderLog();
   renderAccount();
+  renderZen();
 }
+// Fade whichever edge of the tab strip has more tabs beyond it.
+function fadeTabs() {
+  const t = $('#tabs');
+  t.classList.toggle('more-left', t.scrollLeft > 6);
+  t.classList.toggle('more-right', t.scrollLeft + t.clientWidth < t.scrollWidth - 6);
+}
+$('#tabs').addEventListener('scroll', fadeTabs, { passive: true });
+window.addEventListener('resize', fadeTabs);
 function go(v) {
   view = v;
   renderHeader();
@@ -15,8 +24,17 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  ['today', 'inbox', 'focus', 'log', 'account'].forEach(k => ($('#v-' + k).hidden = k !== v));
-  window.scrollTo(0, 0);
+  const board = onBoard();
+  document.body.classList.toggle('board', board);
+  ['today', 'inbox', 'focus', 'log', 'account'].forEach(
+    k => ($('#v-' + k).hidden = board ? !['today', 'inbox', 'focus'].includes(k) : k !== v),
+  );
+  // Keep the current tab visible when the tab bar is scrolled sideways.
+  const tab = document.querySelector(`nav [data-v="${v}"]`);
+  if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  fadeTabs();
+  if (board) $('#v-' + v).scrollIntoView({ block: 'nearest' });
+  else window.scrollTo(0, 0);
 }
 function openPath(p) {
   path = p;
@@ -58,6 +76,14 @@ document.addEventListener('submit', e => {
     if (opt) $('#sopt').checked = true;
   }
   if (f.id === 'authform') signIn();
+  if (f.id === 'projform') {
+    const v = $('#projin').value.trim();
+    if (!v) return;
+    newProject(v);
+    save();
+    renderAll();
+    $('#projin').focus();
+  }
   if (f.id === 'tagform') {
     const v = $('#tagin').value.trim();
     if (!v) return;
@@ -85,7 +111,7 @@ document.addEventListener('submit', e => {
       v = f.querySelector('input').value.trim(),
       it = S.inbox.find(x => x.id === id);
     if (!v || !it) return;
-    it.node = it.node || fix({ id: uid(), text: it.text, tag: it.tag });
+    it.node = it.node || inboxToNode(it);
     it.node.children.push(fix({ id: uid(), text: v }));
     save();
     renderAll();
@@ -99,6 +125,18 @@ document.addEventListener('change', e => {
   if (el.id === 'imp') {
     if (el.files && el.files[0]) importFile(el.files[0]);
     el.value = '';
+    return;
+  }
+  if (el.dataset.setproject) {
+    setProject(el.dataset.kind, el.dataset.setproject, el.value);
+    return;
+  }
+  if (el.dataset.projname !== undefined) {
+    const p = S.projects[+el.dataset.projname],
+      v = el.value.trim().slice(0, 40);
+    if (p && v) p.name = v;
+    save();
+    renderAll();
     return;
   }
   if (el.dataset.tagname !== undefined) {
@@ -280,14 +318,7 @@ document.addEventListener('click', e => {
         if (k === 'off') t.monthDay = 0;
       });
   }
-  if (d.toinbox) {
-    const r = find(d.toinbox),
-      bf = snapshot();
-    r.arr.splice(r.arr.indexOf(r.n), 1);
-    S.inbox.unshift({ id: uid(), text: r.n.text, node: r.n });
-    settle(bf);
-    toast('Moved to inbox');
-  }
+  if (d.toinbox) moveToInbox(d.toinbox);
   if (d.sched) schedule(d.kind, d.sched, d.when);
   if (d.now) {
     const i = S.later.findIndex(x => x.id === d.now);
@@ -318,11 +349,7 @@ document.addEventListener('click', e => {
     const i = S.inbox.findIndex(x => x.id === d.promote),
       it = S.inbox[i],
       bf = snapshot();
-    S.quests.push(
-      it.node
-        ? Object.assign(it.node, { tag: it.tag || it.node.tag })
-        : fix({ id: uid(), text: it.text, tag: it.tag }),
-    );
+    S.quests.push(inboxToNode(it));
     S.inbox.splice(i, 1);
     settle(bf);
     toast('Added to today');
@@ -371,11 +398,36 @@ document.addEventListener('click', e => {
     save();
     renderAll();
   }
+  if (d.look) {
+    setLook(d.look, d.val);
+    renderAccount();
+  }
   if (d.edittags) {
     renderAccount();
     go('account');
     const t = $('#tagsec');
     t && t.scrollIntoView();
+  }
+  if (d.projdone) {
+    const p = S.projects.find(x => x.id === d.projdone);
+    if (p) {
+      p.done = !p.done;
+      save();
+      renderAll();
+      toast(p.done ? 'Project finished' : 'Project reopened');
+    }
+  }
+  if (d.delproj) {
+    if (!arm(b, 'Delete?')) return;
+    withUndo('Project deleted', () => {
+      const id = S.projects[+d.delproj].id;
+      S.projects.splice(+d.delproj, 1);
+      eachTagged(n => {
+        if (n.project === id) n.project = '';
+      });
+      save();
+      renderAll();
+    });
   }
   if (d.deltag) {
     if (!arm(b, 'Delete?')) return;
@@ -398,16 +450,10 @@ document.addEventListener('click', e => {
     save();
     renderFocus();
   }
-  if (b.id === 'start') {
-    const q = focusTarget(),
-      top = topOf(q);
-    askNotify();
-    beep([440]);
-    S.timer = { end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
-    save();
-    renderHeader();
-    renderFocus();
-  }
+  if (b.id === 'start') startTimer(focusTarget());
+  if (d.zstart) startTimer(d.zstart);
+  if (d.zen) setZen(true);
+  if (b.id === 'zenexit') setZen(false);
   if (b.id === 'plus5') {
     const t = S.timer;
     if (!t) return;
@@ -424,8 +470,8 @@ document.addEventListener('click', e => {
     renderHeader();
     renderFocus();
   }
-  if (b.id === 'stopsave') stopAndSave(false);
-  if (b.id === 'stopdone') stopAndSave(true);
+  if (b.id === 'stopsave' || d.stop === 'save') stopAndSave(false);
+  if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) {
     const t = S.timer;
     if (!t) return;
@@ -436,6 +482,7 @@ document.addEventListener('click', e => {
     save();
     renderHeader();
     renderFocus();
+    renderZen();
   }
   if (b.id === 'undo') undo();
   if (b.id === 'copylog') copyLog();
@@ -489,7 +536,8 @@ document.addEventListener(
 );
 
 /* keyboard shortcuts (desktop) */
-const KEYS = 'n new quest · i capture · t today · f focus · l history · s settings · p pause · Esc back';
+const KEYS =
+  'n new quest · i capture · t today · f focus · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const el = e.target;
@@ -521,8 +569,10 @@ document.addEventListener('keydown', e => {
     if (b) b.click();
   } else if (k === '?') toast(KEYS, false, 5000);
   else if (k === 's') go('account');
+  else if (k === 'z') setZen(!zen);
   else if (k === 'Escape') {
-    if (view === 'today' && path.length) openPath(path.slice(0, -1));
+    if (zen) setZen(false);
+    else if (view === 'today' && path.length) openPath(path.slice(0, -1));
   }
 });
 
@@ -546,6 +596,7 @@ load();
 rollover();
 if (timerDue()) finishTimer(true);
 else renderAll();
+go(view);
 receiveShare();
 setInterval(timerTick, 500);
 if (sb) {

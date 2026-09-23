@@ -27,6 +27,7 @@ function row(n, i, len, sib) {
   const rt = tplFor(n);
   const meta =
     tagBadge(n.tag) +
+    projectBadge(n.project) +
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
@@ -34,7 +35,7 @@ function row(n, i, len, sib) {
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : `<span class="chev" aria-hidden="true">&gt;</span><button class="x" data-del="${n.id}" aria-label="Delete ${esc(n.text)}">×</button>`;
-  return `<div class="row box${d ? ' done' : ''}">${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
+  return `<div class="row box${d ? ' done' : ''}"${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
 }
 function list(ns) {
   let h = '';
@@ -107,7 +108,7 @@ function renderUpcoming() {
   let h = `<details id="upd"${panels.upd ? ' open' : ''}><summary>Upcoming (${S.later.length})</summary>`;
   S.later.forEach(n => {
     const c = count(n);
-    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</div>
+    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${projectBadge(n.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</div>
       <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
       <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
   });
@@ -127,9 +128,7 @@ function schedule(kind, id, date) {
     const i = S.inbox.findIndex(x => x.id === id);
     if (i < 0) return;
     const it = S.inbox.splice(i, 1)[0];
-    n = it.node
-      ? Object.assign(it.node, { tag: it.tag || it.node.tag })
-      : fix({ id: uid(), text: it.text, tag: it.tag });
+    n = inboxToNode(it);
   }
   n.start = date;
   S.later.push(n);
@@ -144,7 +143,7 @@ function renderNode({ n, parents }) {
     top = !parents.length;
   let h = `<button class="btn back" data-crumb="${parents.length - 1}">&lt; Back</button><div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
-  h += `<span>/</span><b>${esc(n.text)}</b></div><div class="node box"><h1>${esc(n.text)}</h1>${top ? tagPicker('q', n.id, n.tag) : ''}`;
+  h += `<span>/</span><b>${esc(n.text)}</b></div><div class="node box"><h1>${esc(n.text)}</h1>${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,

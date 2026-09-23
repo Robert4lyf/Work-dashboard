@@ -63,7 +63,7 @@ function settle(before) {
     const pts = v.top ? 30 : 10;
     if (v.done && !was) {
       gain += pts;
-      S.log.push({ id, d: today(), text: v.text, trail: v.trail });
+      S.log.push({ id, d: today(), text: v.text, trail: v.trail, p: projectOf(id) });
     }
     if (!v.done && was) {
       gain -= pts;
@@ -103,12 +103,21 @@ function dueSoon() {
 const strip = n => ({
   text: n.text,
   tag: n.tag,
+  project: n.project,
   opt: n.opt,
   notes: n.notes,
   children: n.children.map(strip),
 });
 const inst = t =>
-  fix({ id: uid(), text: t.text, tag: t.tag, opt: t.opt, notes: t.notes, children: t.children.map(inst) });
+  fix({
+    id: uid(),
+    text: t.text,
+    tag: t.tag,
+    project: t.project,
+    opt: t.opt,
+    notes: t.notes,
+    children: t.children.map(inst),
+  });
 
 /* repeating quests: a quest repeats through a template linked by n.tpl */
 const repeats = t => !!t && (t.days.length > 0 || t.monthDay > 0);

@@ -26,6 +26,35 @@
     --edge: #000000;
   }
 }
+:root[data-font='plain'] {
+  --display: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+:root[data-font='plain'] body {
+  font-size: 17px;
+}
+/* The pixel heading font is very wide, so its sizes are small; plain text needs larger ones. */
+:root[data-font='plain'] :is(.title, h2, .node h1, .clear b, .toast, .now .clk) {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+:root[data-font='plain'] .title {
+  font-size: 16px;
+}
+:root[data-font='plain'] h2 {
+  font-size: 17px;
+  line-height: 1.35;
+}
+:root[data-font='plain'] .node h1 {
+  font-size: 21px;
+  line-height: 1.3;
+}
+:root[data-font='plain'] .toast {
+  font-size: 15px;
+}
+:root[data-font='plain'] .now .clk {
+  font-size: 20px;
+}
 :root[data-theme='dark'] {
   --bg: #1d2b53;
   --panel: #29366f;
@@ -469,50 +498,46 @@ nav {
   bottom: 0;
   background: var(--panel);
   border-top: 3px solid var(--edge);
-  padding: 8px 6px calc(8px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+}
+/* Tabs keep their full labels; on narrow phones the strip scrolls sideways, and the edge with
+   more tabs beyond it fades out as a hint. */
+.tabs {
   display: flex;
-  justify-content: center;
-  gap: 4px;
+  gap: 2px;
+  padding: 0 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabs.more-right {
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.tabs.more-left {
+  mask-image: linear-gradient(to left, #000 calc(100% - 40px), transparent);
+}
+.tabs.more-left.more-right {
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
+/* Centred when everything fits, without clipping the first tab when it doesn't. */
+nav button:first-child {
+  margin-left: auto;
+}
+nav button:last-child {
+  margin-right: auto;
 }
 nav button {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 140px;
+  flex: 0 0 auto;
   background: none;
   border: 3px solid transparent;
-  padding: 8px 2px;
+  padding: 8px 7px;
   cursor: pointer;
   font-weight: 600;
   font-size: 16px;
-}
-nav .gear {
-  flex: 0 0 52px;
-  display: grid;
-  place-items: center;
-}
-@media (max-width: 374px) {
-  nav {
-    gap: 2px;
-    padding-left: 4px;
-    padding-right: 4px;
-  }
-  nav button {
-    font-size: 14px;
-    padding: 8px 1px;
-  }
-  nav .gear {
-    flex-basis: 40px;
-  }
-  nav .badge {
-    min-width: 18px;
-    margin-left: 2px;
-    padding: 0 2px;
-    font-size: 12px;
-  }
-}
-nav .gear svg {
-  width: 22px;
-  height: 22px;
+  white-space: nowrap;
 }
 nav button[aria-current='page'] {
   background: var(--yellow);
@@ -626,6 +651,36 @@ nav button[aria-current='page'] {
   font-size: 14px;
   margin-right: 4px;
   color: var(--on-accent);
+}
+.tag.projcard {
+  background: var(--panel);
+  color: var(--ink);
+}
+.projcard {
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.projhead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.projhead small {
+  color: var(--muted);
+  font-size: 15px;
+}
+.projcard ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+.projcard li {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.projcard li small {
+  color: var(--muted);
 }
 .tag.opt {
   background: var(--blue);
@@ -1026,6 +1081,83 @@ textarea.fld {
 }
 .uprow .btn {
   padding: 4px 10px;
+}
+/* single-task mode */
+body.zen .wrap,
+body.zen nav {
+  display: none;
+}
+#v-zen {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  max-width: 720px;
+  margin: 0 auto;
+}
+.zx {
+  align-self: flex-end;
+}
+.zbody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+.ztrail {
+  color: var(--muted);
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.zt {
+  font-family: var(--display);
+  font-size: clamp(18px, 5vw, 28px);
+  line-height: 1.5;
+  margin: 0 0 28px;
+  overflow-wrap: anywhere;
+}
+.zclock {
+  font-family: var(--display);
+  font-size: clamp(44px, 16vw, 88px);
+  margin-bottom: 24px;
+}
+.zbody .acts {
+  justify-content: center;
+}
+.zbody .acts .btn {
+  min-width: 140px;
+  padding: 14px 18px;
+}
+/* desktop board */
+@media (min-width: 1100px) {
+  .wrap {
+    max-width: 760px;
+  }
+  body.board .wrap {
+    max-width: 1360px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 32px;
+    align-items: start;
+  }
+  body.board header {
+    grid-column: 1 / -1;
+  }
+  /* Today, Inbox and Focus are all on screen, so all three show as current. */
+  body.board nav :is([data-v='today'], [data-v='inbox'], [data-v='focus']) {
+    background: var(--yellow);
+    color: var(--on-accent);
+    border-color: var(--edge);
+  }
+}
+[draggable='true'] {
+  cursor: grab;
+}
+.dropping {
+  outline: 3px dashed var(--blue);
+  outline-offset: 3px;
 }
 [hidden] {
   display: none !important;

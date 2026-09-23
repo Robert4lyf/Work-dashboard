@@ -17,6 +17,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script>
+  // Apply this device's appearance before first paint (see "Appearance" in Settings).
+  try {
+    const l = JSON.parse(localStorage.getItem('dashboard-look')) || {};
+    if (l.font) document.documentElement.dataset.font = l.font;
+    if (l.theme) document.documentElement.dataset.theme = l.theme;
+  } catch (e) {}
+</script>
 </head>
 <body>
 <div class="wrap">
@@ -34,13 +42,14 @@
   <section id="v-account" hidden></section>
 </div>
 
-<nav aria-label="Sections">
+<nav aria-label="Sections"><div class="tabs" id="tabs">
   <button data-v="today" aria-current="page">Today</button>
   <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
   <button data-v="focus">Focus</button>
   <button data-v="log">History</button>
-  <button data-v="account" class="gear" aria-label="Settings" title="Settings"><svg viewBox="0 0 9 9" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M3 0h3v1H3zM1 1h1v1H1zM3 1h3v1H3zM7 1h1v1H7zM2 2h5v1H2zM0 3h4v1H0zM5 3h4v1H5zM0 4h3v1H0zM6 4h3v1H6zM0 5h4v1H0zM5 5h4v1H5zM2 6h5v1H2zM1 7h1v1H1zM3 7h3v1H3zM7 7h1v1H7zM3 8h3v1H3z"/></svg></button>
-</nav>
+  <button data-v="account">Settings</button>
+</div></nav>
+<section id="v-zen" hidden aria-label="Single-task mode"></section>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js" integrity="sha384-xPW3QHswsICVC2mW6BFNwMbhpLkbZ133fKOhxNx3QGGgAOJfL3O9t8r2aWn1aez6" crossorigin="anonymous"></script>
@@ -52,8 +61,10 @@
 <script src="js/today.js"></script>
 <script src="js/inbox.js"></script>
 <script src="js/focus.js"></script>
+<script src="js/projects.js"></script>
 <script src="js/history.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/board.js"></script>
 <script src="js/events.js"></script>
 
 
