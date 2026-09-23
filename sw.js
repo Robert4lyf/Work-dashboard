@@ -1,6 +1,7 @@
 // Work Cockpit service worker: makes the app installable and usable offline.
-// Bump VERSION whenever you upload changed files so phones pick up the update.
-const VERSION = 'cockpit-v1';
+// VERSION is stamped automatically by .github/workflows/pages.yml on each deploy.
+// If you deploy from a branch instead, bump it by hand whenever you upload changed files.
+const VERSION = 'cockpit-v2';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', SUPABASE_JS];
@@ -40,4 +41,13 @@ self.addEventListener('fetch', e => {
     if (res.ok || res.type === 'opaque') put(req, res.clone());
     return res;
   })));
+});
+
+// Tapping a timer notification brings the app back to the front.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {
+    for (const c of list) if ('focus' in c) return c.focus();
+    return self.clients.openWindow('./');
+  }));
 });

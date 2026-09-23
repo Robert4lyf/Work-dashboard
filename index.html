@@ -163,6 +163,28 @@ textarea.fld{min-height:90px;resize:vertical}
 .backup label{cursor:pointer}
 .banner{padding:14px;margin-bottom:22px;background:var(--panel)}
 .banner p{margin:0}
+/* undo toast, log, repeat days, tags, stats range */
+.toast.act{pointer-events:auto}
+.toast button{margin-left:10px;background:var(--yellow);color:var(--on-accent);border:2px solid var(--edge);font-family:var(--display);font-size:11px;padding:6px 8px;cursor:pointer}
+.day{width:34px;height:34px;padding:0;border:2px solid var(--edge);background:var(--panel);cursor:pointer;font-size:14px}
+.day[aria-pressed="true"]{background:var(--blue);color:var(--on-accent);font-weight:600}
+.rep{padding:10px 0;border-top:2px dashed var(--muted)}
+.rep:first-of-type{border-top:0}
+.rep>span{display:block;margin-bottom:6px;overflow-wrap:anywhere}
+.days{display:flex;flex-wrap:wrap;gap:6px}
+.tagrow{display:flex;align-items:center;gap:8px;margin:8px 0}
+.tagrow .fld{flex:1;padding:6px 8px}
+.sw{flex:none;width:22px;height:22px;border:2px solid var(--edge)}
+.x[disabled]{opacity:.3;cursor:default}
+.rng{margin-bottom:10px}
+.rng .chip{padding:4px 10px;font-size:15px}
+.bar span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.logday{padding:12px 14px;margin-bottom:16px}
+.logday h2{display:flex;justify-content:space-between;gap:8px}
+.logday h2 small{font-family:var(--body);font-size:15px;color:var(--muted);font-weight:400}
+.logday ul{margin:6px 0 0;padding-left:20px}
+.logday li{margin:4px 0;overflow-wrap:anywhere}
+.logday li small{color:var(--muted)}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -178,6 +200,7 @@ textarea.fld{min-height:90px;resize:vertical}
   <section id="v-today"></section>
   <section id="v-inbox" hidden></section>
   <section id="v-focus" hidden></section>
+  <section id="v-log" hidden></section>
   <section id="v-account" hidden></section>
 </div>
 
@@ -185,14 +208,17 @@ textarea.fld{min-height:90px;resize:vertical}
   <button data-v="today" aria-current="page">Today</button>
   <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
   <button data-v="focus">Focus</button>
+  <button data-v="log">Log</button>
 </nav>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js" integrity="sha384-xPW3QHswsICVC2mW6BFNwMbhpLkbZ133fKOhxNx3QGGgAOJfL3O9t8r2aWn1aez6" crossorigin="anonymous"></script>
 
 <script>
 const KEY='work-cockpit-v1';
 const TAGS=[['Design','var(--pink)'],['Meetings','var(--blue)'],['Admin','var(--orange)'],['Delivery','var(--green)']];
+const PALETTE=['var(--pink)','var(--blue)','var(--orange)','var(--green)','var(--yellow)','#C2C3C7'];
+const TITLE='Work Cockpit';
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const pad=n=>String(n).padStart(2,'0');
@@ -202,24 +228,45 @@ const shift=(ds,n)=>{const [y,m,d]=ds.split('-').map(Number);return fmt(new Date
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const niceDate=ds=>{const [y,m,d]=ds.split('-').map(Number);return d+' '+MON[m-1];};
+const WD=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const WEEK=[1,2,3,4,5,6,0];
+const dayLabel=ds=>{if(ds===today())return 'Today';if(ds===shift(today(),-1))return 'Yesterday';const [y,m,d]=ds.split('-').map(Number);return WD[new Date(y,m-1,d).getDay()]+' '+d+' '+MON[m-1];};
 
 let S;
 function fix(n){n.children=(n.children||[]).map(fix);n.opt=!!n.opt;n.notes=n.notes||'';n.due=n.due||'';n.done=!!n.done;return n;}
 function norm(s){
-  S=Object.assign({xp:0,day:today(),quests:[],inbox:[],sessions:[],templates:[],bonusDay:'',timer:null,tag:'Design',mins:25,focusQ:null},s||{});
+  S=Object.assign({xp:0,day:today(),quests:[],inbox:[],sessions:[],templates:[],bonusDay:'',timer:null,tag:'Design',mins:25,focusQ:null,log:[],tags:null,daily:null},s||{});
   delete S.streak;
   S.quests=S.quests.map(fix);
   S.inbox=S.inbox.map(i=>i.node?Object.assign(i,{node:fix(i.node)}):i);
+  S.templates.forEach(t=>{if(!Array.isArray(t.days))t.days=[];});
+  if(!Array.isArray(S.tags)||!S.tags.length) S.tags=TAGS.map(([name,color])=>({name,color}));
+  if(!S.tags.some(t=>t.name===S.tag)) S.tag=S.tags[0].name;
+  if(!S.daily){S.daily={};S.sessions.forEach(x=>addDaily(fmt(new Date(x.t)),x.tag,x.mins));}
 }
+function addDaily(d,tag,mins){const o=S.daily[d]=S.daily[d]||{};o[tag]=(o[tag]||0)+mins;}
 function load(){let s=null;try{s=JSON.parse(localStorage.getItem(KEY));}catch(e){}norm(s);}
 function persistLocal(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
 function save(){
-  const cut=Date.now()-60*864e5;
+  const cut=Date.now()-60*864e5,dcut=shift(today(),-400),lcut=shift(today(),-120);
   S.sessions=S.sessions.filter(x=>x.t>cut);
+  for(const d in S.daily) if(d<dcut) delete S.daily[d];
+  S.log=S.log.filter(x=>x.d>=lcut);
   S.editedAt=Date.now();
+  dropUndo();
   persistLocal();schedulePush();
 }
-function rollover(){if(S.day!==today()){S.quests=S.quests.filter(q=>!isDone(q));S.day=today();save();}}
+// The daily reset must not stamp an edit time: otherwise a device that was
+// closed yesterday would look newer than the server and overwrite it on sync.
+// Every device runs the same reset, so it doesn't need to be pushed.
+function rollover(){
+  if(S.day===today()) return;
+  S.quests=S.quests.filter(q=>!isDone(q));
+  S.day=today();
+  const wd=new Date().getDay();
+  S.templates.forEach(t=>{if(t.days.includes(wd)&&!S.quests.some(q=>q.text===t.text&&!isDone(q)))S.quests.push(inst(t));});
+  persistLocal();
+}
 
 /* tree helpers */
 function isDone(n){
@@ -251,12 +298,15 @@ function nextLeaf(n){
 }
 function snapshot(){
   const m=new Map();
-  (function w(ns,top){ns.forEach(n=>{m.set(n.id,{done:isDone(n),top});w(n.children,false);});})(S.quests,true);
+  (function w(ns,trail){ns.forEach(n=>{m.set(n.id,{done:isDone(n),top:!trail.length,text:n.text,trail});w(n.children,[...trail,n.text]);});})(S.quests,[]);
   return m;
 }
 function settle(before){
   const after=snapshot();let gain=0;
-  after.forEach((v,id)=>{if(!before.has(id))return;const was=before.get(id).done;const pts=v.top?30:10;if(v.done&&!was)gain+=pts;if(!v.done&&was)gain-=pts;});
+  after.forEach((v,id)=>{if(!before.has(id))return;const was=before.get(id).done;const pts=v.top?30:10;
+    if(v.done&&!was){gain+=pts;S.log.push({id,d:today(),text:v.text,trail:v.trail});}
+    if(!v.done&&was){gain-=pts;S.log=S.log.filter(x=>!(x.id===id&&x.d===today()));}
+  });
   if(gain){addXP(gain);if(gain>0)beep([659,988]);}
   if(S.quests.length&&S.quests.every(isDone)&&S.bonusDay!==today()){S.bonusDay=today();addXP(50);toast('Stage clear! +50 XP');beep([523,659,784,1047,784,1047]);}
   save();renderAll();
@@ -277,8 +327,19 @@ function addXP(n){
   S.xp=Math.max(0,S.xp+n);
   if(n>0) toast(level()>before?'Level up! LV '+level():'+'+n+' XP');
 }
-let tt;
-function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1600);}
+let tt,undoSnap=null;
+function toast(msg,undo,ms){
+  const t=$('#toast');t.innerHTML=esc(msg)+(undo?'<button id="undo">Undo</button>':'');
+  t.classList.toggle('act',!!undo);t.classList.add('show');clearTimeout(tt);
+  tt=setTimeout(()=>{t.classList.remove('show','act');if(undo)undoSnap=null;},ms||(undo?5000:1600));
+}
+// Run a destructive change and offer to put everything back for a few seconds.
+function withUndo(msg,fn){const snap=JSON.stringify(S);fn();undoSnap=snap;toast(msg,true);}
+function dropUndo(){if(!undoSnap)return;undoSnap=null;$('#toast').classList.remove('show','act');}
+function undo(){
+  const snap=undoSnap;dropUndo();if(!snap)return;
+  norm(JSON.parse(snap));save();renderAll();toast('Undone');
+}
 let ac;
 function beep(notes){
   try{
@@ -306,6 +367,7 @@ function renderHeader(){
 
 /* today / drill-down */
 let path=[],reorder=false,pending=null;
+const panels={};  // which <details> panels are expanded, so re-renders keep them open
 const tick='<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1D2B53" d="M5 1h1v1H5zM4 2h1v1H4zM3 3h1v1H3zM0 3h1v1H0zM1 4h1v1H1zM2 4h1v1H2z"/></svg>';
 function dueTag(n){
   if(!n.due||isDone(n)) return '';
@@ -353,6 +415,13 @@ function renderToday(){
     h+='<div class="tpls"><span class="hint" style="margin:0">From a template:</span>';
     S.templates.forEach(t=>h+=`<span class="tchip"><button data-tpl="${t.id}">${esc(t.text)} (${count(t)})</button><button class="tdel" data-deltpl="${t.id}" aria-label="Delete template ${esc(t.text)}">×</button></span>`);
     h+='</div>';
+    h+=`<details id="repd" style="margin:-4px 0 18px"${panels.repd?' open':''}><summary>Repeat templates</summary><p class="hint" style="margin-top:8px">A template is added to Today automatically each morning on the days you pick.</p>`;
+    S.templates.forEach(t=>{
+      h+=`<div class="rep"><span>${esc(t.text)}</span><div class="days">`;
+      WEEK.forEach(i=>h+=`<button class="day" data-rep="${t.id}" data-wd="${i}" aria-pressed="${t.days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0,2)}</button>`);
+      h+='</div></div>';
+    });
+    h+='</details>';
   }
   if(!qs.length) h+='<div class="slot">No quests yet. Add one above or move something from your inbox.</div>';
   $('#v-today').innerHTML=h;
@@ -401,41 +470,114 @@ function renderInbox(){
 /* focus */
 const mmss=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return pad(Math.floor(s/60))+':'+pad(s%60);};
 const hm=m=>m>=60?Math.floor(m/60)+'h '+(m%60)+'m':m+'m';
+const remaining=()=>S.timer.left!=null?S.timer.left:S.timer.end-Date.now();
+const timerDue=()=>!!S.timer&&S.timer.left==null&&Date.now()>=S.timer.end;
+const tagColor=name=>{const t=S.tags.find(x=>x.name===name);return t?t.color:'var(--muted)';};
+let range=7;
 function renderFocus(){
   let h='<h2>Focus</h2>';
   if(S.timer){
-    const q=S.timer.q&&find(S.timer.q);
-    h+=`<p class="hint">Stay on it. Finishing earns 20 XP.</p><div class="clock box" id="clock">${mmss(S.timer.end-Date.now())}<small>${esc(S.timer.tag)}${q?': '+esc(q.n.text):''}</small></div><button class="btn pink" id="stop" style="width:100%">Stop without saving</button>`;
+    const t=S.timer,q=t.q&&find(t.q),paused=t.left!=null;
+    h+=`<p class="hint">${paused?'Paused.':'Stay on it.'} Finishing earns 20 XP; stopping early saves the minutes you did.</p><div class="clock box" id="clock">${mmss(remaining())}<small>${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></div>`;
+    h+=`<div class="acts" style="margin-top:0"><button class="btn ${paused?'green':'blue'}" id="pause" style="flex:1">${paused?'Resume':'Pause'}</button><button class="btn" id="stopsave" style="flex:1">Stop and save</button></div><button class="dellink" id="stop">Discard this session</button>`;
   }else{
     const fq=S.focusQ&&find(S.focusQ);
     h+='<p class="hint">Pick what you\'re working on and a length.</p>';
     if(fq) h+=`<div class="linked box"><span>Linked to: <b>${esc(fq.n.text)}</b></span><button class="x" id="unlink" aria-label="Unlink quest">×</button></div>`;
     h+='<div class="chips">';
-    TAGS.forEach(([t,c])=>h+=`<button class="chip" style="--c:${c}" data-tag="${t}" aria-pressed="${S.tag===t}">${t}</button>`);
+    S.tags.forEach(t=>h+=`<button class="chip" style="--c:${t.color}" data-tag="${esc(t.name)}" aria-pressed="${S.tag===t.name}">${esc(t.name)}</button>`);
     h+='</div><div class="chips">';
     [15,25,45].forEach(m=>h+=`<button class="chip" data-mins="${m}" aria-pressed="${S.mins===m}">${m} min</button>`);
     h+=`</div><button class="btn green" id="start" style="width:100%">Start ${S.mins} min</button>`;
+    h+=`<details id="tagd"${panels.tagd?' open':''}><summary>Edit tags</summary>`;
+    S.tags.forEach((t,i)=>h+=`<div class="tagrow"><span class="sw" style="background:${t.color}"></span><input class="fld" data-tagname="${i}" value="${esc(t.name)}" maxlength="20" aria-label="Tag name"><button class="x" data-deltag="${i}" aria-label="Delete tag ${esc(t.name)}"${S.tags.length<2?' disabled':''}>×</button></div>`);
+    h+='<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form></details>';
   }
-  const since=Date.now()-7*864e5, tot={};let sum=0;
-  S.sessions.filter(x=>x.t>since).forEach(x=>{tot[x.tag]=(tot[x.tag]||0)+x.mins;sum+=x.mins;});
-  const max=Math.max(1,...Object.values(tot));
-  h+=`<div class="bars box"><h2>Last 7 days: ${hm(sum)}</h2>`;
-  TAGS.forEach(([t,c])=>{const m=tot[t]||0;h+=`<div class="bar"><span>${t}</span><div class="track"><div style="width:${m/max*100}%;background:${c}"></div></div><span>${hm(m)}</span></div>`;});
+  const since=shift(today(),-(range-1)),tot={};let sum=0;
+  for(const d in S.daily) if(d>=since) for(const t in S.daily[d]){tot[t]=(tot[t]||0)+S.daily[d][t];sum+=S.daily[d][t];}
+  const rows=S.tags.map(t=>[t.name,t.color,tot[t.name]||0]);
+  const other=Object.keys(tot).filter(k=>!S.tags.some(t=>t.name===k)).reduce((a,k)=>a+tot[k],0);
+  if(other) rows.push(['Other','var(--muted)',other]);
+  const max=Math.max(1,...rows.map(r=>r[2]));
+  h+='<div class="bars box"><div class="chips rng">';
+  [[7,'Week'],[30,'Month'],[365,'Year']].forEach(([n,l])=>h+=`<button class="chip" data-range="${n}" aria-pressed="${range===n}">${l}</button>`);
+  h+=`</div><h2>Last ${range} days: ${hm(sum)}</h2><p class="hint" style="margin:0">About ${hm(Math.round(sum/range))} a day</p>`;
+  rows.forEach(([t,c,m])=>{h+=`<div class="bar"><span>${esc(t)}</span><div class="track"><div style="width:${m/max*100}%;background:${c}"></div></div><span>${hm(m)}</span></div>`;});
   h+='</div>';
   $('#v-focus').innerHTML=h;
 }
+function logSession(tag,mins,t,q){S.sessions.push({tag,mins,t,q:q||null});addDaily(fmt(new Date(t)),tag,mins);}
 function finishTimer(silent){
   const t=S.timer; S.timer=null;
-  S.sessions.push({tag:t.tag,mins:t.mins,t:t.end,q:t.q||null});
+  logSession(t.tag,t.mins,t.end,t.q);
   addXP(20); save();
-  if(!silent){beep([523,659,784,1047]);try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}}
+  if(!silent){
+    beep([523,659,784,1047]);try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}
+    if(document.hidden) notify('Focus session done',t.mins+' min of '+t.tag+'. +20 XP');
+  }
   renderAll();
 }
+function stopAndSave(){
+  const t=S.timer,m=Math.floor((t.mins*60000-remaining())/60000);
+  S.timer=null;
+  if(m<1){save();renderFocus();toast('Under a minute, nothing saved');return;}
+  logSession(t.tag,m,Date.now(),t.q);
+  addXP(Math.max(1,Math.round(20*m/t.mins)));save();renderAll();
+}
+function askNotify(){
+  try{if('Notification' in window&&Notification.permission==='default'){const p=Notification.requestPermission();if(p&&p.catch)p.catch(()=>{});}}catch(e){}
+}
+function notify(title,body){
+  try{
+    if(!('Notification' in window)||Notification.permission!=='granted') return;
+    const o={body,icon:'icons/icon-192.png',tag:'cockpit-timer'};
+    if(navigator.serviceWorker&&navigator.serviceWorker.controller) navigator.serviceWorker.ready.then(r=>r.showNotification(title,o)).catch(()=>{});
+    else new Notification(title,o);
+  }catch(e){}
+}
+function renameTag(i,v){
+  const old=S.tags[i].name;v=v.trim();
+  if(!v||v===old) return;
+  if(S.tags.some(t=>t.name===v)){toast('That tag already exists');return;}
+  S.tags[i].name=v;
+  S.sessions.forEach(x=>{if(x.tag===old)x.tag=v;});
+  for(const d in S.daily){const o=S.daily[d];if(old in o){o[v]=(o[v]||0)+o[old];delete o[old];}}
+  if(S.tag===old) S.tag=v;
+  if(S.timer&&S.timer.tag===old) S.timer.tag=v;
+}
 setInterval(()=>{
-  if(!S.timer) return;
-  if(Date.now()>=S.timer.end) return finishTimer();
-  const c=$('#clock'); if(c) c.firstChild.nodeValue=mmss(S.timer.end-Date.now());
+  const t=S.timer;
+  if(!t){if(document.title!==TITLE)document.title=TITLE;return;}
+  if(timerDue()) return finishTimer();
+  const txt=mmss(remaining());
+  document.title=txt+(t.left!=null?' paused':'')+' · '+TITLE;
+  const c=$('#clock'); if(c) c.firstChild.nodeValue=txt;
 },500);
+
+/* done log */
+function logDays(since){return [...new Set(S.log.filter(x=>x.d>=since).map(x=>x.d))].sort().reverse();}
+function logText(){
+  return logDays(shift(today(),-6)).map(d=>dayLabel(d)+'\n'+S.log.filter(x=>x.d===d).map(x=>'- '+[...x.trail,x.text].join(' / ')).join('\n')).join('\n\n');
+}
+function renderLog(){
+  let h='<h2>Done log</h2><p class="hint">Everything you finished in the last two weeks. Handy for standups and weekly reviews.</p>';
+  const days=logDays(shift(today(),-13));
+  if(!days.length){h+='<div class="empty">Nothing finished yet. Completed quests show up here.</div>';$('#v-log').innerHTML=h;return;}
+  h+='<div class="acts" style="margin:0 0 16px"><button class="btn blue" id="copylog">Copy last 7 days</button></div>';
+  days.forEach(d=>{
+    const f=Object.values(S.daily[d]||{}).reduce((a,b)=>a+b,0);
+    h+=`<div class="logday box"><h2><span>${dayLabel(d)}</span>${f?`<small>${hm(f)} focus</small>`:''}</h2><ul>`;
+    S.log.filter(x=>x.d===d).forEach(x=>h+=`<li>${esc(x.text)}${x.trail.length?` <small>in ${esc(x.trail.join(' / '))}</small>`:''}</li>`);
+    h+='</ul></div>';
+  });
+  $('#v-log').innerHTML=h;
+}
+function copyLog(){
+  const txt=logText();
+  if(!txt){toast('Nothing in the last 7 days');return;}
+  const fail=()=>toast('Couldn\'t copy on this device');
+  try{navigator.clipboard.writeText(txt).then(()=>toast('Copied'),fail);}catch(e){fail();}
+}
 
 /* sync (Supabase) */
 const CFG=self.COCKPIT_CONFIG||{};
@@ -463,7 +605,7 @@ async function sync(){
     if(error) throw error;
     const remoteAt=data?Number(data.edited_at):0, localAt=S.editedAt||0;
     if(data&&remoteAt>localAt){
-      norm(data.data);S.editedAt=remoteAt;persistLocal();rollover();renderAll();
+      dropUndo();norm(data.data);S.editedAt=remoteAt;persistLocal();rollover();renderAll();
     }else if(localAt>remoteAt||!data){
       const {error:e2}=await sb.from('cockpit_state').upsert({user_id:uid_,data:S,edited_at:localAt,updated_at:new Date().toISOString()});
       if(e2) throw e2;
@@ -493,6 +635,24 @@ function syncLine(){
   if(syncStatus==='syncing') return 'Syncing...';
   return lastSync?'Last synced at '+new Date(lastSync).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'.':'Not synced yet.';
 }
+let history=null;  // null: not loaded, 'loading', 'none' (table missing), or rows
+async function loadHistory(){
+  history='loading';renderAccount();
+  const {data,error}=await sb.from('cockpit_history').select('id,data,saved_at').order('id',{ascending:false}).limit(20);
+  history=error?'none':data;renderAccount();
+}
+function renderHistory(){
+  if(history===null) return '<button class="linkbtn" id="hist">Show previous versions</button>';
+  if(history==='loading') return '<p class="hint">Loading...</p>';
+  if(history==='none') return '<p class="hint">Server history isn\'t set up. Run the updated supabase-setup.sql (see the README).</p>';
+  if(!history.length) return '<p class="hint">No previous versions yet. One is kept each time sync replaces your data.</p>';
+  let h='<p class="hint">The server keeps your last 200 versions. Restoring asks before replacing anything.</p>';
+  history.forEach(r=>{
+    const d=r.data||{},when=new Date(r.saved_at).toLocaleString([],{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    h+=`<div class="soonrow" style="cursor:default"><span>${esc(when)}<br><small class="hint">${(d.quests||[]).length} quests, ${(d.inbox||[]).length} inbox</small></span><button class="btn" data-hist="${r.id}" style="padding:6px 10px">Restore</button></div>`;
+  });
+  return h;
+}
 function renderAccount(){
   let h='<button class="btn back" id="accBack">&lt; Back</button><h2>Sync</h2>';
   if(!sb){
@@ -500,7 +660,7 @@ function renderAccount(){
   }else if(!session){
     h+=`<p class="hint">Sign in to keep your devices in sync.</p><form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg?`<p class="msg">${esc(authMsg)}</p>`:''}`;
   }else{
-    h+=`<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email||'')}</b></p><p class="hint" style="margin:0">${syncLine()}</p><div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div>`;
+    h+=`<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email||'')}</b></p><p class="hint" style="margin:0">${syncLine()}</p><div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}`;
   }
   if(pending) h+=`<div class="banner box"><p>Replace everything with this backup? It has ${pending.quests.length} quests and ${(pending.inbox||[]).length} inbox items. Your current data${session?' on every synced device':''} will be replaced.</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
   h+='<h2 style="margin-top:26px">Backup</h2><p class="hint">A file copy you keep yourself, separate from sync.</p><div class="acts"><button class="btn" id="exp">Save backup</button><label class="btn">Restore backup<input type="file" id="imp" accept=".json,application/json" hidden></label></div>';
@@ -529,11 +689,11 @@ function importFile(file){
 
 /* nav & events */
 let view='today',prevView='today';
-function renderAll(){renderHeader();renderToday();renderInbox();renderFocus();renderAccount();}
+function renderAll(){renderHeader();renderToday();renderInbox();renderFocus();renderLog();renderAccount();}
 function go(v){
   view=v;
   document.querySelectorAll('nav button[data-v]').forEach(x=>{if(x.dataset.v===v)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
-  ['today','inbox','focus','account'].forEach(k=>$('#v-'+k).hidden=k!==v);
+  ['today','inbox','focus','log','account'].forEach(k=>$('#v-'+k).hidden=k!==v);
   window.scrollTo(0,0);
 }
 function openPath(p){path=p;reorder=false;renderToday();window.scrollTo(0,0);}
@@ -553,12 +713,20 @@ document.addEventListener('submit',e=>{
     $('#sin').focus();if(opt)$('#sopt').checked=true;
   }
   if(f.id==='authform') signIn();
+  if(f.id==='tagform'){
+    const v=$('#tagin').value.trim();if(!v)return;
+    if(S.tags.some(t=>t.name===v)){toast('That tag already exists');return;}
+    const used=S.tags.map(t=>t.color);
+    S.tags.push({name:v,color:PALETTE.find(c=>!used.includes(c))||PALETTE[S.tags.length%PALETTE.length]});
+    save();renderFocus();$('#tagin').focus();
+  }
   if(f.id==='iform'){const v=$('#iin').value.trim();if(!v)return;S.inbox.unshift({id:uid(),text:v});save();renderAll();$('#iin').focus();beep([880]);}
 });
 
 document.addEventListener('change',e=>{
   const el=e.target;
   if(el.id==='imp'){if(el.files&&el.files[0])importFile(el.files[0]);el.value='';return;}
+  if(el.dataset.tagname!==undefined){renameTag(+el.dataset.tagname,el.value);save();renderFocus();return;}
   const fld=el.dataset.field;if(!fld)return;
   const r=find(el.dataset.id);if(!r)return;
   if(fld==='text'){const v=el.value.trim();if(v){r.n.text=v;save();renderAll();}return;}
@@ -579,7 +747,7 @@ document.addEventListener('click',e=>{
   if(d.del){
     const r=find(d.del);if(!r)return;
     if(!arm(b,r.n.children.length?'Delete all?':'Delete?'))return;
-    const bf=snapshot();r.arr.splice(r.arr.indexOf(r.n),1);settle(bf);
+    withUndo('Deleted '+r.n.text,()=>{const bf=snapshot();r.arr.splice(r.arr.indexOf(r.n),1);settle(bf);});
   }
   if(d.up||d.down){
     const r=find(d.up||d.down),i=r.arr.indexOf(r.n),j=d.up?i-1:i+1;
@@ -588,12 +756,13 @@ document.addEventListener('click',e=>{
   }
   if(b.id==='reorder'){reorder=!reorder;renderToday();}
   if(d.savetpl){
-    const n=find(d.savetpl).n,t=Object.assign({id:uid()},strip(n)),i=S.templates.findIndex(x=>x.text===n.text);
-    if(i>=0){t.id=S.templates[i].id;S.templates[i]=t;toast('Template updated');}else{S.templates.push(t);toast('Template saved');}
+    const n=find(d.savetpl).n,t=Object.assign({id:uid(),days:[]},strip(n)),i=S.templates.findIndex(x=>x.text===n.text);
+    if(i>=0){t.id=S.templates[i].id;t.days=S.templates[i].days;S.templates[i]=t;toast('Template updated');}else{S.templates.push(t);toast('Template saved');}
     save();
   }
   if(d.tpl){const t=S.templates.find(x=>x.id===d.tpl);const bf=snapshot();S.quests.push(inst(t));settle(bf);toast('Added '+t.text);}
-  if(d.deltpl){if(!arm(b,'Delete?'))return;S.templates=S.templates.filter(x=>x.id!==d.deltpl);save();renderToday();}
+  if(d.deltpl){if(!arm(b,'Delete?'))return;withUndo('Template deleted',()=>{S.templates=S.templates.filter(x=>x.id!==d.deltpl);save();renderToday();});}
+  if(d.rep){const t=S.templates.find(x=>x.id===d.rep),wd=+d.wd;t.days=t.days.includes(wd)?t.days.filter(x=>x!==wd):[...t.days,wd];save();renderToday();}
   if(d.toinbox){
     const r=find(d.toinbox),bf=snapshot();
     r.arr.splice(r.arr.indexOf(r.n),1);
@@ -606,28 +775,58 @@ document.addEventListener('click',e=>{
     const i=S.inbox.findIndex(x=>x.id===d.promote),it=S.inbox[i],bf=snapshot();
     S.quests.push(it.node||fix({id:uid(),text:it.text}));S.inbox.splice(i,1);settle(bf);toast('Added to today');
   }
-  if(d.clear){S.inbox=S.inbox.filter(x=>x.id!==d.clear);addXP(5);save();renderAll();}
+  if(d.clear){withUndo('Cleared, +5 XP',()=>{S.inbox=S.inbox.filter(x=>x.id!==d.clear);addXP(5);save();renderAll();});}
   if(d.tag){S.tag=d.tag;save();renderFocus();}
+  if(d.deltag){
+    if(S.tags.length<2||!arm(b,'Delete?'))return;
+    withUndo('Tag deleted',()=>{S.tags.splice(+d.deltag,1);if(!S.tags.some(t=>t.name===S.tag))S.tag=S.tags[0].name;save();renderFocus();});
+  }
+  if(d.range){range=+d.range;renderFocus();}
   if(d.mins){S.mins=+d.mins;save();renderFocus();}
-  if(b.id==='start'){beep([440]);S.timer={end:Date.now()+S.mins*60000,tag:S.tag,mins:S.mins,q:S.focusQ||null};S.focusQ=null;save();renderFocus();}
-  if(b.id==='stop'){S.timer=null;save();renderFocus();}
+  if(b.id==='start'){askNotify();beep([440]);S.timer={end:Date.now()+S.mins*60000,tag:S.tag,mins:S.mins,q:S.focusQ||null};S.focusQ=null;save();renderFocus();}
+  if(b.id==='stop'){if(!arm(b,'Tap again to discard'))return;S.timer=null;save();renderFocus();}
+  if(b.id==='stopsave') stopAndSave();
+  if(b.id==='pause'){const t=S.timer;if(t.left!=null){t.end=Date.now()+t.left;delete t.left;}else t.left=Math.max(0,t.end-Date.now());save();renderFocus();}
+  if(b.id==='undo') undo();
+  if(b.id==='copylog') copyLog();
+  if(b.id==='hist') loadHistory();
+  if(d.hist){const r=history.find(x=>String(x.id)===d.hist);if(r&&r.data&&Array.isArray(r.data.quests)){pending=r.data;renderAccount();window.scrollTo(0,0);}}
   if(b.id==='exp') exportData();
   if(b.id==='doRestore'){norm(pending);pending=null;path=[];save();renderAll();toast('Backup restored');go('today');}
   if(b.id==='noRestore'){pending=null;renderAccount();}
   if(b.id==='syncBtn'){if(view!=='account')prevView=view;renderAccount();go('account');}
   if(b.id==='accBack') go(prevView);
   if(b.id==='signup') signUp();
-  if(b.id==='signout'){sb.auth.signOut().then(()=>{session=null;syncStatus='';renderSyncBadge();renderAccount();});}
+  if(b.id==='signout'){sb.auth.signOut().then(()=>{session=null;syncStatus='';history=null;renderSyncBadge();renderAccount();});}
   if(b.id==='syncNow') sync();
 });
 
-document.addEventListener('visibilitychange',()=>{if(!document.hidden){rollover();if(S.timer&&Date.now()>=S.timer.end)finishTimer(true);else renderAll();sync();}});
+document.addEventListener('toggle',e=>{if(e.target.id)panels[e.target.id]=e.target.open;},true);
+
+/* keyboard shortcuts (desktop) */
+const KEYS='n new quest · i capture · t today · f focus · l log · p pause · Esc back';
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  const el=e.target;
+  if(el.closest&&el.closest('input,textarea,select,[contenteditable]')){if(e.key==='Escape')el.blur();return;}
+  const k=e.key,field=id=>{const f=$(id);if(!f)return false;e.preventDefault();f.focus();return true;};
+  if(k==='n'){go('today');field('#sin')||field('#qin');}
+  else if(k==='i'){go('inbox');field('#iin');}
+  else if(k==='t'){if(view==='today'&&path.length)openPath([]);go('today');}
+  else if(k==='f') go('focus');
+  else if(k==='l') go('log');
+  else if(k==='p'&&S.timer){go('focus');const b=$('#pause');if(b)b.click();}
+  else if(k==='?') toast(KEYS,false,5000);
+  else if(k==='Escape'){if(view==='account')go(prevView);else if(view==='today'&&path.length)openPath(path.slice(0,-1));}
+});
+
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){rollover();if(timerDue())finishTimer(true);else renderAll();sync();}});
 window.addEventListener('online',()=>sync());
 window.addEventListener('offline',()=>{if(session)setSync('offline');});
 setInterval(()=>{if(!document.hidden)sync();},60000);
 
 load();rollover();
-if(S.timer&&Date.now()>=S.timer.end) finishTimer(true); else renderAll();
+if(timerDue()) finishTimer(true); else renderAll();
 if(sb){
   sb.auth.onAuthStateChange((ev,s)=>{
     session=s;renderSyncBadge();if(view==='account')renderAccount();

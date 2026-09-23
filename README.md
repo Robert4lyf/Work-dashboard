@@ -25,9 +25,12 @@ The anon key is designed to be public. Row-level security (from the SQL file) is
 ## 3. Put it online (GitHub Pages)
 
 1. Create a free account at https://github.com and make a new **public** repository, e.g. `cockpit`.
-2. Click **Add file > Upload files** and upload everything in this folder, keeping the `icons` folder. Commit.
-3. Go to **Settings > Pages**. Under *Build and deployment*, choose **Deploy from a branch**, branch `main`, folder `/ (root)`. Save.
-4. After a minute your app is live at `https://YOUR-USERNAME.github.io/cockpit/`.
+2. Click **Add file > Upload files** and upload everything in this folder, keeping the `icons` and `.github` folders. Commit.
+3. Go to **Settings > Pages**. Under *Build and deployment*, set **Source** to **GitHub Actions**.
+4. Open the **Actions** tab. The "Deploy to GitHub Pages" workflow runs on every upload to `main` (run it by hand the first time if it hasn't started).
+5. After a minute your app is live at `https://YOUR-USERNAME.github.io/cockpit/`.
+
+If you'd rather use **Deploy from a branch** (branch `main`, folder `/ (root)`), delete `.github/workflows/pages.yml`, otherwise that workflow fails on every upload.
 
 ## 4. Finish Supabase auth settings
 
@@ -50,10 +53,24 @@ In the old claude.ai version: **Save backup**. In the new app: tap the sync butt
 
 ## Updating the app later
 
-Upload the changed files to the repository, and change `VERSION` in `sw.js` (e.g. `cockpit-v2`) so installed copies pick up the update. Close and reopen the app twice to see it.
+Upload the changed files to the repository. The deploy workflow stamps a new `VERSION` in `sw.js` automatically, so installed copies pick up the update. Close and reopen the app twice to see it.
+
+If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js` by hand on each upload (e.g. `cockpit-v3`).
+
+**Upgrading from the first version:** run the updated `supabase-setup.sql` once in the SQL Editor. It's safe to re-run and adds the server-side version history.
 
 ## How sync behaves
 
 - Changes save instantly on the device and sync about a second later, and whenever the app is reopened.
 - If you edit on two devices while both are offline, the most recent edit wins and the other device's offline changes are overwritten. Avoid editing the same day's list on two offline devices.
+- Every time sync replaces your data, the server keeps the previous version (the newest 200). If something goes missing, open **Sync > Previous versions** and restore one.
+
+## Features worth knowing
+
+- **Done log:** the Log tab lists what you finished over the last two weeks. **Copy last 7 days** gives you a ready-made standup update.
+- **Undo:** deleting a quest, clearing an inbox item, or deleting a template or tag shows an Undo button for 5 seconds.
+- **Repeat templates:** under Today > Repeat templates, pick weekdays and the template is added to Today automatically each morning.
+- **Focus timer:** pause and resume, or stop early and keep the minutes you did. Tags are editable under Focus > Edit tags. Stats cover a week, month or year.
+- **Timer alerts:** the first time you start a timer, the app asks to show notifications. On a computer you get an alert when the timer ends, even from another tab (it can arrive up to a minute late). On phones, the operating system pauses the app in the background, so the alert only comes when you reopen it.
+- **Keyboard shortcuts (computer):** `n` new quest, `i` capture to inbox, `t` today, `f` focus, `l` log, `p` pause/resume the timer, `Esc` back, `?` show these.
 - Free Supabase projects pause after a week with no activity. Opening the app regularly keeps it awake. If it pauses, click **Restore** in the Supabase dashboard; your data is kept.
