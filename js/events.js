@@ -454,7 +454,7 @@ document.addEventListener('click', e => {
   if (d.zstart) startTimer(d.zstart);
   if (d.zen) setZen(true);
   if (b.id === 'zenexit') setZen(false);
-  if (b.id === 'plus5') {
+  if (b.id === 'plus5' || d.plus5) {
     const t = S.timer;
     if (!t) return;
     t.mins += 5;
@@ -462,13 +462,13 @@ document.addEventListener('click', e => {
     else t.end += 300000;
     save();
     renderFocus();
+    renderZen();
   }
-  if (b.id === 'stop') {
+  if (b.id === 'stop' || d.discard) {
     if (!arm(b, 'Tap again to discard')) return;
     S.timer = null;
     save();
-    renderHeader();
-    renderFocus();
+    renderAll();
   }
   if (b.id === 'stopsave' || d.stop === 'save') stopAndSave(false);
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);

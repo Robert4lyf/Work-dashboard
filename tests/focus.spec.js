@@ -18,11 +18,12 @@ test('session defaults to Next up, takes its tag, and Done ticks it off', async 
   await page.click('#start');
   let s = await app.state();
   expect(s.timer.tag).toBe('Design');
-  await expect(page.locator('header #hclock')).toHaveCount(0);
-  await page.click('#plus5');
+  await expect(page.locator('#v-zen')).toBeVisible();
+  await expect(page.locator('.zt')).toHaveText('Draft');
+  await page.click('#v-zen [data-plus5]');
   expect((await app.state()).timer.mins).toBe(30);
   await page.clock.fastForward('10:00');
-  await page.click('#stopdone');
+  await page.click('#v-zen [data-stop="done"]');
   s = await app.state();
   expect(s.timer).toBeNull();
   expect(s.daily['2026-09-23'].Design).toBe(10);
@@ -35,8 +36,10 @@ test('pause excludes paused time; header shows the timer on other tabs', async (
   await page.selectOption('#fq', 'none');
   await page.click('#start');
   await page.clock.fastForward('05:00');
-  await page.click('#v-focus [data-pause]');
+  await page.click('#v-zen [data-pause]');
   await page.clock.fastForward('10:00');
+  await page.click('#zenexit');
+  await expect(page.locator('#v-focus')).toBeVisible();
   await app.go('today');
   await expect(page.locator('header #hclock')).toHaveText('20:00');
   await page.keyboard.press('p');
@@ -60,10 +63,30 @@ test('History shows focus time by tag and finished items', async ({ app, page })
   await app.go('focus');
   await page.click('#start');
   await page.clock.fastForward('26:00');
+  await page.keyboard.press('Escape');
   await page.click('[aria-label="Mark done: Report"]');
   await app.go('log');
   await expect(page.locator('#v-log')).toContainText('Untagged');
   await expect(page.locator('#v-log')).toContainText('Report');
   await page.click('[data-range="30"]');
   await expect(page.locator('#v-log .bars h2')).toContainText('30 days');
+});
+
+test('starting a session opens single-task mode; leaving it keeps the timer running', async ({
+  app,
+  page,
+}) => {
+  await app.addQuest('Report');
+  await app.go('focus');
+  await page.click('#start');
+  await expect(page.locator('#v-zen')).toBeVisible();
+  await expect(page.locator('nav')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#v-focus #clock')).toBeVisible();
+  expect((await app.state()).timer).not.toBeNull();
+  await page.click('header [data-zen]');
+  await page.click('#v-zen [data-discard]');
+  await page.click('#v-zen [data-discard]');
+  expect((await app.state()).timer).toBeNull();
+  await expect(page.locator('#v-zen [data-zstart]')).toBeVisible();
 });
