@@ -15,7 +15,7 @@ function renderInbox() {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item box"><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide' : 'Details and subquests'}</button></p>`;
+    h += `<div class="item box"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide' : 'Details and subquests'}</button></p>`;
     if (open) {
       h += tagPicker('i', it.id, it.tag) + projectPicker('i', it.id, it.project) + laterPicker('i', it.id);
       if (kids.length) {

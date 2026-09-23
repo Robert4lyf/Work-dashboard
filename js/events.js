@@ -16,8 +16,13 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  ['today', 'inbox', 'focus', 'log', 'account'].forEach(k => ($('#v-' + k).hidden = k !== v));
-  window.scrollTo(0, 0);
+  const board = onBoard();
+  document.body.classList.toggle('board', board);
+  ['today', 'inbox', 'focus', 'log', 'account'].forEach(
+    k => ($('#v-' + k).hidden = board ? !['today', 'inbox', 'focus'].includes(k) : k !== v),
+  );
+  if (board) $('#v-' + v).scrollIntoView({ block: 'nearest' });
+  else window.scrollTo(0, 0);
 }
 function openPath(p) {
   path = p;
@@ -301,14 +306,7 @@ document.addEventListener('click', e => {
         if (k === 'off') t.monthDay = 0;
       });
   }
-  if (d.toinbox) {
-    const r = find(d.toinbox),
-      bf = snapshot();
-    r.arr.splice(r.arr.indexOf(r.n), 1);
-    S.inbox.unshift({ id: uid(), text: r.n.text, node: r.n });
-    settle(bf);
-    toast('Moved to inbox');
-  }
+  if (d.toinbox) moveToInbox(d.toinbox);
   if (d.sched) schedule(d.kind, d.sched, d.when);
   if (d.now) {
     const i = S.later.findIndex(x => x.id === d.now);
@@ -586,6 +584,7 @@ load();
 rollover();
 if (timerDue()) finishTimer(true);
 else renderAll();
+go(view);
 receiveShare();
 setInterval(timerTick, 500);
 if (sb) {

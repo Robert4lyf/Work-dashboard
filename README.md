@@ -76,9 +76,13 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 - **Upcoming:** on a quest (or an inbox item's Tag and subquests), use **Do later** (Tomorrow, Next Mon, or a date) to move it off Today. It waits under Today > Upcoming, where you can change the date or bring it back, and joins the end of Today's list on its day.
 - **Share to Inbox (Android):** once the app is installed, choose it from any app's Share menu to drop a link or text straight into the inbox. iPhone doesn't let home-screen apps receive shares.
 - **Repeating quests:** open a quest and use **Repeat** to pick days (every day, weekdays, any mix) and/or a day of the month. A fresh copy, subquests included, is added to Today on those days, even if the app wasn't opened on the day itself. An unfinished copy carries over instead of doubling up. Choose **Off** to stop it. All repeats are listed under Today > Repeating quests.
+- **Projects:** group quests that belong to longer-running work. Pick a project on a quest (or an inbox item's Details and subquests), or create one from the same picker. History > Projects shows each project's finished and open quests, a progress bar and focus time; finish a project there when it's done. Rename or delete projects in Settings.
+- **Single-task mode:** tap **Single-task** in the header (or press `z`) for a full-screen view of just your current step, the timer and a Done button. `Esc` leaves it.
+- **Desktop board:** on a wide screen, Today, Inbox and Focus sit side by side. Drag an inbox item onto Today (onto a quest to place it before or after), a quest onto Inbox or onto Focus, or quests within Today to reorder.
+- **Appearance:** Settings > Appearance switches between the pixel font and a plain one, and between light, dark or matching your system. It's saved per device.
 - **Focus timer:** pick what you're working on (defaults to Next up) and a length. While it runs: pause, +5 min, stop and keep the minutes, or **Done** to save and tick off the quest.
 - **Timer alerts:** the first time you start a timer, the app asks to show notifications. On a computer you get an alert when the timer ends, even from another tab (it can arrive up to a minute late). On phones, the operating system pauses the app in the background, so the alert only comes when you reopen it.
-- **Keyboard shortcuts (computer):** `n` new quest, `i` capture to inbox, `t` today, `f` focus, `l` history, `s` settings, `p` pause/resume the timer, `Esc` back, `?` show these.
+- **Keyboard shortcuts (computer):** `n` new quest, `i` capture to inbox, `t` today, `f` focus, `l` history, `s` settings, `z` single-task, `p` pause/resume the timer, `Esc` back, `?` show these.
 - Free Supabase projects pause after a week with no activity. Opening the app regularly keeps it awake. If it pauses, click **Restore** in the Supabase dashboard; your data is kept.
 
 ## Working on the code

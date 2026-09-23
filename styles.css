@@ -1134,6 +1134,35 @@ body.zen nav {
   min-width: 140px;
   padding: 14px 18px;
 }
+/* desktop board */
+@media (min-width: 1100px) {
+  .wrap {
+    max-width: 760px;
+  }
+  body.board .wrap {
+    max-width: 1360px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0 32px;
+    align-items: start;
+  }
+  body.board header {
+    grid-column: 1 / -1;
+  }
+  /* Today, Inbox and Focus are all on screen, so all three show as current. */
+  body.board nav :is([data-v='today'], [data-v='inbox'], [data-v='focus']) {
+    background: var(--yellow);
+    color: var(--on-accent);
+    border-color: var(--edge);
+  }
+}
+[draggable='true'] {
+  cursor: grab;
+}
+.dropping {
+  outline: 3px dashed var(--blue);
+  outline-offset: 3px;
+}
 [hidden] {
   display: none !important;
 }
