@@ -72,7 +72,7 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 - **Header:** shows your next step (tick it off right there, or tap to open it), today's progress, focus time, and anything overdue or due today. While a focus timer runs, it shows the countdown with a pause button on every tab.
 - **Done log:** the Log tab lists what you finished over the last two weeks. **Copy last 7 days** gives you a ready-made standup update.
 - **Undo:** deleting a quest, clearing an inbox item, or deleting a template or tag shows an Undo button for 5 seconds.
-- **Repeat templates:** under Today > Repeat templates, pick weekdays and the template is added to Today automatically each morning.
+- **Repeating quests:** open a quest and use **Repeat** to pick days (every day, weekdays, any mix) and/or a day of the month. A fresh copy, subquests included, is added to Today on those days, even if the app wasn't opened on the day itself. An unfinished copy carries over instead of doubling up. Choose **Off** to stop it. All repeats are listed under Today > Repeating quests.
 - **Focus timer:** pause and resume, or stop early and keep the minutes you did. Tags are editable under Focus > Edit tags. Stats cover a week, month or year.
 - **Timer alerts:** the first time you start a timer, the app asks to show notifications. On a computer you get an alert when the timer ends, even from another tab (it can arrive up to a minute late). On phones, the operating system pauses the app in the background, so the alert only comes when you reopen it.
 - **Keyboard shortcuts (computer):** `n` new quest, `i` capture to inbox, `t` today, `f` focus, `l` log, `p` pause/resume the timer, `Esc` back, `?` show these.

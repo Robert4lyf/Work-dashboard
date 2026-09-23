@@ -34,7 +34,7 @@
 html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%;scrollbar-gutter:stable}
 *,*::before,*::after{box-sizing:inherit}
 body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:18px;line-height:1.35;-webkit-tap-highlight-color:transparent}
-button,input{font:inherit;color:inherit}
+button,input,select{font:inherit;color:inherit}
 :focus-visible{outline:3px dashed var(--yellow);outline-offset:3px}
 
 .wrap{max-width:520px;margin:0 auto;padding:16px 16px 110px}
@@ -138,7 +138,7 @@ nav button[aria-current="page"]{background:var(--yellow);color:var(--on-accent);
 .chev{font-family:var(--display);font-size:12px;color:var(--muted)}
 .meter{flex:none;width:34px;height:34px;border:3px solid var(--edge);display:grid;place-items:center;font-weight:600;font-size:13px;color:var(--on-accent);cursor:pointer;padding:0}
 .tag{display:inline-block;border:2px solid var(--edge);padding:0 5px;font-size:14px;margin-right:4px;color:var(--on-accent)}
-.tag.opt{background:var(--blue)} .tag.due{background:var(--yellow)} .tag.late{background:var(--pink)} .tag.now{background:var(--orange)}
+.tag.opt{background:var(--blue)} .tag.rep{background:var(--green)} .tag.due{background:var(--yellow)} .tag.late{background:var(--pink)} .tag.now{background:var(--orange)}
 .node{padding:14px;margin-bottom:22px}
 .node h1{font-family:var(--display);font-size:15px;line-height:1.6;margin:0 0 12px;overflow-wrap:anywhere}
 .prog{height:18px;border:3px solid var(--edge);background:var(--bg);margin:6px 0}
@@ -257,7 +257,7 @@ function norm(s){
   delete S.streak;
   S.quests=S.quests.map(fix);
   S.inbox=S.inbox.map(i=>i.node?Object.assign(i,{node:fix(i.node)}):i);
-  S.templates.forEach(t=>{if(!Array.isArray(t.days))t.days=[];});
+  S.templates.forEach(t=>{if(!Array.isArray(t.days))t.days=[];t.monthDay=t.monthDay||0;});
   if(!Array.isArray(S.tags)||!S.tags.length) S.tags=TAGS.map(([name,color])=>({name,color}));
   if(!S.tags.some(t=>t.name===S.tag)) S.tag=S.tags[0].name;
   if(!S.daily){S.daily={};S.sessions.forEach(x=>addDaily(fmt(new Date(x.t)),x.tag,x.mins));}
@@ -279,10 +279,18 @@ function save(){
 // Every device runs the same reset, so it doesn't need to be pushed.
 function rollover(){
   if(S.day===today()) return;
+  const last=S.day;
   S.quests=S.quests.filter(q=>!isDone(q));
   S.day=today();
-  const wd=new Date().getDay();
-  S.templates.forEach(t=>{if(t.days.includes(wd)&&!S.quests.some(q=>q.text===t.text&&!isDone(q)))S.quests.push(inst(t));});
+  // A repeat that fell on a day the app wasn't opened still turns up (looking back up to a month).
+  let d=last<shift(today(),-30)?shift(today(),-30):shift(last,1);
+  for(;d<=today();d=shift(d,1)){
+    const [y,m,dd]=d.split('-').map(Number),wd=new Date(y,m-1,dd).getDay(),end=new Date(y,m,0).getDate();
+    S.templates.forEach(t=>{
+      const hit=t.days.includes(wd)||(t.monthDay&&(t.monthDay===dd||(t.monthDay>end&&dd===end)));
+      if(hit&&!S.quests.some(q=>q.tpl===t.id||q.text===t.text)){const q=inst(t);q.tpl=t.id;S.quests.push(q);}
+    });
+  }
   persistLocal();
 }
 
@@ -337,6 +345,28 @@ function dueSoon(){
 }
 const strip=n=>({text:n.text,opt:n.opt,notes:n.notes,children:n.children.map(strip)});
 const inst=t=>fix({id:uid(),text:t.text,opt:t.opt,notes:t.notes,children:t.children.map(inst)});
+
+/* repeating quests: a quest repeats through a template linked by n.tpl */
+const repeats=t=>!!t&&(t.days.length>0||t.monthDay>0);
+const tplFor=n=>n.tpl?S.templates.find(t=>t.id===n.tpl):null;
+const ord=n=>n+([11,12,13].includes(n%100)?'th':['th','st','nd','rd'][n%10]||'th');
+function repLabel(t){
+  const ds=WEEK.filter(i=>t.days.includes(i)),p=[];
+  if(ds.length===7) p.push('Daily');
+  else if(ds.length===5&&[1,2,3,4,5].every(i=>ds.includes(i))) p.push('Weekdays');
+  else if(ds.length) p.push(ds.map(i=>WD[i]).join(' '));
+  if(t.monthDay) p.push('Monthly on the '+ord(t.monthDay));
+  return p.join(', ');
+}
+// Change how a quest repeats. The repeat copies the quest as it is now, subquests included.
+function setRepeat(n,fn){
+  let t=tplFor(n)||S.templates.find(x=>x.text===n.text);
+  if(!t){t={id:uid(),days:[],monthDay:0,auto:true};S.templates.push(t);}
+  n.tpl=t.id;
+  Object.assign(t,strip(n));fn(t);
+  if(t.auto&&!repeats(t)){S.templates=S.templates.filter(x=>x!==t);delete n.tpl;}
+  save();renderAll();
+}
 
 /* feedback */
 // XP is still counted (and synced) but no longer shown, so it can come back as a setting.
@@ -422,7 +452,8 @@ function row(n,i,len){
     left=`<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
   }
   const nx=kids&&!d?nextLeaf(n):null;
-  const meta=(n.opt?'<span class="tag opt">Optional</span>':'')+dueTag(n)+(nx?'Next: '+esc(nx.text):'');
+  const rt=tplFor(n);
+  const meta=(n.opt?'<span class="tag opt">Optional</span>':'')+(repeats(rt)?`<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>`:'')+dueTag(n)+(nx?'Next: '+esc(nx.text):'');
   const right=reorder
     ?`<button class="mv" data-up="${n.id}" aria-label="Move up" ${i===0?'disabled':''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i===len-1?'disabled':''}>&#9660;</button>`
     :`<span class="chev" aria-hidden="true">&gt;</span><button class="x" data-del="${n.id}" aria-label="Delete ${esc(n.text)}">×</button>`;
@@ -449,13 +480,16 @@ function renderToday(){
   if(qs.length&&qs.every(isDone)) h+='<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
   h+=list(qs);
   h+='<form class="addrow" id="qform"><input id="qin" maxlength="120" placeholder="Add a quest" aria-label="New quest" autocomplete="off"><button class="btn">Add</button></form>';
-  if(S.templates.length){
+  const own=S.templates.filter(t=>!t.auto);
+  if(own.length){
     h+='<div class="tpls"><span class="hint" style="margin:0">From a template:</span>';
-    S.templates.forEach(t=>h+=`<span class="tchip"><button data-tpl="${t.id}">${esc(t.text)} (${count(t)})</button><button class="tdel" data-deltpl="${t.id}" aria-label="Delete template ${esc(t.text)}">×</button></span>`);
+    own.forEach(t=>h+=`<span class="tchip"><button data-tpl="${t.id}">${esc(t.text)} (${count(t)})</button><button class="tdel" data-deltpl="${t.id}" aria-label="Delete template ${esc(t.text)}">×</button></span>`);
     h+='</div>';
-    h+=`<details id="repd" style="margin:-4px 0 18px"${panels.repd?' open':''}><summary>Repeat templates</summary><p class="hint" style="margin-top:8px">A template is added to Today automatically each morning on the days you pick.</p>`;
+  }
+  if(S.templates.length){
+    h+=`<details id="repd" style="margin:-4px 0 18px"${panels.repd?' open':''}><summary>Repeating quests</summary><p class="hint" style="margin-top:8px">These are added to Today automatically on the days you pick. To repeat any quest, open it and use Repeat.</p>`;
     S.templates.forEach(t=>{
-      h+=`<div class="rep"><span>${esc(t.text)}</span><div class="days">`;
+      h+=`<div class="rep"><span>${esc(t.text)}${t.monthDay?` <small class="hint">(also monthly on the ${ord(t.monthDay)})</small>`:''}</span><div class="days">`;
       WEEK.forEach(i=>h+=`<button class="day" data-rep="${t.id}" data-wd="${i}" aria-pressed="${t.days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0,2)}</button>`);
       h+='</div></div>';
     });
@@ -484,7 +518,18 @@ function renderNode({n,parents}){
     <label class="f" for="fdue">Deadline</label><input class="fld" type="date" id="fdue" data-field="due" data-id="${n.id}" value="${n.due}">
     <label class="f" for="fnotes">Notes</label><textarea class="fld" id="fnotes" data-field="notes" data-id="${n.id}">${esc(n.notes)}</textarea>
     ${top?'':`<label class="optbox"><input type="checkbox" data-field="opt" data-id="${n.id}" ${n.opt?'checked':''}>Optional (doesn't block the parent)</label>`}
-    </details></div>`;
+    </details>`;
+  if(top){
+    const t=tplFor(n),on=repeats(t),days=on?t.days:[],md=on?t.monthDay:0;
+    const preset=(k,l,p)=>`<button class="chip" data-rpreset="${k}" data-id="${n.id}" aria-pressed="${p}">${l}</button>`;
+    h+=`<details id="rptd"${panels.rptd?' open':''}><summary>Repeat: ${on?esc(repLabel(t)):'off'}</summary>
+      <p class="hint" style="margin-top:8px">Adds a fresh copy of this quest, subquests included, to Today on these days. Deleting today's copy doesn't stop the repeat; choose Off for that.</p>
+      <div class="chips" style="margin-bottom:10px">${preset('daily','Every day',days.length===7)}${preset('weekdays','Weekdays',repLabel({days,monthDay:0})==='Weekdays')}${preset('off','Off',!on)}</div>
+      <div class="days">${WEEK.map(i=>`<button class="day" data-rday="${i}" data-id="${n.id}" aria-pressed="${days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0,2)}</button>`).join('')}</div>
+      <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({length:31},(_,i)=>`<option value="${i+1}"${md===i+1?' selected':''}>${ord(i+1)}${i+1>28?' (or last day)':''}</option>`).join('')}</select>
+      </details>`;
+  }
+  h+='</div>';
   h+='<h2>Subquests</h2>';
   if(!kids) h+='<p class="hint">None yet. Add steps to break this down.</p>';
   h+=list(n.children);
@@ -823,7 +868,8 @@ document.addEventListener('change',e=>{
   if(el.dataset.tagname!==undefined){renameTag(+el.dataset.tagname,el.value);save();renderFocus();return;}
   const fld=el.dataset.field;if(!fld)return;
   const r=find(el.dataset.id);if(!r)return;
-  if(fld==='text'){const v=el.value.trim();if(v){r.n.text=v;save();renderAll();}return;}
+  if(fld==='text'){const v=el.value.trim();if(v){r.n.text=v;const t=tplFor(r.n);if(t)t.text=v;save();renderAll();}return;}
+  if(fld==='month'){setRepeat(r.n,t=>t.monthDay=+el.value);return;}
   if(fld==='due'){r.n.due=el.value;save();renderAll();return;}
   if(fld==='opt'){const b=snapshot();r.n.opt=el.checked;settle(b);}
 });
@@ -852,12 +898,18 @@ document.addEventListener('click',e=>{
   if(b.id==='reorder'){reorder=!reorder;renderToday();}
   if(d.savetpl){
     const n=find(d.savetpl).n,t=Object.assign({id:uid(),days:[]},strip(n)),i=S.templates.findIndex(x=>x.text===n.text);
-    if(i>=0){t.id=S.templates[i].id;t.days=S.templates[i].days;S.templates[i]=t;toast('Template updated');}else{S.templates.push(t);toast('Template saved');}
+    if(i>=0){t.id=S.templates[i].id;t.days=S.templates[i].days;t.monthDay=S.templates[i].monthDay;S.templates[i]=t;toast('Template updated');}else{S.templates.push(t);toast('Template saved');}
     save();
   }
-  if(d.tpl){const t=S.templates.find(x=>x.id===d.tpl);const bf=snapshot();S.quests.push(inst(t));settle(bf);toast('Added '+t.text);}
+  if(d.tpl){const t=S.templates.find(x=>x.id===d.tpl);const bf=snapshot(),q=inst(t);q.tpl=t.id;S.quests.push(q);settle(bf);toast('Added '+t.text);}
   if(d.deltpl){if(!arm(b,'Delete?'))return;withUndo('Template deleted',()=>{S.templates=S.templates.filter(x=>x.id!==d.deltpl);save();renderToday();});}
-  if(d.rep){const t=S.templates.find(x=>x.id===d.rep),wd=+d.wd;t.days=t.days.includes(wd)?t.days.filter(x=>x!==wd):[...t.days,wd];save();renderToday();}
+  if(d.rep){
+    const t=S.templates.find(x=>x.id===d.rep),wd=+d.wd;t.days=t.days.includes(wd)?t.days.filter(x=>x!==wd):[...t.days,wd];
+    if(t.auto&&!repeats(t)){S.templates=S.templates.filter(x=>x!==t);S.quests.forEach(q=>{if(q.tpl===t.id)delete q.tpl;});}
+    save();renderAll();
+  }
+  if(d.rday){const wd=+d.rday,r=find(d.id);if(r)setRepeat(r.n,t=>t.days=t.days.includes(wd)?t.days.filter(x=>x!==wd):[...t.days,wd]);}
+  if(d.rpreset){const r=find(d.id),k=d.rpreset;if(r)setRepeat(r.n,t=>{t.days=k==='daily'?[0,1,2,3,4,5,6]:k==='weekdays'?[1,2,3,4,5]:[];if(k==='off')t.monthDay=0;});}
   if(d.toinbox){
     const r=find(d.toinbox),bf=snapshot();
     r.arr.splice(r.arr.indexOf(r.n),1);
