@@ -158,12 +158,11 @@ details,details>*{box-sizing:border-box}
 textarea.fld{min-height:90px;resize:vertical}
 .optbox{display:flex;align-items:center;gap:8px;margin-top:12px}
 .optbox input{width:22px;height:22px;accent-color:var(--blue)}
-.linked{padding:10px 12px;margin-bottom:14px;display:flex;gap:10px;align-items:center}
-.linked span{flex:1}
 .linkbtn{background:none;border:0;padding:6px 0;color:var(--ink);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:16px}
 .links{display:flex;flex-wrap:wrap;gap:4px 20px;margin-top:10px}
 .links .dellink{margin:0;padding:6px 0}
 .listbar{display:flex;justify-content:flex-end;margin:-6px 0 6px}
+.mv[data-top]{width:auto;padding:0 8px;font-weight:600}
 .mv{flex:none;width:36px;height:36px;border:3px solid var(--edge);background:var(--yellow);color:var(--on-accent);cursor:pointer;padding:0;font-size:14px}
 .mv[disabled]{opacity:.3;cursor:default}
 .soon{padding:12px 14px;margin-bottom:22px;border-color:var(--edge);background:var(--panel)}
@@ -226,7 +225,7 @@ textarea.fld{min-height:90px;resize:vertical}
   <button data-v="today" aria-current="page">Today</button>
   <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
   <button data-v="focus">Focus</button>
-  <button data-v="log">Log</button>
+  <button data-v="log">History</button>
 </nav>
 <div class="toast" id="toast" role="status"></div>
 <script src="config.js"></script>
@@ -251,7 +250,7 @@ const WEEK=[1,2,3,4,5,6,0];
 const dayLabel=ds=>{if(ds===today())return 'Today';if(ds===shift(today(),-1))return 'Yesterday';const [y,m,d]=ds.split('-').map(Number);return WD[new Date(y,m-1,d).getDay()]+' '+d+' '+MON[m-1];};
 
 let S;
-function fix(n){n.children=(n.children||[]).map(fix);n.opt=!!n.opt;n.notes=n.notes||'';n.due=n.due||'';n.done=!!n.done;return n;}
+function fix(n){n.children=(n.children||[]).map(fix);n.tag=n.tag||'';n.opt=!!n.opt;n.notes=n.notes||'';n.due=n.due||'';n.done=!!n.done;return n;}
 function norm(s){
   S=Object.assign({xp:0,day:today(),quests:[],inbox:[],sessions:[],templates:[],bonusDay:'',timer:null,tag:'Design',mins:25,focusQ:null,log:[],tags:null,daily:null},s||{});
   delete S.streak;
@@ -259,7 +258,6 @@ function norm(s){
   S.inbox=S.inbox.map(i=>i.node?Object.assign(i,{node:fix(i.node)}):i);
   S.templates.forEach(t=>{if(!Array.isArray(t.days))t.days=[];t.monthDay=t.monthDay||0;});
   if(!Array.isArray(S.tags)||!S.tags.length) S.tags=TAGS.map(([name,color])=>({name,color}));
-  if(!S.tags.some(t=>t.name===S.tag)) S.tag=S.tags[0].name;
   if(!S.daily){S.daily={};S.sessions.forEach(x=>addDaily(fmt(new Date(x.t)),x.tag,x.mins));}
 }
 function addDaily(d,tag,mins){const o=S.daily[d]=S.daily[d]||{};o[tag]=(o[tag]||0)+mins;}
@@ -327,7 +325,15 @@ function snapshot(){
   (function w(ns,trail){ns.forEach(n=>{m.set(n.id,{done:isDone(n),top:!trail.length,text:n.text,trail});w(n.children,[...trail,n.text]);});})(S.quests,[]);
   return m;
 }
+// Finished quests sink below open ones at every level; open ones keep their order,
+// so the top open quest is always "Next up".
+function sinkDone(ns){
+  const open=ns.filter(n=>!isDone(n)),done=ns.filter(isDone);
+  ns.splice(0,ns.length,...open,...done);
+  ns.forEach(n=>sinkDone(n.children));
+}
 function settle(before){
+  sinkDone(S.quests);
   const after=snapshot();let gain=0;
   after.forEach((v,id)=>{if(!before.has(id))return;const was=before.get(id).done;const pts=v.top?30:10;
     if(v.done&&!was){gain+=pts;S.log.push({id,d:today(),text:v.text,trail:v.trail});}
@@ -343,8 +349,8 @@ function dueSoon(){
   (function w(ns,trail){ns.forEach(n=>{if(isDone(n))return;const t=[...trail,n.text];if(n.due&&n.due<=lim)out.push({n,t});w(n.children,t);});})(S.quests,[]);
   return out.sort((a,b)=>a.n.due<b.n.due?-1:a.n.due>b.n.due?1:0).slice(0,5);
 }
-const strip=n=>({text:n.text,opt:n.opt,notes:n.notes,children:n.children.map(strip)});
-const inst=t=>fix({id:uid(),text:t.text,opt:t.opt,notes:t.notes,children:t.children.map(inst)});
+const strip=n=>({text:n.text,tag:n.tag,opt:n.opt,notes:n.notes,children:n.children.map(strip)});
+const inst=t=>fix({id:uid(),text:t.text,tag:t.tag,opt:t.opt,notes:t.notes,children:t.children.map(inst)});
 
 /* repeating quests: a quest repeats through a template linked by n.tpl */
 const repeats=t=>!!t&&(t.days.length>0||t.monthDay>0);
@@ -410,9 +416,9 @@ function nextStep(){
 }
 function renderHeader(){
   let h;
-  if(S.timer){
-    const t=S.timer,q=t.q&&find(t.q),paused=t.left!=null;
-    h=`<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused?'Paused · ':''}${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></button><button class="btn ${paused?'green':'blue'}" data-pause="1">${paused?'Resume':'Pause'}</button>`;
+  if(S.timer&&view!=='focus'){
+    const t=S.timer,paused=t.left!=null;
+    h=`<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused?'Paused · ':''}${esc(timerLabel(t))}</small></button><button class="btn ${paused?'green':'blue'}" data-pause="1">${paused?'Resume':'Pause'}</button>`;
   }else{
     const nx=nextStep();
     if(nx) h=`<button class="check" data-toggle="${nx.n.id}" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n!==nx.q?' in '+esc(nx.q.text):''}</small><b>${esc(nx.n.text)}</b></button>`;
@@ -442,7 +448,7 @@ function dueTag(n){
   const t=today(),cls=n.due<t?'late':n.due===t?'now':'due';
   return `<span class="tag ${cls}">${n.due<t?'Overdue':n.due===t?'Due today':'Due '+niceDate(n.due)}</span>`;
 }
-function row(n,i,len){
+function row(n,i,len,sib){
   const d=isDone(n),kids=n.children.length;
   let left;
   if(kids){
@@ -453,16 +459,16 @@ function row(n,i,len){
   }
   const nx=kids&&!d?nextLeaf(n):null;
   const rt=tplFor(n);
-  const meta=(n.opt?'<span class="tag opt">Optional</span>':'')+(repeats(rt)?`<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>`:'')+dueTag(n)+(nx?'Next: '+esc(nx.text):'');
+  const meta=tagBadge(n.tag)+(n.opt?'<span class="tag opt">Optional</span>':'')+(repeats(rt)?`<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>`:'')+dueTag(n)+(nx?'Next: '+esc(nx.text):'');
   const right=reorder
-    ?`<button class="mv" data-up="${n.id}" aria-label="Move up" ${i===0?'disabled':''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i===len-1?'disabled':''}>&#9660;</button>`
+    ?`${d?'':`<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i===0?'disabled':''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i===0||(d&&!isDone(sib[i-1]))?'disabled':''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i===len-1||(!d&&isDone(sib[i+1]))?'disabled':''}>&#9660;</button>`
     :`<span class="chev" aria-hidden="true">&gt;</span><button class="x" data-del="${n.id}" aria-label="Delete ${esc(n.text)}">×</button>`;
   return `<div class="row box${d?' done':''}">${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta?'<small>'+meta+'</small>':''}</button>${right}</div>`;
 }
 function list(ns){
   let h='';
   if(ns.length>1) h+=`<div class="listbar"><button class="linkbtn" id="reorder">${reorder?'Done reordering':'Reorder'}</button></div>`;
-  ns.forEach((c,i)=>h+=row(c,i,ns.length));
+  ns.forEach((c,i)=>h+=row(c,i,ns.length,ns));
   return h;
 }
 function renderToday(){
@@ -502,7 +508,7 @@ function renderNode({n,parents}){
   const d=isDone(n),kids=n.children.length,top=!parents.length;
   let h=`<button class="btn back" data-crumb="${parents.length-1}">&lt; Back</button><div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">Today</button>`;
   parents.forEach((p,i)=>h+=`<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`);
-  h+=`<span>/</span><b>${esc(n.text)}</b></div><div class="node box"><h1>${esc(n.text)}</h1>`;
+  h+=`<span>/</span><b>${esc(n.text)}</b></div><div class="node box"><h1>${esc(n.text)}</h1>${top?tagPicker('q',n.id,n.tag):''}`;
   if(kids){
     const req=n.children.filter(c=>!c.opt),set=req.length?req:n.children,p=Math.round(frac(n)*100),opt=n.children.length-req.length;
     h+=`<div>${set.filter(isDone).length} / ${set.length} complete (${p}%)${req.length&&opt?' + '+opt+' optional':''}</div><div class="prog"><div style="width:${p}%"></div></div>`;
@@ -544,8 +550,9 @@ function renderInbox(){
   if(!S.inbox.length) h+='<div class="empty">Inbox empty.</div>';
   S.inbox.forEach(it=>{
     const kids=it.node?it.node.children:[],c=it.node?count(it.node):0,open=expanded.has(it.id);
-    h+=`<div class="item box"><p>${esc(it.text)}${c?` <span class="tag opt">${c} subquest${c===1?'':'s'}</span>`:''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open?'Hide subquests':(c?'Edit subquests':'Add subquests')}</button></p>`;
+    h+=`<div class="item box"><p>${esc(it.text)} ${tagBadge(it.tag)}${c?`<span class="tag opt">${c} subquest${c===1?'':'s'}</span>`:''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open?'Hide':'Tag and subquests'}</button></p>`;
     if(open){
+      h+=tagPicker('i',it.id,it.tag);
       if(kids.length){
         h+='<ul class="subs">';
         kids.forEach(k=>h+=`<li><span>${esc(k.text)}${k.children.length?` <small class="hint">(${count(k)} more)</small>`:''}</span><button class="x" data-delsub="${it.id}" data-sub="${k.id}" aria-label="Remove ${esc(k.text)}">×</button></li>`);
@@ -601,56 +608,70 @@ const mmss=ms=>{const s=Math.max(0,Math.ceil(ms/1000));return pad(Math.floor(s/6
 const hm=m=>m>=60?Math.floor(m/60)+'h '+(m%60)+'m':m+'m';
 const remaining=()=>S.timer.left!=null?S.timer.left:S.timer.end-Date.now();
 const timerDue=()=>!!S.timer&&S.timer.left==null&&Date.now()>=S.timer.end;
-const tagColor=name=>{const t=S.tags.find(x=>x.name===name);return t?t.color:'var(--muted)';};
+const tagColor=name=>{const t=S.tags.find(x=>x.name===name);return t?t.color:'#C2C3C7';};
 let range=7;
+const tagBadge=name=>name?`<span class="tag" style="background:${tagColor(name)}">${esc(name)}</span>`:'';
+function tagPicker(kind,id,cur){
+  let h='<div class="chips tagpick">';
+  S.tags.forEach(t=>h+=`<button class="chip" style="--c:${t.color}" data-settag="${esc(t.name)}" data-kind="${kind}" data-id="${id}" aria-pressed="${cur===t.name}">${esc(t.name)}</button>`);
+  return h+'<button class="linkbtn" data-edittags="1">Edit tags</button></div>';
+}
+const topOf=id=>{const r=id&&find(id);return r?(r.parents[0]||r.n):null;};
+const timerLabel=t=>{const q=t.q&&find(t.q);return [t.tag,q&&q.n.text].filter(Boolean).join(': ');};
+// What the next session is for: the quest picked here, else the header's "Next up".
+function focusTarget(){
+  if(S.focusQ==='none') return null;
+  if(S.focusQ&&find(S.focusQ)&&!isDone(find(S.focusQ).n)) return S.focusQ;
+  const nx=nextStep();return nx?nx.n.id:null;
+}
 function renderFocus(){
   let h='<h2>Focus</h2>';
   if(S.timer){
-    const t=S.timer,q=t.q&&find(t.q),paused=t.left!=null;
-    h+=`${paused?'<p class="hint">Paused</p>':''}<div class="clock box" id="clock">${mmss(remaining())}<small>${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></div>`;
-    h+=`<div class="acts" style="margin-top:0"><button class="btn ${paused?'green':'blue'}" data-pause="1" style="flex:1">${paused?'Resume':'Pause'}</button><button class="btn" id="stopsave" style="flex:1">Stop and save</button></div><button class="dellink" id="stop">Discard this session</button>`;
+    const t=S.timer,q=t.q&&find(t.q),paused=t.left!=null,leaf=q&&!q.n.children.length&&!q.n.done;
+    h+=`<div class="clock box" id="clock">${mmss(remaining())}<small>${paused?'Paused · ':''}${esc(timerLabel(t))||'Focus'}</small></div>`;
+    h+=`<div class="acts" style="margin-top:0"><button class="btn ${paused?'green':'blue'}" data-pause="1" style="flex:1">${paused?'Resume':'Pause'}</button><button class="btn" id="plus5" style="flex:1">+5 min</button></div>`;
+    h+=`<div class="acts"><button class="btn" id="stopsave" style="flex:1">Stop and save</button>${leaf?'<button class="btn green" id="stopdone" style="flex:1">Done</button>':''}</div><button class="dellink" id="stop">Discard this session</button>`;
   }else{
-    const fq=S.focusQ&&find(S.focusQ);
-    if(fq) h+=`<div class="linked box"><span>Linked to: <b>${esc(fq.n.text)}</b></span><button class="x" id="unlink" aria-label="Unlink quest">×</button></div>`;
-    h+='<div class="chips">';
-    S.tags.forEach(t=>h+=`<button class="chip" style="--c:${t.color}" data-tag="${esc(t.name)}" aria-pressed="${S.tag===t.name}">${esc(t.name)}</button>`);
-    h+='</div><div class="chips">';
+    const cur=focusTarget(),opts=[];
+    (function w(ns,trail){ns.forEach(n=>{if(isDone(n))return;const tr=[...trail,n.text];opts.push([n.id,tr.join(' / ')]);w(n.children,tr);});})(S.quests,[]);
+    const top=topOf(cur);
+    h+=`<label class="f" for="fq" style="margin-top:0">Working on ${top?tagBadge(top.tag):''}</label><select class="fld" id="fq"><option value="none"${cur?'':' selected'}>Nothing specific</option>${opts.map(([id,l])=>`<option value="${id}"${id===cur?' selected':''}>${esc(l)}</option>`).join('')}</select>`;
+    h+='<div class="chips" style="margin-top:14px">';
     [15,25,45].forEach(m=>h+=`<button class="chip" data-mins="${m}" aria-pressed="${S.mins===m}">${m} min</button>`);
     h+=`</div><button class="btn green" id="start" style="width:100%">Start ${S.mins} min</button>`;
-    h+=`<details id="tagd"${panels.tagd?' open':''}><summary>Edit tags</summary>`;
-    S.tags.forEach((t,i)=>h+=`<div class="tagrow"><span class="sw" style="background:${t.color}"></span><input class="fld" data-tagname="${i}" value="${esc(t.name)}" maxlength="20" aria-label="Tag name"><button class="x" data-deltag="${i}" aria-label="Delete tag ${esc(t.name)}"${S.tags.length<2?' disabled':''}>×</button></div>`);
-    h+='<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form></details>';
   }
+  $('#v-focus').innerHTML=h;
+}
+function renderStats(){
   const since=shift(today(),-(range-1)),tot={};let sum=0;
   for(const d in S.daily) if(d>=since) for(const t in S.daily[d]){tot[t]=(tot[t]||0)+S.daily[d][t];sum+=S.daily[d][t];}
-  const rows=S.tags.map(t=>[t.name,t.color,tot[t.name]||0]);
-  const other=Object.keys(tot).filter(k=>!S.tags.some(t=>t.name===k)).reduce((a,k)=>a+tot[k],0);
-  if(other) rows.push(['Other','var(--muted)',other]);
+  const rows=Object.keys(tot).filter(k=>tot[k]>0).map(k=>[k||'Untagged',k?tagColor(k):'var(--muted)',tot[k]]).sort((a,b)=>b[2]-a[2]);
   const max=Math.max(1,...rows.map(r=>r[2]));
-  h+='<div class="bars box"><div class="chips rng">';
+  let h='<div class="bars box" style="margin:0 0 22px"><div class="chips rng">';
   [[7,'Week'],[30,'Month'],[365,'Year']].forEach(([n,l])=>h+=`<button class="chip" data-range="${n}" aria-pressed="${range===n}">${l}</button>`);
-  h+=`</div><h2>Last ${range} days: ${hm(sum)}</h2><p class="hint" style="margin:0">About ${hm(Math.round(sum/range))} a day</p>`;
+  h+=`</div><h2>Focus, last ${range} days: ${hm(sum)}</h2>`;
+  if(sum) h+=`<p class="hint" style="margin:0">About ${hm(Math.round(sum/range))} a day</p>`;
   rows.forEach(([t,c,m])=>{h+=`<div class="bar"><span>${esc(t)}</span><div class="track"><div style="width:${m/max*100}%;background:${c}"></div></div><span>${hm(m)}</span></div>`;});
-  h+='</div>';
-  $('#v-focus').innerHTML=h;
+  return h+'</div>';
 }
 function logSession(tag,mins,t,q){S.sessions.push({tag,mins,t,q:q||null});addDaily(fmt(new Date(t)),tag,mins);}
 function finishTimer(silent){
-  const t=S.timer; S.timer=null;
+  const t=S.timer; S.timer=null;S.focusQ=null;
   logSession(t.tag,t.mins,t.end,t.q);
   addXP(20); save();
   if(!silent){
     beep([523,659,784,1047]);try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}
-    if(document.hidden) notify('Focus session done',t.mins+' min of '+t.tag+'.');
+    if(document.hidden) notify('Focus session done',t.mins+' min'+(timerLabel(t)?' · '+timerLabel(t):''));
   }
   renderAll();
 }
-function stopAndSave(){
+function stopAndSave(done){
   const t=S.timer,m=Math.floor((t.mins*60000-remaining())/60000);
-  S.timer=null;
-  if(m<1){save();renderHeader();renderFocus();toast('Under a minute, nothing saved');return;}
-  logSession(t.tag,m,Date.now(),t.q);
-  addXP(Math.max(1,Math.round(20*m/t.mins)));save();renderAll();
+  S.timer=null;S.focusQ=null;
+  if(m>=1){logSession(t.tag,m,Date.now(),t.q);addXP(Math.max(1,Math.round(20*m/t.mins)));}
+  const r=done&&t.q&&find(t.q);
+  if(r){const bf=snapshot();r.n.done=true;settle(bf);}else{save();renderAll();}
+  if(m<1&&!r) toast('Under a minute, nothing saved');
 }
 function askNotify(){
   try{if('Notification' in window&&Notification.permission==='default'){const p=Notification.requestPermission();if(p&&p.catch)p.catch(()=>{});}}catch(e){}
@@ -663,14 +684,19 @@ function notify(title,body){
     else new Notification(title,o);
   }catch(e){}
 }
+// Every quest, inbox item and template, for tag renames and deletes.
+function eachTagged(fn){
+  const w=n=>{fn(n);(n.children||[]).forEach(w);};
+  S.quests.forEach(w);S.templates.forEach(w);S.inbox.forEach(i=>{fn(i);if(i.node)w(i.node);});
+}
 function renameTag(i,v){
   const old=S.tags[i].name;v=v.trim();
   if(!v||v===old) return;
   if(S.tags.some(t=>t.name===v)){toast('That tag already exists');return;}
   S.tags[i].name=v;
+  eachTagged(n=>{if(n.tag===old)n.tag=v;});
   S.sessions.forEach(x=>{if(x.tag===old)x.tag=v;});
   for(const d in S.daily){const o=S.daily[d];if(old in o){o[v]=(o[v]||0)+o[old];delete o[old];}}
-  if(S.tag===old) S.tag=v;
   if(S.timer&&S.timer.tag===old) S.timer.tag=v;
 }
 setInterval(()=>{
@@ -689,10 +715,10 @@ function logText(){
   return logDays(shift(today(),-6)).map(d=>dayLabel(d)+'\n'+S.log.filter(x=>x.d===d).map(x=>'- '+[...x.trail,x.text].join(' / ')).join('\n')).join('\n\n');
 }
 function renderLog(){
-  let h='<h2>Done log</h2>';
+  let h='<h2>History</h2>'+renderStats();
   const days=logDays(shift(today(),-13));
+  h+='<div class="listbar" style="justify-content:space-between;align-items:center;margin:0 0 8px"><h2 style="margin:0">Done</h2>'+(days.length?'<button class="linkbtn" id="copylog">Copy last 7 days</button>':'')+'</div>';
   if(!days.length){h+='<div class="empty">Nothing finished yet.</div>';$('#v-log').innerHTML=h;return;}
-  h+='<div class="acts" style="margin:0 0 16px"><button class="btn blue" id="copylog">Copy last 7 days</button></div>';
   days.forEach(d=>{
     const f=Object.values(S.daily[d]||{}).reduce((a,b)=>a+b,0);
     h+=`<div class="logday box"><h2><span>${dayLabel(d)}</span>${f?`<small>${hm(f)} focus</small>`:''}</h2><ul>`;
@@ -792,6 +818,9 @@ function renderAccount(){
     h+=`<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email||'')}</b></p><p class="hint" style="margin:0">${syncLine()}</p><div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}`;
   }
   if(pending) h+=`<div class="banner box"><p>Replace everything with this backup? It has ${pending.quests.length} quests and ${(pending.inbox||[]).length} inbox items. Your current data${session?' on every synced device':''} will be replaced.</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
+  h+='<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
+  S.tags.forEach((t,i)=>h+=`<div class="tagrow"><span class="sw" style="background:${t.color}"></span><input class="fld" data-tagname="${i}" value="${esc(t.name)}" maxlength="20" aria-label="Tag name"><button class="x" data-deltag="${i}" aria-label="Delete tag ${esc(t.name)}">×</button></div>`);
+  h+='<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form>';
   h+='<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><label class="btn">Restore backup<input type="file" id="imp" accept=".json,application/json" hidden></label></div>';
   $('#v-account').innerHTML=h;
 }
@@ -820,7 +849,7 @@ function importFile(file){
 let view='today',prevView='today';
 function renderAll(){renderHeader();renderToday();renderInbox();renderFocus();renderLog();renderAccount();}
 function go(v){
-  view=v;
+  view=v;renderHeader();
   document.querySelectorAll('nav button[data-v]').forEach(x=>{if(x.dataset.v===v)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current');});
   ['today','inbox','focus','log','account'].forEach(k=>$('#v-'+k).hidden=k!==v);
   window.scrollTo(0,0);
@@ -847,12 +876,12 @@ document.addEventListener('submit',e=>{
     if(S.tags.some(t=>t.name===v)){toast('That tag already exists');return;}
     const used=S.tags.map(t=>t.color);
     S.tags.push({name:v,color:PALETTE.find(c=>!used.includes(c))||PALETTE[S.tags.length%PALETTE.length]});
-    save();renderFocus();$('#tagin').focus();
+    save();renderAll();$('#tagin').focus();
   }
   if(f.id==='iform'){const n=capture($('#iin').value);if(!n)return;$('#iin').focus();if(n>1)toast('Added '+n+' items');}
   if(f.dataset.subfor){
     const id=f.dataset.subfor,v=f.querySelector('input').value.trim(),it=S.inbox.find(x=>x.id===id);if(!v||!it)return;
-    it.node=it.node||fix({id:uid(),text:it.text});
+    it.node=it.node||fix({id:uid(),text:it.text,tag:it.tag});
     it.node.children.push(fix({id:uid(),text:v}));
     save();renderAll();
     const nf=document.querySelector(`[data-subfor="${id}"] input`);nf&&nf.focus();
@@ -862,7 +891,8 @@ document.addEventListener('submit',e=>{
 document.addEventListener('change',e=>{
   const el=e.target;
   if(el.id==='imp'){if(el.files&&el.files[0])importFile(el.files[0]);el.value='';return;}
-  if(el.dataset.tagname!==undefined){renameTag(+el.dataset.tagname,el.value);save();renderFocus();return;}
+  if(el.dataset.tagname!==undefined){renameTag(+el.dataset.tagname,el.value);save();renderAll();return;}
+  if(el.id==='fq'){S.focusQ=el.value;save();renderFocus();return;}
   const fld=el.dataset.field;if(!fld)return;
   const r=find(el.dataset.id);if(!r)return;
   if(fld==='text'){const v=el.value.trim();if(v){r.n.text=v;const t=tplFor(r.n);if(t)t.text=v;save();renderAll();}return;}
@@ -890,8 +920,9 @@ document.addEventListener('click',e=>{
   if(d.up||d.down){
     const r=find(d.up||d.down),i=r.arr.indexOf(r.n),j=d.up?i-1:i+1;
     if(j<0||j>=r.arr.length)return;
-    [r.arr[i],r.arr[j]]=[r.arr[j],r.arr[i]];save();renderToday();
+    [r.arr[i],r.arr[j]]=[r.arr[j],r.arr[i]];save();renderAll();
   }
+  if(d.top){const r=find(d.top);if(r){r.arr.splice(r.arr.indexOf(r.n),1);r.arr.unshift(r.n);save();renderAll();}}
   if(b.id==='reorder'){reorder=!reorder;renderToday();}
   if(d.savetpl){
     const n=find(d.savetpl).n,t=Object.assign({id:uid(),days:[]},strip(n)),i=S.templates.findIndex(x=>x.text===n.text);
@@ -914,25 +945,32 @@ document.addEventListener('click',e=>{
     settle(bf);toast('Moved to inbox');
   }
   if(d.focuson){S.focusQ=d.focuson;save();renderFocus();go('focus');}
-  if(b.id==='unlink'){S.focusQ=null;save();renderFocus();}
   if(d.promote){
     const i=S.inbox.findIndex(x=>x.id===d.promote),it=S.inbox[i],bf=snapshot();
-    S.quests.push(it.node||fix({id:uid(),text:it.text}));S.inbox.splice(i,1);settle(bf);toast('Added to today');
+    S.quests.push(it.node?Object.assign(it.node,{tag:it.tag||it.node.tag}):fix({id:uid(),text:it.text,tag:it.tag}));S.inbox.splice(i,1);settle(bf);toast('Added to today');
   }
   if(d.steps){if(expanded.has(d.steps))expanded.delete(d.steps);else expanded.add(d.steps);renderInbox();const nf=document.querySelector(`[data-subfor="${d.steps}"] input`);nf&&nf.focus();}
   if(d.delsub){const it=S.inbox.find(x=>x.id===d.delsub);if(it&&it.node)withUndo('Removed',()=>{it.node.children=it.node.children.filter(k=>k.id!==d.sub);save();renderInbox();});}
   if(b.id==='mic') toggleMic();
   if(d.clear){withUndo('Cleared',()=>{S.inbox=S.inbox.filter(x=>x.id!==d.clear);addXP(5);save();renderAll();});}
-  if(d.tag){S.tag=d.tag;save();renderFocus();}
-  if(d.deltag){
-    if(S.tags.length<2||!arm(b,'Delete?'))return;
-    withUndo('Tag deleted',()=>{S.tags.splice(+d.deltag,1);if(!S.tags.some(t=>t.name===S.tag))S.tag=S.tags[0].name;save();renderFocus();});
+  if(d.settag!==undefined){
+    const v=d.settag;
+    if(d.kind==='q'){const r=find(d.id);if(r){r.n.tag=r.n.tag===v?'':v;const t=tplFor(r.n);if(t)t.tag=r.n.tag;}}
+    else{const it=S.inbox.find(x=>x.id===d.id);if(it){it.tag=it.tag===v?'':v;if(it.node)it.node.tag=it.tag;}}
+    save();renderAll();
   }
-  if(d.range){range=+d.range;renderFocus();}
+  if(d.edittags){if(view!=='account')prevView=view;renderAccount();go('account');const t=$('#tagsec');t&&t.scrollIntoView();}
+  if(d.deltag){
+    if(!arm(b,'Delete?'))return;
+    withUndo('Tag deleted',()=>{const name=S.tags[+d.deltag].name;S.tags.splice(+d.deltag,1);eachTagged(n=>{if(n.tag===name)n.tag='';});save();renderAll();});
+  }
+  if(d.range){range=+d.range;renderLog();}
   if(d.mins){S.mins=+d.mins;save();renderFocus();}
-  if(b.id==='start'){askNotify();beep([440]);S.timer={end:Date.now()+S.mins*60000,tag:S.tag,mins:S.mins,q:S.focusQ||null};S.focusQ=null;save();renderHeader();renderFocus();}
+  if(b.id==='start'){const q=focusTarget(),top=topOf(q);askNotify();beep([440]);S.timer={end:Date.now()+S.mins*60000,tag:top?top.tag:'',mins:S.mins,q};save();renderHeader();renderFocus();}
+  if(b.id==='plus5'){const t=S.timer;if(!t)return;t.mins+=5;if(t.left!=null)t.left+=300000;else t.end+=300000;save();renderFocus();}
   if(b.id==='stop'){if(!arm(b,'Tap again to discard'))return;S.timer=null;save();renderHeader();renderFocus();}
-  if(b.id==='stopsave') stopAndSave();
+  if(b.id==='stopsave') stopAndSave(false);
+  if(b.id==='stopdone') stopAndSave(true);
   if(d.pause){const t=S.timer;if(!t)return;if(t.left!=null){t.end=Date.now()+t.left;delete t.left;}else t.left=Math.max(0,t.end-Date.now());save();renderHeader();renderFocus();}
   if(b.id==='undo') undo();
   if(b.id==='copylog') copyLog();
