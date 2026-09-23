@@ -1,9 +1,11 @@
 // Work Cockpit service worker: makes the app installable and usable offline.
 // VERSION is stamped automatically by .github/workflows/pages.yml on each deploy.
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
-const VERSION = 'cockpit-v2';
+const VERSION = 'cockpit-v3';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
-const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest',
+const APP = ['state', 'tree', 'merge', 'header', 'today', 'inbox', 'focus', 'history', 'sync', 'events']
+  .map(n => `./js/${n}.js`);
+const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', SUPABASE_JS];
 
 try { importScripts('./config.js'); } catch (e) {}
@@ -28,8 +30,9 @@ self.addEventListener('fetch', e => {
   if (apiOrigin && url.origin === apiOrigin) return;          // sync traffic: always live
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
-  // Pages and config: network first so updates arrive, cache when offline
-  if (req.mode === 'navigate' || url.pathname.endsWith('/config.js')) {
+  // The app itself (page, scripts, styles, config): network first so updates arrive
+  // together, cache when offline
+  if (req.mode === 'navigate' || (url.origin === self.location.origin && /\.(js|css)$/.test(url.pathname))) {
     e.respondWith(fetch(req).then(res => {
       if (res.ok) put(req.mode === 'navigate' ? './index.html' : req, res.clone());
       return res;
