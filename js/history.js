@@ -16,7 +16,7 @@ function logText() {
     .join('\n\n');
 }
 function renderLog() {
-  let h = '<h2>History</h2>' + renderStats();
+  let h = '<h2>History</h2>' + renderStats() + renderProjects(shift(today(), -(range - 1)));
   const days = logDays(shift(today(), -13));
   h +=
     '<div class="listbar" style="justify-content:space-between;align-items:center;margin:0 0 8px"><h2 style="margin:0">Done</h2>' +

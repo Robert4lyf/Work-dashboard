@@ -59,6 +59,14 @@ document.addEventListener('submit', e => {
     if (opt) $('#sopt').checked = true;
   }
   if (f.id === 'authform') signIn();
+  if (f.id === 'projform') {
+    const v = $('#projin').value.trim();
+    if (!v) return;
+    newProject(v);
+    save();
+    renderAll();
+    $('#projin').focus();
+  }
   if (f.id === 'tagform') {
     const v = $('#tagin').value.trim();
     if (!v) return;
@@ -86,7 +94,7 @@ document.addEventListener('submit', e => {
       v = f.querySelector('input').value.trim(),
       it = S.inbox.find(x => x.id === id);
     if (!v || !it) return;
-    it.node = it.node || fix({ id: uid(), text: it.text, tag: it.tag });
+    it.node = it.node || inboxToNode(it);
     it.node.children.push(fix({ id: uid(), text: v }));
     save();
     renderAll();
@@ -100,6 +108,18 @@ document.addEventListener('change', e => {
   if (el.id === 'imp') {
     if (el.files && el.files[0]) importFile(el.files[0]);
     el.value = '';
+    return;
+  }
+  if (el.dataset.setproject) {
+    setProject(el.dataset.kind, el.dataset.setproject, el.value);
+    return;
+  }
+  if (el.dataset.projname !== undefined) {
+    const p = S.projects[+el.dataset.projname],
+      v = el.value.trim().slice(0, 40);
+    if (p && v) p.name = v;
+    save();
+    renderAll();
     return;
   }
   if (el.dataset.tagname !== undefined) {
@@ -319,11 +339,7 @@ document.addEventListener('click', e => {
     const i = S.inbox.findIndex(x => x.id === d.promote),
       it = S.inbox[i],
       bf = snapshot();
-    S.quests.push(
-      it.node
-        ? Object.assign(it.node, { tag: it.tag || it.node.tag })
-        : fix({ id: uid(), text: it.text, tag: it.tag }),
-    );
+    S.quests.push(inboxToNode(it));
     S.inbox.splice(i, 1);
     settle(bf);
     toast('Added to today');
@@ -381,6 +397,27 @@ document.addEventListener('click', e => {
     go('account');
     const t = $('#tagsec');
     t && t.scrollIntoView();
+  }
+  if (d.projdone) {
+    const p = S.projects.find(x => x.id === d.projdone);
+    if (p) {
+      p.done = !p.done;
+      save();
+      renderAll();
+      toast(p.done ? 'Project finished' : 'Project reopened');
+    }
+  }
+  if (d.delproj) {
+    if (!arm(b, 'Delete?')) return;
+    withUndo('Project deleted', () => {
+      const id = S.projects[+d.delproj].id;
+      S.projects.splice(+d.delproj, 1);
+      eachTagged(n => {
+        if (n.project === id) n.project = '';
+      });
+      save();
+      renderAll();
+    });
   }
   if (d.deltag) {
     if (!arm(b, 'Delete?')) return;

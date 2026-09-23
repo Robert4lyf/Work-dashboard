@@ -143,8 +143,10 @@ function renderStats() {
   return h + '</div>';
 }
 function logSession(tag, mins, t, q) {
-  S.sessions.push({ tag, mins, t, q: q || null });
+  const p = projectOf(q);
+  S.sessions.push({ tag, mins, t, q: q || null, p });
   addDaily(fmt(new Date(t)), tag, mins);
+  addPDaily(fmt(new Date(t)), p, mins);
 }
 function finishTimer(silent) {
   const t = S.timer;
@@ -207,6 +209,7 @@ function eachTagged(fn) {
     (n.children || []).forEach(w);
   };
   S.quests.forEach(w);
+  S.later.forEach(w);
   S.templates.forEach(w);
   S.inbox.forEach(i => {
     fn(i);

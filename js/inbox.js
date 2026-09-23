@@ -1,5 +1,12 @@
 /* inbox */
 const expanded = new Set(); // inbox items showing their subquest editor
+// An inbox item as a quest, keeping its tag, project and any subquests.
+function inboxToNode(it) {
+  const n = it.node || fix({ id: uid(), text: it.text });
+  n.tag = it.tag || n.tag;
+  n.project = it.project || n.project;
+  return n;
+}
 function renderInbox() {
   let h = '<h2>Inbox</h2>';
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
@@ -8,9 +15,9 @@ function renderInbox() {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item box"><p>${esc(it.text)} ${tagBadge(it.tag)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide' : 'Tag and subquests'}</button></p>`;
+    h += `<div class="item box"><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide' : 'Details and subquests'}</button></p>`;
     if (open) {
-      h += tagPicker('i', it.id, it.tag) + laterPicker('i', it.id);
+      h += tagPicker('i', it.id, it.tag) + projectPicker('i', it.id, it.project) + laterPicker('i', it.id);
       if (kids.length) {
         h += '<ul class="subs">';
         kids.forEach(

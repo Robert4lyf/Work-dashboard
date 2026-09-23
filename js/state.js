@@ -39,6 +39,7 @@ let S;
 function fix(n) {
   n.children = (n.children || []).map(fix);
   n.tag = n.tag || '';
+  n.project = n.project || '';
   n.opt = !!n.opt;
   n.notes = n.notes || '';
   n.due = n.due || '';
@@ -63,6 +64,8 @@ function norm(s) {
       tags: null,
       daily: null,
       later: [],
+      projects: [],
+      pdaily: {},
     },
     s || {},
   );
@@ -102,6 +105,7 @@ function save() {
     lcut = shift(today(), -120);
   S.sessions = S.sessions.filter(x => x.t > cut);
   for (const d in S.daily) if (d < dcut) delete S.daily[d];
+  for (const d in S.pdaily) if (d < dcut) delete S.pdaily[d];
   S.log = S.log.filter(x => x.d >= lcut);
   S.editedAt = Date.now();
   dropUndo();

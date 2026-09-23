@@ -240,6 +240,7 @@ function renderAccount() {
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
     <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
     <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>`;
+  h += renderProjectSettings();
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
   S.tags.forEach(
     (t, i) =>
