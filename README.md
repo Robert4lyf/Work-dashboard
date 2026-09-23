@@ -25,7 +25,7 @@ The anon key is designed to be public. Row-level security (from the SQL file) is
 ## 3. Put it online (GitHub Pages)
 
 1. Create a free account at https://github.com and make a new **public** repository, e.g. `cockpit`.
-2. Click **Add file > Upload files** and upload everything in this folder, keeping the `icons` and `.github` folders. Commit.
+2. Click **Add file > Upload files** and upload everything in this folder, keeping the `icons`, `js` and `.github` folders. Commit.
 3. Go to **Settings > Pages**. Under *Build and deployment*, set **Source** to **GitHub Actions**.
 4. Open the **Actions** tab. The "Deploy to GitHub Pages" workflow runs on every upload to `main` (run it by hand the first time if it hasn't started).
 5. After a minute your app is live at `https://YOUR-USERNAME.github.io/cockpit/`.
