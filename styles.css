@@ -11,6 +11,9 @@
   --blue: #29adff;
   --plum: #7e2553;
   --on-accent: #1d2b53;
+  --head-ink: #fff1e8;
+  --head-track: #1d2b53;
+  --radius: 0px;
   --display: 'Press Start 2P', 'Courier New', monospace;
   --body: 'Pixelify Sans', 'Trebuchet MS', system-ui, sans-serif;
   box-sizing: border-box;
@@ -26,6 +29,45 @@
     --edge: #000000;
   }
 }
+:root[data-style='botanical'] {
+  --bg: #f3f1e7;
+  --panel: #fffdf7;
+  --ink: #22352b;
+  --muted: #677a6c;
+  --edge: #c3cfbf;
+  --yellow: #e9c46a;
+  --pink: #e07a5f;
+  --green: #8fbf6a;
+  --orange: #e0a458;
+  --blue: #9cc3bd;
+  --plum: #2f4a3a;
+  --on-accent: #1e2b22;
+  --head-ink: #f3f1e7;
+  --head-track: #1f3328;
+  --radius: 14px;
+  --display: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-style='botanical']:not([data-theme='light']) {
+    --bg: #141f19;
+    --panel: #1d2b23;
+    --ink: #e6eee1;
+    --muted: #a3b3a6;
+    --edge: #33473b;
+    --plum: #27402f;
+    --head-track: #122018;
+  }
+}
+:root[data-style='botanical'][data-theme='dark'] {
+  --bg: #141f19;
+  --panel: #1d2b23;
+  --ink: #e6eee1;
+  --muted: #a3b3a6;
+  --edge: #33473b;
+  --plum: #27402f;
+  --head-track: #122018;
+}
 :root[data-font='plain'] {
   --display: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --body: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -34,25 +76,26 @@
   font-size: 17px;
 }
 /* The pixel heading font is very wide, so its sizes are small; plain text needs larger ones. */
-:root[data-font='plain'] :is(.title, h2, .node h1, .clear b, .toast, .now .clk) {
+:is(:root[data-font='plain'], :root[data-style='botanical'])
+  :is(.title, h2, .node h1, .clear b, .toast, .now .clk) {
   font-weight: 700;
   letter-spacing: 0;
 }
-:root[data-font='plain'] .title {
+:is(:root[data-font='plain'], :root[data-style='botanical']) .title {
   font-size: 16px;
 }
-:root[data-font='plain'] h2 {
+:is(:root[data-font='plain'], :root[data-style='botanical']) h2 {
   font-size: 17px;
   line-height: 1.35;
 }
-:root[data-font='plain'] .node h1 {
+:is(:root[data-font='plain'], :root[data-style='botanical']) .node h1 {
   font-size: 21px;
   line-height: 1.3;
 }
-:root[data-font='plain'] .toast {
+:is(:root[data-font='plain'], :root[data-style='botanical']) .toast {
   font-size: 15px;
 }
-:root[data-font='plain'] .now .clk {
+:is(:root[data-font='plain'], :root[data-style='botanical']) .now .clk {
   font-size: 20px;
 }
 :root[data-theme='dark'] {
@@ -102,7 +145,7 @@ select {
 /* header */
 header {
   background: var(--plum);
-  color: #fff1e8;
+  color: var(--head-ink);
   border: 3px solid var(--edge);
   box-shadow: 5px 5px 0 var(--edge);
   padding: 12px 14px;
@@ -136,7 +179,7 @@ header {
   background: none;
   border: 0;
   padding: 0;
-  color: #fff1e8;
+  color: var(--head-ink);
   text-align: left;
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -160,7 +203,7 @@ header {
 .hprog {
   height: 12px;
   border: 3px solid var(--edge);
-  background: #1d2b53;
+  background: var(--head-track);
 }
 .hprog div {
   height: 100%;
@@ -178,11 +221,11 @@ header {
   background: none;
   border: 0;
   padding: 2px 0;
-  color: #fff1e8;
+  color: var(--head-ink);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
-  text-decoration-color: rgba(255, 241, 232, 0.4);
+  text-decoration-color: color-mix(in srgb, var(--head-ink) 40%, transparent);
 }
 .hstats .warn {
   color: var(--on-accent);
@@ -193,8 +236,8 @@ header {
 }
 .syncbtn {
   background: none;
-  border: 2px solid #fff1e8;
-  color: #fff1e8;
+  border: 2px solid var(--head-ink);
+  color: var(--head-ink);
   padding: 1px 8px;
   font-size: 15px;
   cursor: pointer;
@@ -1164,6 +1207,42 @@ body.zen nav {
 .dropping {
   outline: 3px dashed var(--blue);
   outline-offset: 3px;
+}
+/* botanical: rounded, soft shapes instead of hard pixel edges */
+:root[data-style='botanical'] :is(.box, .btn, header, .toast, .tchip, .addrow input, .fld, .clear, .slot) {
+  border-radius: var(--radius);
+  border-width: 1.5px;
+  box-shadow:
+    0 1px 2px rgba(20, 40, 28, 0.06),
+    0 6px 18px rgba(20, 40, 28, 0.08);
+}
+:root[data-style='botanical'] header {
+  border: 0;
+}
+:root[data-style='botanical'] .btn:active {
+  transform: translateY(1px);
+}
+:root[data-style='botanical'] :is(.check, .meter, .mv, .day, .x.armed, .dellink.armed, .syncbtn) {
+  border-radius: 9px;
+  border-width: 1.5px;
+}
+:root[data-style='botanical'] :is(.chip, .tag, .badge, nav button, .tchip button) {
+  border-radius: 999px;
+}
+:root[data-style='botanical'] .chip {
+  border-width: 1.5px;
+  box-shadow: none;
+}
+:root[data-style='botanical'] :is(.hprog, .prog, .track) {
+  border-radius: 999px;
+  border-width: 1.5px;
+  overflow: hidden;
+}
+:root[data-style='botanical'] nav {
+  border-top-width: 1px;
+}
+:root[data-style='botanical'] :is(h2, .title, .node h1, .zt, .zclock, .clock) {
+  letter-spacing: 0;
 }
 [hidden] {
   display: none !important;

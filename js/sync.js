@@ -223,6 +223,7 @@ function setLook(k, v) {
   const root = document.documentElement.dataset;
   if (v) root[k] = v;
   else delete root[k];
+  if (k === 'style' && v === 'botanical') loadStyleFonts();
 }
 function renderAccount() {
   let h = '<h2>Sync</h2>';
@@ -238,7 +239,8 @@ function renderAccount() {
   const opt = (k, v, label) =>
     `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
-    <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
+    <div class="chips">${opt('style', '', 'Retro')}${opt('style', 'botanical', 'Botanical')}</div>
+    <div class="chips">${opt('font', '', 'Style font')}${opt('font', 'plain', 'Plain font')}</div>
     <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>`;
   h += renderProjectSettings();
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
