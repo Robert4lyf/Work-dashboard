@@ -1,7 +1,7 @@
 {
-  "name": "work-cockpit",
+  "name": "dashboard",
   "private": true,
-  "description": "Work Cockpit: quests, inbox and focus timer (static PWA).",
+  "description": "Dashboard: quests, inbox and focus timer (static PWA).",
   "scripts": {
     "test": "playwright test",
     "format": "prettier --write \"js/*.js\" styles.css \"tests/*.js\"",

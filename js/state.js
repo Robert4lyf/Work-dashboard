@@ -6,7 +6,7 @@ const TAGS = [
   ['Delivery', 'var(--green)'],
 ];
 const PALETTE = ['var(--pink)', 'var(--blue)', 'var(--orange)', 'var(--green)', 'var(--yellow)', '#C2C3C7'];
-const TITLE = 'Work Cockpit';
+const TITLE = 'Dashboard';
 const $ = s => document.querySelector(s);
 const esc = s =>
   String(s).replace(

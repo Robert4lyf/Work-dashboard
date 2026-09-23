@@ -1,6 +1,6 @@
 {
-  "name": "Work Cockpit",
-  "short_name": "Cockpit",
+  "name": "Dashboard",
+  "short_name": "Dashboard",
   "description": "Quests, inbox and focus timer.",
   "start_url": "./",
   "scope": "./",

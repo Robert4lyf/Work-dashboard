@@ -1,4 +1,4 @@
--- Work Cockpit: run this in Supabase > SQL Editor > New query.
+-- Dashboard: run this in Supabase > SQL Editor > New query.
 -- Safe to run again: it only adds what's missing.
 create table if not exists public.cockpit_state (
   user_id    uuid primary key default auth.uid() references auth.users(id) on delete cascade,

@@ -234,7 +234,7 @@ function renderAccount() {
 /* backup */
 function exportData() {
   const json = JSON.stringify(S),
-    name = 'work-cockpit-backup-' + today() + '.json';
+    name = 'dashboard-backup-' + today() + '.json';
   try {
     const file = new File([json], name, { type: 'application/json' });
     if (
@@ -266,7 +266,7 @@ function importFile(file) {
       renderAccount();
       window.scrollTo(0, 0);
     } catch (e) {
-      toast("That file isn't a Work Cockpit backup");
+      toast("That file isn't a Dashboard backup");
     }
   };
   r.readAsText(file);
