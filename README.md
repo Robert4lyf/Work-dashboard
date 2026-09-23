@@ -69,6 +69,7 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 
 - **Voice capture:** tap the mic next to the inbox box and speak. Say "next item" between thoughts to add several at once (this also works when typing or using keyboard dictation). The mic shows in Chrome and Edge, and in Safari in a normal tab. It's hidden in the iPhone home-screen app, where Apple's speech recognition is unreliable, so use the keyboard's dictation key there. Chrome sends the audio to Google to transcribe.
 - **Inbox subquests:** tap **Add subquests** on an inbox item to break it down before it goes to Today. They move with it.
+- **Header:** shows your next step (tick it off right there, or tap to open it), today's progress, focus time, and anything overdue or due today. While a focus timer runs, it shows the countdown with a pause button on every tab.
 - **Done log:** the Log tab lists what you finished over the last two weeks. **Copy last 7 days** gives you a ready-made standup update.
 - **Undo:** deleting a quest, clearing an inbox item, or deleting a template or tag shows an Undo button for 5 seconds.
 - **Repeat templates:** under Today > Repeat templates, pick weekdays and the template is added to Today automatically each morning.

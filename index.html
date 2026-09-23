@@ -40,13 +40,21 @@ button,input{font:inherit;color:inherit}
 .wrap{max-width:520px;margin:0 auto;padding:16px 16px 110px}
 
 /* header */
-header{background:var(--plum);color:#FFF1E8;border:3px solid var(--edge);box-shadow:5px 5px 0 var(--edge);padding:14px;margin-bottom:22px}
-.title{font-family:var(--display);font-size:14px;letter-spacing:1px;margin:0 0 14px;display:flex;justify-content:space-between;align-items:center;gap:8px}
-.lv{background:var(--yellow);color:var(--on-accent);padding:6px 8px;border:3px solid var(--edge)}
-.xpbar{height:18px;border:3px solid var(--edge);background:#1D2B53;position:relative}
-.xpfill{height:100%;background:var(--green);transition:width .3s steps(6)}
-.xpbar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 calc(10% - 3px),#1D2B53 calc(10% - 3px) 10%)}
-.stats{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;font-size:16px}
+header{background:var(--plum);color:#FFF1E8;border:3px solid var(--edge);box-shadow:5px 5px 0 var(--edge);padding:12px 14px;margin-bottom:22px}
+.hrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.title{font-family:var(--display);font-size:12px;letter-spacing:1px;margin:0}
+.now{display:flex;align-items:center;gap:10px;margin:12px 0 10px;min-height:34px}
+.now .check{border-color:var(--edge)}
+.now .go{flex:1;min-width:0;background:none;border:0;padding:0;color:#FFF1E8;text-align:left;cursor:pointer;overflow-wrap:anywhere}
+.now .go small{display:block;font-size:14px;opacity:.8}
+.now .go b{font-weight:600}
+.now .clk{font-family:var(--display);font-size:16px}
+.now .btn{padding:6px 10px;font-size:15px}
+.hprog{height:12px;border:3px solid var(--edge);background:#1D2B53}
+.hprog div{height:100%;background:var(--green);transition:width .3s steps(6)}
+.hstats{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:6px;font-size:15px}
+.hstats button{background:none;border:0;padding:2px 0;color:#FFF1E8;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:rgba(255,241,232,.4)}
+.hstats .warn{color:var(--on-accent);background:var(--pink);border:2px solid var(--edge);padding:0 5px;text-decoration:none}
 .syncbtn{background:none;border:2px solid #FFF1E8;color:#FFF1E8;padding:1px 8px;font-size:15px;cursor:pointer;white-space:nowrap}
 .syncbtn[data-state="ok"]{background:var(--green);color:var(--on-accent);border-color:var(--edge)}
 .syncbtn[data-state="offline"]{background:var(--orange);color:var(--on-accent);border-color:var(--edge)}
@@ -201,9 +209,10 @@ textarea.fld{min-height:90px;resize:vertical}
 <body>
 <div class="wrap">
   <header>
-    <p class="title"><span>Work Cockpit</span><span class="lv" id="lv">LV 1</span></p>
-    <div class="xpbar" role="progressbar" aria-label="Progress to next level" aria-valuemin="0" aria-valuemax="100" id="xpbar"><div class="xpfill" id="xpfill"></div></div>
-    <div class="stats"><span id="xptext">0 / 100 XP to next level</span><button class="syncbtn" id="syncBtn">Sync off</button></div>
+    <div class="hrow"><p class="title">Work Cockpit</p><button class="syncbtn" id="syncBtn">Sync off</button></div>
+    <div class="now" id="hnow"></div>
+    <div class="hprog" role="progressbar" aria-label="Today's quests done" aria-valuemin="0" aria-valuemax="100" id="hprog"><div id="hfill"></div></div>
+    <div class="hstats" id="hstats"></div>
   </header>
 
   <section id="v-today"></section>
@@ -317,7 +326,7 @@ function settle(before){
     if(!v.done&&was){gain-=pts;S.log=S.log.filter(x=>!(x.id===id&&x.d===today()));}
   });
   if(gain){addXP(gain);if(gain>0)beep([659,988]);}
-  if(S.quests.length&&S.quests.every(isDone)&&S.bonusDay!==today()){S.bonusDay=today();addXP(50);toast('Stage clear! +50 XP');beep([523,659,784,1047,784,1047]);}
+  if(S.quests.length&&S.quests.every(isDone)&&S.bonusDay!==today()){S.bonusDay=today();addXP(50);toast('Stage clear!');beep([523,659,784,1047,784,1047]);}
   save();renderAll();
 }
 const spent=n=>{const set=new Set(ids(n));return S.sessions.filter(s=>set.has(s.q)).reduce((a,s)=>a+s.mins,0);};
@@ -329,13 +338,9 @@ function dueSoon(){
 const strip=n=>({text:n.text,opt:n.opt,notes:n.notes,children:n.children.map(strip)});
 const inst=t=>fix({id:uid(),text:t.text,opt:t.opt,notes:t.notes,children:t.children.map(inst)});
 
-/* XP & feedback */
-const level=()=>Math.floor(S.xp/100)+1;
-function addXP(n){
-  const before=level();
-  S.xp=Math.max(0,S.xp+n);
-  if(n>0) toast(level()>before?'Level up! LV '+level():'+'+n+' XP');
-}
+/* feedback */
+// XP is still counted (and synced) but no longer shown, so it can come back as a setting.
+function addXP(n){S.xp=Math.max(0,S.xp+n);}
 let tt,undoSnap=null;
 function toast(msg,undo,ms){
   const t=$('#toast');t.innerHTML=esc(msg)+(undo?'<button id="undo">Undo</button>':'');
@@ -364,12 +369,36 @@ function arm(b,label){
 }
 
 /* header */
+// The first unfinished step of the first unfinished quest, in list order.
+function nextStep(){
+  for(const q of S.quests){
+    if(isDone(q)) continue;
+    const n=q.children.length?nextLeaf(q):q;
+    if(n) return {n,q};
+  }
+  return null;
+}
 function renderHeader(){
-  $('#lv').textContent='LV '+level();
-  const p=S.xp%100;
-  $('#xpfill').style.width=p+'%';
-  $('#xpbar').setAttribute('aria-valuenow',p);
-  $('#xptext').textContent=p+' / 100 XP to next level';
+  let h;
+  if(S.timer){
+    const t=S.timer,q=t.q&&find(t.q),paused=t.left!=null;
+    h=`<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused?'Paused · ':''}${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></button><button class="btn ${paused?'green':'blue'}" data-pause="1">${paused?'Resume':'Pause'}</button>`;
+  }else{
+    const nx=nextStep();
+    if(nx) h=`<button class="check" data-toggle="${nx.n.id}" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n!==nx.q?' in '+esc(nx.q.text):''}</small><b>${esc(nx.n.text)}</b></button>`;
+    else h=`<button class="go" data-v="today"><small>Next up</small><b>${S.quests.length?'All done for today':'Nothing planned yet'}</b></button>`;
+  }
+  $('#hnow').innerHTML=h;
+  const qs=S.quests,done=qs.filter(isDone).length,p=qs.length?Math.round(done/qs.length*100):0;
+  $('#hfill').style.width=p+'%';
+  $('#hprog').setAttribute('aria-valuenow',p);
+  const t=today();let late=0,due=0;
+  (function w(ns){ns.forEach(n=>{if(isDone(n))return;if(n.due&&n.due<t)late++;else if(n.due===t)due++;w(n.children);});})(qs);
+  const focus=Object.values(S.daily[t]||{}).reduce((a,b)=>a+b,0);
+  let st=`<button data-v="today">${done} / ${qs.length} quests done</button><button data-v="focus">${hm(focus)} focus today</button>`;
+  if(late) st+=`<button class="warn" data-v="today">${late} overdue</button>`;
+  if(due) st+=`<button class="warn" data-v="today" style="background:var(--orange)">${due} due today</button>`;
+  $('#hstats').innerHTML=st;
   const b=$('#inboxBadge');b.hidden=!S.inbox.length;b.textContent=S.inbox.length;
   renderSyncBadge();
 }
@@ -467,7 +496,7 @@ function renderNode({n,parents}){
 /* inbox */
 const expanded=new Set();  // inbox items showing their subquest editor
 function renderInbox(){
-  let h='<h2>Inbox</h2><p class="hint">Capture now, sort later. Say or type "next item" between thoughts to add several at once. Clearing an item earns 5 XP.</p>';
+  let h='<h2>Inbox</h2><p class="hint">Capture now, sort later. Say or type "next item" between thoughts to add several at once.</p>';
   h+=`<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic?`<button type="button" class="btn mic${listening?' on':''}" id="mic" aria-label="${listening?'Stop listening':'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>`:''}<button class="btn pink">Add</button></form>`;
   if(!S.inbox.length) h+='<div class="empty">Inbox empty. Type anything that\'s on your mind.</div>';
   S.inbox.forEach(it=>{
@@ -535,8 +564,8 @@ function renderFocus(){
   let h='<h2>Focus</h2>';
   if(S.timer){
     const t=S.timer,q=t.q&&find(t.q),paused=t.left!=null;
-    h+=`<p class="hint">${paused?'Paused.':'Stay on it.'} Finishing earns 20 XP; stopping early saves the minutes you did.</p><div class="clock box" id="clock">${mmss(remaining())}<small>${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></div>`;
-    h+=`<div class="acts" style="margin-top:0"><button class="btn ${paused?'green':'blue'}" id="pause" style="flex:1">${paused?'Resume':'Pause'}</button><button class="btn" id="stopsave" style="flex:1">Stop and save</button></div><button class="dellink" id="stop">Discard this session</button>`;
+    h+=`<p class="hint">${paused?'Paused.':'Stay on it.'} Stopping early saves the minutes you did.</p><div class="clock box" id="clock">${mmss(remaining())}<small>${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></div>`;
+    h+=`<div class="acts" style="margin-top:0"><button class="btn ${paused?'green':'blue'}" data-pause="1" style="flex:1">${paused?'Resume':'Pause'}</button><button class="btn" id="stopsave" style="flex:1">Stop and save</button></div><button class="dellink" id="stop">Discard this session</button>`;
   }else{
     const fq=S.focusQ&&find(S.focusQ);
     h+='<p class="hint">Pick what you\'re working on and a length.</p>';
@@ -570,14 +599,14 @@ function finishTimer(silent){
   addXP(20); save();
   if(!silent){
     beep([523,659,784,1047]);try{navigator.vibrate&&navigator.vibrate([200,100,200]);}catch(e){}
-    if(document.hidden) notify('Focus session done',t.mins+' min of '+t.tag+'. +20 XP');
+    if(document.hidden) notify('Focus session done',t.mins+' min of '+t.tag+'.');
   }
   renderAll();
 }
 function stopAndSave(){
   const t=S.timer,m=Math.floor((t.mins*60000-remaining())/60000);
   S.timer=null;
-  if(m<1){save();renderFocus();toast('Under a minute, nothing saved');return;}
+  if(m<1){save();renderHeader();renderFocus();toast('Under a minute, nothing saved');return;}
   logSession(t.tag,m,Date.now(),t.q);
   addXP(Math.max(1,Math.round(20*m/t.mins)));save();renderAll();
 }
@@ -609,6 +638,7 @@ setInterval(()=>{
   const txt=mmss(remaining());
   document.title=txt+(t.left!=null?' paused':'')+' · '+TITLE;
   const c=$('#clock'); if(c) c.firstChild.nodeValue=txt;
+  const hc=$('#hclock'); if(hc) hc.textContent=txt;
 },500);
 
 /* done log */
@@ -805,7 +835,8 @@ document.addEventListener('input',e=>{
 document.addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   const d=b.dataset;
-  if(d.open){const r=find(d.open);if(r)openPath([...r.parents.map(p=>p.id),r.n.id]);}
+  if(d.open){const r=find(d.open);if(r){openPath([...r.parents.map(p=>p.id),r.n.id]);if(view!=='today')go('today');}}
+  if(d.v&&b.closest('header')) go(d.v);
   if(d.crumb!==undefined) openPath(path.slice(0,+d.crumb+1));
   if(d.toggle){const n=find(d.toggle).n,bf=snapshot();n.done=!n.done;settle(bf);}
   if(d.del){
@@ -842,7 +873,7 @@ document.addEventListener('click',e=>{
   if(d.steps){if(expanded.has(d.steps))expanded.delete(d.steps);else expanded.add(d.steps);renderInbox();const nf=document.querySelector(`[data-subfor="${d.steps}"] input`);nf&&nf.focus();}
   if(d.delsub){const it=S.inbox.find(x=>x.id===d.delsub);if(it&&it.node)withUndo('Removed',()=>{it.node.children=it.node.children.filter(k=>k.id!==d.sub);save();renderInbox();});}
   if(b.id==='mic') toggleMic();
-  if(d.clear){withUndo('Cleared, +5 XP',()=>{S.inbox=S.inbox.filter(x=>x.id!==d.clear);addXP(5);save();renderAll();});}
+  if(d.clear){withUndo('Cleared',()=>{S.inbox=S.inbox.filter(x=>x.id!==d.clear);addXP(5);save();renderAll();});}
   if(d.tag){S.tag=d.tag;save();renderFocus();}
   if(d.deltag){
     if(S.tags.length<2||!arm(b,'Delete?'))return;
@@ -850,10 +881,10 @@ document.addEventListener('click',e=>{
   }
   if(d.range){range=+d.range;renderFocus();}
   if(d.mins){S.mins=+d.mins;save();renderFocus();}
-  if(b.id==='start'){askNotify();beep([440]);S.timer={end:Date.now()+S.mins*60000,tag:S.tag,mins:S.mins,q:S.focusQ||null};S.focusQ=null;save();renderFocus();}
-  if(b.id==='stop'){if(!arm(b,'Tap again to discard'))return;S.timer=null;save();renderFocus();}
+  if(b.id==='start'){askNotify();beep([440]);S.timer={end:Date.now()+S.mins*60000,tag:S.tag,mins:S.mins,q:S.focusQ||null};S.focusQ=null;save();renderHeader();renderFocus();}
+  if(b.id==='stop'){if(!arm(b,'Tap again to discard'))return;S.timer=null;save();renderHeader();renderFocus();}
   if(b.id==='stopsave') stopAndSave();
-  if(b.id==='pause'){const t=S.timer;if(t.left!=null){t.end=Date.now()+t.left;delete t.left;}else t.left=Math.max(0,t.end-Date.now());save();renderFocus();}
+  if(d.pause){const t=S.timer;if(!t)return;if(t.left!=null){t.end=Date.now()+t.left;delete t.left;}else t.left=Math.max(0,t.end-Date.now());save();renderHeader();renderFocus();}
   if(b.id==='undo') undo();
   if(b.id==='copylog') copyLog();
   if(b.id==='hist') loadHistory();
@@ -882,7 +913,7 @@ document.addEventListener('keydown',e=>{
   else if(k==='t'){if(view==='today'&&path.length)openPath([]);go('today');}
   else if(k==='f') go('focus');
   else if(k==='l') go('log');
-  else if(k==='p'&&S.timer){go('focus');const b=$('#pause');if(b)b.click();}
+  else if(k==='p'&&S.timer){const b=$('[data-pause]');if(b)b.click();}
   else if(k==='?') toast(KEYS,false,5000);
   else if(k==='Escape'){if(view==='account')go(prevView);else if(view==='today'&&path.length)openPath(path.slice(0,-1));}
 });
