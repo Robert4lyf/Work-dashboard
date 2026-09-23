@@ -476,7 +476,7 @@ function renderToday(){
     soon.forEach(({n,t})=>h+=`<button class="soonrow" data-open="${n.id}"><span>${esc(t.join(' / '))}</span>${dueTag(n)}</button>`);
     h+='</div>';
   }
-  h+='<h2>Today\'s quests</h2><p class="hint">Tap a quest to break it down. Unfinished quests carry over.</p>';
+  h+='<h2>Today\'s quests</h2>';
   if(qs.length&&qs.every(isDone)) h+='<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
   h+=list(qs);
   h+='<form class="addrow" id="qform"><input id="qin" maxlength="120" placeholder="Add a quest" aria-label="New quest" autocomplete="off"><button class="btn">Add</button></form>';
@@ -487,7 +487,7 @@ function renderToday(){
     h+='</div>';
   }
   if(S.templates.length){
-    h+=`<details id="repd" style="margin:-4px 0 18px"${panels.repd?' open':''}><summary>Repeating quests</summary><p class="hint" style="margin-top:8px">These are added to Today automatically on the days you pick. To repeat any quest, open it and use Repeat.</p>`;
+    h+=`<details id="repd" style="margin:-4px 0 18px"${panels.repd?' open':''}><summary>Repeating quests</summary>`;
     S.templates.forEach(t=>{
       h+=`<div class="rep"><span>${esc(t.text)}${t.monthDay?` <small class="hint">(also monthly on the ${ord(t.monthDay)})</small>`:''}</span><div class="days">`;
       WEEK.forEach(i=>h+=`<button class="day" data-rep="${t.id}" data-wd="${i}" aria-pressed="${t.days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0,2)}</button>`);
@@ -495,7 +495,7 @@ function renderToday(){
     });
     h+='</details>';
   }
-  if(!qs.length) h+='<div class="slot">No quests yet. Add one above or move something from your inbox.</div>';
+  if(!qs.length) h+='<div class="slot">No quests yet.</div>';
   $('#v-today').innerHTML=h;
 }
 function renderNode({n,parents}){
@@ -517,13 +517,12 @@ function renderNode({n,parents}){
     <label class="f" for="fname">Name</label><input class="fld" id="fname" data-field="text" data-id="${n.id}" value="${esc(n.text)}" maxlength="120">
     <label class="f" for="fdue">Deadline</label><input class="fld" type="date" id="fdue" data-field="due" data-id="${n.id}" value="${n.due}">
     <label class="f" for="fnotes">Notes</label><textarea class="fld" id="fnotes" data-field="notes" data-id="${n.id}">${esc(n.notes)}</textarea>
-    ${top?'':`<label class="optbox"><input type="checkbox" data-field="opt" data-id="${n.id}" ${n.opt?'checked':''}>Optional (doesn't block the parent)</label>`}
+    ${top?'':`<label class="optbox"><input type="checkbox" data-field="opt" data-id="${n.id}" ${n.opt?'checked':''}>Optional</label>`}
     </details>`;
   if(top){
     const t=tplFor(n),on=repeats(t),days=on?t.days:[],md=on?t.monthDay:0;
     const preset=(k,l,p)=>`<button class="chip" data-rpreset="${k}" data-id="${n.id}" aria-pressed="${p}">${l}</button>`;
     h+=`<details id="rptd"${panels.rptd?' open':''}><summary>Repeat: ${on?esc(repLabel(t)):'off'}</summary>
-      <p class="hint" style="margin-top:8px">Adds a fresh copy of this quest, subquests included, to Today on these days. Deleting today's copy doesn't stop the repeat; choose Off for that.</p>
       <div class="chips" style="margin-bottom:10px">${preset('daily','Every day',days.length===7)}${preset('weekdays','Weekdays',repLabel({days,monthDay:0})==='Weekdays')}${preset('off','Off',!on)}</div>
       <div class="days">${WEEK.map(i=>`<button class="day" data-rday="${i}" data-id="${n.id}" aria-pressed="${days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0,2)}</button>`).join('')}</div>
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({length:31},(_,i)=>`<option value="${i+1}"${md===i+1?' selected':''}>${ord(i+1)}${i+1>28?' (or last day)':''}</option>`).join('')}</select>
@@ -531,7 +530,6 @@ function renderNode({n,parents}){
   }
   h+='</div>';
   h+='<h2>Subquests</h2>';
-  if(!kids) h+='<p class="hint">None yet. Add steps to break this down.</p>';
   h+=list(n.children);
   h+=`<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>
     <label class="optbox" style="margin-top:-4px"><input type="checkbox" id="sopt">Add as optional</label>`;
@@ -541,9 +539,9 @@ function renderNode({n,parents}){
 /* inbox */
 const expanded=new Set();  // inbox items showing their subquest editor
 function renderInbox(){
-  let h='<h2>Inbox</h2><p class="hint">Capture now, sort later. Say or type "next item" between thoughts to add several at once.</p>';
+  let h='<h2>Inbox</h2>';
   h+=`<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic?`<button type="button" class="btn mic${listening?' on':''}" id="mic" aria-label="${listening?'Stop listening':'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>`:''}<button class="btn pink">Add</button></form>`;
-  if(!S.inbox.length) h+='<div class="empty">Inbox empty. Type anything that\'s on your mind.</div>';
+  if(!S.inbox.length) h+='<div class="empty">Inbox empty.</div>';
   S.inbox.forEach(it=>{
     const kids=it.node?it.node.children:[],c=it.node?count(it.node):0,open=expanded.has(it.id);
     h+=`<div class="item box"><p>${esc(it.text)}${c?` <span class="tag opt">${c} subquest${c===1?'':'s'}</span>`:''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open?'Hide subquests':(c?'Edit subquests':'Add subquests')}</button></p>`;
@@ -609,11 +607,10 @@ function renderFocus(){
   let h='<h2>Focus</h2>';
   if(S.timer){
     const t=S.timer,q=t.q&&find(t.q),paused=t.left!=null;
-    h+=`<p class="hint">${paused?'Paused.':'Stay on it.'} Stopping early saves the minutes you did.</p><div class="clock box" id="clock">${mmss(remaining())}<small>${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></div>`;
+    h+=`${paused?'<p class="hint">Paused</p>':''}<div class="clock box" id="clock">${mmss(remaining())}<small>${esc(t.tag)}${q?': '+esc(q.n.text):''}</small></div>`;
     h+=`<div class="acts" style="margin-top:0"><button class="btn ${paused?'green':'blue'}" data-pause="1" style="flex:1">${paused?'Resume':'Pause'}</button><button class="btn" id="stopsave" style="flex:1">Stop and save</button></div><button class="dellink" id="stop">Discard this session</button>`;
   }else{
     const fq=S.focusQ&&find(S.focusQ);
-    h+='<p class="hint">Pick what you\'re working on and a length.</p>';
     if(fq) h+=`<div class="linked box"><span>Linked to: <b>${esc(fq.n.text)}</b></span><button class="x" id="unlink" aria-label="Unlink quest">×</button></div>`;
     h+='<div class="chips">';
     S.tags.forEach(t=>h+=`<button class="chip" style="--c:${t.color}" data-tag="${esc(t.name)}" aria-pressed="${S.tag===t.name}">${esc(t.name)}</button>`);
@@ -692,9 +689,9 @@ function logText(){
   return logDays(shift(today(),-6)).map(d=>dayLabel(d)+'\n'+S.log.filter(x=>x.d===d).map(x=>'- '+[...x.trail,x.text].join(' / ')).join('\n')).join('\n\n');
 }
 function renderLog(){
-  let h='<h2>Done log</h2><p class="hint">Everything you finished in the last two weeks. Handy for standups and weekly reviews.</p>';
+  let h='<h2>Done log</h2>';
   const days=logDays(shift(today(),-13));
-  if(!days.length){h+='<div class="empty">Nothing finished yet. Completed quests show up here.</div>';$('#v-log').innerHTML=h;return;}
+  if(!days.length){h+='<div class="empty">Nothing finished yet.</div>';$('#v-log').innerHTML=h;return;}
   h+='<div class="acts" style="margin:0 0 16px"><button class="btn blue" id="copylog">Copy last 7 days</button></div>';
   days.forEach(d=>{
     const f=Object.values(S.daily[d]||{}).reduce((a,b)=>a+b,0);
@@ -777,8 +774,8 @@ function renderHistory(){
   if(history===null) return '<button class="linkbtn" id="hist">Show previous versions</button>';
   if(history==='loading') return '<p class="hint">Loading...</p>';
   if(history==='none') return '<p class="hint">Server history isn\'t set up. Run the updated supabase-setup.sql (see the README).</p>';
-  if(!history.length) return '<p class="hint">No previous versions yet. One is kept each time sync replaces your data.</p>';
-  let h='<p class="hint">The server keeps your last 200 versions. Restoring asks before replacing anything.</p>';
+  if(!history.length) return '<p class="hint">No previous versions yet.</p>';
+  let h='';
   history.forEach(r=>{
     const d=r.data||{},when=new Date(r.saved_at).toLocaleString([],{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
     h+=`<div class="soonrow" style="cursor:default"><span>${esc(when)}<br><small class="hint">${(d.quests||[]).length} quests, ${(d.inbox||[]).length} inbox</small></span><button class="btn" data-hist="${r.id}" style="padding:6px 10px">Restore</button></div>`;
@@ -788,14 +785,14 @@ function renderHistory(){
 function renderAccount(){
   let h='<button class="btn back" id="accBack">&lt; Back</button><h2>Sync</h2>';
   if(!sb){
-    h+='<p class="hint">Sync isn\'t set up. Add your Supabase details to config.js (see the README). Until then, everything is saved on this device only.</p>';
+    h+='<p class="hint">Sync isn\'t set up (see the README). Data is saved on this device only.</p>';
   }else if(!session){
-    h+=`<p class="hint">Sign in to keep your devices in sync.</p><form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg?`<p class="msg">${esc(authMsg)}</p>`:''}`;
+    h+=`<form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg?`<p class="msg">${esc(authMsg)}</p>`:''}`;
   }else{
     h+=`<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email||'')}</b></p><p class="hint" style="margin:0">${syncLine()}</p><div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}`;
   }
   if(pending) h+=`<div class="banner box"><p>Replace everything with this backup? It has ${pending.quests.length} quests and ${(pending.inbox||[]).length} inbox items. Your current data${session?' on every synced device':''} will be replaced.</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
-  h+='<h2 style="margin-top:26px">Backup</h2><p class="hint">A file copy you keep yourself, separate from sync.</p><div class="acts"><button class="btn" id="exp">Save backup</button><label class="btn">Restore backup<input type="file" id="imp" accept=".json,application/json" hidden></label></div>';
+  h+='<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><label class="btn">Restore backup<input type="file" id="imp" accept=".json,application/json" hidden></label></div>';
   $('#v-account').innerHTML=h;
 }
 
