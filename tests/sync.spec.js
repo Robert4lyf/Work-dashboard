@@ -1,8 +1,45 @@
 const { test, expect } = require('@playwright/test');
 
-// A stand-in for Supabase: one shared row held in the test, reached by each "device" (browser
-// context) through exposed functions. Supports exactly the calls the app makes.
-const fakeSupabase = () => {
+// A stand-in for Supabase, shared by several "devices" (browser contexts): the cockpit_items rows
+// live in the test, and each page reaches them through exposed functions. Supports the calls the
+// app makes, plus live-update notifications to every other device after a write.
+function fakeSupabase() {
+  const query = table => {
+    const q = { table, filters: {} };
+    const api = {
+      select() {
+        return api;
+      },
+      eq(k, v) {
+        q.filters[k] = v;
+        return api;
+      },
+      gt(k, v) {
+        q.gt = v;
+        return api;
+      },
+      order() {
+        return api;
+      },
+      limit(n) {
+        q.limit = n;
+        return api;
+      },
+      maybeSingle: async () => ({ data: await window.srvState(), error: null }),
+      upsert: async (rows, opts) => {
+        if (table === 'cockpit_state') await window.srvSnapshot(rows);
+        else await window.srvUpsert(Array.isArray(rows) ? rows : [rows]);
+        return { error: null };
+      },
+      then(res, rej) {
+        return window
+          .srvRows(q.gt || 0, q.limit || 1000)
+          .then(data => ({ data, error: null }))
+          .then(res, rej);
+      },
+    };
+    return api;
+  };
   window.supabase = {
     createClient: () => ({
       auth: {
@@ -12,33 +49,28 @@ const fakeSupabase = () => {
         },
         signOut: async () => ({}),
       },
-      from() {
-        const q = { filters: {} };
-        const api = {
-          eq(k, v) {
-            q.filters[k] = v;
-            return api;
+      from: query,
+      channel() {
+        const ch = {
+          on(_type, _filter, cb) {
+            window.__live = cb;
+            return ch;
           },
-          maybeSingle: async () => ({ data: await window.srvGet(), error: null }),
-          upsert: async row => (await window.srvPut(row, null), { error: null }),
-          update(row) {
-            q.update = row;
-            return api;
-          },
-          select() {
-            if (!q.update) return api;
-            return window
-              .srvPut(q.update, q.filters.edited_at)
-              .then(ok => ({ data: ok ? [{ user_id: 'u1' }] : [], error: null }));
+          subscribe() {
+            return ch;
           },
         };
-        return api;
+        return ch;
       },
+      removeChannel() {},
     }),
   };
-};
+}
 
-async function device(browser, server) {
+function server() {
+  return { rows: new Map(), seq: 0, state: null, devices: [], snapshots: 0 };
+}
+async function device(browser, srv, seed) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   const errors = [];
@@ -47,22 +79,25 @@ async function device(browser, server) {
     u => !u.href.startsWith('http://localhost'),
     r => r.abort(),
   );
-  await page.exposeFunction('srvGet', async () => {
-    const row = server.row ? { ...server.row } : null;
-    // Lets a test make another device save after this read but before this device writes.
-    if (server.onRead) {
-      const f = server.onRead;
-      server.onRead = null;
-      await f();
-    }
-    return row;
+  await page.exposeFunction('srvRows', (gt, limit) =>
+    [...srv.rows.values()]
+      .filter(r => r.seq > gt)
+      .sort((a, b) => a.seq - b.seq)
+      .slice(0, limit),
+  );
+  await page.exposeFunction('srvUpsert', rows => {
+    rows.forEach(r => srv.rows.set(r.key, { ...r, seq: ++srv.seq }));
+    // Tell the other devices, like Supabase Realtime would.
+    srv.devices
+      .filter(d => d.page !== page)
+      .forEach(d => d.page.evaluate(() => window.__live && window.__live()));
   });
-  await page.exposeFunction('srvPut', (row, expected) => {
-    if (expected != null && (!server.row || server.row.edited_at !== expected)) return false;
-    server.row = { data: row.data, edited_at: row.edited_at };
-    server.writes++;
-    return true;
+  await page.exposeFunction('srvState', () => srv.state);
+  await page.exposeFunction('srvSnapshot', row => {
+    srv.state = { data: row.data, edited_at: row.edited_at };
+    srv.snapshots++;
   });
+  if (seed) await page.addInitScript(s => localStorage.setItem('work-cockpit-v1', s), JSON.stringify(seed));
   await page.addInitScript(fakeSupabase);
   await page.goto('/');
   await expect(page.locator('#syncBtn')).toHaveText('Synced');
@@ -78,111 +113,147 @@ async function device(browser, server) {
         while (syncing || again) await new Promise(r => setTimeout(r, 20));
       }),
     add: async text => {
+      await page.click('nav [data-v=today]');
       await page.fill('#qin', text);
       await page.press('#qin', 'Enter');
     },
   };
+  srv.devices.push(d);
   return d;
 }
 const texts = s => s.quests.map(q => q.text).sort();
+const settle = async (...ds) => {
+  for (let i = 0; i < 2; i++) for (const d of ds) await d.sync();
+};
 
-test('edits made on two devices at once are merged, not overwritten', async ({ browser }) => {
-  const server = { row: null, writes: 0 };
-  const a = await device(browser, server);
+test('each item is its own row, and changes reach the other device live', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Report');
+  await a.sync();
+  expect([...srv.rows.keys()].filter(k => k.startsWith('quest:'))).toHaveLength(1);
+  const b = await device(browser, srv);
+  expect(texts(await b.state())).toEqual(['Report']);
+
+  // A change on A reaches B without B polling (live update, then a short debounce).
+  await a.add('Email');
+  await a.sync();
+  await expect.poll(async () => texts(await b.state())).toEqual(['Email', 'Report']);
+  // Only the changed rows travel: adding one quest writes the quest and the list order.
+  const before = srv.seq;
+  await a.add('Third');
+  await a.sync();
+  expect(srv.seq - before).toBeLessThanOrEqual(3);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('offline edits to different items on two devices are all kept', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
   await a.add('Shared');
   await a.sync();
-  const b = await device(browser, server);
-  expect(texts(await b.state())).toEqual(['Shared']);
-
-  // Both devices go offline and change different things.
+  const b = await device(browser, srv);
   await a.ctx.setOffline(true);
   await b.ctx.setOffline(true);
   await a.add('From A');
   await b.add('From B');
   await b.page.click('[aria-label="Mark done: Shared"]');
   await a.ctx.setOffline(false);
-  await a.sync();
   await b.ctx.setOffline(false);
-  await b.sync();
-  await a.sync();
-
+  await settle(a, b);
   for (const d of [a, b]) {
     const s = await d.state();
     expect(texts(s)).toEqual(['From A', 'From B', 'Shared']);
     expect(s.quests.find(q => q.text === 'Shared').done).toBe(true);
-    expect(d.errors).toEqual([]);
   }
-  expect(server.row.data.quests.map(q => q.text).sort()).toEqual(['From A', 'From B', 'Shared']);
 });
 
-test('a deletion on one device survives an unrelated edit on the other', async ({ browser }) => {
-  const server = { row: null, writes: 0 };
-  const a = await device(browser, server);
+test('the same item edited on both devices: the newer edit wins', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Draft');
+  await a.sync();
+  const b = await device(browser, srv);
+  await a.ctx.setOffline(true);
+  await b.ctx.setOffline(true);
+  const rename = (d, t) =>
+    d.page.evaluate(t => {
+      S.quests[0].text = t;
+      save();
+    }, t);
+  await rename(a, 'Older edit');
+  await a.page.waitForTimeout(20);
+  await rename(b, 'Newer edit');
+  await b.ctx.setOffline(false);
+  await b.sync();
+  await a.ctx.setOffline(false);
+  await settle(a, b);
+  for (const d of [a, b]) expect(texts(await d.state())).toEqual(['Newer edit']);
+});
+
+test('deletions reach other devices', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
   await a.add('Keep');
   await a.add('Remove me');
   await a.sync();
-  const b = await device(browser, server);
-  await a.ctx.setOffline(true);
-  await b.ctx.setOffline(true);
+  const b = await device(browser, srv);
   await a.page.click('[aria-label="Delete Remove me"]');
   await a.page.click('[aria-label="Delete Remove me"]');
-  await b.add('New on B');
-  await a.ctx.setOffline(false);
-  await a.sync();
-  await b.ctx.setOffline(false);
-  await b.sync();
-  expect(texts(await b.state())).toEqual(['Keep', 'New on B']);
+  await settle(a, b);
+  expect(texts(await b.state())).toEqual(['Keep']);
+  expect(srv.rows.get([...srv.rows.keys()].find(k => srv.rows.get(k).deleted)).deleted).toBe(true);
 });
 
-test('a save that lands between reading and writing is merged, not overwritten', async ({ browser }) => {
-  const server = { row: null, writes: 0 };
-  const a = await device(browser, server);
-  await a.add('First');
-  await a.sync();
-  const b = await device(browser, server);
-  await b.add('From B');
-  await b.sync();
-  // A edits, then while A is syncing, B's next save lands just after A read the server.
-  await a.add('From A');
-  await b.add('Late B');
-  server.onRead = () => b.sync();
-  await a.sync();
-  expect(texts(await a.state())).toEqual(['First', 'From A', 'From B', 'Late B']);
-  expect(server.row.data.quests.map(q => q.text).sort()).toEqual(['First', 'From A', 'From B', 'Late B']);
+test('focus time from two devices on the same day adds up', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  const log = (d, mins, t) => d.page.evaluate(([m, t]) => (logSession('', m, t, null), save()), [mins, t]);
+  const t = new Date(2026, 8, 23, 10).getTime();
+  await log(a, 10, t);
+  await log(b, 5, t + 3600e3);
+  await settle(a, b);
+  for (const d of [a, b]) expect((await d.state()).daily['2026-09-23']['']).toBe(15);
 });
 
-test('merge rules', async ({ page }) => {
-  await page.route(
-    u => !u.href.startsWith('http://localhost'),
-    r => r.abort(),
-  );
-  await page.goto('/');
-  const r = await page.evaluate(() => {
-    const q = (id, text, extra = {}) => ({ id, text, children: [], ...extra });
-    const base = { editedAt: 1, xp: 0, timer: null, quests: [q('1', 'One'), q('2', 'Two')], daily: {} };
-    const mine = {
-      editedAt: 3,
-      xp: 0,
-      timer: null,
-      quests: [q('1', 'One (edited here)'), q('2', 'Two'), q('3', 'Mine')],
-      daily: { '2026-09-23': { Design: 10 } },
-      sessions: [{ tag: 'Design', mins: 10, t: new Date(2026, 8, 23, 10).getTime(), q: null }],
-    };
-    const theirs = {
-      editedAt: 2,
-      xp: 0,
-      timer: { end: 5, mins: 25, tag: '', q: null },
-      quests: [q('1', 'One (edited there)')],
-      daily: { '2026-09-23': { Admin: 5 } },
-      sessions: [{ tag: 'Admin', mins: 5, t: new Date(2026, 8, 23, 11).getTime(), q: null }],
-    };
-    return mergeState(base, mine, theirs);
-  });
-  // Both edited quest 1: the newer side (mine) wins. Quest 2 deleted there and untouched here: gone.
-  expect(r.quests.map(x => x.text)).toEqual(['One (edited here)', 'Mine']);
-  // The timer only changed on the other device, so it is kept even though that side is older.
-  expect(r.timer).toMatchObject({ mins: 25 });
-  // Both logged focus time the same day: the day is rebuilt from both sets of sessions.
-  expect(r.daily['2026-09-23']).toEqual({ Design: 10, Admin: 5 });
-  expect(r.sessions).toHaveLength(2);
+test('the first device to update moves the old single-copy data over', async ({ browser }) => {
+  const srv = server();
+  srv.state = {
+    edited_at: 5,
+    data: {
+      quests: [{ id: 'q1', text: 'From old sync', children: [] }],
+      daily: { '2026-01-02': { Design: 30 } },
+    },
+  };
+  const a = await device(browser, srv);
+  const s = await a.state();
+  expect(texts(s)).toEqual(['From old sync']);
+  // Older focus totals without sessions are kept.
+  expect(s.daily['2026-01-02'].Design).toBe(30);
+  expect(srv.rows.has('quest:q1')).toBe(true);
+  expect(srv.snapshots).toBeGreaterThan(0);
+  // A second device takes the rows, not its own stale local copy.
+  const b = await device(browser, srv, { quests: [{ id: 'old', text: 'Stale local', children: [] }] });
+  expect(texts(await b.state())).toEqual(['From old sync']);
+});
+
+test('daily repeats created on two devices are not doubled', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Standup');
+  await a.page.click('.open >> text=Standup');
+  await a.page.click('#rptd summary');
+  await a.page.click('[data-rpreset="daily"]');
+  await a.page.click('[aria-label="Mark done: Standup"]');
+  await a.sync();
+  const b = await device(browser, srv);
+  // Next morning both devices run the daily reset before hearing from each other.
+  for (const d of [a, b])
+    await d.page.evaluate(() => {
+      S.day = shift(today(), -1);
+      rollover();
+    });
+  await settle(a, b);
+  for (const d of [a, b]) expect(texts(await d.state())).toEqual(['Standup']);
 });

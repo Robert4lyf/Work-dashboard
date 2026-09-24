@@ -497,7 +497,6 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'exp') exportData();
   if (b.id === 'doRestore') {
-    saveBase(null); // a restore replaces everything rather than merging
     norm(pending);
     pending = null;
     path = [];
@@ -516,6 +515,7 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
+    unlisten();
     sb.auth.signOut().then(() => {
       session = null;
       syncStatus = '';
@@ -604,7 +604,10 @@ if (sb) {
     session = s;
     renderSyncBadge();
     if (view === 'account') renderAccount();
-    if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) setTimeout(sync, 0);
+    if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
+      setTimeout(sync, 0);
+      listen();
+    }
   });
 }
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

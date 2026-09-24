@@ -34,33 +34,119 @@ function renderSyncBadge() {
   b.textContent = badgeText();
   b.dataset.state = !sb || !session ? 'off' : syncStatus;
 }
-// The version this device last agreed with the server, used as the base for merging.
-const BASE_KEY = KEY + '-base';
-function loadBase() {
-  try {
-    return JSON.parse(localStorage.getItem(BASE_KEY));
-  } catch (e) {
-    return null;
-  }
-}
-function saveBase(json) {
-  try {
-    if (json) localStorage.setItem(BASE_KEY, json);
-    else localStorage.removeItem(BASE_KEY);
-  } catch (e) {}
-}
-function applyRemote(data, at) {
-  dropUndo();
-  norm(data);
-  S.editedAt = at;
-  persistLocal();
-  rollover();
-  renderAll();
-}
 function schedulePush() {
   if (!sb || !session) return;
   clearTimeout(pushT);
   pushT = setTimeout(sync, 1200);
+}
+
+/* sync v2: one row per record in cockpit_items (see js/records.js and supabase-setup.sql) */
+const OVERLAP = 200; // re-read a few recent rows in case a write committed out of order
+async function pullRows(since) {
+  const rows = [];
+  for (;;) {
+    const { data, error } = await sb
+      .from('cockpit_items')
+      .select('key,data,deleted,edited_at,seq')
+      .gt('seq', since)
+      .order('seq')
+      .limit(1000);
+    if (error) throw error;
+    rows.push(...data);
+    if (data.length < 1000) return rows;
+    since = data[data.length - 1].seq;
+  }
+}
+// Take in rows from the server. A record changed here and not yet sent keeps the local version
+// only if its edit is newer than the server's.
+function applyRows(rows, firstSync) {
+  const recs = firstSync ? new Map() : toRecords(S);
+  let changed = firstSync;
+  for (const r of rows) {
+    sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
+    const h = r.deleted ? null : hashOf(r.data),
+      mine = sync2.dirty[r.key];
+    if (mine && mine.at > Number(r.edited_at)) continue;
+    delete sync2.dirty[r.key];
+    if (h === null) delete sync2.synced[r.key];
+    else sync2.synced[r.key] = h;
+    if (h === null ? recs.has(r.key) : hashOf(recs.get(r.key)) !== h) {
+      if (h === null) recs.delete(r.key);
+      else recs.set(r.key, r.data);
+      changed = true;
+    }
+  }
+  if (changed) {
+    dropUndo();
+    norm(fromRecords(recs, S.day));
+    persistLocal();
+    rollover();
+    markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
+    renderAll();
+  }
+  saveSyncState();
+}
+// First sync on a device: if the server already has rows, they are the truth. Otherwise this
+// device moves your data over, taking the old single-row copy if it is newer.
+async function firstSync() {
+  const rows = await pullRows(0);
+  if (rows.length) return applyRows(rows, true);
+  const { data, error } = await sb
+    .from('cockpit_state')
+    .select('data,edited_at')
+    .eq('user_id', session.user.id)
+    .maybeSingle();
+  if (error) throw error;
+  if (data && Number(data.edited_at) > (S.editedAt || 0)) {
+    norm(data.data);
+    persistLocal();
+    rollover();
+    renderAll();
+  }
+  markDirty();
+}
+async function pushDirty() {
+  const keys = Object.keys(sync2.dirty);
+  if (!keys.length) return;
+  const recs = toRecords(S),
+    uid_ = session.user.id;
+  for (let i = 0; i < keys.length; i += 500) {
+    const batch = keys.slice(i, i + 500).map(k => ({ k, d: sync2.dirty[k] }));
+    const { error } = await sb.from('cockpit_items').upsert(
+      batch.map(({ k, d }) => ({
+        user_id: uid_,
+        key: k,
+        kind: k.slice(0, k.indexOf(':')),
+        data: d.h === null ? null : recs.get(k),
+        deleted: d.h === null,
+        edited_at: d.at,
+      })),
+      { onConflict: 'user_id,key' },
+    );
+    if (error) throw error;
+    batch.forEach(({ k, d }) => {
+      if (d.h === null) delete sync2.synced[k];
+      else sync2.synced[k] = d.h;
+      // Only clear it if it wasn't edited again while sending.
+      if (sync2.dirty[k] === d) delete sync2.dirty[k];
+    });
+    saveSyncState();
+  }
+}
+// A few times a day, keep a whole-state copy in cockpit_state; its history trigger is what
+// Settings > Previous versions lists.
+async function saveSnapshot() {
+  if (Date.now() - sync2.snapAt < 6 * 3600e3) return;
+  const { error } = await sb.from('cockpit_state').upsert({
+    user_id: session.user.id,
+    data: S,
+    edited_at: Date.now(),
+    updated_at: new Date().toISOString(),
+  });
+  if (!error) {
+    sync2.snapAt = Date.now();
+    saveSyncState();
+  }
 }
 async function sync() {
   if (!sb || !session) return;
@@ -75,51 +161,13 @@ async function sync() {
   syncing = true;
   setSync('syncing');
   try {
-    const uid_ = session.user.id;
-    const { data, error } = await sb
-      .from('cockpit_state')
-      .select('data,edited_at')
-      .eq('user_id', uid_)
-      .maybeSingle();
-    if (error) throw error;
-    const remoteAt = data ? Number(data.edited_at) : 0,
-      base = loadBase(),
-      baseAt = base ? base.editedAt || 0 : null;
-    let localAt = S.editedAt || 0,
-      push = false;
-    if (!data) push = true;
-    else if (remoteAt === localAt) saveBase(JSON.stringify(data.data));
-    else if (baseAt === null || remoteAt <= baseAt || localAt <= baseAt) {
-      // Only one side changed since the last agreed version (or no base yet): newer copy wins.
-      if (remoteAt > localAt) {
-        saveBase(JSON.stringify(data.data));
-        applyRemote(data.data, remoteAt);
-      } else push = true;
-    } else {
-      // Both changed: merge, show the result here, then send it back.
-      const merged = mergeState(base, JSON.parse(JSON.stringify(S)), { ...data.data, editedAt: remoteAt });
-      localAt = Date.now();
-      applyRemote(merged, localAt);
-      push = true;
-    }
-    if (push) {
-      const row = { user_id: uid_, data: S, edited_at: localAt, updated_at: new Date().toISOString() };
-      if (!data) {
-        const { error: e2 } = await sb.from('cockpit_state').upsert(row);
-        if (e2) throw e2;
-      } else {
-        // Only overwrite the version we read; if another device saved meanwhile, sync again.
-        const { data: done, error: e2 } = await sb
-          .from('cockpit_state')
-          .update(row)
-          .eq('user_id', uid_)
-          .eq('edited_at', remoteAt)
-          .select('user_id');
-        if (e2) throw e2;
-        if (!done || !done.length) again = true;
-      }
-      if (!again) saveBase(JSON.stringify(S));
-    }
+    if (sync2.user !== session.user.id) {
+      // New device, or a different account: start from the server's copy.
+      sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0, user: session.user.id };
+      await firstSync();
+    } else applyRows(await pullRows(Math.max(0, sync2.cursor - OVERLAP)), false);
+    await pushDirty();
+    await saveSnapshot();
     lastSync = Date.now();
     setSync('ok');
   } catch (e) {
@@ -132,6 +180,26 @@ async function sync() {
       sync();
     }
   }
+}
+// Live updates: another device's change arrives within a second instead of at the next poll.
+let live = null;
+function listen() {
+  if (!sb || !session || live || !sb.channel) return;
+  live = sb
+    .channel('items')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'cockpit_items', filter: 'user_id=eq.' + session.user.id },
+      () => {
+        clearTimeout(pushT);
+        pushT = setTimeout(sync, 300);
+      },
+    )
+    .subscribe();
+}
+function unlisten() {
+  if (live && sb.removeChannel) sb.removeChannel(live);
+  live = null;
 }
 async function signIn() {
   const email = $('#aemail').value.trim(),

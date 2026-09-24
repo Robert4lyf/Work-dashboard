@@ -78,10 +78,39 @@ function norm(s) {
     t.monthDay = t.monthDay || 0;
   });
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
-  if (!S.daily) {
+  // Focus totals per day are worked out from the sessions. Older days whose sessions are gone
+  // keep their totals in oldDaily/oldPdaily (on first run, whatever the sessions don't explain).
+  if (!S.oldDaily) {
+    const kept = S.daily || {},
+      keptP = S.pdaily || {};
     S.daily = {};
-    S.sessions.forEach(x => addDaily(fmt(new Date(x.t)), x.tag, x.mins));
+    S.pdaily = {};
+    sessionTotals();
+    S.oldDaily = minus(kept, S.daily);
+    S.oldPdaily = minus(keptP, S.pdaily);
   }
+  rebuildTotals();
+}
+function sessionTotals() {
+  S.sessions.forEach(x => {
+    const d = fmt(new Date(x.t));
+    addDaily(d, x.tag, x.mins);
+    addPDaily(d, x.p, x.mins);
+  });
+}
+function minus(a, b) {
+  const out = {};
+  for (const d in a)
+    for (const k in a[d]) {
+      const v = a[d][k] - ((b[d] || {})[k] || 0);
+      if (v > 0) (out[d] = out[d] || {})[k] = v;
+    }
+  return out;
+}
+function rebuildTotals() {
+  S.daily = JSON.parse(JSON.stringify(S.oldDaily));
+  S.pdaily = JSON.parse(JSON.stringify(S.oldPdaily));
+  sessionTotals();
 }
 function addDaily(d, tag, mins) {
   const o = (S.daily[d] = S.daily[d] || {});
@@ -100,21 +129,20 @@ function persistLocal() {
   } catch (e) {}
 }
 function save() {
-  const cut = Date.now() - 60 * 864e5,
+  const cut = Date.now() - 400 * 864e5,
     dcut = shift(today(), -400),
     lcut = shift(today(), -120);
   S.sessions = S.sessions.filter(x => x.t > cut);
-  for (const d in S.daily) if (d < dcut) delete S.daily[d];
-  for (const d in S.pdaily) if (d < dcut) delete S.pdaily[d];
+  for (const o of [S.oldDaily, S.oldPdaily, S.daily, S.pdaily]) for (const d in o) if (d < dcut) delete o[d];
   S.log = S.log.filter(x => x.d >= lcut);
   S.editedAt = Date.now();
   dropUndo();
   persistLocal();
+  markDirty();
   schedulePush();
 }
-// The daily reset must not stamp an edit time: otherwise a device that was
-// closed yesterday would look newer than the server and overwrite it on sync.
-// Every device runs the same reset, so it doesn't need to be pushed.
+// The daily reset. Every device runs it and makes the same changes (repeat copies get
+// date-based ids), so whichever device syncs first, nothing is doubled.
 function rollover() {
   if (S.day === today()) return;
   const last = S.day;
@@ -132,6 +160,7 @@ function rollover() {
       if (hit && !S.quests.some(q => q.tpl === t.id || q.text === t.text)) {
         const q = inst(t);
         q.tpl = t.id;
+        q.id = t.id + '-' + d; // the same on every device, so two devices don't both add it
         S.quests.push(q);
       }
     });
@@ -144,4 +173,5 @@ function rollover() {
     return false;
   });
   persistLocal();
+  markDirty();
 }
