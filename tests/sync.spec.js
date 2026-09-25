@@ -71,8 +71,10 @@ function fakeSupabase() {
 function server() {
   return { rows: new Map(), seq: 0, state: null, devices: [], snapshots: 0 };
 }
+// Service workers are blocked: the app's worker would fetch and cache the real Supabase library,
+// which bypasses page.route and would replace the fake after a reload.
 async function device(browser, srv, seed) {
-  const ctx = await browser.newContext();
+  const ctx = await browser.newContext({ serviceWorkers: 'block' });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
