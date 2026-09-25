@@ -57,13 +57,15 @@ Upload the changed files to the repository. The deploy workflow stamps a new `VE
 
 If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js` by hand on each upload (e.g. `dashboard-v5`).
 
-**Upgrading from the first version:** run the updated `supabase-setup.sql` once in the SQL Editor. It's safe to re-run and adds the server-side version history.
+**Upgrading:** whenever this file changes, run the updated `supabase-setup.sql` once in the SQL Editor. It's safe to re-run and only adds what's missing.
+
+**Upgrading to per-item sync (item rows and live updates):** run the updated `supabase-setup.sql` first, then open the updated app on one device and let it sync; that device moves your data into the new table. Then open the app on your other devices. If live updates don't arrive, check **Database > Publications > supabase_realtime** in Supabase includes `cockpit_items`.
 
 ## How sync behaves
 
-- Changes save instantly on the device and sync about a second later, and whenever the app is reopened.
-- If two devices change things at the same time (or while offline), their changes are merged item by item: new quests, inbox items and focus time from both are kept, and a deletion on one device sticks unless the other edited that item. Only when the *same* quest or setting was changed on both does the newer edit win.
-- Every time sync replaces your data, the server keeps the previous version (the newest 200). If something goes missing, open **Settings > Previous versions** and restore one.
+- Each quest, inbox item, focus session and so on is stored as its own row, so devices only exchange what changed. Changes save instantly on the device, sync about a second later, and reach your other open devices within a second or two (live updates).
+- Edits on two devices at the same time (or offline) are all kept, as long as they're to different items. If the *same* quest was changed on both, the newer edit wins. Focus time from every device adds up.
+- A copy of everything is saved on the server every few hours (the newest 200 are kept). If something goes missing, open **Settings > Previous versions** and restore one.
 
 ## Features worth knowing
 
@@ -74,6 +76,7 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 - **Tags:** a tag belongs to a quest. Set it on the quest (Today) or inbox item (Tag and subquests); subquests and focus sessions use it. Add, rename or delete tags in the Settings tab.
 - **Undo:** deleting a quest, clearing an inbox item, or deleting a template or tag shows an Undo button for 5 seconds.
 - **Upcoming:** on a quest (or an inbox item's Tag and subquests), use **Do later** (Tomorrow, Next Mon, or a date) to move it off Today. It waits under Today > Upcoming, where you can change the date or bring it back, and joins the end of Today's list on its day.
+- **Capture from anywhere:** in Settings > Capture from anywhere, create a private capture link, then follow the steps for an iPhone/Mac Shortcut (works with Siri and, on a Mac, a keyboard shortcut) or Android's HTTP Shortcuts app. On a computer, drag the **+ Dashboard** bookmarklet to your bookmarks bar to send the page you're on. Long-pressing the installed app's icon also offers **Capture** and **Focus**.
 - **Share to Inbox (Android):** once the app is installed, choose it from any app's Share menu to drop a link or text straight into the inbox. iPhone doesn't let home-screen apps receive shares.
 - **Repeating quests:** open a quest and use **Repeat** to pick days (every day, weekdays, any mix) and/or a day of the month. A fresh copy, subquests included, is added to Today on those days, even if the app wasn't opened on the day itself. An unfinished copy carries over instead of doubling up. Choose **Off** to stop it. All repeats are listed under Today > Repeating quests.
 - **Projects:** group quests that belong to longer-running work. Pick a project on a quest (or an inbox item's Details and subquests), or create one from the same picker. History > Projects shows each project's finished and open quests, a progress bar and focus time; finish a project there when it's done. Rename or delete projects in Settings.

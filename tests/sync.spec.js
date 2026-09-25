@@ -63,6 +63,7 @@ function fakeSupabase() {
         return ch;
       },
       removeChannel() {},
+      rpc: async name => ({ data: await window.srvRpc(name), error: null }),
     }),
   };
 }
@@ -93,6 +94,23 @@ async function device(browser, srv, seed) {
       .forEach(d => d.page.evaluate(() => window.__live && window.__live()));
   });
   await page.exposeFunction('srvState', () => srv.state);
+  await page.exposeFunction('srvRpc', name =>
+    name === 'cockpit_new_capture_token' ? (srv.token = 'tok123') : null,
+  );
+  // The capture endpoint, doing what the cockpit_capture database function does.
+  await page.route('**/rest/v1/rpc/cockpit_capture', async r => {
+    const body = r.request().postDataJSON();
+    if (body.token !== srv.token) return r.fulfill({ status: 400, body: '{}' });
+    const id = 'cap' + ++srv.seq;
+    srv.rows.set('inbox:' + id, {
+      key: 'inbox:' + id,
+      data: { id, text: body.text },
+      deleted: false,
+      edited_at: Date.now(),
+      seq: ++srv.seq,
+    });
+    r.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+  });
   await page.exposeFunction('srvSnapshot', row => {
     srv.state = { data: row.data, edited_at: row.edited_at };
     srv.snapshots++;
@@ -256,4 +274,21 @@ test('daily repeats created on two devices are not doubled', async ({ browser })
     });
   await settle(a, b);
   for (const d of [a, b]) expect(texts(await d.state())).toEqual(['Standup']);
+});
+
+test('capture: create a link, and items sent to it land in the inbox', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.click('nav [data-v=account]');
+  await a.page.click('#capnew');
+  await expect(a.page.locator('.caprow code').nth(2)).toHaveText('tok123');
+  await a.page.click('#captest');
+  await expect
+    .poll(async () => (await a.state()).inbox.map(i => i.text))
+    .toEqual(['Test capture from Settings']);
+  // The details survive a reload on this device.
+  await a.page.reload();
+  await a.page.click('nav [data-v=account]');
+  await expect(a.page.locator('.caprow code').nth(2)).toHaveText('tok123');
+  expect(a.errors).toEqual([]);
 });

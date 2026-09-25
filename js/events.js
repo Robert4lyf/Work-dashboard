@@ -525,6 +525,9 @@ document.addEventListener('click', e => {
     });
   }
   if (b.id === 'syncNow') sync();
+  if (b.id === 'capnew') newCaptureToken();
+  if (b.id === 'captest') testCapture();
+  if (d.copy) copyText({ url: captureUrl(), key: CFG.supabaseAnonKey, token: captureToken }[d.copy]);
 });
 
 document.addEventListener(
@@ -598,12 +601,13 @@ if (timerDue()) finishTimer(true);
 else renderAll();
 go(view);
 receiveShare();
+receiveLaunch();
 setInterval(timerTick, 500);
 if (sb) {
   sb.auth.onAuthStateChange((ev, s) => {
     session = s;
     renderSyncBadge();
-    if (view === 'account') renderAccount();
+    renderAccount(); // even when not on screen, so Settings never shows a stale sign-in form
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
       setTimeout(sync, 0);
       listen();
