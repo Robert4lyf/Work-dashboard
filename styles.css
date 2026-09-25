@@ -1244,6 +1244,64 @@ body.zen nav {
 :root[data-style='botanical'] :is(h2, .title, .node h1, .zt, .zclock, .clock) {
   letter-spacing: 0;
 }
+/* capture setup */
+.caprow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font-size: 15px;
+}
+.caprow span {
+  flex: none;
+  width: 100px;
+  color: var(--muted);
+}
+.caprow code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--bg);
+  border: 1px solid var(--edge);
+  padding: 2px 6px;
+}
+.steps {
+  margin: 8px 0;
+  padding-left: 22px;
+  font-size: 16px;
+}
+.steps li {
+  margin: 6px 0;
+}
+.steps code {
+  overflow-wrap: anywhere;
+}
+/* meetings from the calendar */
+.meet {
+  padding: 12px 14px;
+  margin-bottom: 22px;
+}
+.mrow {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 2px dashed var(--muted);
+  overflow-wrap: anywhere;
+}
+.mrow:first-of-type {
+  border-top: 0;
+}
+.mrow .mt {
+  flex: none;
+  min-width: 104px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.mrow.past {
+  opacity: 0.55;
+}
 [hidden] {
   display: none !important;
 }

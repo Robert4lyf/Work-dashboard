@@ -76,6 +76,7 @@ document.addEventListener('submit', e => {
     if (opt) $('#sopt').checked = true;
   }
   if (f.id === 'authform') signIn();
+  if (f.id === 'calform') saveCalendarUrl($('#calin').value);
   if (f.id === 'projform') {
     const v = $('#projin').value.trim();
     if (!v) return;
@@ -497,7 +498,6 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'exp') exportData();
   if (b.id === 'doRestore') {
-    saveBase(null); // a restore replaces everything rather than merging
     norm(pending);
     pending = null;
     path = [];
@@ -516,6 +516,7 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
+    unlisten();
     sb.auth.signOut().then(() => {
       session = null;
       syncStatus = '';
@@ -525,6 +526,24 @@ document.addEventListener('click', e => {
     });
   }
   if (b.id === 'syncNow') sync();
+  if (b.id === 'pushkeys') setupPushKeys();
+  if (b.id === 'pushon') enablePush();
+  if (b.id === 'pushoff') disablePush();
+  if (b.id === 'pushtest') testPush();
+  if (b.id === 'calnow') loadCalendar(true);
+  if (b.id === 'caloff') removeCalendar();
+  if (b.id === 'capnew') newCaptureToken();
+  if (b.id === 'captest') testCapture();
+  if (d.copy)
+    copyText(
+      {
+        url: captureUrl(),
+        key: CFG.supabaseAnonKey,
+        token: captureToken,
+        vpub: S.pushKey,
+        vpriv: newPrivateKey,
+      }[d.copy],
+    );
 });
 
 document.addEventListener(
@@ -582,6 +601,7 @@ document.addEventListener('visibilitychange', () => {
     if (timerDue()) finishTimer(true);
     else renderAll();
     sync();
+    loadCalendar();
   }
 });
 window.addEventListener('online', () => sync());
@@ -589,7 +609,10 @@ window.addEventListener('offline', () => {
   if (session) setSync('offline');
 });
 setInterval(() => {
-  if (!document.hidden) sync();
+  if (document.hidden) return;
+  sync();
+  loadCalendar();
+  renderHeader(); // keeps "Free until ..." current
 }, 60000);
 
 load();
@@ -598,13 +621,18 @@ if (timerDue()) finishTimer(true);
 else renderAll();
 go(view);
 receiveShare();
+receiveLaunch();
 setInterval(timerTick, 500);
 if (sb) {
   sb.auth.onAuthStateChange((ev, s) => {
     session = s;
     renderSyncBadge();
-    if (view === 'account') renderAccount();
-    if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) setTimeout(sync, 0);
+    renderAccount(); // even when not on screen, so Settings never shows a stale sign-in form
+    if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
+      setTimeout(sync, 0);
+      listen();
+      loadCalendar();
+    }
   });
 }
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

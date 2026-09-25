@@ -3,7 +3,7 @@
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
 const VERSION = 'dashboard-v4';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
-const APP = ['state', 'tree', 'merge', 'header', 'today', 'inbox', 'focus', 'projects', 'history', 'sync', 'board', 'events']
+const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'projects', 'history', 'sync', 'capture', 'notify', 'calendar', 'board', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', SUPABASE_JS];
@@ -47,6 +47,23 @@ self.addEventListener('fetch', e => {
 });
 
 // Tapping a timer notification brings the app back to the front.
+// Notifications sent by the send-notices function (see supabase/functions).
+self.addEventListener('push', e => {
+  let d = {};
+  try {
+    d = e.data.json();
+  } catch (x) {
+    d = { body: e.data ? e.data.text() : '' };
+  }
+  e.waitUntil(
+    self.registration.showNotification(d.title || 'Dashboard', {
+      body: d.body || '',
+      tag: d.tag,
+      icon: 'icons/icon-192.png',
+    }),
+  );
+});
+
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {

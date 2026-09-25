@@ -30,7 +30,7 @@ function renderInbox() {
     }
     h += `<div class="row" style="padding:0;margin:0"><button class="btn blue" data-promote="${it.id}">Move to today</button><button class="btn green" data-clear="${it.id}">Clear</button></div></div>`;
   });
-  $('#v-inbox').innerHTML = h;
+  setHTML($('#v-inbox'), h);
 }
 // "call Sam next item book dentist" -> two items. Also splits on new lines.
 const splitItems = v =>

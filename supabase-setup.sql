@@ -47,3 +47,147 @@ end $$;
 drop trigger if exists cockpit_keep_history on public.cockpit_state;
 create trigger cockpit_keep_history before update on public.cockpit_state
   for each row execute function public.cockpit_keep_history();
+
+-- Per-item storage (version 2 sync). Each quest, inbox item, session... is one row, so devices
+-- only exchange what changed and edits to different items never collide.
+-- `seq` increases on every write; devices ask for rows with a higher seq than they have seen.
+-- Deleted items stay as tombstones (deleted = true) so the deletion reaches every device.
+create sequence if not exists public.cockpit_items_seq;
+create table if not exists public.cockpit_items (
+  user_id    uuid   not null default auth.uid() references auth.users(id) on delete cascade,
+  key        text   not null,
+  kind       text   not null,
+  data       jsonb,
+  deleted    boolean not null default false,
+  edited_at  bigint not null default 0,
+  seq        bigint not null default nextval('public.cockpit_items_seq'),
+  primary key (user_id, key)
+);
+create index if not exists cockpit_items_seq_idx on public.cockpit_items (user_id, seq);
+
+alter table public.cockpit_items enable row level security;
+drop policy if exists "read own items"   on public.cockpit_items;
+drop policy if exists "insert own items" on public.cockpit_items;
+drop policy if exists "update own items" on public.cockpit_items;
+create policy "read own items"   on public.cockpit_items for select using (auth.uid() = user_id);
+create policy "insert own items" on public.cockpit_items for insert with check (auth.uid() = user_id);
+create policy "update own items" on public.cockpit_items for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create or replace function public.cockpit_items_stamp() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  new.seq := nextval('public.cockpit_items_seq');
+  return new;
+end $$;
+drop trigger if exists cockpit_items_stamp on public.cockpit_items;
+create trigger cockpit_items_stamp before insert or update on public.cockpit_items
+  for each row execute function public.cockpit_items_stamp();
+
+-- Live updates: other devices hear about changes within a second.
+do $$ begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables
+                     where pubname = 'supabase_realtime' and tablename = 'cockpit_items') then
+    alter publication supabase_realtime add table public.cockpit_items;
+  end if;
+end $$;
+
+-- Capture from anywhere: a secret token lets shortcuts (Siri, Android, email...) add inbox items
+-- without signing in. Settings > Capture creates or replaces your token.
+create table if not exists public.cockpit_capture_tokens (
+  token      text primary key,
+  user_id    uuid not null unique references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.cockpit_capture_tokens enable row level security;
+-- No policies: the table is only reachable through the two functions below.
+
+create or replace function public.cockpit_new_capture_token() returns text
+language plpgsql security definer set search_path = public as $$
+declare t text := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+begin
+  if auth.uid() is null then raise exception 'sign in first'; end if;
+  delete from cockpit_capture_tokens where user_id = auth.uid();
+  insert into cockpit_capture_tokens (token, user_id) values (t, auth.uid());
+  return t;
+end $$;
+revoke execute on function public.cockpit_new_capture_token() from public, anon;
+grant execute on function public.cockpit_new_capture_token() to authenticated;
+
+create or replace function public.cockpit_capture(token text, text text) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  u uuid;
+  body text := trim(coalesce(text, ''));
+  id text := 'cap' || replace(gen_random_uuid()::text, '-', '');
+  item jsonb;
+begin
+  select t.user_id into u from cockpit_capture_tokens t where t.token = cockpit_capture.token;
+  if u is null then raise exception 'unknown capture token'; end if;
+  if body = '' then return false; end if;
+  item := jsonb_build_object('id', id, 'text', left(regexp_replace(body, '\s+', ' ', 'g'), 200));
+  -- Long text keeps its full version in the notes.
+  if length(body) > 200 then
+    item := item || jsonb_build_object('node', jsonb_build_object(
+      'id', id || 'n', 'text', left(regexp_replace(body, '\s+', ' ', 'g'), 200), 'notes', body, 'children', '[]'::jsonb));
+  end if;
+  insert into cockpit_items (user_id, key, kind, data, edited_at)
+    values (u, 'inbox:' || id, 'inbox', item, (extract(epoch from now()) * 1000)::bigint);
+  return true;
+end $$;
+revoke execute on function public.cockpit_capture(text, text) from public;
+grant execute on function public.cockpit_capture(text, text) to anon, authenticated;
+
+-- Calendar feed: your calendar's private link (ICS), fetched by the database because browsers
+-- aren't allowed to read it directly. Only you can set or read your link.
+create extension if not exists http with schema extensions;
+create table if not exists public.cockpit_calendar (
+  user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  url     text not null check (url ~ '^https://')
+);
+alter table public.cockpit_calendar enable row level security;
+drop policy if exists "own calendar" on public.cockpit_calendar;
+create policy "own calendar" on public.cockpit_calendar for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create or replace function public.cockpit_calendar_ics() returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  link text;
+  r extensions.http_response;
+begin
+  select url into link from cockpit_calendar where user_id = auth.uid();
+  if link is null then return null; end if;
+  select * into r from extensions.http_get(link);
+  if r.status <> 200 then raise exception 'calendar feed answered %', r.status; end if;
+  return r.content;
+end $$;
+revoke execute on function public.cockpit_calendar_ics() from public, anon;
+grant execute on function public.cockpit_calendar_ics() to authenticated;
+
+-- Notifications: each device that turns them on stores its push subscription here, and the app
+-- keeps a queue of upcoming notices (timer end, deadlines...). The send-notices function
+-- (supabase/functions/send-notices) sends the due ones every minute (supabase/notifications-cron.sql).
+create table if not exists public.cockpit_push_subs (
+  endpoint   text primary key,
+  user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.cockpit_push_subs enable row level security;
+drop policy if exists "own push subscriptions" on public.cockpit_push_subs;
+create policy "own push subscriptions" on public.cockpit_push_subs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create table if not exists public.cockpit_notices (
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  key     text not null,
+  at      timestamptz not null,
+  title   text not null,
+  body    text not null default '',
+  sent_at timestamptz,
+  primary key (user_id, key)
+);
+create index if not exists cockpit_notices_due on public.cockpit_notices (at) where sent_at is null;
+alter table public.cockpit_notices enable row level security;
+drop policy if exists "own notices" on public.cockpit_notices;
+create policy "own notices" on public.cockpit_notices for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

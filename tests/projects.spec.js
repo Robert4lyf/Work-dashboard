@@ -76,25 +76,3 @@ test('inbox items carry their project; renaming and deleting projects', async ({
   s = await app.state();
   expect(s.quests[0].project).toBe(pid);
 });
-
-test('project time merges when both devices logged focus the same day', async ({ page }) => {
-  const r = await page.evaluate(() => {
-    const t = h => new Date(2026, 8, 23, h).getTime();
-    const base = { editedAt: 1, sessions: [], pdaily: {}, daily: {} };
-    const mine = {
-      editedAt: 3,
-      sessions: [{ tag: '', mins: 10, t: t(10), q: 'a', p: 'P1' }],
-      pdaily: { '2026-09-23': { P1: 10 } },
-      daily: { '2026-09-23': { '': 10 } },
-    };
-    const theirs = {
-      editedAt: 2,
-      sessions: [{ tag: '', mins: 5, t: t(11), q: 'b', p: 'P1' }],
-      pdaily: { '2026-09-23': { P1: 5 } },
-      daily: { '2026-09-23': { '': 5 } },
-    };
-    return mergeState(base, mine, theirs);
-  });
-  expect(r.pdaily['2026-09-23']).toEqual({ P1: 15 });
-  expect(r.daily['2026-09-23']).toEqual({ '': 15 });
-});

@@ -115,7 +115,7 @@ function renderFocus() {
     );
     h += `</div><button class="btn green" id="start" style="width:100%">Start ${S.mins} min</button>`;
   }
-  $('#v-focus').innerHTML = h;
+  setHTML($('#v-focus'), h);
 }
 function renderStats() {
   const since = shift(today(), -(range - 1)),
@@ -166,7 +166,9 @@ function finishTimer(silent) {
       navigator.vibrate && navigator.vibrate([200, 100, 200]);
     } catch (e) {}
     if (document.hidden)
-      notify('Focus session done', t.mins + ' min' + (timerLabel(t) ? ' · ' + timerLabel(t) : ''));
+      if (!pushEndpoint)
+        // Devices with push notifications on get the server's notification instead.
+        notify('Focus session done', t.mins + ' min' + (timerLabel(t) ? ' · ' + timerLabel(t) : ''));
   }
   renderAll();
 }
@@ -236,13 +238,14 @@ function renameTag(i, v) {
   S.sessions.forEach(x => {
     if (x.tag === old) x.tag = v;
   });
-  for (const d in S.daily) {
-    const o = S.daily[d];
+  for (const d in S.oldDaily) {
+    const o = S.oldDaily[d];
     if (old in o) {
       o[v] = (o[v] || 0) + o[old];
       delete o[old];
     }
   }
+  rebuildTotals();
   if (S.timer && S.timer.tag === old) S.timer.tag = v;
 }
 // Runs twice a second once the app has loaded (started from events.js).
@@ -252,7 +255,7 @@ function timerTick() {
     if (document.title !== TITLE) document.title = TITLE;
     return;
   }
-  if (timerDue()) return finishTimer();
+  if (timerDue()) return inBackground(() => finishTimer());
   const txt = mmss(remaining());
   document.title = txt + (t.left != null ? ' paused' : '') + ' · ' + TITLE;
   const c = $('#clock');
