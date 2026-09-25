@@ -54,7 +54,7 @@ function renderToday() {
   });
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
-  let h = '';
+  let h = renderMeetings();
   const soon = dueSoon();
   if (soon.length) {
     h += '<div class="soon box"><h2>Due soon</h2>';
@@ -93,7 +93,7 @@ function renderToday() {
   }
   if (!qs.length) h += '<div class="slot">No quests yet.</div>';
   h += renderUpcoming();
-  $('#v-today').innerHTML = h;
+  setHTML($('#v-today'), h);
 }
 
 /* upcoming: top-level quests scheduled for a later day (S.later, each with a start date) */
@@ -185,5 +185,5 @@ function renderNode({ n, parents }) {
   h += list(n.children);
   h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>
     <label class="optbox" style="margin-top:-4px"><input type="checkbox" id="sopt">Add as optional</label>`;
-  $('#v-today').innerHTML = h;
+  setHTML($('#v-today'), h);
 }

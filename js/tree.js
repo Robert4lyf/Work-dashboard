@@ -178,6 +178,46 @@ function withUndo(msg, fn) {
   undoSnap = snap;
   toast(msg, true);
 }
+// Redraws triggered in the background (sync, calendar, the timer ending) must not wipe what
+// the user is typing or move their cursor. Views set their HTML through setHTML for that.
+let background = false;
+const COMPOSE = ['qin', 'sin', 'iin', 'tagin', 'projin', 'calin', 'aemail', 'apass'];
+function inBackground(fn) {
+  const was = background;
+  background = true;
+  try {
+    return fn();
+  } finally {
+    background = was;
+  }
+}
+function setHTML(el, html) {
+  if (!background) {
+    el.innerHTML = html;
+    return;
+  }
+  const a = document.activeElement,
+    fid = a && a.id && el.contains(a) ? a.id : '',
+    sel = fid && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null,
+    typed = {};
+  COMPOSE.forEach(id => {
+    const i = el.querySelector('#' + id);
+    if (i && i.value) typed[id] = i.value;
+  });
+  el.innerHTML = html;
+  for (const id in typed) {
+    const i = el.querySelector('#' + id);
+    if (i) i.value = typed[id];
+  }
+  const f = fid && el.querySelector('#' + CSS.escape(fid));
+  if (f) {
+    f.focus();
+    if (sel)
+      try {
+        f.setSelectionRange(sel[0], sel[1]);
+      } catch (e) {}
+  }
+}
 function dropUndo() {
   if (!undoSnap) return;
   undoSnap = null;

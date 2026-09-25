@@ -4,11 +4,12 @@
   "description": "Dashboard: quests, inbox and focus timer (static PWA).",
   "scripts": {
     "test": "playwright test",
-    "format": "prettier --write \"js/*.js\" styles.css \"tests/*.js\"",
-    "format:check": "prettier --check \"js/*.js\" styles.css \"tests/*.js\""
+    "format": "prettier --write \"js/*.js\" styles.css \"tests/*.js\" \"supabase/functions/**/*.{mjs,ts}\"",
+    "format:check": "prettier --check \"js/*.js\" styles.css \"tests/*.js\" \"supabase/functions/**/*.{mjs,ts}\""
   },
   "devDependencies": {
     "@playwright/test": "1.56.1",
-    "prettier": "3.8.1"
+    "prettier": "3.8.1",
+    "web-push": "^3.6.7"
   }
 }

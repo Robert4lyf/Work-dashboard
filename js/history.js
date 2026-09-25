@@ -24,7 +24,7 @@ function renderLog() {
     '</div>';
   if (!days.length) {
     h += '<div class="empty">Nothing finished yet.</div>';
-    $('#v-log').innerHTML = h;
+    setHTML($('#v-log'), h);
     return;
   }
   days.forEach(d => {
@@ -38,7 +38,7 @@ function renderLog() {
       );
     h += '</ul></div>';
   });
-  $('#v-log').innerHTML = h;
+  setHTML($('#v-log'), h);
 }
 function copyLog() {
   const txt = logText();

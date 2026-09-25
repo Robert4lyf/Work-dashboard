@@ -137,3 +137,57 @@ begin
 end $$;
 revoke execute on function public.cockpit_capture(text, text) from public;
 grant execute on function public.cockpit_capture(text, text) to anon, authenticated;
+
+-- Calendar feed: your calendar's private link (ICS), fetched by the database because browsers
+-- aren't allowed to read it directly. Only you can set or read your link.
+create extension if not exists http with schema extensions;
+create table if not exists public.cockpit_calendar (
+  user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
+  url     text not null check (url ~ '^https://')
+);
+alter table public.cockpit_calendar enable row level security;
+drop policy if exists "own calendar" on public.cockpit_calendar;
+create policy "own calendar" on public.cockpit_calendar for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create or replace function public.cockpit_calendar_ics() returns text
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  link text;
+  r extensions.http_response;
+begin
+  select url into link from cockpit_calendar where user_id = auth.uid();
+  if link is null then return null; end if;
+  select * into r from extensions.http_get(link);
+  if r.status <> 200 then raise exception 'calendar feed answered %', r.status; end if;
+  return r.content;
+end $$;
+revoke execute on function public.cockpit_calendar_ics() from public, anon;
+grant execute on function public.cockpit_calendar_ics() to authenticated;
+
+-- Notifications: each device that turns them on stores its push subscription here, and the app
+-- keeps a queue of upcoming notices (timer end, deadlines...). The send-notices function
+-- (supabase/functions/send-notices) sends the due ones every minute (supabase/notifications-cron.sql).
+create table if not exists public.cockpit_push_subs (
+  endpoint   text primary key,
+  user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  p256dh     text not null,
+  auth       text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.cockpit_push_subs enable row level security;
+drop policy if exists "own push subscriptions" on public.cockpit_push_subs;
+create policy "own push subscriptions" on public.cockpit_push_subs for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create table if not exists public.cockpit_notices (
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  key     text not null,
+  at      timestamptz not null,
+  title   text not null,
+  body    text not null default '',
+  sent_at timestamptz,
+  primary key (user_id, key)
+);
+create index if not exists cockpit_notices_due on public.cockpit_notices (at) where sent_at is null;
+alter table public.cockpit_notices enable row level security;
+drop policy if exists "own notices" on public.cockpit_notices;
+create policy "own notices" on public.cockpit_notices for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

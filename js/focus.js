@@ -115,7 +115,7 @@ function renderFocus() {
     );
     h += `</div><button class="btn green" id="start" style="width:100%">Start ${S.mins} min</button>`;
   }
-  $('#v-focus').innerHTML = h;
+  setHTML($('#v-focus'), h);
 }
 function renderStats() {
   const since = shift(today(), -(range - 1)),
@@ -166,7 +166,9 @@ function finishTimer(silent) {
       navigator.vibrate && navigator.vibrate([200, 100, 200]);
     } catch (e) {}
     if (document.hidden)
-      notify('Focus session done', t.mins + ' min' + (timerLabel(t) ? ' · ' + timerLabel(t) : ''));
+      if (!pushEndpoint)
+        // Devices with push notifications on get the server's notification instead.
+        notify('Focus session done', t.mins + ' min' + (timerLabel(t) ? ' · ' + timerLabel(t) : ''));
   }
   renderAll();
 }
@@ -253,7 +255,7 @@ function timerTick() {
     if (document.title !== TITLE) document.title = TITLE;
     return;
   }
-  if (timerDue()) return finishTimer();
+  if (timerDue()) return inBackground(() => finishTimer());
   const txt = mmss(remaining());
   document.title = txt + (t.left != null ? ' paused' : '') + ' · ' + TITLE;
   const c = $('#clock');

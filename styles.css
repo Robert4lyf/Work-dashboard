@@ -1278,6 +1278,30 @@ body.zen nav {
 .steps code {
   overflow-wrap: anywhere;
 }
+/* meetings from the calendar */
+.meet {
+  padding: 12px 14px;
+  margin-bottom: 22px;
+}
+.mrow {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-top: 2px dashed var(--muted);
+  overflow-wrap: anywhere;
+}
+.mrow:first-of-type {
+  border-top: 0;
+}
+.mrow .mt {
+  flex: none;
+  min-width: 104px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.mrow.past {
+  opacity: 0.55;
+}
 [hidden] {
   display: none !important;
 }

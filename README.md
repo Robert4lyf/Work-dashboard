@@ -61,6 +61,26 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 
 **Upgrading to per-item sync (item rows and live updates):** run the updated `supabase-setup.sql` first, then open the updated app on one device and let it sync; that device moves your data into the new table. Then open the app on your other devices. If live updates don't arrive, check **Database > Publications > supabase_realtime** in Supabase includes `cockpit_items`.
 
+## Notifications (optional, one-time setup)
+
+Real notifications, even with the app closed: when a focus session ends, on the morning a deadline is due, and when an Upcoming quest returns to Today. On iPhone/iPad they need iOS 16.4+ and the app added to the Home Screen.
+
+1. Run the updated `supabase-setup.sql` (adds the notification tables).
+2. In the app: **Settings > Notifications > Generate keys**. Copy the two keys it shows (the private key isn't saved anywhere else).
+3. In Supabase, open **Edge Functions**, create a function named `send-notices`, and give it the two files from `supabase/functions/send-notices/` (`index.ts` and `core.mjs`). Turn **off** "Enforce JWT verification" for it (a secret header protects it instead). If you use the Supabase CLI: `supabase functions deploy send-notices --no-verify-jwt`.
+4. In **Edge Functions > Secrets**, add `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (from step 2), `VAPID_SUBJECT` (`mailto:` plus your email) and `CRON_SECRET` (any long random string).
+5. Open `supabase/notifications-cron.sql`, replace `YOUR-PROJECT-REF` (from your project URL) and `YOUR-CRON-SECRET`, and run it in the SQL Editor. It checks for due notifications every minute.
+6. On each device: **Settings > Notifications > Turn on for this device**, then **Send a test**.
+
+## Calendar (optional)
+
+Shows today's meetings on Today and "Free until 14:00" in the header. Paste your calendar's private feed link in **Settings > Calendar**:
+
+- **Outlook:** Settings > Calendar > Shared calendars > Publish a calendar. Choose a calendar and "Can view when I'm busy" (enough for free/busy) or "Can view titles and locations", then copy the **ICS** link. Work accounts sometimes block publishing.
+- **Google:** calendar settings > "Secret address in iCal format".
+
+The link works like a password, so it's stored in your Supabase project (only you can read it) and the database fetches the feed; the events stay on each device and aren't synced. Feeds refresh every 15 minutes; Outlook's published feeds can themselves lag behind by a while.
+
 ## How sync behaves
 
 - Each quest, inbox item, focus session and so on is stored as its own row, so devices only exchange what changed. Changes save instantly on the device, sync about a second later, and reach your other open devices within a second or two (live updates).

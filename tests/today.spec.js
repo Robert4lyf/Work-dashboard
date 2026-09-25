@@ -68,3 +68,15 @@ test('overdue count shows in the header', async ({ app, page }) => {
   await page.dispatchEvent('#fdue', 'change');
   await expect(page.locator('#hstats')).toContainText('1 overdue');
 });
+
+test('a background refresh keeps what you are typing', async ({ app, page }) => {
+  await app.addQuest('First');
+  await page.fill('#qin', 'Half-typed quest');
+  await page.evaluate(() => inBackground(renderAll));
+  await expect(page.locator('#qin')).toBeFocused();
+  await expect(page.locator('#qin')).toHaveValue('Half-typed quest');
+  await page.press('#qin', 'Enter');
+  expect(await app.order()).toEqual(['First', 'Half-typed quest']);
+  // A normal (user-driven) redraw after adding still clears the box.
+  await expect(page.locator('#qin')).toHaveValue('');
+});
