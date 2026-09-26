@@ -11,11 +11,12 @@ function renderInbox() {
   let h = '<h2>Inbox</h2>';
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
   if (!S.inbox.length) h += '<div class="empty">Inbox empty.</div>';
+  else h += '<div class="list box">';
   S.inbox.forEach(it => {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item box"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}<br><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide' : 'Details and subquests'}</button></p>`;
+    h += `<div class="item"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
       h += tagPicker('i', it.id, it.tag) + projectPicker('i', it.id, it.project) + laterPicker('i', it.id);
       if (kids.length) {
@@ -28,8 +29,9 @@ function renderInbox() {
       }
       h += `<form class="addrow" data-subfor="${it.id}"><input maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
     }
-    h += `<div class="row" style="padding:0;margin:0"><button class="btn blue" data-promote="${it.id}">Move to today</button><button class="btn green" data-clear="${it.id}">Clear</button></div></div>`;
+    h += `<div class="iacts"><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide details' : 'Details'}</button><button class="btn sm blue" data-promote="${it.id}">Move to today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
   });
+  if (S.inbox.length) h += '</div>';
   setHTML($('#v-inbox'), h);
 }
 // "call Sam next item book dentist" -> two items. Also splits on new lines.

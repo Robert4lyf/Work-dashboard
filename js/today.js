@@ -34,15 +34,18 @@ function row(n, i, len, sib) {
     (nx ? 'Next: ' + esc(nx.text) : '');
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
-    : `<span class="chev" aria-hidden="true">&gt;</span><button class="x" data-del="${n.id}" aria-label="Delete ${esc(n.text)}">×</button>`;
-  return `<div class="row box${d ? ' done' : ''}"${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
+    : `<button class="x" data-del="${n.id}" aria-label="Delete ${esc(n.text)}">×</button>`;
+  return `<div class="row${d ? ' done' : ''}"${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
 }
+// A section title, with the Reorder switch beside it when the list has something to reorder.
+function listHead(title, ns) {
+  return `<div class="sechead"><h2>${title}</h2>${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
+}
+// One card, one row per quest.
 function list(ns) {
-  let h = '';
-  if (ns.length > 1)
-    h += `<div class="listbar"><button class="linkbtn" id="reorder">${reorder ? 'Done reordering' : 'Reorder'}</button></div>`;
-  ns.forEach((c, i) => (h += row(c, i, ns.length, ns)));
-  return h;
+  return ns.length
+    ? `<div class="list box">${ns.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
+    : '';
 }
 function renderToday() {
   $('#v-today')
@@ -55,7 +58,7 @@ function renderToday() {
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
   let h = renderMeetings();
-  const soon = dueSoon();
+  const soon = dueSoon().filter(s => s.t.length > 1); // top-level quests show their deadline in the list
   if (soon.length) {
     h += '<div class="soon box"><h2>Due soon</h2>';
     soon.forEach(
@@ -64,7 +67,7 @@ function renderToday() {
     );
     h += '</div>';
   }
-  h += "<h2>Today's quests</h2>";
+  h += listHead("Today's quests", qs);
   if (qs.length && qs.every(isDone))
     h += '<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
   h += list(qs);
@@ -141,9 +144,9 @@ function renderNode({ n, parents }) {
   const d = isDone(n),
     kids = n.children.length,
     top = !parents.length;
-  let h = `<button class="btn back" data-crumb="${parents.length - 1}">&lt; Back</button><div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">Today</button>`;
+  let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
-  h += `<span>/</span><b>${esc(n.text)}</b></div><div class="node box"><h1>${esc(n.text)}</h1>${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}`;
+  h += `</div><div class="node box"><h1>${esc(n.text)}</h1>${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
@@ -181,7 +184,7 @@ function renderNode({ n, parents }) {
     h += laterPicker('q', n.id);
   }
   h += '</div>';
-  h += '<h2>Subquests</h2>';
+  h += listHead('Subquests', n.children);
   h += list(n.children);
   h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>
     <label class="optbox" style="margin-top:-4px"><input type="checkbox" id="sopt">Add as optional</label>`;

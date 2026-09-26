@@ -19,7 +19,7 @@ function renderLog() {
   let h = '<h2>History</h2>' + renderStats() + renderProjects(shift(today(), -(range - 1)));
   const days = logDays(shift(today(), -13));
   h +=
-    '<div class="listbar" style="justify-content:space-between;align-items:center;margin:0 0 8px"><h2 style="margin:0">Done</h2>' +
+    '<div class="sechead"><h2>Done</h2>' +
     (days.length ? '<button class="linkbtn" id="copylog">Copy last 7 days</button>' : '') +
     '</div>';
   if (!days.length) {

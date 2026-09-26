@@ -39,7 +39,7 @@ function renderHeader() {
     });
   })(qs);
   const focus = Object.values(S.daily[t] || {}).reduce((a, b) => a + b, 0);
-  let st = `<button data-v="today">${done} / ${qs.length} quests done</button><button data-v="focus">${hm(focus)} focus today</button><button data-zen="1">Single-task</button>`;
+  let st = `<button data-v="today">${done}/${qs.length} done</button><button data-v="focus">${hm(focus)} focus</button><button class="pill" data-zen="1">Single-task</button>`;
   const ms = meetingStatus();
   if (ms) st += `<button data-v="today">${ms}</button>`;
   if (late) st += `<button class="warn" data-v="today">${late} overdue</button>`;
