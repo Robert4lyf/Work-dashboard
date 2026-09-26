@@ -90,7 +90,7 @@ The link works like a password, so it's stored in your Supabase project (only yo
 
 - **One way in:** new work always starts in the Inbox (typed, spoken, shared or captured from anywhere). Today only holds what you've chosen from it: tap **Today** on an inbox item, or set its project, waiting details or a later date first. Subquests are still added on a quest's page.
 - **Tabs:** Today, Inbox, Waiting, Review and Settings. Focus opens from the header (tap the focus time, **Single-task**, or **Focus on this** on a quest).
-- **Inbox swipes (phone):** swipe an item right to send it to Today (with Undo); swipe left for quick options: Tomorrow, Next week, Waiting… or Clear.
+- **Inbox swipes (phone):** swipe an item left to send it to Today (with Undo); swipe right for quick options: Tomorrow, Next week, Waiting… or Clear.
 - **Weekly review:** Review > Week walks through the week in one page: empty the Inbox, decide on carried-over quests, chase what you're waiting on, projects with nothing open, what's coming up, and what you finished (with **Copy summary** for an update). From Friday until you tap **Mark week reviewed**, the header shows a **Weekly review** button.
 - **Health check:** Settings > Health check tests the setup against your Supabase project (sync table, live updates, notifications, calendar feed, offline) and says what to fix for anything that isn't working.
 - **Voice capture:** tap the mic next to the inbox box and speak. Say "next item" between thoughts to add several at once (this also works when typing or using keyboard dictation). The mic shows in Chrome and Edge. Chrome sends the audio to Google to transcribe.

@@ -1268,10 +1268,10 @@ body.zen nav {
   transition: none;
 }
 .item[data-swipe='today'] {
-  box-shadow: inset 6px 0 0 var(--green);
+  box-shadow: inset -6px 0 0 var(--green);
 }
 .item[data-swipe='more'] {
-  box-shadow: inset -6px 0 0 var(--blue);
+  box-shadow: inset 6px 0 0 var(--blue);
 }
 .iacts.quick {
   flex-wrap: wrap;

@@ -8,7 +8,7 @@ function inboxToNode(it) {
   if (it.wait) n.wait = it.wait;
   return n;
 }
-// Inbox item to Today (the Today button, or a swipe right), with Undo.
+// Inbox item to Today (the Today button, or a swipe left), with Undo.
 function promoteInbox(id) {
   const i = S.inbox.findIndex(x => x.id === id);
   if (i < 0) return;
@@ -20,7 +20,7 @@ function promoteInbox(id) {
     settle(bf);
   });
 }
-/* swipes on a phone: right sends an item to Today, left shows quick options */
+/* swipes on a phone: left sends an item to Today (the tab to the left), right shows quick options */
 let swipe = null,
   swiped = null; // the item showing its quick options
 const SWIPE = 90;
@@ -42,7 +42,7 @@ $('#v-inbox').addEventListener('pointermove', e => {
   }
   s.dx = dx;
   s.el.style.transform = `translateX(${dx}px)`;
-  s.el.dataset.swipe = dx > SWIPE ? 'today' : dx < -SWIPE ? 'more' : '';
+  s.el.dataset.swipe = dx < -SWIPE ? 'today' : dx > SWIPE ? 'more' : '';
 });
 function endSwipe() {
   const s = swipe;
@@ -51,8 +51,8 @@ function endSwipe() {
   s.el.classList.remove('swiping');
   s.el.style.transform = '';
   delete s.el.dataset.swipe;
-  if (s.dx > SWIPE) promoteInbox(s.id);
-  else if (s.dx < -SWIPE) {
+  if (s.dx < -SWIPE) promoteInbox(s.id);
+  else if (s.dx > SWIPE) {
     swiped = s.id;
     renderInbox();
   }

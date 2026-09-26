@@ -66,7 +66,7 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   await expect(page.locator('header [data-rsub="week"]')).toHaveCount(0);
 });
 
-test('inbox swipes: right sends to Today (undoable), left shows quick options', async ({ app, page }) => {
+test('inbox swipes: left sends to Today (undoable), right shows quick options', async ({ app, page }) => {
   await app.go('inbox');
   for (const t of ['Book dentist', 'Reply to Sam']) {
     await page.fill('#iin', t);
@@ -81,16 +81,16 @@ test('inbox swipes: right sends to Today (undoable), left shows quick options', 
     for (let i = 1; i <= 5; i++) await page.mouse.move(x + (dx * i) / 5, y);
     await page.mouse.up();
   };
-  await swipe('Reply to Sam', 140);
+  await swipe('Reply to Sam', -140);
   let s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Reply to Sam']);
   await page.click('#undo');
   expect((await app.state()).quests).toEqual([]);
 
   // A short swipe does nothing.
-  await swipe('Book dentist', 40);
+  await swipe('Book dentist', -40);
   await expect(page.locator('#v-inbox .iacts.quick')).toHaveCount(0);
-  await swipe('Book dentist', -140);
+  await swipe('Book dentist', 140);
   const quick = page.locator('#v-inbox .item', { hasText: 'Book dentist' }).locator('.iacts.quick');
   await expect(quick.locator('.chip')).toHaveText(['Tomorrow', 'Next week', 'Waiting…', 'Clear']);
   await quick.locator('[data-sched]').first().click();
@@ -98,7 +98,7 @@ test('inbox swipes: right sends to Today (undoable), left shows quick options', 
   expect(s.later).toMatchObject([{ text: 'Book dentist', start: '2026-09-26' }]);
 
   // Waiting… opens the details with the waiting box ready.
-  await swipe('Reply to Sam', -140);
+  await swipe('Reply to Sam', 140);
   await page.click('#v-inbox [data-waiton]');
   const id = (await app.state()).inbox[0].id;
   await expect(page.locator(`[data-iwait="${id}"]`)).toBeFocused();
