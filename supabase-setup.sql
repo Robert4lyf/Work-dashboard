@@ -92,7 +92,7 @@ do $$ begin
   end if;
 end $$;
 
--- Capture from anywhere: a secret token lets shortcuts (Siri, Android, email...) add inbox items
+-- Capture from anywhere: a secret token lets shortcuts (Android, email...) add inbox items
 -- without signing in. Settings > Capture creates or replaces your token.
 create table if not exists public.cockpit_capture_tokens (
   token      text primary key,
