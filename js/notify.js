@@ -34,6 +34,16 @@ async function setupPushKeys() {
   save();
   renderAccount();
 }
+// Replace a lost or leaked key pair. Every device's subscription used the old key, so they are
+// all removed; each device turns notifications on again afterwards.
+async function replacePushKeys() {
+  await disablePush();
+  try {
+    await sb.from('cockpit_push_subs').delete().neq('endpoint', '');
+  } catch (e) {}
+  pushTest = null;
+  await setupPushKeys();
+}
 async function enablePush() {
   try {
     if ((await Notification.requestPermission()) !== 'granted') {
@@ -61,8 +71,9 @@ async function enablePush() {
 }
 async function disablePush() {
   try {
-    const reg = await navigator.serviceWorker.ready,
-      sub = await reg.pushManager.getSubscription();
+    // getRegistration, not ready: it doesn't wait forever when there's no service worker.
+    const reg = await navigator.serviceWorker.getRegistration(),
+      sub = reg && (await reg.pushManager.getSubscription());
     if (sub) await sub.unsubscribe();
     await sb.from('cockpit_push_subs').delete().eq('endpoint', pushEndpoint);
   } catch (e) {}
@@ -238,10 +249,14 @@ function renderNotifySettings() {
   if (newPrivateKey)
     h += `<div class="banner box"><p>Copy these into Supabase > Edge Functions > Secrets now. The private key isn't saved anywhere else.</p>
       <div class="caprow"><span>VAPID_PUBLIC_KEY</span><code>${esc(S.pushKey)}</code><button class="linkbtn" data-copy="vpub">Copy</button></div>
-      <div class="caprow"><span>VAPID_PRIVATE_KEY</span><code>${esc(newPrivateKey)}</code><button class="linkbtn" data-copy="vpriv">Copy</button></div></div>`;
+      <div class="caprow"><span>VAPID_PRIVATE_KEY</span><code>${esc(newPrivateKey)}</code><button class="linkbtn" data-copy="vpriv">Copy</button></div>
+      <p class="hint">Then turn notifications on again on each device.</p></div>`;
   h += pushEndpoint
     ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines (9am on the day) and Upcoming items returning.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
       renderPushTest()
     : '<p class="hint" style="margin:0 0 8px">Off for this device.</p><button class="btn green" id="pushon">Turn on for this device</button>';
+  if (!newPrivateKey)
+    h +=
+      '<p class="hint" style="margin:14px 0 6px">Lost the private key, or the server says the keys don\'t match? Make a new pair and enter it in Supabase again.</p><button class="btn sm" id="pushnewkeys">New keys</button>';
   return h;
 }

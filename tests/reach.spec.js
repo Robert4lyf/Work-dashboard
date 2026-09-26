@@ -200,3 +200,23 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
   expect(db.notices.find(n => n.key === 'a').error).toBeNull();
   expect(db.notices.find(n => n.key === 'lonely').error).toBe('no devices have notifications turned on');
 });
+
+test('lost the private key: New keys makes a fresh pair after a confirm', async ({ browser }) => {
+  const { page, errors } = await open(browser, new Date('2026-09-23T08:00:00+01:00'));
+  await page.evaluate(() => {
+    S.pushKey = 'old-key';
+    save();
+  });
+  await page.click('nav [data-v=account]');
+  await expect(page.locator('#pushkeys')).toHaveCount(0);
+  await page.click('#pushnewkeys');
+  await expect(page.locator('#pushnewkeys')).toHaveText('Replace keys?');
+  expect(await page.evaluate(() => S.pushKey)).toBe('old-key');
+  await page.click('#pushnewkeys');
+  await expect(page.locator('.banner code')).toHaveCount(2);
+  const pub = await page.locator('.banner code').nth(0).innerText();
+  expect(pub).not.toBe('old-key');
+  expect(await page.evaluate(() => S.pushKey)).toBe(pub);
+  await expect(page.locator('#pushnewkeys')).toHaveCount(0); // hidden while the new pair shows
+  expect(errors).toEqual([]);
+});

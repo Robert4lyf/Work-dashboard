@@ -651,6 +651,7 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'syncNow') sync();
   if (b.id === 'pushkeys') setupPushKeys();
+  if (b.id === 'pushnewkeys' && arm(b, 'Replace keys?')) replacePushKeys();
   if (b.id === 'pushon') enablePush();
   if (b.id === 'pushoff') disablePush();
   if (b.id === 'pushtest') testPush();

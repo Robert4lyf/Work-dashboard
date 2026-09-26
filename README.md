@@ -71,6 +71,8 @@ Real notifications, even with the app closed: when a focus session ends, on the 
 5. Open `supabase/notifications-cron.sql`, replace `YOUR-PROJECT-REF` (from your project URL) and `YOUR-CRON-SECRET`, and run it in the SQL Editor. It checks for due notifications every minute.
 6. On each device: **Settings > Notifications > Turn on for this device**, then **Send a test**.
 
+**Lost the private key?** It's only shown once. Use **Settings > Notifications > New keys**: it makes a new pair and turns notifications off on every device. Enter the two new keys in the function's secrets (step 4), then turn notifications on again on each device.
+
 **If the test doesn't arrive:** **Send a test** checks each link and shows which one is broken: *This phone* (a notification shown straight away, no server; if it fails, allow notifications for Chrome/the app in Android settings), *Subscription* (this device is subscribed with the current key; if not, **Turn off here** and turn it on again) and *Server* (the function picks it up within about a minute and sends it). If the server tried and failed it says why, for example the VAPID secrets not matching the keys the app generated (re-enter them from step 2, or generate new keys and turn notifications off and on again on each device). "Not picked up" means the function, its secrets or the cron job from step 5 isn't set up. After updating the app, re-run `supabase-setup.sql` and redeploy `send-notices` so the reason is recorded.
 
 ## How sync behaves
