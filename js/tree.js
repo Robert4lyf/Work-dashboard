@@ -28,7 +28,7 @@ function count(n) {
 }
 function nextLeaf(n) {
   for (const c of n.children) {
-    if (isDone(c)) continue;
+    if (isDone(c) || c.wait) continue;
     if (!c.children.length) return c;
     const r = nextLeaf(c);
     if (r) return r;
@@ -182,7 +182,6 @@ function withUndo(msg, fn) {
 // the user is typing or move their cursor. Views set their HTML through setHTML for that.
 let background = false;
 const COMPOSE = [
-  'qin',
   'sin',
   'iin',
   'tagin',
@@ -192,8 +191,10 @@ const COMPOSE = [
   'apass',
   'leftin',
   'whyin',
-  'pwhat',
-  'pwho',
+  'wwhat',
+  'wfrom',
+  'wwho',
+  'wnote',
 ];
 function inBackground(fn) {
   const was = background;
@@ -213,13 +214,14 @@ function setHTML(el, html) {
     fid = a && a.id && el.contains(a) ? a.id : '',
     sel = fid && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null,
     typed = {};
-  COMPOSE.forEach(id => {
-    const i = el.querySelector('#' + id);
+  // Fixed compose boxes, plus any input marked data-keep (e.g. one per project).
+  [...COMPOSE, ...[...el.querySelectorAll('input[data-keep][id]')].map(i => i.id)].forEach(id => {
+    const i = el.querySelector('#' + CSS.escape(id));
     if (i && i.value) typed[id] = i.value;
   });
   el.innerHTML = html;
   for (const id in typed) {
-    const i = el.querySelector('#' + id);
+    const i = el.querySelector('#' + CSS.escape(id));
     if (i) i.value = typed[id];
   }
   const f = fid && el.querySelector('#' + CSS.escape(fid));

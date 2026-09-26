@@ -144,9 +144,11 @@ async function device(browser, srv, seed) {
         while (syncing || again) await new Promise(r => setTimeout(r, 20));
       }),
     add: async text => {
+      await page.click('nav [data-v=inbox]');
+      await page.fill('#iin', text);
+      await page.press('#iin', 'Enter');
+      await page.click('#v-inbox [data-promote] >> nth=0');
       await page.click('nav [data-v=today]');
-      await page.fill('#qin', text);
-      await page.press('#qin', 'Enter');
     },
   };
   srv.devices.push(d);
@@ -170,11 +172,12 @@ test('each item is its own row, and changes reach the other device live', async 
   await a.add('Email');
   await a.sync();
   await expect.poll(async () => texts(await b.state())).toEqual(['Email', 'Report']);
-  // Only the changed rows travel: adding one quest writes the quest and the list order.
+  // Only the changed rows travel: adding one quest writes the quest, the list order and the
+  // inbox item it came from.
   const before = srv.seq;
   await a.add('Third');
   await a.sync();
-  expect(srv.seq - before).toBeLessThanOrEqual(3);
+  expect(srv.seq - before).toBeLessThanOrEqual(4);
   for (const d of [a, b]) expect(d.errors).toEqual([]);
 });
 

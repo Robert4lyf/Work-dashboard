@@ -27,6 +27,7 @@ function row(n, i, len, sib) {
   const rt = tplFor(n);
   const meta =
     tagBadge(n.tag) +
+    waitBadge(n) +
     projectBadge(n.project) +
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
@@ -72,8 +73,6 @@ function renderToday() {
   if (qs.length && qs.every(isDone))
     h += '<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
   h += list(qs);
-  h +=
-    '<form class="addrow" id="qform"><input id="qin" maxlength="120" placeholder="Add a quest" aria-label="New quest" autocomplete="off"><button class="btn">Add</button></form>';
   const own = S.templates.filter(t => !t.auto);
   if (own.length) {
     h += '<div class="tpls"><span class="hint" style="margin:0">From a template:</span>';
@@ -95,7 +94,10 @@ function renderToday() {
     });
     h += '</details>';
   }
-  if (!qs.length) h += '<div class="slot">No quests yet.</div>';
+  // New work comes in through the Inbox; Today is what you've chosen from it.
+  if (!qs.length)
+    h +=
+      '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
   h += renderUpcoming();
   setHTML($('#v-today'), h);
 }
@@ -103,7 +105,7 @@ function renderToday() {
 /* carried over: quests on Today for STALE days or more get a decision each morning */
 const STALE = 3;
 const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
-const carried = () => S.quests.filter(q => !isDone(q) && ageOf(q) >= STALE && q.kept !== today());
+const carried = () => S.quests.filter(q => !isDone(q) && !q.wait && ageOf(q) >= STALE && q.kept !== today());
 function renderCarried() {
   const qs = carried();
   if (!qs.length) return '';
@@ -187,6 +189,7 @@ function renderNode({ n, parents }) {
     <label class="f" for="fnotes">Notes</label><textarea class="fld" id="fnotes" data-field="notes" data-id="${n.id}">${esc(n.notes)}</textarea>
     ${top ? '' : `<label class="optbox"><input type="checkbox" data-field="opt" data-id="${n.id}" ${n.opt ? 'checked' : ''}>Optional</label>`}
     </details>`;
+  h += waitPanel(n);
   if (top) {
     const t = tplFor(n),
       on = repeats(t),

@@ -70,13 +70,31 @@ test('overdue count shows in the header', async ({ app, page }) => {
 });
 
 test('a background refresh keeps what you are typing', async ({ app, page }) => {
-  await app.addQuest('First');
-  await page.fill('#qin', 'Half-typed quest');
+  await app.go('inbox');
+  await page.fill('#iin', 'Half-typed thought');
   await page.evaluate(() => inBackground(renderAll));
-  await expect(page.locator('#qin')).toBeFocused();
-  await expect(page.locator('#qin')).toHaveValue('Half-typed quest');
-  await page.press('#qin', 'Enter');
-  expect(await app.order()).toEqual(['First', 'Half-typed quest']);
+  await expect(page.locator('#iin')).toBeFocused();
+  await expect(page.locator('#iin')).toHaveValue('Half-typed thought');
+  await page.press('#iin', 'Enter');
+  expect((await app.state()).inbox.map(i => i.text)).toEqual(['Half-typed thought']);
   // A normal (user-driven) redraw after adding still clears the box.
-  await expect(page.locator('#qin')).toHaveValue('');
+  await expect(page.locator('#iin')).toHaveValue('');
+});
+
+test('Today has no add box: new work comes in through the Inbox', async ({ app, page }) => {
+  await expect(page.locator('#v-today input')).toHaveCount(0);
+  await page.click('#v-today [data-goto="inbox"]');
+  await expect(page.locator('#iin')).toBeFocused();
+  await page.fill('#iin', 'Plan offsite');
+  await page.press('#iin', 'Enter');
+  await page.click('#v-inbox [data-promote]');
+  expect((await app.state()).quests.map(q => q.text)).toEqual(['Plan offsite']);
+  // On Today, n captures to the Inbox; on a quest's page it adds a subquest.
+  await app.go('today');
+  await page.keyboard.press('n');
+  await expect(page.locator('#iin')).toBeFocused();
+  await app.go('today');
+  await app.openQuest('Plan offsite');
+  await page.keyboard.press('n');
+  await expect(page.locator('#sin')).toBeFocused();
 });

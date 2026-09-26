@@ -34,21 +34,21 @@ test('projects group quests, count progress and focus time', async ({ app, page 
   expect(s.pdaily['2026-09-23'][pid]).toBe(10);
   expect(s.log[0].p).toBe(pid);
 
-  await app.go('log');
+  await app.go('projects');
   const card = page.locator('.projcard', { hasText: 'Q4 launch' });
   await expect(card).toContainText('1 done · 1 open · 10m');
   await expect(card.locator('.prog div')).toHaveAttribute('style', /width:50%/);
   await card.locator('[data-open]').click();
   await expect(page.locator('.node h1')).toHaveText('Book venue');
 
-  await app.go('log');
+  await app.go('projects');
   await page.click('[data-projdone]');
   expect((await app.state()).projects[0].done).toBe(true);
-  await expect(page.locator('#projfin summary')).toHaveText('Finished projects (1)');
+  await expect(page.locator('#projfin > summary')).toHaveText('Finished projects (1)');
 });
 
 test('inbox items carry their project; renaming and deleting projects', async ({ app, page }) => {
-  await app.go('account');
+  await app.go('projects');
   await page.fill('#projin', 'Hiring');
   await page.press('#projin', 'Enter');
   const pid = (await app.state()).projects[0].id;
@@ -61,12 +61,13 @@ test('inbox items carry their project; renaming and deleting projects', async ({
   await page.click(`[data-promote="${id}"]`);
   expect((await app.state()).quests[0].project).toBe(pid);
 
-  await app.go('account');
+  await app.go('projects');
+  await page.click(`#projm-${pid} summary`);
   await page.fill('[data-projname="0"]', 'Hiring Q4');
   await page.press('[data-projname="0"]', 'Tab');
   await app.go('today');
   await expect(page.locator('#v-today .tag.proj')).toHaveText('Hiring Q4');
-  await app.go('account');
+  await app.go('projects');
   await page.click('[data-delproj="0"]');
   await page.click('[data-delproj="0"]');
   let s = await app.state();
@@ -75,4 +76,34 @@ test('inbox items carry their project; renaming and deleting projects', async ({
   await page.click('#undo');
   s = await app.state();
   expect(s.quests[0].project).toBe(pid);
+});
+
+test('the Projects tab sets up projects and adds quests to them', async ({ app, page }) => {
+  await app.addQuest('Loose end');
+  await app.go('projects');
+  await expect(page.locator('#v-projects .empty')).toHaveText('No projects yet.');
+  await page.fill('#projin', 'Website');
+  await page.press('#projin', 'Enter');
+  const pid = (await app.state()).projects[0].id;
+  const card = page.locator('.projcard', { hasText: 'Website' });
+  // New work goes to the Inbox, already in the project, and keeps it on the way to Today.
+  await card.locator(`#pa-${pid}`).fill('Draft homepage copy');
+  await card.locator(`#pa-${pid}`).press('Enter');
+  expect((await app.state()).inbox[0]).toMatchObject({ text: 'Draft homepage copy', project: pid });
+  await app.go('inbox');
+  await expect(page.locator('#v-inbox .tag.proj')).toHaveText('Website');
+  await page.click('#v-inbox [data-promote]');
+  await app.go('projects');
+  // An existing quest from Today joins it.
+  await card.locator('[data-projpick]').selectOption({ label: 'Loose end' });
+  const s = await app.state();
+  expect(s.quests.map(q => [q.text, q.project])).toEqual([
+    ['Loose end', pid],
+    ['Draft homepage copy', pid],
+  ]);
+  await expect(card).toContainText('0 done · 2 open');
+  await expect(card.locator('[data-projpick]')).toHaveCount(0); // nothing left without a project
+  await card.locator('[data-open]', { hasText: 'Draft homepage copy' }).click();
+  await expect(page.locator('.node h1')).toHaveText('Draft homepage copy');
+  await expect(page.locator('#v-today')).toBeVisible();
 });

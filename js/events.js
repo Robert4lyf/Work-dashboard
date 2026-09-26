@@ -5,7 +5,8 @@ function renderAll() {
   renderToday();
   renderInbox();
   renderFocus();
-  renderPromises();
+  renderWaiting();
+  renderProjectsView();
   renderLog();
   renderAccount();
   renderZen();
@@ -27,7 +28,7 @@ function go(v) {
   });
   const board = onBoard();
   document.body.classList.toggle('board', board);
-  ['today', 'inbox', 'promises', 'focus', 'log', 'account'].forEach(
+  ['today', 'inbox', 'waiting', 'projects', 'focus', 'log', 'account'].forEach(
     k => ($('#v-' + k).hidden = board ? !['today', 'inbox', 'focus'].includes(k) : k !== v),
   );
   // Keep the current tab visible when the tab bar is scrolled sideways.
@@ -56,15 +57,6 @@ document.querySelectorAll('nav button[data-v]').forEach(
 document.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target;
-  if (f.id === 'qform') {
-    const v = $('#qin').value.trim();
-    if (!v) return;
-    const b = snapshot();
-    S.quests.push(fix({ id: uid(), text: v }));
-    settle(b);
-    const n = $('#qin');
-    n && n.focus();
-  }
   if (f.id === 'sform') {
     const v = $('#sin').value.trim();
     if (!v) return;
@@ -79,7 +71,15 @@ document.addEventListener('submit', e => {
   if (f.id === 'authform') signIn();
   if (f.id === 'leftform') saveLeft($('#leftin').value.trim());
   if (f.id === 'whyform') saveWhy($('#whyin').value.trim());
-  if (f.id === 'pform') addPromise();
+  if (f.id === 'wform') addWaiting();
+  if (f.dataset.projadd) {
+    const inp = f.querySelector('input'),
+      v = inp.value.trim();
+    if (!v) return;
+    addToProject(f.dataset.projadd, v);
+    const n = $('#pa-' + f.dataset.projadd);
+    n && n.focus();
+  }
   if (f.id === 'calform') saveCalendarUrl($('#calin').value);
   if (f.id === 'projform') {
     const v = $('#projin').value.trim();
@@ -134,6 +134,24 @@ document.addEventListener('change', e => {
   }
   if (el.dataset.setproject) {
     setProject(el.dataset.kind, el.dataset.setproject, el.value);
+    return;
+  }
+  if (el.dataset.iwait) {
+    const it = S.inbox.find(x => x.id === el.dataset.iwait),
+      who = el.value.trim();
+    if (it) {
+      if (who) it.wait = { note: '', due: '', since: today(), ...it.wait, who };
+      else delete it.wait;
+    }
+    save();
+    renderAll();
+    return;
+  }
+  if (el.dataset.projpick) {
+    const r = el.value && find(el.value);
+    if (r) r.n.project = el.dataset.projpick;
+    save();
+    renderAll();
     return;
   }
   if (el.dataset.projname !== undefined) {
@@ -222,7 +240,12 @@ document.addEventListener('click', e => {
       if (view !== 'today') go('today');
     }
   }
-  if (d.v && b.closest('header')) go(d.v);
+  if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (d.goto) {
+    go(d.goto);
+    const i = $('#iin');
+    i && i.focus();
+  }
   if (d.crumb !== undefined) openPath(path.slice(0, +d.crumb + 1));
   if (d.toggle) {
     const n = find(d.toggle).n,
@@ -501,20 +524,15 @@ document.addEventListener('click', e => {
         renderAll();
       });
   }
-  if (d.pdir) {
-    pdir = d.pdir;
-    renderPromises();
-    $('#pwhat').focus();
-  }
-  if (d.pdone) togglePromise(d.pdone);
-  if (d.pdel) {
-    const p = S.promises.find(x => x.id === d.pdel);
-    if (p)
-      withUndo('Deleted', () => {
-        S.promises = S.promises.filter(x => x !== p);
-        save();
-        renderAll();
-      });
+  if (d.waitsave)
+    setWaiting(d.waitsave, {
+      who: $('#wwho').value.trim(),
+      note: $('#wnote').value.trim(),
+      due: $('#wdue').value || '',
+    });
+  if (d.waitclear) {
+    setWaiting(d.waitclear, null);
+    toast('Back on your list');
   }
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) {
@@ -600,7 +618,7 @@ document.addEventListener(
 
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'n new quest · i capture · t today · f focus · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: subquest) · t today · f focus · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const el = e.target;
@@ -616,10 +634,8 @@ document.addEventListener('keydown', e => {
       f.focus();
       return true;
     };
-  if (k === 'n') {
-    go('today');
-    field('#sin') || field('#qin');
-  } else if (k === 'i') {
+  if (k === 'n' && view === 'today' && path.length) field('#sin');
+  else if (k === 'n' || k === 'i') {
     go('inbox');
     field('#iin');
   } else if (k === 't') {
