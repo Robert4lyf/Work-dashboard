@@ -68,8 +68,18 @@ function fakeSupabase() {
   };
 }
 
+// Postgres jsonb does not keep key order: it stores shorter keys first, then sorts by bytes.
+function jsonb(v) {
+  if (Array.isArray(v)) return v.map(jsonb);
+  if (!v || typeof v !== 'object') return v;
+  const o = {};
+  Object.keys(v)
+    .sort((a, b) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0))
+    .forEach(k => (o[k] = jsonb(v[k])));
+  return o;
+}
 function server() {
-  return { rows: new Map(), seq: 0, state: null, devices: [], snapshots: 0 };
+  return { rows: new Map(), seq: 0, state: null, devices: [], snapshots: 0, writes: 0 };
 }
 // Service workers are blocked: the app's worker would fetch and cache the real Supabase library,
 // which bypasses page.route and would replace the fake after a reload.
@@ -89,7 +99,8 @@ async function device(browser, srv, seed) {
       .slice(0, limit),
   );
   await page.exposeFunction('srvUpsert', rows => {
-    rows.forEach(r => srv.rows.set(r.key, { ...r, seq: ++srv.seq }));
+    srv.writes += rows.length;
+    rows.forEach(r => srv.rows.set(r.key, { ...r, data: jsonb(r.data), seq: ++srv.seq }));
     // Tell the other devices, like Supabase Realtime would.
     srv.devices
       .filter(d => d.page !== page)
@@ -165,6 +176,20 @@ test('each item is its own row, and changes reach the other device live', async 
   await a.sync();
   expect(srv.seq - before).toBeLessThanOrEqual(3);
   for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('once caught up, syncing sends nothing (the server may reorder JSON keys)', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Report');
+  await a.page.click('nav [data-v=focus]');
+  const b = await device(browser, srv);
+  await settle(a, b);
+  const before = srv.writes;
+  await a.page.waitForTimeout(1500); // room for live updates and debounced syncs to loop
+  await settle(a, b);
+  expect(srv.writes - before).toBe(0);
+  for (const d of [a, b]) await expect(d.page.locator('#syncBtn')).toHaveText('Synced');
 });
 
 test('offline edits to different items on two devices are all kept', async ({ browser }) => {

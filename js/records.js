@@ -62,9 +62,19 @@ function fromRecords(m, day) {
   return s;
 }
 
-// A short fingerprint of a record, to tell whether it changed.
+// A short fingerprint of a record, to tell whether it changed. Keys are sorted first: the
+// database stores JSON with its own key order, and that must not count as a change.
+function canon(v) {
+  if (Array.isArray(v)) return v.map(canon);
+  if (!v || typeof v !== 'object') return v;
+  const o = {};
+  Object.keys(v)
+    .sort()
+    .forEach(k => (o[k] = canon(v[k])));
+  return o;
+}
 function hashOf(v) {
-  const str = JSON.stringify(v === undefined ? null : v);
+  const str = JSON.stringify(canon(v === undefined ? null : v));
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
   return (h >>> 0).toString(36) + str.length.toString(36);
