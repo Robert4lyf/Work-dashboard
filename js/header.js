@@ -1,8 +1,10 @@
 /* header */
-// The first unfinished step of the first unfinished quest, in list order.
+// The first unfinished step of the first unfinished quest, in list order. Quests with a waiting
+// step come last, as they're listed on Today.
 function nextStep() {
-  for (const q of S.quests) {
-    if (isDone(q) || q.wait) continue;
+  const qs = S.quests.filter(q => !isDone(q) && !q.wait),
+    free = qs.filter(q => !showsWaiting(q));
+  for (const q of [...free, ...qs.filter(q => showsWaiting(q))]) {
     const n = q.children.length ? nextLeaf(q) : q;
     if (n) return { n, q };
   }

@@ -34,6 +34,8 @@ function waitingSteps(n) {
   })(n.children);
   return out;
 }
+// Waiting on someone, itself or through one of its steps (such rows show dark orange).
+const showsWaiting = n => !isDone(n) && !!(n.wait || waitingSteps(n).length);
 // A quest with a waiting step shows as waiting too, naming who (or how many steps).
 function stepWaitBadge(n) {
   const ws = waitingSteps(n);
