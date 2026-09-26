@@ -73,10 +73,9 @@ function renderCapture() {
 // Launched from an app-icon shortcut (manifest "shortcuts").
 function receiveLaunch() {
   const q = new URLSearchParams(location.search);
-  if (!q.has('capture') && !q.has('focus') && !q.has('talk')) return;
+  if (!q.has('capture') && !q.has('talk')) return;
   history.replaceState(null, '', location.pathname);
   if (q.has('talk')) return talkable() ? openTalk(false) : undefined;
-  if (q.has('focus')) return go('focus');
   go('inbox');
   const i = $('#iin');
   if (i) i.focus();

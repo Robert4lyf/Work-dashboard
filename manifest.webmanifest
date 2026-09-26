@@ -57,17 +57,6 @@
           "sizes": "192x192"
         }
       ]
-    },
-    {
-      "name": "Start a focus session",
-      "short_name": "Focus",
-      "url": "./index.html?focus=1",
-      "icons": [
-        {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
     }
   ]
 }

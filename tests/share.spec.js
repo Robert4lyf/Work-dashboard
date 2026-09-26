@@ -22,12 +22,13 @@ test('the manifest declares the share target', async ({ page }) => {
   expect((await res.json()).share_target.params).toEqual({ title: 'title', text: 'text', url: 'url' });
 });
 
-test('app-icon shortcuts open the inbox ready to type, or the Focus tab', async ({ app, page }) => {
+test('app-icon shortcuts: Capture opens the inbox ready to type; there is no Focus shortcut', async ({
+  app,
+  page,
+}) => {
   await page.goto('/index.html?capture=1');
   await expect(page.locator('#iin')).toBeFocused();
   expect(new URL(page.url()).search).toBe('');
-  await page.goto('/index.html?focus=1');
-  await expect(page.locator('#v-focus')).toBeVisible();
   const m = await (await page.request.get('/manifest.webmanifest')).json();
-  expect(m.shortcuts.map(s => s.short_name)).toEqual(['Capture', 'Talk', 'Focus']);
+  expect(m.shortcuts.map(s => s.short_name)).toEqual(['Capture', 'Talk']);
 });

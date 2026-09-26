@@ -1,51 +1,43 @@
 const { test, expect } = require('./fixtures');
 
-test.describe('desktop board', () => {
+test.describe('desktop', () => {
   test.use({ viewport: { width: 1280, height: 900 } });
   test.beforeEach(async ({ app, page }) => {
     await app.open();
     for (const t of ['A', 'B', 'C']) await app.addQuest(t);
-    await page.fill('#iin', 'From inbox');
-    await page.press('#iin', 'Enter');
+    await app.go('today');
   });
 
-  test('Today, Inbox and Focus are shown side by side', async ({ page }) => {
-    for (const id of ['#v-today', '#v-inbox', '#v-focus']) await expect(page.locator(id)).toBeVisible();
-    const [t, i, f] = await Promise.all(
-      ['#v-today', '#v-inbox', '#v-focus'].map(s => page.locator(s).boundingBox()),
-    );
-    expect(t.x < i.x && i.x < f.x).toBe(true);
-    expect(Math.abs(t.y - f.y)).toBeLessThan(2);
-  });
-
-  test('History and Settings still get the whole page', async ({ app, page }) => {
-    await app.go('log');
+  test('Today and Inbox are separate pages, and Focus isn’t shown beside them', async ({ page }) => {
+    await expect(page.locator('#v-today')).toBeVisible();
+    await expect(page.locator('#v-inbox')).toBeHidden();
+    await expect(page.locator('#v-focus')).toBeHidden();
+    await page.click('nav [data-v=inbox]');
+    await expect(page.locator('#v-inbox')).toBeVisible();
     await expect(page.locator('#v-today')).toBeHidden();
-    await expect(page.locator('#v-log')).toBeVisible();
+    await expect(page.locator('#v-focus')).toBeHidden();
   });
 
   test('drag within Today to reorder', async ({ app, page }) => {
     const row = t => page.locator(`#v-today .row:has(.open > span:text-is("${t}"))`);
-    const box = await row('A').boundingBox();
     await row('C').dragTo(row('A'), { targetPosition: { x: 20, y: 5 } });
     expect(await app.order()).toEqual(['C', 'A', 'B']);
     await expect(page.locator('#hnow b')).toHaveText('C');
-    expect(box).toBeTruthy();
   });
 
-  test('drag an inbox item into Today, a quest to Inbox, and a quest to Focus', async ({ app, page }) => {
-    const row = t => page.locator(`#v-today .row:has(.open > span:text-is("${t}"))`);
-    await page.locator('#v-inbox .item', { hasText: 'From inbox' }).dragTo(row('B'), {
-      targetPosition: { x: 20, y: 5 },
-    });
-    expect(await app.order()).toEqual(['A', 'From inbox', 'B', 'C']);
-    expect((await app.state()).inbox).toHaveLength(0);
-
-    await row('C').dragTo(page.locator('#v-inbox'));
-    expect((await app.state()).inbox.map(x => x.text)).toEqual(['C']);
-
-    await row('B').dragTo(page.locator('#v-focus'));
-    expect(await page.$eval('#fq', e => e.options[e.selectedIndex].text)).toBe('B');
+  test('a running session shows only itself until paused', async ({ page }) => {
+    await page.click('header [data-zen]');
+    await page.click('#v-zen [data-zstart]');
+    await expect(page.locator('#v-zen')).toBeVisible();
+    for (const s of ['header', 'nav', '#v-today']) await expect(page.locator(s)).toBeHidden();
+    await expect(page.locator('#zenexit')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('t');
+    await expect(page.locator('nav')).toBeHidden();
+    await page.click('#v-zen [data-pause]');
+    await page.click('#whyskip');
+    await page.click('#zenexit');
+    await expect(page.locator('nav')).toBeVisible();
   });
 });
 

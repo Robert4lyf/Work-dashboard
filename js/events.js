@@ -33,21 +33,15 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  const board = onBoard();
-  document.body.classList.toggle('board', board);
   ['today', 'inbox', 'waiting', 'review', 'projects', 'focus', 'log', 'account'].forEach(
-    k =>
-      ($('#v-' + k).hidden = board
-        ? !['today', 'inbox', 'focus'].includes(k)
-        : k !== v && !(v === 'review' && k === reviewSub)),
+    k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)),
   );
   if (v === 'review') renderReview();
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
   if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   fadeTabs();
-  if (board) $('#v-' + v).scrollIntoView({ block: 'nearest' });
-  else window.scrollTo(0, 0);
+  window.scrollTo(0, 0);
 }
 function openPath(p) {
   path = p;
@@ -679,7 +673,7 @@ document.addEventListener(
 
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'i or n capture (n on a quest: subquest) · t today · f focus · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: subquest) · t today · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const el = e.target;
@@ -705,8 +699,7 @@ document.addEventListener('keydown', e => {
   } else if (k === 't') {
     if (view === 'today' && path.length) openPath([]);
     go('today');
-  } else if (k === 'f') go('focus');
-  else if (k === 'l') go('log');
+  } else if (k === 'l') go('log');
   else if (k === 'p' && S.timer) {
     const b = $('[data-pause]');
     if (b) b.click();
