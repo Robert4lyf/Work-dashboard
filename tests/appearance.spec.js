@@ -41,13 +41,13 @@ test('botanical style: palette, rounded shapes and its fonts, loaded only when c
       const box = getComputedStyle(document.querySelector('header'));
       return {
         style: document.documentElement.dataset.style,
-        radius: box.borderTopLeftRadius,
-        header: box.backgroundColor,
+        radius: box.borderBottomLeftRadius,
+        header: box.backgroundImage.startsWith('linear-gradient'),
         heading: getComputedStyle(document.querySelector('h2')).fontFamily,
       };
     });
   let r = await look();
-  expect(r).toMatchObject({ style: 'botanical', radius: '14px', header: 'rgb(47, 74, 58)' });
+  expect(r).toMatchObject({ style: 'botanical', radius: '36px', header: true });
   expect(r.heading).toContain('Fraunces');
   expect(await fontsLink()).toBe(1);
   await page.reload();
