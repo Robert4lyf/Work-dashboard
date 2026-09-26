@@ -8,6 +8,57 @@ function inboxToNode(it) {
   if (it.wait) n.wait = it.wait;
   return n;
 }
+// Inbox item to Today (the Today button, or a swipe right), with Undo.
+function promoteInbox(id) {
+  const i = S.inbox.findIndex(x => x.id === id);
+  if (i < 0) return;
+  swiped = null;
+  withUndo('Moved to Today', () => {
+    const bf = snapshot();
+    S.quests.push(inboxToNode(S.inbox[i]));
+    S.inbox.splice(i, 1);
+    settle(bf);
+  });
+}
+/* swipes on a phone: right sends an item to Today, left shows quick options */
+let swipe = null,
+  swiped = null; // the item showing its quick options
+const SWIPE = 90;
+$('#v-inbox').addEventListener('pointerdown', e => {
+  const el = e.target.closest('.item[data-id]');
+  if (!el || e.target.closest('button, input, select, textarea, form, a')) return;
+  swipe = { el, id: el.dataset.id, x: e.clientX, y: e.clientY, dx: 0, on: false, pid: e.pointerId };
+});
+$('#v-inbox').addEventListener('pointermove', e => {
+  const s = swipe;
+  if (!s || e.pointerId !== s.pid) return;
+  const dx = e.clientX - s.x,
+    dy = e.clientY - s.y;
+  if (!s.on) {
+    if (Math.abs(dy) > 12) return (swipe = null); // scrolling, not swiping
+    if (Math.abs(dx) < 12) return;
+    s.on = true;
+    s.el.classList.add('swiping');
+  }
+  s.dx = dx;
+  s.el.style.transform = `translateX(${dx}px)`;
+  s.el.dataset.swipe = dx > SWIPE ? 'today' : dx < -SWIPE ? 'more' : '';
+});
+function endSwipe() {
+  const s = swipe;
+  swipe = null;
+  if (!s || !s.on) return;
+  s.el.classList.remove('swiping');
+  s.el.style.transform = '';
+  delete s.el.dataset.swipe;
+  if (s.dx > SWIPE) promoteInbox(s.id);
+  else if (s.dx < -SWIPE) {
+    swiped = s.id;
+    renderInbox();
+  }
+}
+$('#v-inbox').addEventListener('pointerup', endSwipe);
+$('#v-inbox').addEventListener('pointercancel', endSwipe);
 function renderInbox() {
   let h = '<h2>Inbox</h2>';
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
@@ -17,7 +68,7 @@ function renderInbox() {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${waitBadge(it)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
+    h += `<div class="item" data-id="${it.id}"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${waitBadge(it)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
       h +=
         tagPicker('i', it.id, it.tag) +
@@ -34,7 +85,11 @@ function renderInbox() {
       }
       h += `<form class="addrow" data-subfor="${it.id}"><input maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
     }
-    h += `<div class="iacts"><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide details' : 'Details'}</button><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
+    const chip = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
+    h +=
+      swiped === it.id
+        ? `<div class="iacts quick">${chip(`data-sched="${it.id}" data-kind="i" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${chip(`data-sched="${it.id}" data-kind="i" data-when="${nextMonday()}"`, 'Next week')}${chip(`data-waiton="${it.id}"`, 'Waiting…')}<button class="chip del" data-clear="${it.id}">Clear</button><button class="x" data-unswipe="1" aria-label="Close options">×</button></div></div>`
+        : `<div class="iacts"><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide details' : 'Details'}</button><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
   });
   if (S.inbox.length) h += '</div>';
   setHTML($('#v-inbox'), h);

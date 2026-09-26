@@ -25,7 +25,13 @@ function toRecords(s) {
     projects: s.projects.map(x => x.id),
     tags: s.tags.map(x => x.name),
   });
-  m.set('meta:prefs', { mins: s.mins, tag: s.tag, focusQ: s.focusQ, pushKey: s.pushKey || '' });
+  m.set('meta:prefs', {
+    mins: s.mins,
+    tag: s.tag,
+    focusQ: s.focusQ,
+    pushKey: s.pushKey || '',
+    reviewed: s.reviewed || '',
+  });
   m.set('meta:timer', { timer: s.timer });
   m.set('meta:score', { xp: s.xp, bonusDay: s.bonusDay });
   m.set('meta:legacy', { daily: s.oldDaily, pdaily: s.oldPdaily });

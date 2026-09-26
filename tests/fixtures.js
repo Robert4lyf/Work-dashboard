@@ -38,7 +38,12 @@ const test = base.test.extend({
       },
       openQuest: text => page.click(`#v-today .open >> text="${text}"`),
       order: () => page.$$eval('#v-today .row .open > span', x => x.map(e => e.textContent)),
-      go: v => page.click(`nav [data-v=${v}]`),
+      // Views without a tab (Focus, and History/Projects under Review) are opened directly.
+      go: async v => {
+        const tab = page.locator(`nav [data-v=${v}]`);
+        if (await tab.count()) await tab.click();
+        else await page.evaluate(v => go(v), v);
+      },
     };
     await use(app);
     base.expect(errors, 'page errors').toEqual([]);
