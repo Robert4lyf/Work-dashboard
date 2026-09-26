@@ -56,7 +56,11 @@ function zenTarget() {
   const leaf = nextLeaf(r.n);
   return leaf ? find(leaf.id) : r;
 }
+// A running (not paused) session holds you in single-task mode: pause or log an
+// interruption (which pauses) to get back to the rest of the app.
+const focusLocked = () => !!(S.timer && S.timer.left == null);
 function renderZen() {
+  if (focusLocked()) zen = true;
   document.body.classList.toggle('zen', zen);
   const el = $('#v-zen');
   el.hidden = !zen;
@@ -64,7 +68,9 @@ function renderZen() {
   const t = S.timer,
     r = zenTarget(),
     leaf = r && !r.n.children.length && !r.n.done;
-  let h = '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
+  let h = focusLocked()
+    ? '<p class="zx hint">Pause to leave single-task mode</p><div class="zbody">'
+    : '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
   if (!r) h += '<p class="zt">Nothing left to do.</p>';
   else {
     const trail = r.parents.map(p => p.text).join(' / ');
@@ -83,6 +89,7 @@ function renderZen() {
   el.innerHTML = h + '</div>';
 }
 function setZen(on) {
+  if (!on && focusLocked()) return;
   zen = on;
   renderZen();
   renderFocus(); // the note and interruption prompts show in whichever view is open
@@ -227,8 +234,21 @@ function saveLeft(text) {
   renderAll();
 }
 /* interruptions: one tap during a session logs one; the reason is optional */
+// Pause or resume the running session.
+function togglePause() {
+  const t = S.timer;
+  if (!t) return;
+  if (t.left != null) {
+    t.end = Date.now() + t.left;
+    delete t.left;
+  } else t.left = Math.max(0, t.end - Date.now());
+  save();
+  renderAll();
+}
 function logInterrupt() {
   const x = { id: uid(), t: Date.now(), q: S.timer ? S.timer.q : null, why: '' };
+  // An interruption pauses the session, so you can go and deal with it.
+  if (focusLocked()) S.timer.left = Math.max(0, S.timer.end - Date.now());
   S.interrupts.push(x);
   whyFor = x.id;
   save();

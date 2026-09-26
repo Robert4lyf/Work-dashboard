@@ -42,10 +42,11 @@ test('pause excludes paused time; header shows the timer on other tabs', async (
   await expect(page.locator('#v-focus')).toBeVisible();
   await app.go('today');
   await expect(page.locator('header #hclock')).toHaveText('20:00');
+  // Resuming puts you back in single-task mode.
   await page.keyboard.press('p');
+  await expect(page.locator('#v-zen')).toBeVisible();
   await page.clock.fastForward('02:00');
-  await page.click('header [data-v=focus]');
-  await page.click('#stopsave');
+  await page.click('#v-zen [data-stop="save"]');
   expect((await app.state()).daily['2026-09-23']['']).toBe(7);
 });
 
@@ -72,19 +73,28 @@ test('History shows focus time by tag and finished items', async ({ app, page })
   await expect(page.locator('#v-log .bars h2')).toContainText('30 days');
 });
 
-test('starting a session opens single-task mode; leaving it keeps the timer running', async ({
-  app,
-  page,
-}) => {
+test('a running session holds you in single-task mode until you pause', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.go('focus');
   await page.click('#start');
   await expect(page.locator('#v-zen')).toBeVisible();
   await expect(page.locator('nav')).toBeHidden();
+  // No way out while it runs: no Exit, and Esc and tab shortcuts do nothing.
+  await expect(page.locator('#zenexit')).toHaveCount(0);
+  await expect(page.locator('#v-zen .zx')).toHaveText('Pause to leave single-task mode');
+  for (const k of ['Escape', 't', 'l']) await page.keyboard.press(k);
+  await expect(page.locator('#v-zen')).toBeVisible();
+  // Pausing unlocks it; leaving keeps the (paused) timer.
+  await page.click('#v-zen [data-pause]');
   await page.keyboard.press('Escape');
   await expect(page.locator('#v-focus #clock')).toBeVisible();
   expect((await app.state()).timer).not.toBeNull();
-  await page.click('header [data-zen]');
+  // Resuming from the Focus tab goes straight back in; so does reopening the app.
+  await page.click('#v-focus [data-pause]');
+  await expect(page.locator('#v-zen')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('#v-zen')).toBeVisible();
+  await expect(page.locator('#zenexit')).toHaveCount(0);
   await page.click('#v-zen [data-discard]');
   await page.click('#v-zen [data-discard]');
   expect((await app.state()).timer).toBeNull();

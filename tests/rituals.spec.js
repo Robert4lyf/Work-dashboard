@@ -53,7 +53,8 @@ test('interruptions are logged with one tap, with an optional reason, and summar
   await page.click('#whyskip');
   const s = await app.state();
   expect(s.interrupts.map(x => x.why)).toEqual(['Slack', 'Slack', '']);
-  expect(s.timer).not.toBeNull(); // logging doesn't stop the session
+  expect(s.timer).not.toBeNull(); // logging pauses the session, it doesn't end it
+  expect(s.timer.left).toBeGreaterThan(0);
   await page.click('#zenexit');
   await app.go('log');
   await expect(page.locator('#v-log')).toContainText('Interruptions, last 7 days: 3');
@@ -114,6 +115,9 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam');
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Waiting on Sam');
+  // Waiting rows look different (dark orange); others don't.
+  await expect(page.locator('#v-today .row.waiting')).toHaveCount(1);
+  await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
   // It's blocked, so Next up moves on to the next quest.
   await expect(page.locator('#hnow')).toContainText('Write report');
   await expect(page.locator('#hstats')).toContainText('1 to chase');

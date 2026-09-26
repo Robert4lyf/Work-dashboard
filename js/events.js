@@ -231,6 +231,11 @@ document.addEventListener('input', e => {
 
 document.addEventListener('click', e => {
   const b = e.target.closest('button');
+  // A tap anywhere else closes a row's Inbox/Delete choice.
+  if (xOpen && !(b && (b.dataset.xopen || b.dataset.toinbox || b.dataset.delnow))) {
+    xOpen = null;
+    renderToday();
+  }
   if (!b) return;
   const d = b.dataset;
   if (d.open) {
@@ -346,7 +351,24 @@ document.addEventListener('click', e => {
         if (k === 'off') t.monthDay = 0;
       });
   }
-  if (d.toinbox) moveToInbox(d.toinbox);
+  if (d.xopen) {
+    xOpen = xOpen === d.xopen ? null : d.xopen;
+    renderToday();
+  }
+  if (d.delnow) {
+    const r = find(d.delnow);
+    xOpen = null;
+    if (r)
+      withUndo('Deleted ' + r.n.text, () => {
+        const bf = snapshot();
+        r.arr.splice(r.arr.indexOf(r.n), 1);
+        settle(bf);
+      });
+  }
+  if (d.toinbox) {
+    xOpen = null;
+    moveToInbox(d.toinbox);
+  }
   if (d.sched) schedule(d.kind, d.sched, d.when);
   if (d.now) {
     const i = S.later.findIndex(x => x.id === d.now);
@@ -535,18 +557,7 @@ document.addEventListener('click', e => {
     toast('Back on your list');
   }
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
-  if (d.pause) {
-    const t = S.timer;
-    if (!t) return;
-    if (t.left != null) {
-      t.end = Date.now() + t.left;
-      delete t.left;
-    } else t.left = Math.max(0, t.end - Date.now());
-    save();
-    renderHeader();
-    renderFocus();
-    renderZen();
-  }
+  if (d.pause) togglePause();
   if (b.id === 'undo') undo();
   if (b.id === 'copylog') copyLog();
   if (b.id === 'hist') loadHistory();
@@ -626,14 +637,16 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') el.blur();
     return;
   }
-  const k = e.key,
-    field = id => {
-      const f = $(id);
-      if (!f) return false;
-      e.preventDefault();
-      f.focus();
-      return true;
-    };
+  const k = e.key;
+  // During a running session only pause and help work (see focusLocked).
+  if (focusLocked() && k !== 'p' && k !== '?') return;
+  const field = id => {
+    const f = $(id);
+    if (!f) return false;
+    e.preventDefault();
+    f.focus();
+    return true;
+  };
   if (k === 'n' && view === 'today' && path.length) field('#sin');
   else if (k === 'n' || k === 'i') {
     go('inbox');
