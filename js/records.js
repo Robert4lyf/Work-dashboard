@@ -31,6 +31,7 @@ function toRecords(s) {
     focusQ: s.focusQ,
     pushKey: s.pushKey || '',
     reviewed: s.reviewed || '',
+    dayEnd: s.dayEnd || '',
   });
   m.set('meta:timer', { timer: s.timer });
   m.set('meta:score', { xp: s.xp, bonusDay: s.bonusDay });

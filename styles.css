@@ -1343,6 +1343,70 @@ body.zen nav {
   margin: 4px 0 0;
   font-size: 15px;
 }
+/* header focus button, attention strip, plan line, estimates */
+.now .zenbtn {
+  flex: none;
+  padding: 5px 10px;
+  font-size: 15px;
+}
+.attn {
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.attn .chip {
+  padding: 3px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+.chip.warn {
+  background: var(--pink);
+  color: var(--on-accent);
+}
+.chip.due {
+  background: var(--orange);
+  color: var(--on-accent);
+}
+.plan {
+  margin: -2px 0 8px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.plan.over {
+  color: var(--wait-ink);
+  font-weight: 700;
+}
+.tag.est {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--muted);
+}
+.estpick {
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.estpick .hint {
+  margin: 0;
+  font-size: 15px;
+}
+.estpick .chip {
+  padding: 3px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+nav .dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 4px;
+  vertical-align: middle;
+  background: var(--pink);
+  border-radius: var(--dot, 0);
+}
+nav .dot[hidden],
+nav .badge[hidden] {
+  display: none;
+}
 /* carried over */
 .carried {
   padding: 12px 14px 6px;
