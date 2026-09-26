@@ -49,10 +49,13 @@ function row(n, i, len, sib) {
 function listHead(title, ns) {
   return `<div class="sechead"><h2>${title}</h2>${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
 }
-// One card, one row per quest.
+// One card, one row per quest. Waiting ones show below the rest (above finished ones); their
+// place in the real order is kept, so they move back up when the wait is over.
 function list(ns) {
+  const rank = n => (isDone(n) ? 2 : showsWaiting(n) ? 1 : 0),
+    shown = reorder ? ns : [...ns].sort((a, b) => rank(a) - rank(b));
   return ns.length
-    ? `<div class="list box">${ns.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
+    ? `<div class="list box">${shown.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
     : '';
 }
 function renderToday() {

@@ -245,3 +245,19 @@ test('a quest with a step waiting on someone shows as waiting too', async ({ app
   await page.reload();
   await expect(row).not.toHaveClass(/waiting/);
 });
+
+test('waiting quests sit at the bottom of Today, and return to their place', async ({ app, page }) => {
+  for (const t of ['Budget', 'Report', 'Email']) await app.addQuest(t);
+  await app.setState(s => (s.quests[0].wait = { who: 'Sam', note: '', due: '', since: '2026-09-23' }));
+  await page.reload();
+  const rows = page.locator('#v-today .list .row .open > span');
+  await expect(rows).toHaveText(['Report', 'Email', 'Budget']);
+  expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Report', 'Email']); // real order kept
+  // Reorder mode shows the real order.
+  await page.click('#reorder');
+  await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
+  await page.click('#reorder');
+  await app.setState(s => delete s.quests[0].wait);
+  await page.reload();
+  await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
+});
