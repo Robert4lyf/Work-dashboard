@@ -274,7 +274,7 @@ function askNotify() {
 function notify(title, body) {
   try {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    const o = { body, icon: 'icons/icon-192.png', tag: 'cockpit-timer' };
+    const o = { body, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: 'cockpit-timer' };
     if (navigator.serviceWorker && navigator.serviceWorker.controller)
       navigator.serviceWorker.ready.then(r => r.showNotification(title, o)).catch(() => {});
     else new Notification(title, o);
