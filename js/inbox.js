@@ -74,8 +74,7 @@ function receiveShare() {
 
 /* voice capture: browsers with speech recognition only */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-// iPhone home-screen apps have a broken recogniser; keyboard dictation works there instead.
-const mic = !!SR && !navigator.standalone;
+const mic = !!SR;
 const micIcon =
   '<svg viewBox="0 0 7 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M2 0h3v5H2zM0 3h1v2H0zM6 3h1v2H6zM1 5h5v1H1zM3 6h1v1H3zM1 7h5v1H1z"/></svg>';
 let listening = false,

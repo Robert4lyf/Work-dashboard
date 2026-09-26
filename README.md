@@ -41,7 +41,6 @@ If you'd rather use **Deploy from a branch** (branch `main`, folder `/ (root)`),
 
 ## 5. Install it
 
-- **iPhone:** open the link in Safari > Share > **Add to Home Screen**.
 - **Android:** open in Chrome > menu > **Install app**.
 - **Computer:** in Chrome or Edge, click the install icon at the right of the address bar.
 
@@ -63,7 +62,7 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 
 ## Notifications (optional, one-time setup)
 
-Real notifications, even with the app closed: when a focus session ends, on the morning a deadline is due, and when an Upcoming quest returns to Today. On iPhone/iPad they need iOS 16.4+ and the app added to the Home Screen.
+Real notifications, even with the app closed: when a focus session ends, on the morning a deadline is due, and when an Upcoming quest returns to Today.
 
 1. Run the updated `supabase-setup.sql` (adds the notification tables).
 2. In the app: **Settings > Notifications > Generate keys**. Copy the two keys it shows (the private key isn't saved anywhere else).
@@ -89,15 +88,15 @@ The link works like a password, so it's stored in your Supabase project (only yo
 
 ## Features worth knowing
 
-- **Voice capture:** tap the mic next to the inbox box and speak. Say "next item" between thoughts to add several at once (this also works when typing or using keyboard dictation). The mic shows in Chrome and Edge, and in Safari in a normal tab. It's hidden in the iPhone home-screen app, where Apple's speech recognition is unreliable, so use the keyboard's dictation key there. Chrome sends the audio to Google to transcribe.
+- **Voice capture:** tap the mic next to the inbox box and speak. Say "next item" between thoughts to add several at once (this also works when typing or using keyboard dictation). The mic shows in Chrome and Edge. Chrome sends the audio to Google to transcribe.
 - **Inbox subquests:** tap **Add subquests** on an inbox item to break it down before it goes to Today. They move with it.
 - **Header:** shows your next step (tick it off right there, or tap to open it), today's progress, focus time, and anything overdue or due today. While a focus timer runs, it shows the countdown with a pause button on every tab.
 - **History:** where your focus time went (week, month or year, by tag) and what you finished over the last two weeks. **Copy last 7 days** gives you a ready-made standup update.
 - **Tags:** a tag belongs to a quest. Set it on the quest (Today) or inbox item (Tag and subquests); subquests and focus sessions use it. Add, rename or delete tags in the Settings tab.
 - **Undo:** deleting a quest, clearing an inbox item, or deleting a template or tag shows an Undo button for 5 seconds.
 - **Upcoming:** on a quest (or an inbox item's Tag and subquests), use **Do later** (Tomorrow, Next Mon, or a date) to move it off Today. It waits under Today > Upcoming, where you can change the date or bring it back, and joins the end of Today's list on its day.
-- **Capture from anywhere:** in Settings > Capture from anywhere, create a private capture link, then follow the steps for an iPhone/Mac Shortcut (works with Siri and, on a Mac, a keyboard shortcut) or Android's HTTP Shortcuts app. On a computer, drag the **+ Dashboard** bookmarklet to your bookmarks bar to send the page you're on. Long-pressing the installed app's icon also offers **Capture** and **Focus**.
-- **Share to Inbox (Android):** once the app is installed, choose it from any app's Share menu to drop a link or text straight into the inbox. iPhone doesn't let home-screen apps receive shares.
+- **Capture from anywhere:** in Settings > Capture from anywhere, create a private capture link, then follow the steps for Android's HTTP Shortcuts app. On a computer, drag the **+ Dashboard** bookmarklet to your bookmarks bar to send the page you're on. Long-pressing the installed app's icon also offers **Capture** and **Focus**.
+- **Share to Inbox (Android):** once the app is installed, choose it from any app's Share menu to drop a link or text straight into the inbox.
 - **Repeating quests:** open a quest and use **Repeat** to pick days (every day, weekdays, any mix) and/or a day of the month. A fresh copy, subquests included, is added to Today on those days, even if the app wasn't opened on the day itself. An unfinished copy carries over instead of doubling up. Choose **Off** to stop it. All repeats are listed under Today > Repeating quests.
 - **Projects:** group quests that belong to longer-running work. Pick a project on a quest (or an inbox item's Details and subquests), or create one from the same picker. History > Projects shows each project's finished and open quests, a progress bar and focus time; finish a project there when it's done. Rename or delete projects in Settings.
 - **Single-task mode:** starting a focus session opens a full-screen view of just your current step and the timer (pause, +5 min, stop and save, Done, discard). **Exit** or `Esc` goes back to the normal app with the timer still running. You can also open it any time with **Single-task** in the header or `z`.

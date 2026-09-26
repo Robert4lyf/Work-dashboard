@@ -1,4 +1,4 @@
-/* capture from anywhere: shortcuts (Siri, Android, other tools) add inbox items by calling the
+/* capture from anywhere: shortcuts (Android, other tools) add inbox items by calling the
    cockpit_capture database function with a secret token. The token is created in Settings and
    kept on this device so the setup details can be shown again. */
 const CAPTURE_KEY = 'dashboard-capture-token';
@@ -53,7 +53,7 @@ function renderCapture() {
   if (!captureToken) {
     return (
       h +
-      '<p class="hint" style="margin:0 0 8px">For Siri, Android or other tools, create a private capture link.</p><button class="btn" id="capnew">Create capture link</button>'
+      '<p class="hint" style="margin:0 0 8px">For Android or other tools, create a private capture link.</p><button class="btn" id="capnew">Create capture link</button>'
     );
   }
   const row = (label, value, id) =>
@@ -62,12 +62,7 @@ function renderCapture() {
     row('URL', captureUrl(), 'url') +
     row('apikey header', CFG.supabaseAnonKey, 'key') +
     row('token', captureToken, 'token');
-  h += `<details id="capios"${panels.capios ? ' open' : ''}><summary>iPhone, iPad or Mac (Shortcuts)</summary><ol class="steps">
-    <li>In the Shortcuts app, make a new shortcut named <b>Add to Dashboard</b>.</li>
-    <li>Add <b>Dictate Text</b> (or <b>Ask for Input</b> to type).</li>
-    <li>Add <b>Get Contents of URL</b>: paste the URL, set Method to <b>POST</b>, add a header <b>apikey</b> with the value above, and set Request Body to <b>JSON</b> with <b>token</b> = your token and <b>text</b> = the dictated text.</li>
-    <li>Say <b>"Hey Siri, Add to Dashboard"</b>. On a Mac you can also give the shortcut a keyboard shortcut in its details.</li></ol></details>
-    <details id="capand"${panels.capand ? ' open' : ''}><summary>Android</summary><ol class="steps">
+  h += `<details id="capand"${panels.capand ? ' open' : ''}><summary>Android</summary><ol class="steps">
     <li>Install the free <b>HTTP Shortcuts</b> app and create a Regular Shortcut.</li>
     <li>Method <b>POST</b>, the URL above, a header <b>apikey</b> with the value above, and a JSON body <code>{"token":"…","text":"{{text}}"}</code> where <b>text</b> is a variable that asks for input (it can use voice).</li>
     <li>Add it to your home screen, or run it from a Google Assistant routine.</li></ol></details>

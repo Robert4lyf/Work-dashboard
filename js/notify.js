@@ -146,11 +146,7 @@ async function syncNotices() {
 
 function renderNotifySettings() {
   let h = '<h2 style="margin-top:26px" id="notifsec">Notifications</h2>';
-  if (!pushSupported())
-    return (
-      h +
-      '<p class="hint">This browser can\'t receive notifications. On an iPhone or iPad, add Dashboard to your Home Screen and open it from there (iOS 16.4 or later).</p>'
-    );
+  if (!pushSupported()) return h + '<p class="hint">This browser can\'t receive notifications.</p>';
   if (!S.pushKey)
     return (
       h +

@@ -6,7 +6,7 @@ const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/
 const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'projects', 'history', 'sync', 'capture', 'notify', 'calendar', 'board', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
-  './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', SUPABASE_JS];
+  './icons/icon-192.png', './icons/icon-512.png', SUPABASE_JS];
 
 try { importScripts('./config.js'); } catch (e) {}
 let apiOrigin = '';
