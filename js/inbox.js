@@ -22,11 +22,14 @@ function promoteInbox(id) {
 }
 /* swipes on a phone: left sends an item to Today (the tab to the left), right shows quick options */
 let swipe = null,
-  swiped = null; // the item showing its quick options
+  swiped = null, // the item showing its quick options
+  swipeClick = false; // a swipe just ended: the click that follows isn't a tap
 const SWIPE = 90;
 $('#v-inbox').addEventListener('pointerdown', e => {
   const el = e.target.closest('.item[data-id]');
-  if (!el || e.target.closest('button, input, select, textarea, form, a')) return;
+  swipeClick = false;
+  // The title is a button (tap to expand) but still swipes.
+  if (!el || e.target.closest('button:not(.ititle), input, select, textarea, form, a')) return;
   swipe = { el, id: el.dataset.id, x: e.clientX, y: e.clientY, dx: 0, on: false, pid: e.pointerId };
 });
 $('#v-inbox').addEventListener('pointermove', e => {
@@ -48,6 +51,7 @@ function endSwipe() {
   const s = swipe;
   swipe = null;
   if (!s || !s.on) return;
+  swipeClick = true;
   s.el.classList.remove('swiping');
   s.el.style.transform = '';
   delete s.el.dataset.swipe;
@@ -58,6 +62,14 @@ function endSwipe() {
   }
 }
 $('#v-inbox').addEventListener('pointerup', endSwipe);
+$('#v-inbox').addEventListener(
+  'click',
+  e => {
+    if (swipeClick) e.stopPropagation();
+    swipeClick = false;
+  },
+  true,
+);
 $('#v-inbox').addEventListener('pointercancel', endSwipe);
 function renderInbox() {
   let h = '<h2>Inbox</h2>';
@@ -68,7 +80,7 @@ function renderInbox() {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item" data-id="${it.id}"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${waitBadge(it)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
+    h += `<div class="item" data-id="${it.id}"${dragAttr('i:' + it.id)}><p><button class="ititle" data-steps="${it.id}" aria-expanded="${open}">${esc(it.text)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button> ${tagBadge(it.tag)}${projectBadge(it.project)}${waitBadge(it)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
       h +=
         tagPicker('i', it.id, it.tag) +
@@ -89,7 +101,7 @@ function renderInbox() {
     h +=
       swiped === it.id
         ? `<div class="iacts quick">${chip(`data-sched="${it.id}" data-kind="i" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${chip(`data-sched="${it.id}" data-kind="i" data-when="${nextMonday()}"`, 'Next week')}${chip(`data-waiton="${it.id}"`, 'Waiting…')}<button class="chip del" data-clear="${it.id}">Clear</button><button class="x" data-unswipe="1" aria-label="Close options">×</button></div></div>`
-        : `<div class="iacts"><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide details' : 'Details'}</button><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
+        : `<div class="iacts"><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
   });
   if (S.inbox.length) h += '</div>';
   setHTML($('#v-inbox'), h);

@@ -63,3 +63,24 @@ test('mic is hidden where speech recognition is unavailable', async ({ browser }
   await expect(page.locator('#mic')).toHaveCount(0);
   await page.close();
 });
+
+test('tapping an item’s title shows and hides its details; a swipe doesn’t', async ({ page }) => {
+  await page.fill('#iin', 'Book dentist');
+  await page.press('#iin', 'Enter');
+  const title = page.locator('#v-inbox .ititle');
+  await expect(page.locator('#v-inbox .iacts .linkbtn')).toHaveCount(0); // no Details link
+  await title.click();
+  await expect(title).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#v-inbox [data-subfor]')).toBeVisible();
+  await title.click();
+  await expect(title).toHaveAttribute('aria-expanded', 'false');
+  // A short swipe that springs back isn't a tap.
+  const box = await title.boundingBox(),
+    y = box.y + box.height / 2,
+    x = box.x + box.width / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (let i = 1; i <= 5; i++) await page.mouse.move(x + (40 * i) / 5, y);
+  await page.mouse.up();
+  await expect(title).toHaveAttribute('aria-expanded', 'false');
+});
