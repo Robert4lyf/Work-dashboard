@@ -68,12 +68,14 @@ function renderZen() {
   if (!r) h += '<p class="zt">Nothing left to do.</p>';
   else {
     const trail = r.parents.map(p => p.text).join(' / ');
-    h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>`;
+    h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>${leftNote(r.n)}`;
   }
+  h += afterPrompts();
   if (t) {
     h += `<div class="zclock" id="zclock">${mmss(remaining())}</div>
       <div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button><button class="btn" data-plus5="1">+5 min</button></div>
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
+      <button class="linkbtn" data-interrupt="1" style="align-self:center">Interrupted</button>
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
   } else if (r) {
     h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
@@ -83,11 +85,13 @@ function renderZen() {
 function setZen(on) {
   zen = on;
   renderZen();
+  renderFocus(); // the note and interruption prompts show in whichever view is open
   window.scrollTo(0, 0);
 }
 
 function renderFocus() {
   let h = '<h2>Focus</h2>';
+  if (!zen) h += afterPrompts();
   if (S.timer) {
     const t = S.timer,
       q = t.q && find(t.q),
@@ -95,7 +99,7 @@ function renderFocus() {
       leaf = q && !q.n.children.length && !q.n.done;
     h += `<div class="clock box" id="clock">${mmss(remaining())}<small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t)) || 'Focus'}</small></div>`;
     h += `<div class="acts" style="margin-top:0"><button class="btn ${paused ? 'green' : 'blue'}" data-pause="1" style="flex:1">${paused ? 'Resume' : 'Pause'}</button><button class="btn" id="plus5" style="flex:1">+5 min</button></div>`;
-    h += `<div class="acts"><button class="btn" id="stopsave" style="flex:1">Stop and save</button>${leaf ? '<button class="btn green" id="stopdone" style="flex:1">Done</button>' : ''}</div><button class="dellink" id="stop">Discard this session</button>`;
+    h += `<div class="acts"><button class="btn" id="stopsave" style="flex:1">Stop and save</button>${leaf ? '<button class="btn green" id="stopdone" style="flex:1">Done</button>' : ''}</div><button class="linkbtn" data-interrupt="1">Interrupted</button><button class="dellink" id="stop">Discard this session</button>`;
   } else {
     const cur = focusTarget(),
       opts = [];
@@ -108,7 +112,7 @@ function renderFocus() {
       });
     })(S.quests, []);
     const top = topOf(cur);
-    h += `<label class="f" for="fq" style="margin-top:0">Working on ${top ? tagBadge(top.tag) : ''}</label><select class="fld" id="fq"><option value="none"${cur ? '' : ' selected'}>Nothing specific</option>${opts.map(([id, l]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    h += `<label class="f" for="fq" style="margin-top:0">Working on ${top ? tagBadge(top.tag) : ''}</label><select class="fld" id="fq"><option value="none"${cur ? '' : ' selected'}>Nothing specific</option>${opts.map(([id, l]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${cur ? leftNote(find(cur).n) : ''}`;
     h += '<div class="chips" style="margin-top:14px">';
     [15, 25, 45].forEach(
       m => (h += `<button class="chip" data-mins="${m}" aria-pressed="${S.mins === m}">${m} min</button>`),
@@ -156,6 +160,7 @@ function logSession(tag, mins, t, q) {
 function finishTimer(silent) {
   const t = S.timer;
   S.timer = null;
+  leftFor = t.q;
   S.focusQ = null;
   logSession(t.tag, t.mins, t.end, t.q);
   addXP(20);
@@ -182,6 +187,7 @@ function stopAndSave(done) {
     addXP(Math.max(1, Math.round((20 * m) / t.mins)));
   }
   const r = done && t.q && find(t.q);
+  if (!done) leftFor = t.q;
   if (r) {
     const bf = snapshot();
     r.n.done = true;
@@ -191,6 +197,57 @@ function stopAndSave(done) {
     renderAll();
   }
   if (m < 1 && !r) toast('Under a minute, nothing saved');
+}
+/* "where did I leave it?": after a session stops, one line for next time, shown on that step */
+let leftFor = null, // the step whose session just stopped
+  whyFor = null; // the interruption just logged, waiting for what it was
+function leftNote(n) {
+  return n && n.left
+    ? `<div class="leftnote"><span>You left off:</span> ${esc(n.left.text)} <small>${dayLabel(n.left.d)}</small><button class="x" data-clearleft="${n.id}" aria-label="Clear note">×</button></div>`
+    : '';
+}
+function afterPrompts() {
+  let h = '';
+  const r = leftFor && find(leftFor);
+  if (r && !isDone(r.n))
+    h += `<form class="ask box" id="leftform"><label for="leftin">Where did you leave it?</label><div class="addrow"><input id="leftin" maxlength="160" placeholder="Next step, or what you were thinking" autocomplete="off"><button class="btn">Save</button></div><button type="button" class="linkbtn" id="leftskip">Skip</button></form>`;
+  if (whyFor && S.interrupts.some(x => x.id === whyFor)) {
+    const chips = recentWhys()
+      .map(w => `<button type="button" class="chip" data-why="${esc(w)}">${esc(w)}</button>`)
+      .join('');
+    h += `<form class="ask box" id="whyform"><label for="whyin">What interrupted you?</label>${chips ? `<div class="chips">${chips}</div>` : ''}<div class="addrow"><input id="whyin" maxlength="60" placeholder="A call, a message, someone…" autocomplete="off"><button class="btn">Save</button></div><button type="button" class="linkbtn" id="whyskip">Skip</button></form>`;
+  }
+  return h;
+}
+function saveLeft(text) {
+  const r = leftFor && find(leftFor);
+  leftFor = null;
+  if (r && text) r.n.left = { text, d: today() };
+  save();
+  renderAll();
+}
+/* interruptions: one tap during a session logs one; the reason is optional */
+function logInterrupt() {
+  const x = { id: uid(), t: Date.now(), q: S.timer ? S.timer.q : null, why: '' };
+  S.interrupts.push(x);
+  whyFor = x.id;
+  save();
+  renderAll();
+}
+function saveWhy(why) {
+  const x = S.interrupts.find(i => i.id === whyFor);
+  whyFor = null;
+  if (x && why) x.why = why;
+  save();
+  renderAll();
+}
+// Reasons used before, most frequent first.
+function recentWhys() {
+  const n = {};
+  S.interrupts.forEach(x => x.why && (n[x.why] = (n[x.why] || 0) + 1));
+  return Object.keys(n)
+    .sort((a, b) => n[b] - n[a])
+    .slice(0, 5);
 }
 function askNotify() {
   try {

@@ -66,6 +66,8 @@ function norm(s) {
       later: [],
       projects: [],
       pdaily: {},
+      promises: [],
+      interrupts: [],
     },
     s || {},
   );
@@ -107,6 +109,18 @@ function minus(a, b) {
     }
   return out;
 }
+// Whole days from one date to another.
+const daysBetween = (a, b) => {
+  const [y1, m1, d1] = a.split('-').map(Number),
+    [y2, m2, d2] = b.split('-').map(Number);
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 864e5);
+};
+// Each quest on Today remembers the day it arrived, so ones carried over for days stand out.
+function stampSince() {
+  S.quests.forEach(q => {
+    if (!q.since) q.since = today();
+  });
+}
 function rebuildTotals() {
   S.daily = JSON.parse(JSON.stringify(S.oldDaily));
   S.pdaily = JSON.parse(JSON.stringify(S.oldPdaily));
@@ -135,6 +149,9 @@ function save() {
   S.sessions = S.sessions.filter(x => x.t > cut);
   for (const o of [S.oldDaily, S.oldPdaily, S.daily, S.pdaily]) for (const d in o) if (d < dcut) delete o[d];
   S.log = S.log.filter(x => x.d >= lcut);
+  S.interrupts = S.interrupts.filter(x => x.t > Date.now() - 120 * 864e5);
+  S.promises = S.promises.filter(p => !p.done || p.done >= shift(today(), -30));
+  stampSince();
   S.editedAt = Date.now();
   dropUndo();
   persistLocal();
@@ -172,6 +189,7 @@ function rollover() {
     S.quests.push(n);
     return false;
   });
+  stampSince();
   persistLocal();
   markDirty();
 }

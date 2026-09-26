@@ -1612,6 +1612,110 @@ body.zen nav {
   color: #fff8ee;
   font-weight: 800;
 }
+/* carried over */
+.carried {
+  padding: 12px 14px 6px;
+  margin-bottom: 22px;
+}
+.crow + .crow {
+  border-top: 1.5px solid var(--line);
+}
+.crow p {
+  margin: 8px 0 6px;
+  overflow-wrap: anywhere;
+}
+.crow small {
+  color: var(--muted);
+  font-size: 14px;
+}
+.crow .chips {
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.crow .chip {
+  padding: 3px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+.tag.old {
+  background: transparent;
+  color: var(--muted);
+  border-style: dashed;
+}
+/* where you left off */
+.leftnote {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  margin: 0 0 12px;
+  padding: 8px 4px 8px 12px;
+  border-left: 4px solid var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 14%, transparent);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.leftnote span {
+  font-weight: 700;
+}
+.leftnote small {
+  color: var(--muted);
+  font-size: 14px;
+}
+.leftnote .x {
+  margin-left: auto;
+  font-size: 18px;
+  padding: 0 6px;
+}
+.ask {
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  text-align: left;
+}
+.ask label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.ask .addrow {
+  margin-bottom: 4px;
+}
+.ask .chips {
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.ask .chip {
+  padding: 3px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+/* promises */
+.pform {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 22px;
+}
+.pform .chips {
+  margin: 0;
+}
+.prow2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.prow2 .fld {
+  min-width: 0;
+  width: 100%;
+}
+:root[data-style='botanical'] .leftnote {
+  border-left: 0;
+  border-radius: 14px;
+  padding-left: 14px;
+}
+:root[data-style='botanical'] .tag.old {
+  border: 1.5px dashed var(--muted);
+}
 /* capture setup */
 .caprow {
   display: flex;

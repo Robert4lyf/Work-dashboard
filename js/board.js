@@ -9,6 +9,8 @@ function moveToInbox(id) {
   if (!r) return;
   const bf = snapshot();
   r.arr.splice(r.arr.indexOf(r.n), 1);
+  delete r.n.since; // it starts afresh if it comes back to Today
+  delete r.n.kept;
   S.inbox.unshift({ id: uid(), text: r.n.text, node: r.n, tag: r.n.tag, project: r.n.project });
   settle(bf);
   toast('Moved to inbox');

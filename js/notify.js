@@ -116,6 +116,15 @@ function wantedNotices(now = Date.now()) {
         body: n.text,
       });
   });
+  S.promises.forEach(p => {
+    if (!p.done && p.due && soon(at9(p.due)))
+      out.push({
+        key: 'promise:' + p.id + ':' + p.due,
+        at: at9(p.due),
+        title: p.dir === 'owe' ? 'Promise due' : 'Time to chase',
+        body: p.what + (p.who ? (p.dir === 'owe' ? ' for ' : ' from ') + p.who : ''),
+      });
+  });
   return out;
 }
 // Keep the server's queue matching wantedNotices(); only talks to the server when it changed.

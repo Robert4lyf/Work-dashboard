@@ -181,7 +181,20 @@ function withUndo(msg, fn) {
 // Redraws triggered in the background (sync, calendar, the timer ending) must not wipe what
 // the user is typing or move their cursor. Views set their HTML through setHTML for that.
 let background = false;
-const COMPOSE = ['qin', 'sin', 'iin', 'tagin', 'projin', 'calin', 'aemail', 'apass'];
+const COMPOSE = [
+  'qin',
+  'sin',
+  'iin',
+  'tagin',
+  'projin',
+  'calin',
+  'aemail',
+  'apass',
+  'leftin',
+  'whyin',
+  'pwhat',
+  'pwho',
+];
 function inBackground(fn) {
   const was = background;
   background = true;

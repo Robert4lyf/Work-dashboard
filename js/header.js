@@ -45,6 +45,8 @@ function renderHeader() {
   if (late) st += `<button class="warn" data-v="today">${late} overdue</button>`;
   if (due)
     st += `<button class="warn" data-v="today" style="background:var(--orange)">${due} due today</button>`;
+  const pd = promisesDue();
+  if (pd) st += `<button class="warn" data-v="promises">${pd} promise${pd === 1 ? '' : 's'} due</button>`;
   $('#hstats').innerHTML = st;
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;
