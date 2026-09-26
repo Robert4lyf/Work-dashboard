@@ -45,6 +45,7 @@ $('#v-inbox').addEventListener('pointermove', e => {
   }
   s.dx = dx;
   s.el.style.transform = `translateX(${dx}px)`;
+  s.el.parentElement.dataset.swipe = dx < 0 ? 'today' : 'more';
   s.el.dataset.swipe = dx < -SWIPE ? 'today' : dx > SWIPE ? 'more' : '';
 });
 function endSwipe() {
@@ -55,6 +56,7 @@ function endSwipe() {
   s.el.classList.remove('swiping');
   s.el.style.transform = '';
   delete s.el.dataset.swipe;
+  delete s.el.parentElement.dataset.swipe;
   if (s.dx < -SWIPE) promoteInbox(s.id);
   else if (s.dx > SWIPE) {
     swiped = s.id;

@@ -1278,19 +1278,26 @@ body.zen nav {
   background: var(--pink);
   color: var(--on-accent);
 }
-/* inbox swipes */
+/* inbox swipes: the whole item slides as a card over a coloured strip (green: Today, blue: options) */
+#v-inbox .list {
+  overflow: hidden;
+}
 .item {
+  position: relative;
+  background: var(--panel);
   touch-action: pan-y;
   transition: transform 0.15s;
 }
 .item.swiping {
   transition: none;
+  z-index: 1;
+  outline: 2px solid var(--edge);
 }
-.item[data-swipe='today'] {
-  box-shadow: inset -6px 0 0 var(--green);
+#v-inbox .list[data-swipe='today'] {
+  background: var(--green);
 }
-.item[data-swipe='more'] {
-  box-shadow: inset 6px 0 0 var(--blue);
+#v-inbox .list[data-swipe='more'] {
+  background: var(--blue);
 }
 .iacts.quick {
   flex-wrap: wrap;
