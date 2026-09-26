@@ -5,6 +5,7 @@ function renderAll() {
   renderToday();
   renderInbox();
   renderFocus();
+  renderPromises();
   renderLog();
   renderAccount();
   renderZen();
@@ -26,7 +27,7 @@ function go(v) {
   });
   const board = onBoard();
   document.body.classList.toggle('board', board);
-  ['today', 'inbox', 'focus', 'log', 'account'].forEach(
+  ['today', 'inbox', 'promises', 'focus', 'log', 'account'].forEach(
     k => ($('#v-' + k).hidden = board ? !['today', 'inbox', 'focus'].includes(k) : k !== v),
   );
   // Keep the current tab visible when the tab bar is scrolled sideways.
@@ -76,6 +77,9 @@ document.addEventListener('submit', e => {
     if (opt) $('#sopt').checked = true;
   }
   if (f.id === 'authform') signIn();
+  if (f.id === 'leftform') saveLeft($('#leftin').value.trim());
+  if (f.id === 'whyform') saveWhy($('#whyin').value.trim());
+  if (f.id === 'pform') addPromise();
   if (f.id === 'calform') saveCalendarUrl($('#calin').value);
   if (f.id === 'projform') {
     const v = $('#projin').value.trim();
@@ -472,6 +476,46 @@ document.addEventListener('click', e => {
     renderAll();
   }
   if (b.id === 'stopsave' || d.stop === 'save') stopAndSave(false);
+  if (d.interrupt) logInterrupt();
+  if (d.why) saveWhy(d.why);
+  if (b.id === 'whyskip') saveWhy('');
+  if (b.id === 'leftskip') saveLeft('');
+  if (d.clearleft) {
+    const r = find(d.clearleft);
+    if (r) delete r.n.left;
+    save();
+    renderAll();
+  }
+  if (d.keep) {
+    const q = S.quests.find(x => x.id === d.keep);
+    if (q) q.kept = today();
+    save();
+    renderAll();
+  }
+  if (d.drop) {
+    const q = S.quests.find(x => x.id === d.drop);
+    if (q)
+      withUndo('Dropped ' + q.text, () => {
+        S.quests = S.quests.filter(x => x !== q);
+        save();
+        renderAll();
+      });
+  }
+  if (d.pdir) {
+    pdir = d.pdir;
+    renderPromises();
+    $('#pwhat').focus();
+  }
+  if (d.pdone) togglePromise(d.pdone);
+  if (d.pdel) {
+    const p = S.promises.find(x => x.id === d.pdel);
+    if (p)
+      withUndo('Deleted', () => {
+        S.promises = S.promises.filter(x => x !== p);
+        save();
+        renderAll();
+      });
+  }
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) {
     const t = S.timer;

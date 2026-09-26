@@ -31,6 +31,7 @@ function row(n, i, len, sib) {
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
+    (!d && ageOf(n) >= STALE ? `<span class="tag old">${ageOf(n)} days</span>` : '') +
     (nx ? 'Next: ' + esc(nx.text) : '');
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
@@ -57,7 +58,7 @@ function renderToday() {
   });
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
-  let h = renderMeetings();
+  let h = renderMeetings() + renderCarried();
   const soon = dueSoon().filter(s => s.t.length > 1); // top-level quests show their deadline in the list
   if (soon.length) {
     h += '<div class="soon box"><h2>Due soon</h2>';
@@ -99,6 +100,21 @@ function renderToday() {
   setHTML($('#v-today'), h);
 }
 
+/* carried over: quests on Today for STALE days or more get a decision each morning */
+const STALE = 3;
+const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
+const carried = () => S.quests.filter(q => !isDone(q) && ageOf(q) >= STALE && q.kept !== today());
+function renderCarried() {
+  const qs = carried();
+  if (!qs.length) return '';
+  let h = '<div class="carried box"><h2>Carried over</h2>';
+  qs.forEach(q => {
+    const b = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
+    h += `<div class="crow"><p>${esc(q.text)} <small>${ageOf(q)} days</small></p><div class="chips">${b(`data-keep="${q.id}"`, 'Keep')}${b(`data-sched="${q.id}" data-kind="q" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${b(`data-sched="${q.id}" data-kind="q" data-when="${nextMonday()}"`, 'Next week')}${b(`data-toinbox="${q.id}"`, 'Inbox')}${b(`data-drop="${q.id}"`, 'Drop')}</div></div>`;
+  });
+  return h + '</div>';
+}
+
 /* upcoming: top-level quests scheduled for a later day (S.later, each with a start date) */
 const nextMonday = () => shift(today(), (8 - new Date().getDay()) % 7 || 7);
 function laterPicker(kind, id) {
@@ -134,6 +150,8 @@ function schedule(kind, id, date) {
     n = inboxToNode(it);
   }
   n.start = date;
+  delete n.since;
+  delete n.kept;
   S.later.push(n);
   S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
   save();
@@ -146,7 +164,7 @@ function renderNode({ n, parents }) {
     top = !parents.length;
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
-  h += `</div><div class="node box"><h1>${esc(n.text)}</h1>${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}`;
+  h += `</div><div class="node box"><h1>${esc(n.text)}</h1>${leftNote(n)}${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
