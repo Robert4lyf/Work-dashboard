@@ -231,6 +231,11 @@ document.addEventListener('input', e => {
 
 document.addEventListener('click', e => {
   const b = e.target.closest('button');
+  // A tap anywhere else closes a row's Inbox/Delete choice.
+  if (xOpen && !(b && (b.dataset.xopen || b.dataset.toinbox || b.dataset.delnow))) {
+    xOpen = null;
+    renderToday();
+  }
   if (!b) return;
   const d = b.dataset;
   if (d.open) {
@@ -346,7 +351,24 @@ document.addEventListener('click', e => {
         if (k === 'off') t.monthDay = 0;
       });
   }
-  if (d.toinbox) moveToInbox(d.toinbox);
+  if (d.xopen) {
+    xOpen = xOpen === d.xopen ? null : d.xopen;
+    renderToday();
+  }
+  if (d.delnow) {
+    const r = find(d.delnow);
+    xOpen = null;
+    if (r)
+      withUndo('Deleted ' + r.n.text, () => {
+        const bf = snapshot();
+        r.arr.splice(r.arr.indexOf(r.n), 1);
+        settle(bf);
+      });
+  }
+  if (d.toinbox) {
+    xOpen = null;
+    moveToInbox(d.toinbox);
+  }
   if (d.sched) schedule(d.kind, d.sched, d.when);
   if (d.now) {
     const i = S.later.findIndex(x => x.id === d.now);

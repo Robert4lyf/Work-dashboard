@@ -1,7 +1,8 @@
 /* today / drill-down */
 let path = [],
   reorder = false,
-  pending = null;
+  pending = null,
+  xOpen = null; // the row whose × is showing its two choices
 const panels = {}; // which <details> panels are expanded, so re-renders keep them open
 const tick =
   '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1D2B53" d="M5 1h1v1H5zM4 2h1v1H4zM3 3h1v1H3zM0 3h1v1H0zM1 4h1v1H1zM2 4h1v1H2z"/></svg>';
@@ -36,7 +37,9 @@ function row(n, i, len, sib) {
     (nx ? 'Next: ' + esc(nx.text) : '');
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
-    : `<button class="x" data-del="${n.id}" aria-label="Delete ${esc(n.text)}">×</button>`;
+    : xOpen === n.id
+      ? `<span class="xchoice"><button class="chip" data-toinbox="${n.id}">Inbox</button><button class="chip del" data-delnow="${n.id}">Delete</button></span>`
+      : `<button class="x" data-xopen="${n.id}" aria-label="Remove ${esc(n.text)}">×</button>`;
   return `<div class="row${d ? ' done' : ''}"${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder.

@@ -1229,6 +1229,21 @@ body.zen nav {
   outline: 3px dashed var(--blue);
   outline-offset: 3px;
 }
+/* a row's × opens two choices */
+.xchoice {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.xchoice .chip {
+  padding: 4px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+.xchoice .del {
+  background: var(--pink);
+  color: var(--on-accent);
+}
 /* carried over */
 .carried {
   padding: 12px 14px 6px;

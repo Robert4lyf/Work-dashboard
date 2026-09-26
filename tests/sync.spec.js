@@ -246,8 +246,8 @@ test('deletions reach other devices', async ({ browser }) => {
   await a.add('Remove me');
   await a.sync();
   const b = await device(browser, srv);
-  await a.page.click('[aria-label="Delete Remove me"]');
-  await a.page.click('[aria-label="Delete Remove me"]');
+  await a.page.click('[aria-label="Remove Remove me"]');
+  await a.page.click('#v-today [data-delnow]');
   await settle(a, b);
   expect(texts(await b.state())).toEqual(['Keep']);
   expect(srv.rows.get([...srv.rows.keys()].find(k => srv.rows.get(k).deleted)).deleted).toBe(true);

@@ -42,13 +42,28 @@ test('subquests: next step, sinking, and header tick', async ({ app, page }) => 
   expect(await app.order()).toEqual(['Review', 'Draft']);
 });
 
-test('delete can be undone', async ({ app, page }) => {
+test('× offers Inbox or Delete; delete can be undone', async ({ app, page }) => {
   await app.addQuest('Email Bob');
-  await page.click('[aria-label="Delete Email Bob"]');
-  await page.click('[aria-label="Delete Email Bob"]');
-  expect((await app.state()).quests).toHaveLength(0);
+  await app.addQuest('Plan trip');
+  const row = page.locator('#v-today .row', { hasText: 'Email Bob' });
+  // Tapping elsewhere closes the choice without doing anything.
+  await row.locator('[aria-label="Remove Email Bob"]').click();
+  await expect(row.locator('.xchoice button')).toHaveText(['Inbox', 'Delete']);
+  await page.click('#v-today h2');
+  await expect(row.locator('.xchoice')).toHaveCount(0);
+  expect((await app.state()).quests).toHaveLength(2);
+
+  await row.locator('[aria-label="Remove Email Bob"]').click();
+  await row.locator('[data-delnow]').click();
+  expect((await app.state()).quests.map(q => q.text)).toEqual(['Plan trip']);
   await page.click('#undo');
-  expect((await app.state()).quests).toHaveLength(1);
+  expect((await app.state()).quests).toHaveLength(2);
+
+  await page.locator('[aria-label="Remove Plan trip"]').click();
+  await page.locator('#v-today [data-toinbox]').click();
+  const s = await app.state();
+  expect(s.quests.map(q => q.text)).toEqual(['Email Bob']);
+  expect(s.inbox[0].text).toBe('Plan trip');
 });
 
 test('tags are set on the quest and shown on its row', async ({ app, page }) => {
