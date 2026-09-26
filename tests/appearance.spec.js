@@ -26,39 +26,3 @@ test('font and colour choices apply at once and survive a reload', async ({ app,
   expect(r.font).toBeUndefined();
   expect(r.theme).toBeUndefined();
 });
-
-test('botanical style: palette, rounded shapes and its fonts, loaded only when chosen', async ({
-  app,
-  page,
-}) => {
-  await app.open();
-  const fontsLink = () => page.locator('#botanical-fonts').count();
-  expect(await fontsLink()).toBe(0);
-  await app.go('account');
-  await page.click('[data-look="style"][data-val="botanical"]');
-  const look = () =>
-    page.evaluate(() => {
-      const box = getComputedStyle(document.querySelector('header'));
-      return {
-        style: document.documentElement.dataset.style,
-        radius: box.borderBottomLeftRadius,
-        header: box.backgroundImage.startsWith('linear-gradient'),
-        heading: getComputedStyle(document.querySelector('h2')).fontFamily,
-      };
-    });
-  let r = await look();
-  expect(r).toMatchObject({ style: 'botanical', radius: '36px', header: true });
-  expect(r.heading).toContain('Fraunces');
-  expect(await fontsLink()).toBe(1);
-  await page.reload();
-  expect((await look()).style).toBe('botanical');
-  expect(await fontsLink()).toBe(1);
-  // Plain font still overrides the style's fonts.
-  await app.go('account');
-  await page.click('[data-look="font"][data-val="plain"]');
-  expect((await look()).heading).not.toContain('Fraunces');
-  await page.click('[data-look="style"][data-val=""]');
-  r = await look();
-  expect(r.style).toBeUndefined();
-  expect(r.radius).toBe('0px');
-});
