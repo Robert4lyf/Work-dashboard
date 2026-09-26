@@ -99,7 +99,12 @@ async function testPush() {
   try {
     reg = await navigator.serviceWorker.ready;
     if (Notification.permission !== 'granted') throw new Error('blocked');
-    await reg.showNotification('Dashboard', { body: 'This phone can show notifications', tag: 'local-test' });
+    await reg.showNotification('Dashboard', {
+      body: 'This phone can show notifications',
+      icon: 'icons/icon-192.png',
+      badge: 'icons/badge-96.png',
+      tag: 'local-test',
+    });
     step('This phone', true, 'You should see a notification now.');
   } catch (e) {
     step(
