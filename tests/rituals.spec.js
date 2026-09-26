@@ -127,7 +127,8 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
   // It's blocked, so Next up moves on to the next quest.
   await expect(page.locator('#hnow')).toContainText('Write report');
-  await expect(page.locator('#hstats')).toContainText('1 to chase');
+  await expect(page.locator('#v-today .attn')).toContainText('1 to chase');
+  await expect(page.locator('nav #waitBadge')).toHaveText('1');
 
   await app.go('waiting');
   const v = page.locator('#v-waiting');

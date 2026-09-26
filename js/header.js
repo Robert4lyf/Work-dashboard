@@ -17,7 +17,7 @@ function renderHeader() {
   } else {
     const nx = nextStep();
     if (nx)
-      h = `<button class="check" data-toggle="${nx.n.id}" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button>`;
+      h = `<button class="check" data-toggle="${nx.n.id}" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button><button class="btn sm zenbtn" data-zen="1">Focus</button>`;
     else
       h = `<button class="go" data-v="today"><small>Next up</small><b>${S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
   }
@@ -27,30 +27,19 @@ function renderHeader() {
     p = qs.length ? Math.round((done / qs.length) * 100) : 0;
   $('#hfill').style.width = p + '%';
   $('#hprog').setAttribute('aria-valuenow', p);
-  const t = today();
-  let late = 0,
-    due = 0;
-  (function w(ns) {
-    ns.forEach(n => {
-      if (isDone(n)) return;
-      if (n.due && n.due < t) late++;
-      else if (n.due === t) due++;
-      w(n.children);
-    });
-  })(qs);
-  const focus = Object.values(S.daily[t] || {}).reduce((a, b) => a + b, 0);
-  let st = `<button data-v="today">${done}/${qs.length} done</button><button data-v="focus">${hm(focus)} focus</button><button class="pill" data-zen="1">Single-task</button>`;
-  if (reviewDue()) st += '<button class="pill" data-rsub="week">Weekly review</button>';
+  // One quiet line of stats; anything needing attention is on Today and in tab badges.
+  const focus = Object.values(S.daily[today()] || {}).reduce((a, b) => a + b, 0);
+  let st = `<button data-v="today">${done}/${qs.length} done</button><button data-v="focus">${hm(focus)} focus</button>`;
   const ms = meetingStatus();
   if (ms) st += `<button data-v="today">${ms}</button>`;
-  if (late) st += `<button class="warn" data-v="today">${late} overdue</button>`;
-  if (due)
-    st += `<button class="warn" data-v="today" style="background:var(--orange)">${due} due today</button>`;
-  const ch = chaseDue();
-  if (ch) st += `<button class="warn" data-v="waiting">${ch} to chase</button>`;
   $('#hstats').innerHTML = st;
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;
   b.textContent = S.inbox.length;
+  const w = $('#waitBadge'),
+    ch = chaseDue();
+  w.hidden = !ch;
+  w.textContent = ch || '';
+  $('#reviewDot').hidden = !reviewDue();
   renderSyncBadge();
 }

@@ -310,7 +310,8 @@ function renderAccount() {
     `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
     <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
-    <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>`;
+    <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
+    <label class="f" for="dayend">Workday ends (for "free" time on Today)</label><input class="fld" type="time" id="dayend" value="${S.dayEnd || '17:30'}" style="max-width:10em">`;
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
   S.tags.forEach(
     (t, i) =>

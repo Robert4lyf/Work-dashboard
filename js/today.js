@@ -33,6 +33,7 @@ function row(n, i, len, sib) {
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
+    (!d && estLeft(n) ? `<span class="tag est">~${hmShort(estLeft(n))}</span>` : '') +
     (!d && ageOf(n) >= STALE ? `<span class="tag old">${ageOf(n)} days</span>` : '') +
     (nx ? 'Next: ' + esc(nx.text) : '');
   const right = reorder
@@ -62,7 +63,7 @@ function renderToday() {
   });
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
-  let h = renderMeetings() + renderCarried();
+  let h = renderAttention() + renderMeetings() + renderCarried();
   const soon = dueSoon().filter(s => s.t.length > 1); // top-level quests show their deadline in the list
   if (soon.length) {
     h += '<div class="soon box"><h2>Due soon</h2>';
@@ -72,7 +73,7 @@ function renderToday() {
     );
     h += '</div>';
   }
-  h += listHead("Today's quests", qs);
+  h += listHead("Today's quests", qs) + planLine();
   if (qs.length && qs.every(isDone))
     h += '<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
   h += list(qs);
@@ -103,6 +104,67 @@ function renderToday() {
       '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
   h += renderUpcoming();
   setHTML($('#v-today'), h);
+}
+
+/* estimates: optional minutes on a quest or step (n.est). A quest with estimated steps counts
+   what's left of them; waiting quests don't count (they're not your work right now). */
+const EST = [15, 30, 60, 120];
+const hmShort = m => (m >= 60 && !(m % 60) ? m / 60 + 'h' : hm(m));
+function estLeft(n) {
+  if (isDone(n) || n.wait) return 0;
+  const kids = n.children.reduce((a, c) => a + estLeft(c), 0);
+  return kids || n.est || 0;
+}
+function estPicker(n) {
+  const kids = n.children.reduce((a, c) => a + estLeft(c), 0);
+  return `<div class="chips estpick"><span class="hint">Estimate</span>${EST.map(m => `<button class="chip" data-est="${m}" data-id="${n.id}" aria-pressed="${n.est === m}">${hmShort(m)}</button>`).join('')}${kids ? `<span class="hint">steps left: ${hmShort(kids)}</span>` : ''}</div>`;
+}
+// Free minutes from now to the end of the workday, less the meetings still to come.
+function freeLeft(now = Date.now()) {
+  const [h, m] = (S.dayEnd || '17:30').split(':').map(Number),
+    d = new Date(now),
+    end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
+  if (now >= end) return 0;
+  let busy = 0,
+    upto = now;
+  todaysEvents()
+    .filter(e => !e.allDay && e.end > now && e.start < end)
+    .sort((a, b) => a.start - b.start)
+    .forEach(e => {
+      const s = Math.max(e.start, upto),
+        f = Math.min(e.end, end);
+      if (f > s) busy += f - s;
+      upto = Math.max(upto, f);
+    });
+  return Math.max(0, Math.round((end - now - busy) / 60000));
+}
+function planLine() {
+  const planned = S.quests.reduce((a, q) => a + estLeft(q), 0);
+  if (!planned) return '';
+  const free = freeLeft(),
+    over = planned > free;
+  return `<p class="plan${over ? ' over' : ''}">${hmShort(planned)} planned · ${hmShort(free)} free${over ? ' · more than fits: move something to Upcoming' : ''}</p>`;
+}
+// What needs attention, as one row of chips at the top of Today (kept out of the header).
+function renderAttention() {
+  const t = today();
+  let late = 0,
+    due = 0;
+  (function w(ns) {
+    ns.forEach(n => {
+      if (isDone(n)) return;
+      if (n.due && n.due < t) late++;
+      else if (n.due === t) due++;
+      w(n.children);
+    });
+  })(S.quests);
+  const ch = chaseDue(),
+    c = [];
+  if (late) c.push(`<span class="chip warn">${late} overdue</span>`);
+  if (due) c.push(`<span class="chip due">${due} due today</span>`);
+  if (ch) c.push(`<button class="chip" data-goto="waiting">${ch} to chase</button>`);
+  if (reviewDue()) c.push('<button class="chip" data-rsub="week">Weekly review</button>');
+  return c.length ? `<div class="attn chips">${c.join('')}</div>` : '';
 }
 
 /* carried over: quests on Today for STALE days or more get a decision each morning */
@@ -173,7 +235,7 @@ function renderNode({ n, parents }) {
     top = !parents.length;
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
-  h += `</div><div class="node box"><h1>${esc(n.text)}</h1>${leftNote(n)}${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}`;
+  h += `</div><div class="node box"><h1>${esc(n.text)}</h1>${leftNote(n)}${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}${estPicker(n)}`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,

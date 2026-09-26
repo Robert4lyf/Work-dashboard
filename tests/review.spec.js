@@ -44,7 +44,8 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   });
   await page.reload();
   // It's Friday and the week hasn't been reviewed: the header says so.
-  await page.click('header [data-rsub="week"]');
+  await page.click('#v-today .attn [data-rsub="week"]');
+  await expect(page.locator('nav #reviewDot')).toBeVisible();
   const v = page.locator('#v-review');
   await expect(v.locator('.wsum')).toContainText('1 done');
   const step = t => v.locator('.wstep', { has: page.locator('h2', { hasText: t }) });
@@ -63,7 +64,8 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   await expect(step('Carried over')).toContainText('Old report 5 days'); // still stale, now kept
   await page.click('#reviewed');
   expect((await app.state()).reviewed).toBe('2026-09-25');
-  await expect(page.locator('header [data-rsub="week"]')).toHaveCount(0);
+  await expect(page.locator('#v-today .attn [data-rsub="week"]')).toHaveCount(0);
+  await expect(page.locator('nav #reviewDot')).toBeHidden();
 });
 
 test('inbox swipes: left sends to Today (undoable), right shows quick options', async ({ app, page }) => {

@@ -75,13 +75,15 @@ test('tags are set on the quest and shown on its row', async ({ app, page }) => 
   await expect(page.locator('#v-today .row .tag')).toHaveText('Design');
 });
 
-test('overdue count shows in the header', async ({ app, page }) => {
+test('overdue count shows at the top of Today', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await page.click('.node details summary >> nth=0');
   await page.fill('#fdue', '2000-01-01');
   await page.dispatchEvent('#fdue', 'change');
-  await expect(page.locator('#hstats')).toContainText('1 overdue');
+  await page.click('[data-crumb="-1"]');
+  await expect(page.locator('#v-today .attn')).toContainText('1 overdue');
+  await expect(page.locator('#hstats')).not.toContainText('overdue'); // the header stays calm
 });
 
 test('a background refresh keeps what you are typing', async ({ app, page }) => {
@@ -112,4 +114,60 @@ test('Today has no add box: new work comes in through the Inbox', async ({ app, 
   await app.openQuest('Plan offsite');
   await page.keyboard.press('n');
   await expect(page.locator('#sin')).toBeFocused();
+});
+
+test('estimates add up against free time until the end of the workday', async ({ app, page }) => {
+  await page.clock.setFixedTime(new Date(2026, 8, 23, 15, 0)); // 3pm
+  await app.addQuest('Write report');
+  await app.addQuest('Plan sprint');
+  await expect(page.locator('#v-today .plan')).toHaveCount(0); // nothing estimated yet
+  await app.openQuest('Write report');
+  await page.click('[data-est="120"]');
+  await page.click('[data-crumb="-1"]');
+  await expect(page.locator('#v-today .row', { hasText: 'Write report' }).locator('.tag.est')).toHaveText(
+    '~2h',
+  );
+  // 3pm to the default 5:30pm end leaves 2h 30m.
+  await expect(page.locator('#v-today .plan')).toHaveText('2h planned · 2h 30m free');
+  await app.openQuest('Plan sprint');
+  await page.click('[data-est="60"]');
+  await page.click('[data-crumb="-1"]');
+  await expect(page.locator('#v-today .plan')).toHaveClass(/over/);
+  await expect(page.locator('#v-today .plan')).toContainText('3h planned · 2h 30m free · more than fits');
+  // Tapping the same estimate again clears it; finished quests stop counting.
+  await app.openQuest('Plan sprint');
+  await page.click('[data-est="60"]');
+  expect((await app.state()).quests[1].est).toBeUndefined();
+  await page.click('[data-crumb="-1"]');
+  await page.click('[aria-label="Mark done: Write report"] >> nth=1');
+  await expect(page.locator('#v-today .plan')).toHaveCount(0);
+  // The workday end is a setting.
+  await app.go('account');
+  await page.fill('#dayend', '18:00');
+  await page.dispatchEvent('#dayend', 'change');
+  expect((await app.state()).dayEnd).toBe('18:00');
+});
+
+test('the header stays to three lines: Focus sits beside Next up', async ({ app, page }) => {
+  await app.addQuest('Report');
+  await expect(page.locator('#hnow [data-zen]')).toHaveText('Focus');
+  await expect(page.locator('#hstats button')).toHaveText(['0/1 done', '0m focus']);
+});
+
+test('free time leaves out the rest of today’s meetings', async ({ app, page }) => {
+  const free = await page.evaluate(() => {
+    const at = (h, m = 0) => new Date(2026, 8, 23, h, m).getTime();
+    cal = {
+      day: today(),
+      events: [
+        { title: 'Standup', start: at(9), end: at(9, 30) }, // already over
+        { title: 'Review', start: at(14), end: at(15) },
+        { title: 'Overlap', start: at(14, 30), end: at(15, 30) }, // overlaps Review
+        { title: 'Offsite', allDay: true, start: at(0), end: at(23, 59) }, // all-day: ignored
+      ],
+    };
+    return freeLeft(at(13));
+  });
+  // 1pm to 5:30pm is 4h 30m, less 2:00-3:30pm busy = 3h.
+  expect(free).toBe(180);
 });

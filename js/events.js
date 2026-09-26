@@ -157,6 +157,12 @@ document.addEventListener('change', e => {
     renderAll();
     return;
   }
+  if (el.id === 'dayend') {
+    S.dayEnd = el.value || '17:30';
+    save();
+    renderAll();
+    return;
+  }
   if (el.dataset.projpick) {
     const r = el.value && find(el.value);
     if (r) r.n.project = el.dataset.projpick;
@@ -258,7 +264,7 @@ document.addEventListener('click', e => {
   if (d.v && b.closest('header, #v-waiting')) go(d.v);
   if (d.goto) {
     go(d.goto);
-    const i = $('#iin');
+    const i = d.goto === 'inbox' && $('#iin');
     i && i.focus();
   }
   if (d.crumb !== undefined) openPath(path.slice(0, +d.crumb + 1));
@@ -406,6 +412,15 @@ document.addEventListener('click', e => {
     go('focus');
   }
   if (d.promote) promoteInbox(d.promote);
+  if (d.est) {
+    const r = find(d.id);
+    if (r) {
+      if (r.n.est === +d.est) delete r.n.est;
+      else r.n.est = +d.est;
+      save();
+      renderAll();
+    }
+  }
   if (d.rsub) {
     reviewSub = d.rsub;
     go(d.rsub === 'week' ? 'review' : d.rsub);
