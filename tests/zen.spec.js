@@ -45,3 +45,14 @@ test('timer in single-task mode: start, pause, and Done saves the time', async (
   expect(s.daily['2026-09-23']['']).toBe(5);
   await expect(page.locator('.zt')).toHaveText('Nothing left to do.');
 });
+
+test("the header's Focus button opens the task the header shows", async ({ app, page }) => {
+  await app.addQuest('Report');
+  await app.addQuest('Email');
+  // An older pick on the Focus tab doesn't win over what the header shows.
+  await app.setState(s => (s.focusQ = s.quests[1].id));
+  await page.reload();
+  await expect(page.locator('#hnow')).toContainText('Report');
+  await page.click('header [data-zen]');
+  await expect(page.locator('.zt')).toHaveText('Report');
+});

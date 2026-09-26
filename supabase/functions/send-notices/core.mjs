@@ -20,10 +20,14 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
     skipped = 0;
   const gone = new Set();
   for (const n of due) {
+    // Why a notice didn't go out, kept on the notice so the app's test can show it.
+    const errs = [];
+    const mine = subs.filter(s => s.user_id === n.user_id && !gone.has(s.endpoint));
     // Anything more than 6 hours overdue (say the job was paused) is marked done unsent.
     if (new Date(n.at) < late) skipped++;
+    else if (!mine.length) errs.push('no devices have notifications turned on');
     else
-      for (const s of subs.filter(s => s.user_id === n.user_id && !gone.has(s.endpoint))) {
+      for (const s of mine) {
         try {
           await push.sendNotification(
             { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
@@ -34,14 +38,20 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
         } catch (err) {
           // 404/410: the device unsubscribed or the app was removed; forget it.
           if (err.statusCode === 404 || err.statusCode === 410) gone.add(s.endpoint);
-          else log.warn('push failed', err.statusCode || err.message);
+          else {
+            log.warn('push failed', err.statusCode || err.message);
+            errs.push(
+              err.statusCode === 401 || err.statusCode === 403
+                ? `push service refused (${err.statusCode}): the VAPID keys in the function's secrets don't match this device's`
+                : `push failed: ${err.statusCode || err.message}`,
+            );
+          }
         }
       }
-    const { error: e3 } = await db
-      .from('cockpit_notices')
-      .update({ sent_at: now.toISOString() })
-      .eq('user_id', n.user_id)
-      .eq('key', n.key);
+    const mark = v => db.from('cockpit_notices').update(v).eq('user_id', n.user_id).eq('key', n.key);
+    let { error: e3 } = await mark({ sent_at: now.toISOString(), error: errs.join('; ') || null });
+    // The error column is newer than the table; without it, still mark the notice sent.
+    if (e3) ({ error: e3 } = await mark({ sent_at: now.toISOString() }));
     if (e3) throw e3;
   }
   if (gone.size)

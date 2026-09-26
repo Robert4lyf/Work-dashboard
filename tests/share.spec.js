@@ -29,5 +29,5 @@ test('app-icon shortcuts open the inbox ready to type, or the Focus tab', async 
   await page.goto('/index.html?focus=1');
   await expect(page.locator('#v-focus')).toBeVisible();
   const m = await (await page.request.get('/manifest.webmanifest')).json();
-  expect(m.shortcuts.map(s => s.short_name)).toEqual(['Capture', 'Focus']);
+  expect(m.shortcuts.map(s => s.short_name)).toEqual(['Capture', 'Talk', 'Focus']);
 });

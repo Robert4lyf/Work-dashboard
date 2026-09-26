@@ -17,10 +17,12 @@ function renderHeader() {
   } else {
     const nx = nextStep();
     if (nx)
-      h = `<button class="check" data-toggle="${nx.n.id}" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button><button class="btn sm zenbtn" data-zen="1">Focus</button>`;
+      h = `<button class="check" data-toggle="${nx.n.id}" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button><button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
     else
       h = `<button class="go" data-v="today"><small>Next up</small><b>${S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
   }
+  // Talk mode, if turned on for this device (Settings).
+  if (talkPref && talkable() && !S.timer) h += '<button class="btn sm zenbtn" id="talkbtn">Talk</button>';
   $('#hnow').innerHTML = h;
   const qs = S.quests,
     done = qs.filter(isDone).length,
