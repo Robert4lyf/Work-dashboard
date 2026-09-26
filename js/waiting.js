@@ -22,6 +22,25 @@ function chaseTag(w) {
 }
 const waitBadge = n =>
   n.wait ? `<span class="tag wait">Waiting${n.wait.who ? ' on ' + esc(n.wait.who) : ''}</span>` : '';
+// Open steps somewhere under a quest that are waiting on someone.
+function waitingSteps(n) {
+  const out = [];
+  (function w(ns) {
+    ns.forEach(c => {
+      if (isDone(c)) return;
+      if (c.wait) out.push(c);
+      w(c.children);
+    });
+  })(n.children);
+  return out;
+}
+// A quest with a waiting step shows as waiting too, naming who (or how many steps).
+function stepWaitBadge(n) {
+  const ws = waitingSteps(n);
+  if (!ws.length) return '';
+  const who = [...new Set(ws.map(c => c.wait.who).filter(Boolean))];
+  return `<span class="tag wait">${ws.length > 1 ? ws.length + ' steps waiting' : 'Step waiting'}${who.length === 1 ? ' on ' + esc(who[0]) : ''}</span>`;
+}
 // On a quest's page: set it waiting, change the details, or stop waiting.
 function waitPanel(n) {
   const w = n.wait || {};

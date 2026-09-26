@@ -24,11 +24,13 @@ function row(n, i, len, sib) {
   } else {
     left = `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
   }
-  const nx = kids && !d ? nextLeaf(n) : null;
+  const nx = kids && !d ? nextLeaf(n) : null,
+    stepWait = !d && !n.wait ? stepWaitBadge(n) : '';
   const rt = tplFor(n);
   const meta =
     tagBadge(n.tag) +
     waitBadge(n) +
+    stepWait +
     projectBadge(n.project) +
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
@@ -41,7 +43,7 @@ function row(n, i, len, sib) {
     : xOpen === n.id
       ? `<span class="xchoice"><button class="chip" data-toinbox="${n.id}">Inbox</button><button class="chip del" data-delnow="${n.id}">Delete</button></span>`
       : `<button class="x" data-xopen="${n.id}" aria-label="Remove ${esc(n.text)}">×</button>`;
-  return `<div class="row${d ? ' done' : n.wait ? ' waiting' : ''}"${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
+  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}"${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder.
 function listHead(title, ns) {

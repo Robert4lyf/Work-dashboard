@@ -225,3 +225,23 @@ test('interruptions sync as their own rows; waiting travels with its quest', asy
   expect(r.back.interrupts[0].why).toBe('Call');
   expect(r.back.quests[0].wait.who).toBe('Sam');
 });
+
+test('a quest with a step waiting on someone shows as waiting too', async ({ app, page }) => {
+  await app.addQuest('Budget');
+  await app.openQuest('Budget');
+  await app.addSub('Get figures');
+  await app.addSub('Write summary');
+  await app.setState(
+    s => (s.quests[0].children[0].wait = { who: 'Sam', note: '', due: '', since: '2026-09-23' }),
+  );
+  await page.reload();
+  const row = page.locator('#v-today .row', { hasText: 'Budget' });
+  await expect(row).toHaveClass(/waiting/);
+  await expect(row.locator('.tag.wait')).toHaveText('Step waiting on Sam');
+  // The rest of the quest carries on: Next up skips the waiting step.
+  await expect(page.locator('#hnow')).toContainText('Write summary');
+  // Once the step is back, the quest isn't waiting.
+  await app.setState(s => delete s.quests[0].children[0].wait);
+  await page.reload();
+  await expect(row).not.toHaveClass(/waiting/);
+});
