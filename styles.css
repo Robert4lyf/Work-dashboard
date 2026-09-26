@@ -1234,26 +1234,10 @@ body.zen nav {
   min-width: 0;
   padding: 14px 10px;
 }
-/* desktop board */
+/* desktop */
 @media (min-width: 1100px) {
   .wrap {
     max-width: 760px;
-  }
-  body.board .wrap {
-    max-width: 1360px;
-    display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
-    gap: 0 32px;
-    align-items: start;
-  }
-  body.board header {
-    grid-column: 1 / -1;
-  }
-  /* Today, Inbox and Focus are all on screen, so all three show as current. */
-  body.board nav :is([data-v='today'], [data-v='inbox'], [data-v='focus']) {
-    background: var(--yellow);
-    color: var(--on-accent);
-    border-color: var(--edge);
   }
 }
 [draggable='true'] {

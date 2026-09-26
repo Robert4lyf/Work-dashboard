@@ -10,7 +10,7 @@ function nextStep() {
 }
 function renderHeader() {
   let h;
-  if (S.timer && view !== 'focus' && !onBoard()) {
+  if (S.timer && view !== 'focus') {
     const t = S.timer,
       paused = t.left != null;
     h = `<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t))}</small></button><button class="btn ${paused ? 'green' : 'blue'}" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`;
