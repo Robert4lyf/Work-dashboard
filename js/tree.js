@@ -182,7 +182,6 @@ function withUndo(msg, fn) {
 // the user is typing or move their cursor. Views set their HTML through setHTML for that.
 let background = false;
 const COMPOSE = [
-  'qin',
   'sin',
   'iin',
   'tagin',

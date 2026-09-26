@@ -124,13 +124,21 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await expect(v.locator('.row')).toContainText('from Sam · Q3 figures');
   await expect(v.locator('.row')).toContainText('Chase today');
 
-  // Add straight from the Waiting tab: a new quest on Today, already waiting.
+  // Add from the Waiting tab: it lands in the Inbox, already waiting, and is listed here.
   await page.fill('#wwhat', 'Signed contract');
   await page.fill('#wfrom', 'Legal');
   await page.press('#wwhat', 'Enter');
   s = await app.state();
-  expect(s.quests.find(q => q.text === 'Signed contract').wait).toMatchObject({ who: 'Legal', due: '' });
+  expect(s.inbox[0]).toMatchObject({ text: 'Signed contract', wait: { who: 'Legal', due: '' } });
   await expect(v.locator('.row')).toHaveCount(2);
+  await expect(v.locator('.row', { hasText: 'Signed contract' })).toContainText('from Legal · in Inbox');
+  // Moving it to Today keeps it waiting.
+  await app.go('inbox');
+  await expect(page.locator('#v-inbox .tag.wait')).toHaveText('Waiting on Legal');
+  await page.click('#v-inbox [data-promote]');
+  s = await app.state();
+  expect(s.quests.find(q => q.text === 'Signed contract').wait).toMatchObject({ who: 'Legal' });
+  await app.go('waiting');
 
   // "Got it" puts it back on the list as a normal quest.
   await v.locator('.row', { hasText: 'Budget review' }).locator('[data-waitclear]').click();
@@ -142,6 +150,21 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await v.locator('[data-toggle]').click();
   expect((await app.state()).quests.find(q => q.text === 'Signed contract').done).toBe(true);
   await expect(v.locator('.empty')).toHaveText('Nothing to chase.');
+});
+
+test('an inbox item can be marked waiting from its details', async ({ app, page }) => {
+  await app.go('inbox');
+  await page.fill('#iin', 'Invoice approval');
+  await page.press('#iin', 'Enter');
+  const id = (await app.state()).inbox[0].id;
+  await page.click(`[data-steps="${id}"]`);
+  await page.fill(`[data-iwait="${id}"]`, 'Finance');
+  await page.dispatchEvent(`[data-iwait="${id}"]`, 'change');
+  expect((await app.state()).inbox[0].wait).toMatchObject({ who: 'Finance' });
+  await app.go('waiting');
+  await expect(page.locator('#v-waiting .row')).toContainText('from Finance · in Inbox');
+  await page.click('#v-waiting [data-waitclear]');
+  expect((await app.state()).inbox[0].wait).toBeUndefined();
 });
 
 test('a waiting quest gets a chase notification, and skips the carried-over card', async ({ app, page }) => {

@@ -10,6 +10,7 @@ function waitingNodes() {
     });
   })(S.quests, []);
   S.later.forEach(n => n.wait && out.push({ n, trail: [], start: n.start }));
+  S.inbox.forEach(i => i.wait && out.push({ n: i, trail: [], inbox: true }));
   return out;
 }
 const chaseDue = () => waitingNodes().filter(x => x.n.wait.due && x.n.wait.due <= today()).length;
@@ -41,7 +42,7 @@ function whoList() {
   return `<datalist id="wholist">${people.map(w => `<option value="${esc(w)}">`).join('')}</datalist>`;
 }
 function setWaiting(id, w) {
-  const r = find(id) || { n: S.later.find(x => x.id === id) };
+  const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };
   if (!r.n) return;
   if (w) r.n.wait = { since: (r.n.wait && r.n.wait.since) || today(), ...w };
   else delete r.n.wait;
@@ -63,34 +64,34 @@ function renderWaiting() {
   if (!all.length) h += '<div class="empty">Nothing to chase.</div>';
   else {
     h += '<div class="list box">';
-    all.forEach(({ n, trail, start }) => {
+    all.forEach(({ n, trail, start, inbox }) => {
       const w = n.wait,
         meta = [
           w.who ? 'from ' + esc(w.who) : '',
           w.note ? esc(w.note) : '',
           trail.length ? 'in ' + esc(trail.join(' / ')) : '',
           start ? 'on Upcoming, ' + dayLabel(start) : '',
+          inbox ? 'in Inbox' : '',
         ]
           .filter(Boolean)
           .join(' · ');
-      h += `<div class="row">${n.children.length || start ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Got it</button></div>`;
+      h += `<div class="row">${(n.children && n.children.length) || start || inbox ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open"${inbox ? ' data-v="inbox"' : ` data-open="${n.id}"`}><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Got it</button></div>`;
     });
     h += '</div>';
   }
   setHTML($('#v-waiting'), h);
 }
-// The add box on the Waiting tab: a quest on Today that is already waiting.
+// The add box on the Waiting tab: an Inbox item that is already waiting.
 function addWaiting() {
   const what = $('#wwhat').value.trim();
   if (!what) return;
-  const bf = snapshot();
-  S.quests.push(
-    fix({
-      id: uid(),
-      text: what,
-      wait: { who: $('#wfrom').value.trim(), note: '', due: $('#wchase').value || '', since: today() },
-    }),
-  );
-  settle(bf);
+  S.inbox.unshift({
+    id: uid(),
+    text: what,
+    wait: { who: $('#wfrom').value.trim(), note: '', due: $('#wchase').value || '', since: today() },
+  });
+  save();
+  renderAll();
+  toast('Added to Inbox');
   $('#wwhat').focus();
 }

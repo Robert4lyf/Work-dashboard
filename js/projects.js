@@ -113,10 +113,10 @@ function renderProjectsView() {
     h += `<details id="projfin" style="margin:0 0 22px"${panels.projfin ? ' open' : ''}><summary>Finished projects (${finished.length})</summary>${finished.map(card).join('')}</details>`;
   setHTML(el, h);
 }
-// A new quest on Today, straight into a project.
+// New work for a project goes to the Inbox, already in the project.
 function addToProject(pid, text) {
-  const bf = snapshot();
-  S.quests.push(fix({ id: uid(), text, project: pid }));
-  settle(bf);
-  toast('Added to Today');
+  S.inbox.unshift({ id: uid(), text, project: pid });
+  save();
+  renderAll();
+  toast('Added to Inbox');
 }

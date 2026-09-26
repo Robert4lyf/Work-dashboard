@@ -26,3 +26,17 @@ test('font and colour choices apply at once and survive a reload', async ({ app,
   expect(r.font).toBeUndefined();
   expect(r.theme).toBeUndefined();
 });
+
+test('notes text follows the theme colour, so it stays readable in dark mode', async ({ app, page }) => {
+  await app.open();
+  await app.addQuest('Report');
+  await app.go('account');
+  await page.click('[data-look="theme"][data-val="dark"]');
+  await app.go('today');
+  await app.openQuest('Report');
+  const c = await page.evaluate(() => [
+    getComputedStyle(document.querySelector('#fnotes')).color,
+    getComputedStyle(document.body).color,
+  ]);
+  expect(c[0]).toBe(c[1]);
+});

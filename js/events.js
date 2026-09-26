@@ -57,15 +57,6 @@ document.querySelectorAll('nav button[data-v]').forEach(
 document.addEventListener('submit', e => {
   e.preventDefault();
   const f = e.target;
-  if (f.id === 'qform') {
-    const v = $('#qin').value.trim();
-    if (!v) return;
-    const b = snapshot();
-    S.quests.push(fix({ id: uid(), text: v }));
-    settle(b);
-    const n = $('#qin');
-    n && n.focus();
-  }
   if (f.id === 'sform') {
     const v = $('#sin').value.trim();
     if (!v) return;
@@ -143,6 +134,17 @@ document.addEventListener('change', e => {
   }
   if (el.dataset.setproject) {
     setProject(el.dataset.kind, el.dataset.setproject, el.value);
+    return;
+  }
+  if (el.dataset.iwait) {
+    const it = S.inbox.find(x => x.id === el.dataset.iwait),
+      who = el.value.trim();
+    if (it) {
+      if (who) it.wait = { note: '', due: '', since: today(), ...it.wait, who };
+      else delete it.wait;
+    }
+    save();
+    renderAll();
     return;
   }
   if (el.dataset.projpick) {
@@ -238,7 +240,12 @@ document.addEventListener('click', e => {
       if (view !== 'today') go('today');
     }
   }
-  if (d.v && b.closest('header')) go(d.v);
+  if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (d.goto) {
+    go(d.goto);
+    const i = $('#iin');
+    i && i.focus();
+  }
   if (d.crumb !== undefined) openPath(path.slice(0, +d.crumb + 1));
   if (d.toggle) {
     const n = find(d.toggle).n,
@@ -611,7 +618,7 @@ document.addEventListener(
 
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'n new quest · i capture · t today · f focus · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: subquest) · t today · f focus · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const el = e.target;
@@ -627,10 +634,8 @@ document.addEventListener('keydown', e => {
       f.focus();
       return true;
     };
-  if (k === 'n') {
-    go('today');
-    field('#sin') || field('#qin');
-  } else if (k === 'i') {
+  if (k === 'n' && view === 'today' && path.length) field('#sin');
+  else if (k === 'n' || k === 'i') {
     go('inbox');
     field('#iin');
   } else if (k === 't') {

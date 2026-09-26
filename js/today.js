@@ -73,8 +73,6 @@ function renderToday() {
   if (qs.length && qs.every(isDone))
     h += '<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
   h += list(qs);
-  h +=
-    '<form class="addrow" id="qform"><input id="qin" maxlength="120" placeholder="Add a quest" aria-label="New quest" autocomplete="off"><button class="btn">Add</button></form>';
   const own = S.templates.filter(t => !t.auto);
   if (own.length) {
     h += '<div class="tpls"><span class="hint" style="margin:0">From a template:</span>';
@@ -96,7 +94,10 @@ function renderToday() {
     });
     h += '</details>';
   }
-  if (!qs.length) h += '<div class="slot">No quests yet.</div>';
+  // New work comes in through the Inbox; Today is what you've chosen from it.
+  if (!qs.length)
+    h +=
+      '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
   h += renderUpcoming();
   setHTML($('#v-today'), h);
 }

@@ -86,9 +86,14 @@ test('the Projects tab sets up projects and adds quests to them', async ({ app, 
   await page.press('#projin', 'Enter');
   const pid = (await app.state()).projects[0].id;
   const card = page.locator('.projcard', { hasText: 'Website' });
-  // A new quest goes on Today, in the project.
+  // New work goes to the Inbox, already in the project, and keeps it on the way to Today.
   await card.locator(`#pa-${pid}`).fill('Draft homepage copy');
   await card.locator(`#pa-${pid}`).press('Enter');
+  expect((await app.state()).inbox[0]).toMatchObject({ text: 'Draft homepage copy', project: pid });
+  await app.go('inbox');
+  await expect(page.locator('#v-inbox .tag.proj')).toHaveText('Website');
+  await page.click('#v-inbox [data-promote]');
+  await app.go('projects');
   // An existing quest from Today joins it.
   await card.locator('[data-projpick]').selectOption({ label: 'Loose end' });
   const s = await app.state();

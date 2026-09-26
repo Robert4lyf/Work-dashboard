@@ -24,10 +24,13 @@ const test = base.test.extend({
           new Function('s', src)(s);
           localStorage.setItem('work-cockpit-v1', JSON.stringify(s));
         }, `(${fn})(s)`),
+      // New quests come in through the Inbox, then move to Today.
       addQuest: async text => {
+        await page.click('nav [data-v=inbox]');
+        await page.fill('#iin', text);
+        await page.press('#iin', 'Enter');
+        await page.click('#v-inbox [data-promote] >> nth=0');
         await page.click('nav [data-v=today]');
-        await page.fill('#qin', text);
-        await page.press('#qin', 'Enter');
       },
       addSub: async text => {
         await page.fill('#sin', text);

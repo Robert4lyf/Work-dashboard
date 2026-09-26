@@ -1,10 +1,11 @@
 /* inbox */
 const expanded = new Set(); // inbox items showing their subquest editor
-// An inbox item as a quest, keeping its tag, project and any subquests.
+// An inbox item as a quest, keeping its tag, project, waiting details and any subquests.
 function inboxToNode(it) {
   const n = it.node || fix({ id: uid(), text: it.text });
   n.tag = it.tag || n.tag;
   n.project = it.project || n.project;
+  if (it.wait) n.wait = it.wait;
   return n;
 }
 function renderInbox() {
@@ -16,9 +17,13 @@ function renderInbox() {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
+    h += `<div class="item"${dragAttr('i:' + it.id)}><p>${esc(it.text)} ${tagBadge(it.tag)}${projectBadge(it.project)}${waitBadge(it)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
-      h += tagPicker('i', it.id, it.tag) + projectPicker('i', it.id, it.project) + laterPicker('i', it.id);
+      h +=
+        tagPicker('i', it.id, it.tag) +
+        projectPicker('i', it.id, it.project) +
+        `<label class="f">Waiting on (optional)</label><input class="fld" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
+        laterPicker('i', it.id);
       if (kids.length) {
         h += '<ul class="subs">';
         kids.forEach(
@@ -29,7 +34,7 @@ function renderInbox() {
       }
       h += `<form class="addrow" data-subfor="${it.id}"><input maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
     }
-    h += `<div class="iacts"><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide details' : 'Details'}</button><button class="btn sm blue" data-promote="${it.id}">Move to today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
+    h += `<div class="iacts"><button class="linkbtn" data-steps="${it.id}" aria-expanded="${open}">${open ? 'Hide details' : 'Details'}</button><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
   });
   if (S.inbox.length) h += '</div>';
   setHTML($('#v-inbox'), h);
