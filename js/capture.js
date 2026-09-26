@@ -15,6 +15,7 @@ async function newCaptureToken() {
     return;
   }
   captureToken = data;
+  panels.capsetup = true; // show the new details straight away
   try {
     localStorage.setItem(CAPTURE_KEY, data);
   } catch (e) {}
@@ -58,6 +59,8 @@ function renderCapture() {
   }
   const row = (label, value, id) =>
     `<div class="caprow"><span>${label}</span><code>${esc(value)}</code><button class="linkbtn" data-copy="${id}">Copy</button></div>`;
+  // Only needed while setting up a shortcut, so kept folded away.
+  h += `<details id="capsetup"${panels.capsetup ? ' open' : ''}><summary>Set up a shortcut</summary>`;
   h +=
     row('URL', captureUrl(), 'url') +
     row('apikey header', CFG.supabaseAnonKey, 'key') +
@@ -67,7 +70,7 @@ function renderCapture() {
     <li>Method <b>POST</b>, the URL above, a header <b>apikey</b> with the value above, and a JSON body <code>{"token":"…","text":"{{text}}"}</code> where <b>text</b> is a variable that asks for input (it can use voice).</li>
     <li>Add it to your home screen, or run it from a Google Assistant routine.</li></ol></details>
     <div class="acts"><button class="btn" id="captest">Send a test</button><button class="btn" id="capnew">New link</button></div>
-    <p class="hint">Anyone with the token can add items to your inbox (nothing else). "New link" replaces it; old shortcuts then stop working.</p>`;
+    <p class="hint">Anyone with the token can add items to your inbox (nothing else). "New link" replaces it; old shortcuts then stop working.</p></details>`;
   return h;
 }
 // Launched from an app-icon shortcut (manifest "shortcuts").

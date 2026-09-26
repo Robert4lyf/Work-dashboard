@@ -327,9 +327,11 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   await expect
     .poll(async () => (await a.state()).inbox.map(i => i.text))
     .toEqual(['Test capture from Settings']);
-  // The details survive a reload on this device.
+  // The details survive a reload on this device, folded away until opened.
   await a.page.reload();
   await a.page.click('nav [data-v=account]');
+  await expect(a.page.locator('.caprow').first()).toBeHidden();
+  await a.page.click('#capsetup summary');
   await expect(a.page.locator('.caprow code').nth(2)).toHaveText('tok123');
   expect(a.errors).toEqual([]);
 });
