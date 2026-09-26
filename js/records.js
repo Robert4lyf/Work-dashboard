@@ -12,7 +12,6 @@ const LISTS = {
   tag: ['tags', x => x.name],
   log: ['log', x => x.id + '|' + x.d],
   session: ['sessions', x => x.t + '|' + (x.q || '')],
-  promise: ['promises', x => x.id],
   interrupt: ['interrupts', x => x.id],
 };
 function toRecords(s) {
@@ -53,7 +52,6 @@ function fromRecords(m, day) {
     tags: ordered(by.tag, order.tags, x => x.name),
     log: (by.log || []).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)),
     sessions: (by.session || []).sort((a, b) => a.t - b.t),
-    promises: (by.promise || []).sort((a, b) => a.t - b.t),
     interrupts: (by.interrupt || []).sort((a, b) => a.t - b.t),
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),

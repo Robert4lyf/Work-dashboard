@@ -2,7 +2,7 @@
 // The first unfinished step of the first unfinished quest, in list order.
 function nextStep() {
   for (const q of S.quests) {
-    if (isDone(q)) continue;
+    if (isDone(q) || q.wait) continue;
     const n = q.children.length ? nextLeaf(q) : q;
     if (n) return { n, q };
   }
@@ -45,8 +45,8 @@ function renderHeader() {
   if (late) st += `<button class="warn" data-v="today">${late} overdue</button>`;
   if (due)
     st += `<button class="warn" data-v="today" style="background:var(--orange)">${due} due today</button>`;
-  const pd = promisesDue();
-  if (pd) st += `<button class="warn" data-v="promises">${pd} promise${pd === 1 ? '' : 's'} due</button>`;
+  const ch = chaseDue();
+  if (ch) st += `<button class="warn" data-v="waiting">${ch} to chase</button>`;
   $('#hstats').innerHTML = st;
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;

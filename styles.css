@@ -720,6 +720,24 @@ nav button[aria-current='page'] {
 .tag.opt {
   background: var(--blue);
 }
+.tag.wait {
+  background: var(--orange);
+}
+.projcard .addrow {
+  margin: 10px 0 8px;
+}
+.projcard .addrow input {
+  padding: 6px 10px;
+}
+.projcard select.fld {
+  margin: 0 0 4px;
+}
+.projcard .links {
+  margin-top: 4px;
+}
+.projcard details {
+  margin-top: 8px;
+}
 .tag.rep {
   background: var(--green);
 }

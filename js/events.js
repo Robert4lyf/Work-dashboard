@@ -5,7 +5,8 @@ function renderAll() {
   renderToday();
   renderInbox();
   renderFocus();
-  renderPromises();
+  renderWaiting();
+  renderProjectsView();
   renderLog();
   renderAccount();
   renderZen();
@@ -27,7 +28,7 @@ function go(v) {
   });
   const board = onBoard();
   document.body.classList.toggle('board', board);
-  ['today', 'inbox', 'promises', 'focus', 'log', 'account'].forEach(
+  ['today', 'inbox', 'waiting', 'projects', 'focus', 'log', 'account'].forEach(
     k => ($('#v-' + k).hidden = board ? !['today', 'inbox', 'focus'].includes(k) : k !== v),
   );
   // Keep the current tab visible when the tab bar is scrolled sideways.
@@ -79,7 +80,15 @@ document.addEventListener('submit', e => {
   if (f.id === 'authform') signIn();
   if (f.id === 'leftform') saveLeft($('#leftin').value.trim());
   if (f.id === 'whyform') saveWhy($('#whyin').value.trim());
-  if (f.id === 'pform') addPromise();
+  if (f.id === 'wform') addWaiting();
+  if (f.dataset.projadd) {
+    const inp = f.querySelector('input'),
+      v = inp.value.trim();
+    if (!v) return;
+    addToProject(f.dataset.projadd, v);
+    const n = $('#pa-' + f.dataset.projadd);
+    n && n.focus();
+  }
   if (f.id === 'calform') saveCalendarUrl($('#calin').value);
   if (f.id === 'projform') {
     const v = $('#projin').value.trim();
@@ -134,6 +143,13 @@ document.addEventListener('change', e => {
   }
   if (el.dataset.setproject) {
     setProject(el.dataset.kind, el.dataset.setproject, el.value);
+    return;
+  }
+  if (el.dataset.projpick) {
+    const r = el.value && find(el.value);
+    if (r) r.n.project = el.dataset.projpick;
+    save();
+    renderAll();
     return;
   }
   if (el.dataset.projname !== undefined) {
@@ -501,20 +517,15 @@ document.addEventListener('click', e => {
         renderAll();
       });
   }
-  if (d.pdir) {
-    pdir = d.pdir;
-    renderPromises();
-    $('#pwhat').focus();
-  }
-  if (d.pdone) togglePromise(d.pdone);
-  if (d.pdel) {
-    const p = S.promises.find(x => x.id === d.pdel);
-    if (p)
-      withUndo('Deleted', () => {
-        S.promises = S.promises.filter(x => x !== p);
-        save();
-        renderAll();
-      });
+  if (d.waitsave)
+    setWaiting(d.waitsave, {
+      who: $('#wwho').value.trim(),
+      note: $('#wnote').value.trim(),
+      due: $('#wdue').value || '',
+    });
+  if (d.waitclear) {
+    setWaiting(d.waitclear, null);
+    toast('Back on your list');
   }
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) {

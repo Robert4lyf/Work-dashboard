@@ -116,13 +116,14 @@ function wantedNotices(now = Date.now()) {
         body: n.text,
       });
   });
-  S.promises.forEach(p => {
-    if (!p.done && p.due && soon(at9(p.due)))
+  waitingNodes().forEach(({ n }) => {
+    const w = n.wait;
+    if (w.due && soon(at9(w.due)))
       out.push({
-        key: 'promise:' + p.id + ':' + p.due,
-        at: at9(p.due),
-        title: p.dir === 'owe' ? 'Promise due' : 'Time to chase',
-        body: p.what + (p.who ? (p.dir === 'owe' ? ' for ' : ' from ') + p.who : ''),
+        key: 'chase:' + n.id + ':' + w.due,
+        at: at9(w.due),
+        title: 'Time to chase',
+        body: n.text + (w.who ? ' (' + w.who + ')' : ''),
       });
   });
   return out;

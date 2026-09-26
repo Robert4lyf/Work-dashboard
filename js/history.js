@@ -42,8 +42,7 @@ function logText() {
     .join('\n\n');
 }
 function renderLog() {
-  let h =
-    '<h2>History</h2>' + renderStats() + renderInterrupts() + renderProjects(shift(today(), -(range - 1)));
+  let h = '<h2>History</h2>' + renderStats() + renderInterrupts();
   const days = logDays(shift(today(), -13));
   h +=
     '<div class="sechead"><h2>Done</h2>' +

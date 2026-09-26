@@ -66,7 +66,6 @@ function norm(s) {
       later: [],
       projects: [],
       pdaily: {},
-      promises: [],
       interrupts: [],
     },
     s || {},
@@ -79,6 +78,20 @@ function norm(s) {
     if (!Array.isArray(t.days)) t.days = [];
     t.monthDay = t.monthDay || 0;
   });
+  // Promises (an earlier feature) become quests: "waiting for" ones set waiting, "I owe" ones
+  // plain. Ids come from the promise, so two devices converting the same one don't double it.
+  const hadPromises = 'promises' in S;
+  (S.promises || [])
+    .filter(p => !p.done)
+    .forEach(p => {
+      const id = 'p-' + p.id;
+      if (S.quests.some(q => q.id === id)) return;
+      const q = fix({ id, text: p.dir === 'owe' && p.who ? `${p.what} (for ${p.who})` : p.what });
+      if (p.dir === 'wait') q.wait = { who: p.who || '', note: '', due: p.due || '', since: today() };
+      else q.due = p.due || '';
+      S.quests.push(q);
+    });
+  delete S.promises;
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
   // Focus totals per day are worked out from the sessions. Older days whose sessions are gone
   // keep their totals in oldDaily/oldPdaily (on first run, whatever the sessions don't explain).
@@ -92,6 +105,7 @@ function norm(s) {
     S.oldPdaily = minus(keptP, S.pdaily);
   }
   rebuildTotals();
+  if (hadPromises) save(); // store and sync the converted quests
 }
 function sessionTotals() {
   S.sessions.forEach(x => {
@@ -150,7 +164,6 @@ function save() {
   for (const o of [S.oldDaily, S.oldPdaily, S.daily, S.pdaily]) for (const d in o) if (d < dcut) delete o[d];
   S.log = S.log.filter(x => x.d >= lcut);
   S.interrupts = S.interrupts.filter(x => x.t > Date.now() - 120 * 864e5);
-  S.promises = S.promises.filter(p => !p.done || p.done >= shift(today(), -30));
   stampSince();
   S.editedAt = Date.now();
   dropUndo();

@@ -62,15 +62,19 @@ function openInProject(pid) {
   );
   return out;
 }
-function renderProjects(since) {
-  if (!S.projects.length) return '';
+/* the Projects tab: set up projects, see where each stands, and add quests to them */
+function renderProjectsView() {
+  const el = $('#v-projects');
+  el.querySelectorAll('details[id]').forEach(d => (panels[d.id] = d.open));
+  const loose = S.quests.filter(q => !q.project && !isDone(q));
   const card = p => {
-    const done = S.log.filter(x => x.p === p.id && !x.trail.length).length,
+    const i = S.projects.indexOf(p),
+      done = S.log.filter(x => x.p === p.id && !x.trail.length).length,
       open = openInProject(p.id),
       total = done + open.length,
       pct = total ? Math.round((done / total) * 100) : 0;
     let mins = 0;
-    for (const d in S.pdaily) if (d >= since) mins += S.pdaily[d][p.id] || 0;
+    for (const d in S.pdaily) mins += S.pdaily[d][p.id] || 0;
     let h = `<div class="projcard box"><div class="projhead"><b>${esc(p.name)}</b><small>${done} done · ${open.length} open${mins ? ' · ' + hm(mins) : ''}</small></div><div class="prog"><div style="width:${pct}%"></div></div>`;
     if (open.length) {
       h += '<ul>';
@@ -83,32 +87,36 @@ function renderProjects(since) {
               : '';
         h +=
           where === 'today'
-            ? `<li><button class="linkbtn" data-open="${n.id}">${esc(n.text)}</button></li>`
+            ? `<li><button class="linkbtn" data-open="${n.id}">${esc(n.text)}</button>${n.wait ? ' <small>waiting</small>' : ''}</li>`
             : `<li>${esc(n.text)}${label}</li>`;
       });
       h += '</ul>';
     }
+    if (!p.done) {
+      h += `<form class="addrow" data-projadd="${p.id}"><input id="pa-${p.id}" data-keep maxlength="120" placeholder="Add a quest" aria-label="New quest for ${esc(p.name)}" autocomplete="off"><button class="btn sm">Add</button></form>`;
+      if (loose.length)
+        h += `<select class="fld" data-projpick="${p.id}" aria-label="Add a quest from Today to ${esc(p.name)}"><option value="">Add a quest from Today…</option>${loose.map(q => `<option value="${q.id}">${esc(q.text)}</option>`).join('')}</select>`;
+    }
     return (
       h +
-      `<button class="linkbtn" data-projdone="${p.id}">${p.done ? 'Reopen project' : 'Finish project'}</button></div>`
+      `<div class="links"><button class="linkbtn" data-projdone="${p.id}">${p.done ? 'Reopen project' : 'Finish project'}</button></div>
+      <details id="projm-${p.id}"${panels['projm-' + p.id] ? ' open' : ''}><summary>Rename or delete</summary><div class="tagrow"><input class="fld" data-projname="${i}" value="${esc(p.name)}" maxlength="40" aria-label="Project name"><button class="x" data-delproj="${i}" aria-label="Delete project ${esc(p.name)}">×</button></div></details></div>`
     );
   };
   const active = S.projects.filter(p => !p.done),
     finished = S.projects.filter(p => p.done);
-  let h = '<h2>Projects</h2>' + active.map(card).join('');
+  let h =
+    '<h2>Projects</h2><form class="addrow" id="projform"><input id="projin" maxlength="40" placeholder="New project" aria-label="New project" autocomplete="off"><button class="btn">Add</button></form>';
+  if (!S.projects.length) h += '<div class="empty">No projects yet.</div>';
+  h += active.map(card).join('');
   if (finished.length)
     h += `<details id="projfin" style="margin:0 0 22px"${panels.projfin ? ' open' : ''}><summary>Finished projects (${finished.length})</summary>${finished.map(card).join('')}</details>`;
-  return h;
+  setHTML(el, h);
 }
-// Settings: rename, finish and delete projects.
-function renderProjectSettings() {
-  let h = '<h2 style="margin-top:26px" id="projsec">Projects</h2>';
-  S.projects.forEach(
-    (p, i) =>
-      (h += `<div class="tagrow"><input class="fld" data-projname="${i}" value="${esc(p.name)}" maxlength="40" aria-label="Project name"><button class="x" data-delproj="${i}" aria-label="Delete project ${esc(p.name)}">×</button></div>`),
-  );
-  return (
-    h +
-    '<form class="addrow" id="projform" style="margin-top:12px"><input id="projin" maxlength="40" placeholder="New project" aria-label="New project" autocomplete="off"><button class="btn">Add</button></form>'
-  );
+// A new quest on Today, straight into a project.
+function addToProject(pid, text) {
+  const bf = snapshot();
+  S.quests.push(fix({ id: uid(), text, project: pid }));
+  settle(bf);
+  toast('Added to Today');
 }

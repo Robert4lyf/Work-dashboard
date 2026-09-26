@@ -27,6 +27,7 @@ function row(n, i, len, sib) {
   const rt = tplFor(n);
   const meta =
     tagBadge(n.tag) +
+    waitBadge(n) +
     projectBadge(n.project) +
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
@@ -103,7 +104,7 @@ function renderToday() {
 /* carried over: quests on Today for STALE days or more get a decision each morning */
 const STALE = 3;
 const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
-const carried = () => S.quests.filter(q => !isDone(q) && ageOf(q) >= STALE && q.kept !== today());
+const carried = () => S.quests.filter(q => !isDone(q) && !q.wait && ageOf(q) >= STALE && q.kept !== today());
 function renderCarried() {
   const qs = carried();
   if (!qs.length) return '';
@@ -187,6 +188,7 @@ function renderNode({ n, parents }) {
     <label class="f" for="fnotes">Notes</label><textarea class="fld" id="fnotes" data-field="notes" data-id="${n.id}">${esc(n.notes)}</textarea>
     ${top ? '' : `<label class="optbox"><input type="checkbox" data-field="opt" data-id="${n.id}" ${n.opt ? 'checked' : ''}>Optional</label>`}
     </details>`;
+  h += waitPanel(n);
   if (top) {
     const t = tplFor(n),
       on = repeats(t),
