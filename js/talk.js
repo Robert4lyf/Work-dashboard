@@ -113,12 +113,8 @@ function talkBrief() {
     qs = S.quests,
     done = qs.filter(isDone).length,
     planned = qs.reduce((a, q) => a + estLeft(q), 0),
-    next = todaysEvents().find(e => !e.allDay && e.start > now.getTime()),
     ch = chaseDue(),
     out = ["It's " + now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.'];
-  const ms = meetingStatus();
-  if (ms.startsWith('In a meeting')) out.push(ms + '.');
-  if (next) out.push('Next meeting: ' + next.title + ' at ' + hhmm(next.start) + '.');
   if (qs.length) out.push(`${done} of ${qs.length} done.`);
   if (planned) out.push(`${sayMins(planned)} planned, ${sayMins(freeLeft())} free.`);
   out.push(sayNext());
@@ -127,7 +123,7 @@ function talkBrief() {
   return out.join(' ') + ' What next?';
 }
 const TALK_HELP =
-  'You can say: done, start focus, tomorrow, waiting on a name, add followed by a thought, inbox to sort it, meetings, next, repeat, or stop.';
+  'You can say: done, start focus, tomorrow, waiting on a name, add followed by a thought, inbox to sort it, next, repeat, or stop.';
 
 /* what it understands */
 function talkHeard(said) {
@@ -174,15 +170,6 @@ function talkHeard(said) {
     return talkSay(`Moved ${name} to tomorrow. ${sayNext()}`);
   }
   if (is(/^(inbox|sort|triage)\b/)) return talkSortNext();
-  if (is(/^(meetings?|calendar|diary)\b/)) {
-    const now = Date.now(),
-      evs = todaysEvents().filter(e => e.allDay || e.end > now);
-    return talkSay(
-      evs.length
-        ? evs.map(e => (e.allDay ? 'All day' : hhmm(e.start)) + ', ' + e.title).join('. ') + '.'
-        : 'No more meetings today.',
-    );
-  }
   if (is(/^(what's next|whats next|next|what now)\b/)) return talkSay(sayNext());
   if (is(/^(repeat|again|brief|plan|status|my day)\b/)) return talkSay(talkBrief());
   if (is(/^(help|commands|what can i say)\b/)) return talkSay(TALK_HELP);

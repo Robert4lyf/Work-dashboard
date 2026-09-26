@@ -138,31 +138,9 @@ end $$;
 revoke execute on function public.cockpit_capture(text, text) from public;
 grant execute on function public.cockpit_capture(text, text) to anon, authenticated;
 
--- Calendar feed: your calendar's private link (ICS), fetched by the database because browsers
--- aren't allowed to read it directly. Only you can set or read your link.
-create extension if not exists http with schema extensions;
-create table if not exists public.cockpit_calendar (
-  user_id uuid primary key default auth.uid() references auth.users(id) on delete cascade,
-  url     text not null check (url ~ '^https://')
-);
-alter table public.cockpit_calendar enable row level security;
-drop policy if exists "own calendar" on public.cockpit_calendar;
-create policy "own calendar" on public.cockpit_calendar for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-create or replace function public.cockpit_calendar_ics() returns text
-language plpgsql security definer set search_path = public, extensions as $$
-declare
-  link text;
-  r extensions.http_response;
-begin
-  select url into link from cockpit_calendar where user_id = auth.uid();
-  if link is null then return null; end if;
-  select * into r from extensions.http_get(link);
-  if r.status <> 200 then raise exception 'calendar feed answered %', r.status; end if;
-  return r.content;
-end $$;
-revoke execute on function public.cockpit_calendar_ics() from public, anon;
-grant execute on function public.cockpit_calendar_ics() to authenticated;
+-- The calendar feed was removed; this clears it out of databases that had it.
+drop function if exists public.cockpit_calendar_ics();
+drop table if exists public.cockpit_calendar;
 
 -- Notifications: each device that turns them on stores its push subscription here, and the app
 -- keeps a queue of upcoming notices (timer end, deadlines...). The send-notices function

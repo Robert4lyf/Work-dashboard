@@ -82,30 +82,6 @@ async function runHealth() {
           : 'Check the send-notices function is deployed with its secrets, and that notifications-cron.sql was run (README > Notifications).',
       );
     }
-    // Calendar: fetch the feed the same way the app does.
-    const link = await q(() => sb.from('cockpit_calendar').select('url').limit(1));
-    if (link.error) add('Calendar', false, 'Calendar table missing', 'Run the updated supabase-setup.sql.');
-    else if (!link.data || !link.data.length) add('Calendar', null, 'Not connected');
-    else {
-      const ics = await q(() => sb.rpc('cockpit_calendar_ics'));
-      let n = -1;
-      if (!ics.error && ics.data)
-        try {
-          await loadIcal();
-          const [y, m, d] = today().split('-').map(Number);
-          n = eventsBetween(
-            ics.data,
-            new Date(y, m - 1, d).getTime(),
-            new Date(y, m - 1, d + 1).getTime(),
-          ).length;
-        } catch (e) {}
-      add(
-        'Calendar',
-        n >= 0,
-        n >= 0 ? `Feed read: ${n} event${n === 1 ? '' : 's'} today` : "Couldn't read the feed",
-        'Check the link is the ICS one and still published; paste it again under Calendar below.',
-      );
-    }
   }
   const sw = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
   add('Works offline', sw ? true : false, sw ? 'Yes' : 'Not yet', 'Reload the app once.');
@@ -118,7 +94,7 @@ function renderHealth() {
   if (!health)
     return (
       h +
-      '<p class="hint" style="margin:0 0 8px">Test sync, notifications and the calendar against your Supabase project.</p><button class="btn" id="healthrun">Run check</button>'
+      '<p class="hint" style="margin:0 0 8px">Test sync and notifications against your Supabase project.</p><button class="btn" id="healthrun">Run check</button>'
     );
   h += '<div class="list box health">';
   health.forEach(r => {

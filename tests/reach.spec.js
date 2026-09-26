@@ -2,8 +2,8 @@ const { test, expect } = require('@playwright/test');
 const crypto = require('crypto');
 const webpush = require('web-push');
 
-// Minimal stand-in for Supabase: signed in, an in-memory notices table, a calendar feed.
-function fakeSupabase(ics) {
+// Minimal stand-in for Supabase: signed in, an in-memory notices table.
+function fakeSupabase() {
   const notices = (window.__notices = []);
   const table = name => {
     const q = { f: [] };
@@ -56,7 +56,7 @@ function fakeSupabase(ics) {
         },
       },
       from: table,
-      rpc: async name => ({ data: name === 'cockpit_calendar_ics' ? ics : null, error: null }),
+      rpc: async () => ({ data: null, error: null }),
       channel() {
         const c = { on: () => c, subscribe: () => c };
         return c;
@@ -65,68 +65,6 @@ function fakeSupabase(ics) {
     }),
   };
 }
-
-// An Outlook-style feed: Windows time-zone name with its definition, a weekday standup moved on
-// the 23rd, a weekly 1:1 cancelled that day, a one-off meeting, an all-day event, and tomorrow.
-const ICS = `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:Microsoft Exchange Server 2010
-BEGIN:VTIMEZONE
-TZID:GMT Standard Time
-BEGIN:STANDARD
-DTSTART:16010101T020000
-TZOFFSETFROM:+0100
-TZOFFSETTO:+0000
-RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=10
-END:STANDARD
-BEGIN:DAYLIGHT
-DTSTART:16010101T010000
-TZOFFSETFROM:+0000
-TZOFFSETTO:+0100
-RRULE:FREQ=YEARLY;INTERVAL=1;BYDAY=-1SU;BYMONTH=3
-END:DAYLIGHT
-END:VTIMEZONE
-BEGIN:VEVENT
-UID:standup
-SUMMARY:Standup
-DTSTART;TZID=GMT Standard Time:20260105T093000
-DTEND;TZID=GMT Standard Time:20260105T094500
-RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
-END:VEVENT
-BEGIN:VEVENT
-UID:standup
-RECURRENCE-ID;TZID=GMT Standard Time:20260923T093000
-SUMMARY:Standup (moved)
-DTSTART;TZID=GMT Standard Time:20260923T100000
-DTEND;TZID=GMT Standard Time:20260923T101500
-END:VEVENT
-BEGIN:VEVENT
-UID:one-to-one
-SUMMARY:1:1 with Sam
-DTSTART;TZID=GMT Standard Time:20260902T140000
-DTEND;TZID=GMT Standard Time:20260902T143000
-RRULE:FREQ=WEEKLY;BYDAY=WE
-EXDATE;TZID=GMT Standard Time:20260923T140000
-END:VEVENT
-BEGIN:VEVENT
-UID:review
-SUMMARY:Design review
-DTSTART;TZID=GMT Standard Time:20260923T110000
-DTEND;TZID=GMT Standard Time:20260923T120000
-END:VEVENT
-BEGIN:VEVENT
-UID:offsite
-SUMMARY:Offsite prep
-DTSTART;VALUE=DATE:20260923
-DTEND;VALUE=DATE:20260924
-END:VEVENT
-BEGIN:VEVENT
-UID:tomorrow
-SUMMARY:Tomorrow's thing
-DTSTART;TZID=GMT Standard Time:20260924T090000
-DTEND;TZID=GMT Standard Time:20260924T100000
-END:VEVENT
-END:VCALENDAR`.replace(/\n/g, '\r\n');
 
 async function open(browser, time) {
   const ctx = await browser.newContext({ timezoneId: 'Europe/London', locale: 'en-GB' });
@@ -138,26 +76,11 @@ async function open(browser, time) {
     r => r.abort(),
   );
   await page.clock.install({ time });
-  await page.addInitScript(fakeSupabase, ICS);
+  await page.addInitScript(fakeSupabase);
   await page.goto('/');
   await expect(page.locator('#syncBtn')).toHaveText('Synced');
   return { page, errors };
 }
-
-test("today's meetings: repeats, moved and cancelled occurrences, all-day, time zone", async ({
-  browser,
-}) => {
-  const { page, errors } = await open(browser, new Date('2026-09-23T10:30:00+01:00'));
-  await expect(page.locator('.meet .mrow')).toHaveCount(3);
-  const rows = await page.$$eval('.meet .mrow', rs => rs.map(r => r.innerText.replace(/\s+/g, ' ').trim()));
-  expect(rows).toEqual(['All day Offsite prep', '10:00–10:15 Standup (moved)', '11:00–12:00 Design review']);
-  await expect(page.locator('.meet .mrow.past')).toHaveCount(1);
-  await expect(page.locator('#hstats')).toContainText('Free until 11:00');
-  await page.clock.setFixedTime(new Date('2026-09-23T11:15:00+01:00'));
-  await page.evaluate(() => renderHeader());
-  await expect(page.locator('#hstats')).toContainText('In a meeting until 12:00');
-  expect(errors).toEqual([]);
-});
 
 test('notices queued for the timer, deadlines and Upcoming, and kept in step', async ({ browser }) => {
   const { page, errors } = await open(browser, new Date('2026-09-23T08:00:00+01:00'));

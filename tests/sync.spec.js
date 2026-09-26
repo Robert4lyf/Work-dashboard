@@ -344,7 +344,5 @@ test('health check, signed in: sync, live updates and optional parts', async ({ 
   await expect(row('Sync table')).toHaveClass(/ok/);
   await expect(row('Last sync')).toHaveClass(/ok/);
   await expect(row('Live updates')).toContainText('Connected');
-  await expect(row('Calendar')).toContainText('Not connected');
-  await expect(row('Calendar')).toHaveClass(/na/);
   expect(a.errors).toEqual([]);
 });
