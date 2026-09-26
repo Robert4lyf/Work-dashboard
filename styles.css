@@ -414,6 +414,25 @@ h2 {
   align-items: center;
   gap: 10px;
 }
+.iacts {
+  justify-content: flex-end;
+}
+/* an inbox item's title: tap to show or hide its details */
+.ititle {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.ititle .chev {
+  color: var(--muted);
+  margin-left: 6px;
+  font-size: 0.8em;
+}
 .iacts .linkbtn {
   margin-right: auto;
   font-size: 15px;
@@ -1569,4 +1588,50 @@ nav .badge[hidden] {
     animation: none !important;
     transition: none !important;
   }
+}
+/* talk mode */
+body.talking .wrap,
+body.talking nav,
+body.talking #v-zen {
+  display: none;
+}
+#v-talk {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
+  max-width: 720px;
+  margin: 0 auto;
+}
+#v-talk[hidden] {
+  display: none;
+}
+.tbody {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 14px;
+}
+.tstate {
+  font-family: var(--display);
+  text-align: center;
+  color: var(--muted);
+  margin: 0;
+}
+.tstate.on {
+  color: var(--ink);
+}
+#v-talk .big {
+  align-self: center;
+  padding: 14px 28px;
+}
+.tlog p {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.tlog p.me {
+  text-align: right;
+  color: var(--muted);
 }

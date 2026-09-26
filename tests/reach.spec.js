@@ -225,6 +225,7 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       },
       { user_id: 'u1', key: 'old', at: '2026-09-22T20:00:00Z', title: 'Old', body: '', sent_at: null },
       { user_id: 'u1', key: 'later', at: '2026-09-23T10:00:00Z', title: 'Later', body: '', sent_at: null },
+      { user_id: 'u2', key: 'lonely', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
     ],
     subs: [
       { endpoint: 'e1', user_id: 'u1', p256dh: 'p', auth: 'a' },
@@ -270,6 +271,9 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       .filter(n => n.sent_at)
       .map(n => n.key)
       .sort(),
-  ).toEqual(['a', 'old']);
+  ).toEqual(['a', 'lonely', 'old']);
   expect(db.subs.map(s => s.endpoint)).toEqual(['e1']);
+  // Why a notice didn't go out is kept on it, for the app's test to show.
+  expect(db.notices.find(n => n.key === 'a').error).toBeNull();
+  expect(db.notices.find(n => n.key === 'lonely').error).toBe('no devices have notifications turned on');
 });

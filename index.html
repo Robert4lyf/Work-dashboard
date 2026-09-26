@@ -1,77 +1,99 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Dashboard</title>
-<meta name="description" content="Quests, inbox and focus timer.">
-<meta name="theme-color" content="#1D2B53">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icons/icon-192.png">
-<meta name="mobile-web-app-capable" content="yes">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css">
-<script>
-  // Apply this device's appearance before first paint (see "Appearance" in Settings).
-  try {
-    const l = JSON.parse(localStorage.getItem('dashboard-look')) || {};
-    if (l.font) document.documentElement.dataset.font = l.font;
-    if (l.theme) document.documentElement.dataset.theme = l.theme;
-  } catch (e) {}
-</script>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <div class="now" id="hnow"></div>
-    <div class="hprog" role="progressbar" aria-label="Today's quests done" aria-valuemin="0" aria-valuemax="100" id="hprog"><div id="hfill"></div></div>
-    <div class="hfoot"><div class="hstats" id="hstats"></div><button class="syncbtn" id="syncBtn">Sync off</button></div>
-  </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Dashboard</title>
+    <meta name="description" content="Quests, inbox and focus timer." />
+    <meta name="theme-color" content="#1D2B53" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" type="image/png" href="icons/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script>
+      // Apply this device's appearance before first paint (see "Appearance" in Settings).
+      try {
+        const l = JSON.parse(localStorage.getItem('dashboard-look')) || {};
+        if (l.font) document.documentElement.dataset.font = l.font;
+        if (l.theme) document.documentElement.dataset.theme = l.theme;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="now" id="hnow"></div>
+        <div
+          class="hprog"
+          role="progressbar"
+          aria-label="Today's quests done"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          id="hprog"
+        >
+          <div id="hfill"></div>
+        </div>
+        <div class="hfoot">
+          <div class="hstats" id="hstats"></div>
+          <button class="syncbtn" id="syncBtn">Sync off</button>
+        </div>
+      </header>
 
-  <section id="v-today"></section>
-  <section id="v-inbox" hidden></section>
-  <section id="v-waiting" hidden></section>
-  <section id="v-review" hidden></section>
-  <section id="v-projects" hidden></section>
-  <section id="v-focus" hidden></section>
-  <section id="v-log" hidden></section>
-  <section id="v-account" hidden></section>
-</div>
+      <section id="v-today"></section>
+      <section id="v-inbox" hidden></section>
+      <section id="v-waiting" hidden></section>
+      <section id="v-review" hidden></section>
+      <section id="v-projects" hidden></section>
+      <section id="v-focus" hidden></section>
+      <section id="v-log" hidden></section>
+      <section id="v-account" hidden></section>
+    </div>
 
-<nav aria-label="Sections"><div class="tabs" id="tabs">
-  <button data-v="today" aria-current="page">Today</button>
-  <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
-  <button data-v="waiting">Waiting<span class="badge" id="waitBadge" hidden></span></button>
-  <button data-v="review">Review<span class="dot" id="reviewDot" hidden aria-label="weekly review due"></span></button>
-  <button data-v="account">Settings</button>
-</div></nav>
-<section id="v-zen" hidden aria-label="Single-task mode"></section>
-<div class="toast" id="toast" role="status"></div>
-<script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js" integrity="sha384-xPW3QHswsICVC2mW6BFNwMbhpLkbZ133fKOhxNx3QGGgAOJfL3O9t8r2aWn1aez6" crossorigin="anonymous"></script>
+    <nav aria-label="Sections">
+      <div class="tabs" id="tabs">
+        <button data-v="today" aria-current="page">Today</button>
+        <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
+        <button data-v="waiting">Waiting<span class="badge" id="waitBadge" hidden></span></button>
+        <button data-v="review">
+          Review<span class="dot" id="reviewDot" hidden aria-label="weekly review due"></span>
+        </button>
+        <button data-v="account">Settings</button>
+      </div>
+    </nav>
+    <section id="v-zen" hidden aria-label="Single-task mode"></section>
+    <section id="v-talk" hidden aria-label="Talk mode"></section>
+    <div class="toast" id="toast" role="status"></div>
+    <script src="config.js"></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js"
+      integrity="sha384-xPW3QHswsICVC2mW6BFNwMbhpLkbZ133fKOhxNx3QGGgAOJfL3O9t8r2aWn1aez6"
+      crossorigin="anonymous"
+    ></script>
 
-<script src="js/state.js"></script>
-<script src="js/tree.js"></script>
-<script src="js/records.js"></script>
-<script src="js/header.js"></script>
-<script src="js/today.js"></script>
-<script src="js/inbox.js"></script>
-<script src="js/focus.js"></script>
-<script src="js/waiting.js"></script>
-<script src="js/review.js"></script>
-<script src="js/health.js"></script>
-<script src="js/projects.js"></script>
-<script src="js/history.js"></script>
-<script src="js/sync.js"></script>
-<script src="js/capture.js"></script>
-<script src="js/notify.js"></script>
-<script src="js/calendar.js"></script>
-<script src="js/board.js"></script>
-<script src="js/events.js"></script>
-
-
-
-</body>
+    <script src="js/state.js"></script>
+    <script src="js/tree.js"></script>
+    <script src="js/records.js"></script>
+    <script src="js/header.js"></script>
+    <script src="js/today.js"></script>
+    <script src="js/inbox.js"></script>
+    <script src="js/focus.js"></script>
+    <script src="js/waiting.js"></script>
+    <script src="js/review.js"></script>
+    <script src="js/health.js"></script>
+    <script src="js/projects.js"></script>
+    <script src="js/history.js"></script>
+    <script src="js/sync.js"></script>
+    <script src="js/capture.js"></script>
+    <script src="js/notify.js"></script>
+    <script src="js/calendar.js"></script>
+    <script src="js/board.js"></script>
+    <script src="js/talk.js"></script>
+    <script src="js/events.js"></script>
+  </body>
 </html>

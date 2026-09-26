@@ -11,6 +11,7 @@ function renderAll() {
   renderLog();
   renderAccount();
   renderZen();
+  if (talk) renderTalk();
 }
 // Fade whichever edge of the tab strip has more tabs beyond it.
 function fadeTabs() {
@@ -542,8 +543,20 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'start') startTimer(focusTarget());
   if (d.zstart) startTimer(d.zstart);
-  if (d.zen) setZen(true);
+  if (d.zen) {
+    // Focus on what the header shows, not an older pick.
+    if (d.q && !S.timer && S.focusQ !== d.q) {
+      S.focusQ = d.q;
+      save();
+    }
+    setZen(true);
+  }
   if (b.id === 'zenexit') setZen(false);
+  if (b.id === 'talkbtn') openTalk(true);
+  if (b.id === 'talkgo') talkSay(talkBrief());
+  if (b.id === 'talkmic') talkListen();
+  if (b.id === 'talkexit') closeTalk();
+  if (d.talkpref) setTalkPref(d.talkpref === 'on');
   if (b.id === 'plus5' || d.plus5) {
     const t = S.timer;
     if (!t) return;
@@ -677,6 +690,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   const k = e.key;
+  if (talk) return k === 'Escape' && closeTalk();
   // During a running session only pause and help work (see focusLocked).
   if (focusLocked() && k !== 'p' && k !== '?') return;
   const field = id => {

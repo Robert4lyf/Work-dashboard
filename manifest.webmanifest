@@ -48,6 +48,17 @@
       ]
     },
     {
+      "name": "Talk through my day",
+      "short_name": "Talk",
+      "url": "./index.html?talk=1",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
       "name": "Start a focus session",
       "short_name": "Focus",
       "url": "./index.html?focus=1",

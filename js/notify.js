@@ -72,14 +72,87 @@ async function disablePush() {
   } catch (e) {}
   renderAccount();
 }
+// "Send a test" checks each link in the chain and says which one is broken:
+// this phone showing notifications, this device's subscription, then the server sending one.
+let pushTest = null; // steps: { name, ok (true/false/null = waiting), msg }
 async function testPush() {
+  const steps = (pushTest = []),
+    step = (name, ok, msg) => {
+      const s = steps.find(x => x.name === name);
+      if (s) Object.assign(s, { ok, msg });
+      else steps.push({ name, ok, msg });
+      renderAccount();
+    };
+  // 1. This phone: show one straight away, no server involved.
+  let reg = null;
+  try {
+    reg = await navigator.serviceWorker.ready;
+    if (Notification.permission !== 'granted') throw new Error('blocked');
+    await reg.showNotification('Dashboard', { body: 'This phone can show notifications', tag: 'local-test' });
+    step('This phone', true, 'You should see a notification now.');
+  } catch (e) {
+    step(
+      'This phone',
+      false,
+      'Notifications are blocked. Allow them for Chrome/this app in Android settings, then try again.',
+    );
+    return;
+  }
+  // 2. This device's subscription uses the current key.
+  try {
+    const sub = await reg.pushManager.getSubscription(),
+      key = sub && sub.options && sub.options.applicationServerKey,
+      same = key && b64u(new Uint8Array(key)) === S.pushKey;
+    if (!sub) step('Subscription', false, 'Not subscribed. Tap "Turn off here", then turn it on again.');
+    else if (key && !same)
+      step('Subscription', false, 'Subscribed with an old key. Tap "Turn off here", then turn it on again.');
+    else step('Subscription', true, 'Subscribed with the current key.');
+    if (!sub || (key && !same)) return;
+  } catch (e) {
+    step('Subscription', null, "Couldn't check.");
+  }
+  // 3. The server: queue a notice and watch for it being sent (the job runs every minute).
+  const key = 'test:' + Date.now();
   const { error } = await sb.from('cockpit_notices').upsert({
-    key: 'test:' + Date.now(),
+    key,
     at: new Date().toISOString(),
     title: 'Dashboard',
-    body: 'Test notification',
+    body: 'Test notification from the server',
   });
-  toast(error ? "Couldn't queue a test" : 'Test queued. It arrives within a minute');
+  if (error) return step('Server', false, "Couldn't queue a test. Run the updated supabase-setup.sql.");
+  step('Server', null, 'Waiting for the server to send it (up to 90 seconds)…');
+  for (let i = 0; i < 18; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const get = cols => sb.from('cockpit_notices').select(cols).eq('key', key).maybeSingle();
+    let { data, error: e } = await get('sent_at,error');
+    if (e) ({ data } = await get('sent_at')); // before the error column was added
+    if (data && data.sent_at)
+      return data.error
+        ? step('Server', false, 'The server tried but: ' + data.error + '.')
+        : step(
+            'Server',
+            true,
+            'Sent. If it still didn’t appear, check Android’s notification settings for Chrome.',
+          );
+  }
+  step(
+    'Server',
+    false,
+    'Not picked up. Check that send-notices is deployed with JWT verification off, has its four secrets (VAPID_SUBJECT must start with mailto:), and that notifications-cron.sql was run with your project ref and the same CRON_SECRET (README > Notifications).',
+  );
+}
+function renderPushTest() {
+  if (!pushTest) return '';
+  return (
+    '<div class="list box health" style="margin-top:10px">' +
+    pushTest
+      .map(
+        s =>
+          `<div class="hrow2 ${s.ok === true ? 'ok' : s.ok === false ? 'bad' : 'na'}"><span class="hicon" aria-hidden="true">${s.ok === true ? '✓' : s.ok === false ? '✗' : '…'}</span><div><b>${esc(s.name)}</b><p>${esc(s.msg)}</p></div></div>`,
+      )
+      .join('') +
+    '</div>'
+  );
 }
 
 // The notices the current data calls for: timer end, deadlines (9am on the day) and Upcoming
@@ -167,7 +240,8 @@ function renderNotifySettings() {
       <div class="caprow"><span>VAPID_PUBLIC_KEY</span><code>${esc(S.pushKey)}</code><button class="linkbtn" data-copy="vpub">Copy</button></div>
       <div class="caprow"><span>VAPID_PRIVATE_KEY</span><code>${esc(newPrivateKey)}</code><button class="linkbtn" data-copy="vpriv">Copy</button></div></div>`;
   h += pushEndpoint
-    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines (9am on the day) and Upcoming items returning.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>'
+    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines (9am on the day) and Upcoming items returning.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
+      renderPushTest()
     : '<p class="hint" style="margin:0 0 8px">Off for this device.</p><button class="btn green" id="pushon">Turn on for this device</button>';
   return h;
 }
