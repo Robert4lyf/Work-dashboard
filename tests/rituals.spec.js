@@ -53,7 +53,8 @@ test('interruptions are logged with one tap, with an optional reason, and summar
   await page.click('#whyskip');
   const s = await app.state();
   expect(s.interrupts.map(x => x.why)).toEqual(['Slack', 'Slack', '']);
-  expect(s.timer).not.toBeNull(); // logging doesn't stop the session
+  expect(s.timer).not.toBeNull(); // logging pauses the session, it doesn't end it
+  expect(s.timer.left).toBeGreaterThan(0);
   await page.click('#zenexit');
   await app.go('log');
   await expect(page.locator('#v-log')).toContainText('Interruptions, last 7 days: 3');

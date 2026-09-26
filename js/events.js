@@ -557,18 +557,7 @@ document.addEventListener('click', e => {
     toast('Back on your list');
   }
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
-  if (d.pause) {
-    const t = S.timer;
-    if (!t) return;
-    if (t.left != null) {
-      t.end = Date.now() + t.left;
-      delete t.left;
-    } else t.left = Math.max(0, t.end - Date.now());
-    save();
-    renderHeader();
-    renderFocus();
-    renderZen();
-  }
+  if (d.pause) togglePause();
   if (b.id === 'undo') undo();
   if (b.id === 'copylog') copyLog();
   if (b.id === 'hist') loadHistory();
@@ -648,14 +637,16 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') el.blur();
     return;
   }
-  const k = e.key,
-    field = id => {
-      const f = $(id);
-      if (!f) return false;
-      e.preventDefault();
-      f.focus();
-      return true;
-    };
+  const k = e.key;
+  // During a running session only pause and help work (see focusLocked).
+  if (focusLocked() && k !== 'p' && k !== '?') return;
+  const field = id => {
+    const f = $(id);
+    if (!f) return false;
+    e.preventDefault();
+    f.focus();
+    return true;
+  };
   if (k === 'n' && view === 'today' && path.length) field('#sin');
   else if (k === 'n' || k === 'i') {
     go('inbox');
