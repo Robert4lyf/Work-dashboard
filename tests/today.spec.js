@@ -153,21 +153,3 @@ test('the header stays to three lines: Focus sits beside Next up', async ({ app,
   await expect(page.locator('#hnow [data-zen]')).toHaveText('Focus');
   await expect(page.locator('#hstats button')).toHaveText(['0/1 done', '0m focus']);
 });
-
-test('free time leaves out the rest of today’s meetings', async ({ app, page }) => {
-  const free = await page.evaluate(() => {
-    const at = (h, m = 0) => new Date(2026, 8, 23, h, m).getTime();
-    cal = {
-      day: today(),
-      events: [
-        { title: 'Standup', start: at(9), end: at(9, 30) }, // already over
-        { title: 'Review', start: at(14), end: at(15) },
-        { title: 'Overlap', start: at(14, 30), end: at(15, 30) }, // overlaps Review
-        { title: 'Offsite', allDay: true, start: at(0), end: at(23, 59) }, // all-day: ignored
-      ],
-    };
-    return freeLeft(at(13));
-  });
-  // 1pm to 5:30pm is 4h 30m, less 2:00-3:30pm busy = 3h.
-  expect(free).toBe(180);
-});

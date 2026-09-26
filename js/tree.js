@@ -178,7 +178,7 @@ function withUndo(msg, fn) {
   undoSnap = snap;
   toast(msg, true);
 }
-// Redraws triggered in the background (sync, calendar, the timer ending) must not wipe what
+// Redraws triggered in the background (sync, the timer ending) must not wipe what
 // the user is typing or move their cursor. Views set their HTML through setHTML for that.
 let background = false;
 const COMPOSE = [
@@ -186,7 +186,6 @@ const COMPOSE = [
   'iin',
   'tagin',
   'projin',
-  'calin',
   'aemail',
   'apass',
   'leftin',

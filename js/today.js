@@ -63,7 +63,7 @@ function renderToday() {
   });
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
-  let h = renderAttention() + renderMeetings() + renderCarried();
+  let h = renderAttention() + renderCarried();
   const soon = dueSoon().filter(s => s.t.length > 1); // top-level quests show their deadline in the list
   if (soon.length) {
     h += '<div class="soon box"><h2>Due soon</h2>';
@@ -119,24 +119,12 @@ function estPicker(n) {
   const kids = n.children.reduce((a, c) => a + estLeft(c), 0);
   return `<div class="chips estpick"><span class="hint">Estimate</span>${EST.map(m => `<button class="chip" data-est="${m}" data-id="${n.id}" aria-pressed="${n.est === m}">${hmShort(m)}</button>`).join('')}${kids ? `<span class="hint">steps left: ${hmShort(kids)}</span>` : ''}</div>`;
 }
-// Free minutes from now to the end of the workday, less the meetings still to come.
+// Free minutes from now to the end of the workday.
 function freeLeft(now = Date.now()) {
   const [h, m] = (S.dayEnd || '17:30').split(':').map(Number),
     d = new Date(now),
     end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
-  if (now >= end) return 0;
-  let busy = 0,
-    upto = now;
-  todaysEvents()
-    .filter(e => !e.allDay && e.end > now && e.start < end)
-    .sort((a, b) => a.start - b.start)
-    .forEach(e => {
-      const s = Math.max(e.start, upto),
-        f = Math.min(e.end, end);
-      if (f > s) busy += f - s;
-      upto = Math.max(upto, f);
-    });
-  return Math.max(0, Math.round((end - now - busy) / 60000));
+  return Math.max(0, Math.round((end - now) / 60000));
 }
 function planLine() {
   const planned = S.quests.reduce((a, q) => a + estLeft(q), 0);
