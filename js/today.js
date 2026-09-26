@@ -111,13 +111,17 @@ const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
 const carried = () => S.quests.filter(q => !isDone(q) && !q.wait && ageOf(q) >= STALE && q.kept !== today());
 function renderCarried() {
   const qs = carried();
-  if (!qs.length) return '';
-  let h = '<div class="carried box"><h2>Carried over</h2>';
-  qs.forEach(q => {
-    const b = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
-    h += `<div class="crow"><p>${esc(q.text)} <small>${ageOf(q)} days</small></p><div class="chips">${b(`data-keep="${q.id}"`, 'Keep')}${b(`data-sched="${q.id}" data-kind="q" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${b(`data-sched="${q.id}" data-kind="q" data-when="${nextMonday()}"`, 'Next week')}${b(`data-toinbox="${q.id}"`, 'Inbox')}${b(`data-drop="${q.id}"`, 'Drop')}</div></div>`;
-  });
-  return h + '</div>';
+  return qs.length ? `<div class="carried box"><h2>Carried over</h2>${carriedRows(qs)}</div>` : '';
+}
+// A carried-over quest with its decisions (also used by the weekly review).
+function carriedRows(qs) {
+  const b = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
+  return qs
+    .map(
+      q =>
+        `<div class="crow"><p>${esc(q.text)} <small>${ageOf(q)} days</small></p><div class="chips">${b(`data-keep="${q.id}"`, 'Keep')}${b(`data-sched="${q.id}" data-kind="q" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${b(`data-sched="${q.id}" data-kind="q" data-when="${nextMonday()}"`, 'Next week')}${b(`data-toinbox="${q.id}"`, 'Inbox')}${b(`data-drop="${q.id}"`, 'Drop')}</div></div>`,
+    )
+    .join('');
 }
 
 /* upcoming: top-level quests scheduled for a later day (S.later, each with a start date) */

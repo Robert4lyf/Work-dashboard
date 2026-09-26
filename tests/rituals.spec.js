@@ -37,27 +37,34 @@ test('after stopping a session, a note on where you left off shows on that step'
   expect((await app.state()).quests[0].left).toBeUndefined();
 });
 
-test('interruptions are logged with one tap, with an optional reason, and summarised', async ({
-  app,
-  page,
-}) => {
+test('one Pause button: naming a cause logs an interruption, a break logs nothing', async ({ app, page }) => {
   await app.go('focus');
   await page.click('#start');
-  await page.click('#v-zen [data-interrupt]');
+  await expect(page.locator('[data-interrupt]')).toHaveCount(0); // no separate button
+  const pause = () => page.click('#v-zen [data-pause]');
+  await pause();
+  await expect(page.locator('#whyform label')).toHaveText('What paused you?');
   await page.fill('#whyin', 'Slack');
   await page.press('#whyin', 'Enter');
+  await pause(); // resume
   await page.clock.fastForward('05:00');
-  await page.click('#v-zen [data-interrupt]');
-  await page.click('#v-zen [data-why="Slack"]'); // reasons used before are one tap
-  await page.click('#v-zen [data-interrupt]');
-  await page.click('#whyskip');
+  await pause();
+  await page.click('#v-zen [data-why="Slack"]'); // causes used before are one tap
+  await pause();
+  await pause();
+  await page.click('#whyskip'); // "Just a break"
+  await pause(); // resume
+  await pause();
+  await pause(); // paused and resumed without answering: nothing logged either
+  await expect(page.locator('#whyform')).toHaveCount(0);
   const s = await app.state();
-  expect(s.interrupts.map(x => x.why)).toEqual(['Slack', 'Slack', '']);
-  expect(s.timer).not.toBeNull(); // logging pauses the session, it doesn't end it
-  expect(s.timer.left).toBeGreaterThan(0);
+  expect(s.interrupts.map(x => x.why)).toEqual(['Slack', 'Slack']);
+  expect(s.timer.left).toBeUndefined(); // running again
+  await pause();
+  await page.click('#whyskip');
   await page.click('#zenexit');
   await app.go('log');
-  await expect(page.locator('#v-log')).toContainText('Interruptions, last 7 days: 3');
+  await expect(page.locator('#v-log')).toContainText('Interruptions, last 7 days: 2');
   await expect(page.locator('#v-log')).toContainText('Most often 09:00–10:00');
   await expect(page.locator('#v-log .bar').first()).toContainText('Slack');
 });

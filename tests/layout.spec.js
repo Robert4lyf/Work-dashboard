@@ -15,7 +15,7 @@ for (const width of [320, 360, 390, 1280]) {
       bs => bs.filter(b => b.scrollWidth > b.clientWidth).length,
     );
     expect(clipped).toBe(0);
-    for (const v of ['today', 'inbox', 'focus', 'log', 'account']) {
+    for (const v of ['today', 'inbox', 'waiting', 'review', 'account']) {
       await app.go(v);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       // The current tab is scrolled fully into view.

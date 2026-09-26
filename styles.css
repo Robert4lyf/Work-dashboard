@@ -1259,6 +1259,90 @@ body.zen nav {
   background: var(--pink);
   color: var(--on-accent);
 }
+/* inbox swipes */
+.item {
+  touch-action: pan-y;
+  transition: transform 0.15s;
+}
+.item.swiping {
+  transition: none;
+}
+.item[data-swipe='today'] {
+  box-shadow: inset -6px 0 0 var(--green);
+}
+.item[data-swipe='more'] {
+  box-shadow: inset 6px 0 0 var(--blue);
+}
+.iacts.quick {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.iacts.quick .chip {
+  padding: 3px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+.iacts.quick .x {
+  margin-left: auto;
+}
+.chip.del {
+  background: var(--pink);
+  color: var(--on-accent);
+}
+/* review tab */
+.rtabs {
+  margin-bottom: 16px;
+}
+.wsum {
+  margin: 0 0 14px;
+}
+.wstep {
+  padding: 12px 14px 8px;
+  margin-bottom: 16px;
+}
+.wstep h2 small {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--muted);
+}
+.wstep .wclear {
+  margin: 0 0 6px;
+}
+.wstep > p,
+.wstep > .btn {
+  margin: 0 0 8px;
+}
+.wdone {
+  margin: 4px 0 10px;
+  padding-left: 20px;
+}
+/* health check */
+.health .hrow2 {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  align-items: baseline;
+}
+.hicon {
+  flex: none;
+  width: 1.2em;
+  font-weight: 700;
+  text-align: center;
+}
+.hrow2.ok .hicon {
+  color: var(--green);
+}
+.hrow2.bad .hicon {
+  color: var(--pink);
+}
+.hrow2.na .hicon,
+.hrow2 small {
+  color: var(--muted);
+}
+.hrow2 p {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
 /* carried over */
 .carried {
   padding: 12px 14px 6px;

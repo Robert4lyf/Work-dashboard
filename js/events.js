@@ -6,6 +6,7 @@ function renderAll() {
   renderInbox();
   renderFocus();
   renderWaiting();
+  renderReview();
   renderProjectsView();
   renderLog();
   renderAccount();
@@ -19,7 +20,12 @@ function fadeTabs() {
 }
 $('#tabs').addEventListener('scroll', fadeTabs, { passive: true });
 window.addEventListener('resize', fadeTabs);
+// History and Projects live under the Review tab; Focus has no tab (the header opens it).
 function go(v) {
+  if (v === 'log' || v === 'projects') {
+    reviewSub = v;
+    v = 'review';
+  }
   view = v;
   renderHeader();
   document.querySelectorAll('nav button[data-v]').forEach(x => {
@@ -28,9 +34,13 @@ function go(v) {
   });
   const board = onBoard();
   document.body.classList.toggle('board', board);
-  ['today', 'inbox', 'waiting', 'projects', 'focus', 'log', 'account'].forEach(
-    k => ($('#v-' + k).hidden = board ? !['today', 'inbox', 'focus'].includes(k) : k !== v),
+  ['today', 'inbox', 'waiting', 'review', 'projects', 'focus', 'log', 'account'].forEach(
+    k =>
+      ($('#v-' + k).hidden = board
+        ? !['today', 'inbox', 'focus'].includes(k)
+        : k !== v && !(v === 'review' && k === reviewSub)),
   );
+  if (v === 'review') renderReview();
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
   if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -395,14 +405,29 @@ document.addEventListener('click', e => {
     renderFocus();
     go('focus');
   }
-  if (d.promote) {
-    const i = S.inbox.findIndex(x => x.id === d.promote),
-      it = S.inbox[i],
-      bf = snapshot();
-    S.quests.push(inboxToNode(it));
-    S.inbox.splice(i, 1);
-    settle(bf);
-    toast('Added to today');
+  if (d.promote) promoteInbox(d.promote);
+  if (d.rsub) {
+    reviewSub = d.rsub;
+    go(d.rsub === 'week' ? 'review' : d.rsub);
+  }
+  if (b.id === 'reviewed') {
+    S.reviewed = today();
+    save();
+    renderAll();
+    toast('Week reviewed');
+  }
+  if (b.id === 'copyweek') copyText(weekText());
+  if (b.id === 'healthrun') runHealth();
+  if (d.waiton) {
+    swiped = null;
+    expanded.add(d.waiton);
+    renderInbox();
+    const f = document.querySelector(`[data-iwait="${d.waiton}"]`);
+    f && f.focus();
+  }
+  if (d.unswipe) {
+    swiped = null;
+    renderInbox();
   }
   if (d.steps) {
     if (expanded.has(d.steps)) expanded.delete(d.steps);
@@ -521,7 +546,6 @@ document.addEventListener('click', e => {
     renderAll();
   }
   if (b.id === 'stopsave' || d.stop === 'save') stopAndSave(false);
-  if (d.interrupt) logInterrupt();
   if (d.why) saveWhy(d.why);
   if (b.id === 'whyskip') saveWhy('');
   if (b.id === 'leftskip') saveLeft('');

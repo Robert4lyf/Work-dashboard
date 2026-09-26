@@ -3,7 +3,7 @@
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
 const VERSION = 'dashboard-v4';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
-const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'projects', 'history', 'sync', 'capture', 'notify', 'calendar', 'board', 'events']
+const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'calendar', 'board', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
   './icons/icon-192.png', './icons/icon-512.png', SUPABASE_JS];

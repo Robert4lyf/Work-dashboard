@@ -57,7 +57,7 @@ function zenTarget() {
   return leaf ? find(leaf.id) : r;
 }
 // A running (not paused) session holds you in single-task mode: pause or log an
-// interruption (which pauses) to get back to the rest of the app.
+// to get back to the rest of the app.
 const focusLocked = () => !!(S.timer && S.timer.left == null);
 function renderZen() {
   if (focusLocked()) zen = true;
@@ -81,7 +81,6 @@ function renderZen() {
     h += `<div class="zclock" id="zclock">${mmss(remaining())}</div>
       <div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button><button class="btn" data-plus5="1">+5 min</button></div>
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
-      <button class="linkbtn" data-interrupt="1" style="align-self:center">Interrupted</button>
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
   } else if (r) {
     h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
@@ -106,7 +105,7 @@ function renderFocus() {
       leaf = q && !q.n.children.length && !q.n.done;
     h += `<div class="clock box" id="clock">${mmss(remaining())}<small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t)) || 'Focus'}</small></div>`;
     h += `<div class="acts" style="margin-top:0"><button class="btn ${paused ? 'green' : 'blue'}" data-pause="1" style="flex:1">${paused ? 'Resume' : 'Pause'}</button><button class="btn" id="plus5" style="flex:1">+5 min</button></div>`;
-    h += `<div class="acts"><button class="btn" id="stopsave" style="flex:1">Stop and save</button>${leaf ? '<button class="btn green" id="stopdone" style="flex:1">Done</button>' : ''}</div><button class="linkbtn" data-interrupt="1">Interrupted</button><button class="dellink" id="stop">Discard this session</button>`;
+    h += `<div class="acts"><button class="btn" id="stopsave" style="flex:1">Stop and save</button>${leaf ? '<button class="btn green" id="stopdone" style="flex:1">Done</button>' : ''}</div><button class="dellink" id="stop">Discard this session</button>`;
   } else {
     const cur = focusTarget(),
       opts = [];
@@ -207,7 +206,7 @@ function stopAndSave(done) {
 }
 /* "where did I leave it?": after a session stops, one line for next time, shown on that step */
 let leftFor = null, // the step whose session just stopped
-  whyFor = null; // the interruption just logged, waiting for what it was
+  pauseAsk = null; // a pause waiting to be explained: { t, q }
 function leftNote(n) {
   return n && n.left
     ? `<div class="leftnote"><span>You left off:</span> ${esc(n.left.text)} <small>${dayLabel(n.left.d)}</small><button class="x" data-clearleft="${n.id}" aria-label="Clear note">×</button></div>`
@@ -218,11 +217,11 @@ function afterPrompts() {
   const r = leftFor && find(leftFor);
   if (r && !isDone(r.n))
     h += `<form class="ask box" id="leftform"><label for="leftin">Where did you leave it?</label><div class="addrow"><input id="leftin" maxlength="160" placeholder="Next step, or what you were thinking" autocomplete="off"><button class="btn">Save</button></div><button type="button" class="linkbtn" id="leftskip">Skip</button></form>`;
-  if (whyFor && S.interrupts.some(x => x.id === whyFor)) {
+  if (pauseAsk && S.timer && S.timer.left != null) {
     const chips = recentWhys()
       .map(w => `<button type="button" class="chip" data-why="${esc(w)}">${esc(w)}</button>`)
       .join('');
-    h += `<form class="ask box" id="whyform"><label for="whyin">What interrupted you?</label>${chips ? `<div class="chips">${chips}</div>` : ''}<div class="addrow"><input id="whyin" maxlength="60" placeholder="A call, a message, someone…" autocomplete="off"><button class="btn">Save</button></div><button type="button" class="linkbtn" id="whyskip">Skip</button></form>`;
+    h += `<form class="ask box" id="whyform"><label for="whyin">What paused you?</label><div class="chips"><button type="button" class="chip" id="whyskip">Just a break</button>${chips}</div><div class="addrow"><input id="whyin" maxlength="60" placeholder="Interrupted? A call, a message, someone…" autocomplete="off"><button class="btn">Save</button></div></form>`;
   }
   return h;
 }
@@ -233,31 +232,26 @@ function saveLeft(text) {
   save();
   renderAll();
 }
-/* interruptions: one tap during a session logs one; the reason is optional */
-// Pause or resume the running session.
+/* pausing: one button. It asks what paused you; naming a cause logs an interruption,
+   "Just a break" (or ignoring it) logs nothing. */
 function togglePause() {
   const t = S.timer;
   if (!t) return;
   if (t.left != null) {
     t.end = Date.now() + t.left;
     delete t.left;
-  } else t.left = Math.max(0, t.end - Date.now());
-  save();
-  renderAll();
-}
-function logInterrupt() {
-  const x = { id: uid(), t: Date.now(), q: S.timer ? S.timer.q : null, why: '' };
-  // An interruption pauses the session, so you can go and deal with it.
-  if (focusLocked()) S.timer.left = Math.max(0, S.timer.end - Date.now());
-  S.interrupts.push(x);
-  whyFor = x.id;
+    pauseAsk = null;
+  } else {
+    t.left = Math.max(0, t.end - Date.now());
+    pauseAsk = { t: Date.now(), q: t.q || null };
+  }
   save();
   renderAll();
 }
 function saveWhy(why) {
-  const x = S.interrupts.find(i => i.id === whyFor);
-  whyFor = null;
-  if (x && why) x.why = why;
+  const a = pauseAsk;
+  pauseAsk = null;
+  if (a && why) S.interrupts.push({ id: uid(), t: a.t, q: a.q, why });
   save();
   renderAll();
 }

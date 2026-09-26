@@ -18,6 +18,15 @@ function fakeSupabase() {
         q.gt = v;
         return api;
       },
+      not() {
+        return api;
+      },
+      is() {
+        return api;
+      },
+      lt() {
+        return api;
+      },
       order() {
         return api;
       },
@@ -32,6 +41,7 @@ function fakeSupabase() {
         return { error: null };
       },
       then(res, rej) {
+        if (table !== 'cockpit_items') return Promise.resolve({ data: [], error: null }).then(res, rej);
         return window
           .srvRows(q.gt || 0, q.limit || 1000)
           .then(data => ({ data, error: null }))
@@ -56,7 +66,8 @@ function fakeSupabase() {
             window.__live = cb;
             return ch;
           },
-          subscribe() {
+          subscribe(cb) {
+            if (cb) cb('SUBSCRIBED');
             return ch;
           },
         };
@@ -185,7 +196,7 @@ test('once caught up, syncing sends nothing (the server may reorder JSON keys)',
   const srv = server();
   const a = await device(browser, srv);
   await a.add('Report');
-  await a.page.click('nav [data-v=focus]');
+  await a.page.evaluate(() => go('focus'));
   const b = await device(browser, srv);
   await settle(a, b);
   const before = srv.writes;
@@ -320,5 +331,20 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   await a.page.reload();
   await a.page.click('nav [data-v=account]');
   await expect(a.page.locator('.caprow code').nth(2)).toHaveText('tok123');
+  expect(a.errors).toEqual([]);
+});
+
+test('health check, signed in: sync, live updates and optional parts', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.click('nav [data-v=account]');
+  await a.page.click('#healthrun');
+  const row = name => a.page.locator('.health .hrow2', { hasText: name });
+  await expect(row('Signed in')).toHaveClass(/ok/);
+  await expect(row('Sync table')).toHaveClass(/ok/);
+  await expect(row('Last sync')).toHaveClass(/ok/);
+  await expect(row('Live updates')).toContainText('Connected');
+  await expect(row('Calendar')).toContainText('Not connected');
+  await expect(row('Calendar')).toHaveClass(/na/);
   expect(a.errors).toEqual([]);
 });
