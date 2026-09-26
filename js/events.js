@@ -521,7 +521,6 @@ document.addEventListener('click', e => {
     renderAll();
   }
   if (b.id === 'stopsave' || d.stop === 'save') stopAndSave(false);
-  if (d.interrupt) logInterrupt();
   if (d.why) saveWhy(d.why);
   if (b.id === 'whyskip') saveWhy('');
   if (b.id === 'leftskip') saveLeft('');
