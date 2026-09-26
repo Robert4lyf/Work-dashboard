@@ -114,6 +114,9 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam');
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Waiting on Sam');
+  // Waiting rows look different (dark orange); others don't.
+  await expect(page.locator('#v-today .row.waiting')).toHaveCount(1);
+  await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
   // It's blocked, so Next up moves on to the next quest.
   await expect(page.locator('#hnow')).toContainText('Write report');
   await expect(page.locator('#hstats')).toContainText('1 to chase');
