@@ -56,7 +56,10 @@ function fakeSupabase() {
         },
       },
       from: table,
-      rpc: async () => ({ data: null, error: null }),
+      rpc: async name => ({
+        data: name === 'cockpit_notify_status' ? window.__notifyStatus : null,
+        error: null,
+      }),
       channel() {
         const c = { on: () => c, subscribe: () => c };
         return c;
@@ -255,5 +258,38 @@ test('after New keys elsewhere removed this device, it shows notifications as of
   });
   await page.evaluate(() => verifyPush());
   expect(await page.evaluate(() => pushEndpoint)).toBe('');
+  expect(errors).toEqual([]);
+});
+
+test('health check: says when the notification job is missing, or what the function answered', async ({
+  browser,
+}) => {
+  const { page, errors } = await open(browser, new Date('2026-09-23T08:00:00+01:00'));
+  await page.evaluate(() => {
+    S.pushKey = 'k';
+    window.__notifyStatus = { cron: false, net: false };
+  });
+  await page.click('nav [data-v=account]');
+  await page.click('#healthrun');
+  const job = page.locator('.health .hrow2', { hasText: 'Notification job' });
+  await expect(job).toHaveClass(/bad/);
+  await expect(job).toContainText('enable pg_cron and pg_net');
+  await page.evaluate(() => (window.__notifyStatus = { cron: true, net: true, active: true, status: 403 }));
+  await page.click('#healthrun');
+  await expect(job).toContainText('The function answered 403');
+  await expect(job).toContainText("doesn't match the function's CRON_SECRET");
+  await page.evaluate(
+    () =>
+      (window.__notifyStatus = {
+        cron: true,
+        net: true,
+        active: true,
+        status: 200,
+        at: new Date().toISOString(),
+      }),
+  );
+  await page.click('#healthrun');
+  await expect(job).toHaveClass(/ok/);
+  await expect(job).toContainText('Running');
   expect(errors).toEqual([]);
 });

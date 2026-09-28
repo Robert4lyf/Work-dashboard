@@ -184,7 +184,7 @@ async function runPushTest() {
   step(
     'Server',
     false,
-    'Not picked up. Check that send-notices is deployed with JWT verification off, has its four secrets (VAPID_SUBJECT must start with mailto:), and that notifications-cron.sql was run with your project ref and the same CRON_SECRET (README > Notifications).',
+    'Not picked up. Run the Health check below: it shows whether the every-minute job is set up (it needs the pg_cron and pg_net extensions) and what the function answers.',
   );
 }
 function renderPushTest() {
