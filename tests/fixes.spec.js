@@ -200,14 +200,18 @@ test('round 4: a due session waits for the server while held; the waiting panel 
     S.quests = [fix({ id: 'h1', text: 'Hold' })];
     startTimer('h1');
     S.timer.end = Date.now() - 1000;
-    holdTimer = true;
+    const id = holdDue();
     timerTick();
-    const held = !!S.timer;
-    holdTimer = false;
-    timerTick();
-    return { held, after: !!S.timer, sessions: S.sessions.length };
+    const held = !!S.timer,
+      clock = document.title;
+    // Pausing or extending a session that's over does nothing.
+    togglePause();
+    const paused = S.timer && S.timer.left != null;
+    releaseHeld(id);
+    return { held, clock, paused, after: !!S.timer, sessions: S.sessions.length };
   });
-  expect(r).toEqual({ held: true, after: false, sessions: 1 });
+  expect(r).toMatchObject({ held: true, paused: false, after: false, sessions: 1 });
+  expect(r.clock).toContain('00:00'); // the label kept up while held
 
   await page.evaluate(() => {
     S.quests = [

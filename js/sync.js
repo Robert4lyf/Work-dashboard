@@ -217,6 +217,7 @@ async function sync() {
     await saveSnapshot();
     await syncNotices();
     lastSync = Date.now();
+    askMerge = false; // (only the sync straight after a sign-in may ask)
     setSync('ok');
     // After the first sync, so a new device never writes before it has the server's copy.
     registerDevice();

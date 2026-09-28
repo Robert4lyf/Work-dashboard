@@ -36,8 +36,16 @@ function focusTarget() {
   const nx = nextStep();
   return nx ? nx.n.id : null;
 }
-// Set while the server is being asked whether a due session was already stopped elsewhere.
-let holdTimer = false;
+// The id of a session already due when the server is being asked whether it was stopped
+// elsewhere: only that one waits (a session running out meanwhile still rings).
+let holdTimer = '';
+const holdDue = () => (holdTimer = timerDue() ? S.timer.id || 'held' : '');
+// Once the answer is in (or it took too long): finish it, quietly, if it's still there.
+function releaseHeld(id) {
+  if (!id || holdTimer !== id) return;
+  holdTimer = '';
+  if (timerDue()) finishTimer(true);
+}
 function startTimer(q) {
   const top = topOf(q);
   askNotify();
@@ -239,7 +247,7 @@ function saveLeft(text) {
    "Just a break" (or ignoring it) logs nothing. */
 function togglePause() {
   const t = S.timer;
-  if (!t) return;
+  if (!t || timerDue()) return; // (over: it's about to finish)
   if (t.left != null) {
     t.end = Date.now() + t.left;
     delete t.left;
@@ -331,7 +339,7 @@ function timerTick() {
     if (document.title !== TITLE) document.title = TITLE;
     return;
   }
-  if (timerDue()) return holdTimer ? undefined : inBackground(() => finishTimer());
+  if (timerDue() && (t.id || 'held') !== holdTimer) return inBackground(() => finishTimer());
   const txt = mmss(remaining());
   document.title = txt + (t.left != null ? ' paused' : '') + ' · ' + TITLE;
   const c = $('#clock');

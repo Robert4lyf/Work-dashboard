@@ -590,7 +590,7 @@ document.addEventListener('click', e => {
   if (d.talkpref) setTalkPref(d.talkpref === 'on');
   if (b.id === 'plus5' || d.plus5) {
     const t = S.timer;
-    if (!t) return;
+    if (!t || timerDue()) return;
     t.mins += 5;
     if (t.left != null) t.left += 300000;
     else t.end += 300000;
@@ -793,11 +793,8 @@ document.addEventListener('visibilitychange', () => {
     // A session another device already stopped mustn't be finished here too: hear from the
     // server first when possible.
     if (timerDue() && started) {
-      holdTimer = true;
-      syncDone().finally(() => {
-        holdTimer = false;
-        if (timerDue()) finishTimer(true);
-      });
+      const held = holdDue();
+      syncDone().finally(() => releaseHeld(held));
     } else if (timerDue()) finishTimer(true);
     else renderAll();
     if (!started) sync();
@@ -829,8 +826,8 @@ const deferStart = !!sb && navigator.onLine;
 if (!deferStart) rollover();
 if (!deferStart && timerDue()) finishTimer(true);
 else renderAll();
-if (deferStart) holdTimer = true;
-setTimeout(() => (holdTimer = false), 20000); // (never held for long, whatever happens)
+const heldAtStart = deferStart ? holdDue() : '';
+setTimeout(() => releaseHeld(heldAtStart), 20000); // (never held for long, whatever happens)
 go(view);
 receiveShare();
 receiveLaunch();
@@ -864,16 +861,11 @@ if (sb) {
     authSeen = true;
     if (ev === 'INITIAL_SESSION' && deferStart) {
       if (!s) {
-        holdTimer = false;
         rollover();
+        releaseHeld(heldAtStart);
         if (timerDue()) finishTimer(true);
         else renderAll();
-      } else
-        // (the sync runs the day's reset)
-        sync().finally(() => {
-          holdTimer = false;
-          if (timerDue()) finishTimer(true);
-        });
+      } else sync().finally(() => releaseHeld(heldAtStart)); // (the sync runs the day's reset)
     }
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
       askMerge = true; // signing in here: a choice about this device's own data can be put

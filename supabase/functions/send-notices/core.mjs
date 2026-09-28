@@ -69,12 +69,15 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
               log.warn('push failed', err.statusCode || err.message);
               // A busy or broken push service (429, 5xx, no answer) may clear by next minute;
               // anything else it refused (bad keys, a bad subscription, too big) won't.
+              // (no status: the library refused the subscription itself, e.g. malformed keys)
               const sc = err.statusCode;
-              if (!sc || sc === 408 || sc === 429 || sc >= 500) giveUp = false;
+              if (sc === 408 || sc === 429 || sc >= 500) giveUp = false;
               errs.push(
-                sc === 400 || sc === 401 || sc === 403
-                  ? `push service refused (${err.statusCode}): the VAPID keys in the function's secrets don't match this device's`
-                  : `push failed: ${err.statusCode || err.message}`,
+                sc === 401 || sc === 403
+                  ? `push service refused (${sc}): the VAPID keys in the function's secrets don't match this device's`
+                  : sc === 400
+                    ? 'push service rejected the request (400): the keys or this subscription may be wrong; turn notifications off and on again there'
+                    : `push failed: ${sc || err.message}`,
               );
             }
           }

@@ -230,12 +230,13 @@ function rolloverLocal() {
     return true; // (one is under way)
   }
   // Before the first auth event nothing is known yet: give it a few minutes before a local reset.
-  if (typeof deferStart !== 'undefined' && deferStart && !authSeen && ++startWait < 4) return false;
+  if (typeof deferStart !== 'undefined' && deferStart && !authSeen && Date.now() - startedAt < 3 * 60e3)
+    return false;
   rollover();
   return false;
 }
-let authSeen = false,
-  startWait = 0;
+let authSeen = false;
+const startedAt = Date.now();
 function rollover() {
   if (S.day === today()) return;
   const last = S.day;
