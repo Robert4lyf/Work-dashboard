@@ -88,7 +88,15 @@ async function runHealth() {
           }[code] ||
             'Open Edge Functions > send-notices > Logs for the error (often a missing secret, or VAPID_SUBJECT not starting with mailto:).',
         );
-      else if (!code && j.error) add('Notification job', false, "Couldn't reach the function", j.error);
+      else if (!code && j.error)
+        add(
+          'Notification job',
+          false,
+          "Couldn't reach the function",
+          j.error === 'Timed out'
+            ? 'The last call timed out. Re-run supabase/notifications-cron.sql (it now allows 30 s) and check the function is deployed.'
+            : 'The last call failed. Check the function is deployed and the URL in the cron job is right.',
+        );
       else
         add(
           'Notification job',

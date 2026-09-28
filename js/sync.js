@@ -332,7 +332,9 @@ function renderHistory() {
   if (versions === 'none')
     return '<p class="hint">Server history isn\'t set up. Run the updated supabase-setup.sql (see the README).</p>';
   if (!versions.length) return '<p class="hint">No previous versions yet.</p>';
-  let h = '';
+  // (they hold everything as it was, notes included: they can be cleared)
+  let h =
+    '<p class="hint">A copy is kept every few hours. <button class="linkbtn" id="histclear">Delete them all</button></p>';
   versions.forEach(r => {
     const d = r.data || {},
       when = new Date(r.saved_at).toLocaleString([], {
@@ -345,6 +347,12 @@ function renderHistory() {
     h += `<div class="soonrow" style="cursor:default"><span>${esc(when)}<br><small class="hint">${(d.quests || []).length} quests, ${(d.inbox || []).length} inbox</small></span><button class="btn" data-hist="${r.id}" style="padding:6px 10px">Restore</button></div>`;
   });
   return h;
+}
+async function clearHistory() {
+  const { error } = await sb.from('cockpit_history').delete().eq('user_id', session.user.id);
+  if (error) return toast("Couldn't delete them. Run the updated supabase-setup.sql", false, 4000);
+  versions = [];
+  renderAccount();
 }
 // Per-device appearance, kept out of synced data (a phone and laptop can differ).
 const LOOK_KEY = 'dashboard-look';
@@ -382,7 +390,7 @@ function renderAccount() {
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
     <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
     <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
-    <label class="f" for="dayend">Workday ends (for "free" time on Today)</label><input class="fld" type="time" id="dayend" value="${S.dayEnd || '17:30'}" style="max-width:10em">
+    <label class="f" for="dayend">Workday ends (for "free" time on Today)</label><input class="fld" type="time" id="dayend" value="${esc(S.dayEnd || '17:30')}" style="max-width:10em">
     <label class="f" for="devname">This device's name (to choose where an alarm rings)</label><input class="fld" id="devname" value="${esc(thisDevice.name)}" maxlength="40" style="max-width:20em">${renderDevices()}`;
   h += renderTalkSettings();
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';

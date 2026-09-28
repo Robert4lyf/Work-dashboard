@@ -31,6 +31,8 @@ create index if not exists cockpit_history_user on public.cockpit_history (user_
 alter table public.cockpit_history enable row level security;
 drop policy if exists "read own history" on public.cockpit_history;
 create policy "read own history" on public.cockpit_history for select using (auth.uid() = user_id);
+drop policy if exists "delete own history" on public.cockpit_history;
+create policy "delete own history" on public.cockpit_history for delete using (auth.uid() = user_id);
 
 create or replace function public.cockpit_keep_history() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -269,7 +271,9 @@ begin
     get diagnostics n = row_count;
     out := out || jsonb_build_object('net', true);
     if n > 0 then
-      out := out || jsonb_build_object('status', r.status_code, 'at', r.created, 'error', left(r.error_msg, 200));
+      -- (only whether it timed out or failed: the log is project-wide, not this job's alone)
+      out := out || jsonb_build_object('status', r.status_code, 'at', r.created, 'error',
+        case when r.error_msg is null then null when r.error_msg ilike '%timeout%' then 'Timed out' else 'Failed' end);
     end if;
   exception when others then null; -- pg_net isn't enabled
   end;

@@ -645,6 +645,7 @@ document.addEventListener('click', e => {
   if (b.id === 'impbtn') $('#imp').click();
   if (b.id === 'copylog') copyLog();
   if (b.id === 'hist') loadHistory();
+  if (b.id === 'histclear' && arm(b, 'Delete all?')) clearHistory();
   if (d.hist) {
     const r = versions.find(x => String(x.id) === d.hist);
     if (r && r.data && Array.isArray(r.data.quests)) {

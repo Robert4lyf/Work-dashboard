@@ -3,7 +3,7 @@
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
 const VERSION = 'dashboard-v4';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
-const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'board', 'talk', 'notes', 'alarms', 'events']
+const APP = ['theme', 'state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'board', 'talk', 'notes', 'alarms', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
   './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png'];
@@ -47,7 +47,7 @@ self.addEventListener('fetch', e => {
   }
   // Everything else (icons, fonts, library): cache first
   e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
-    if (res.ok || res.type === 'opaque') put(req, res.clone());
+    if (res.ok) put(req, res.clone()); // (never an error page, or an opaque response of unknown worth)
     return res;
   })));
 });

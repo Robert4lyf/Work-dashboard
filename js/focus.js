@@ -93,7 +93,7 @@ function renderZen() {
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
   } else if (r) {
-    h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
+    h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${+S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
   }
   setHTML(el, h + '</div>'); // a background redraw keeps what's being typed
 }
@@ -133,7 +133,7 @@ function renderFocus() {
     [15, 25, 45].forEach(
       m => (h += `<button class="chip" data-mins="${m}" aria-pressed="${S.mins === m}">${m} min</button>`),
     );
-    h += `</div><button class="btn green" id="start" style="width:100%">Start ${S.mins} min</button>`;
+    h += `</div><button class="btn green" id="start" style="width:100%">Start ${+S.mins} min</button>`;
   }
   setHTML($('#v-focus'), h);
 }
