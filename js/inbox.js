@@ -108,7 +108,7 @@ function renderInbox() {
         );
         h += '</ul>';
       }
-      h += `<form class="addrow" data-subfor="${it.id}"><input maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
+      h += `<form class="addrow" data-subfor="${it.id}"><input id="is-${it.id}" data-keep maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
     }
     const chip = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
     h +=
@@ -124,12 +124,17 @@ const splitItems = v =>
   v
     .split(/\bnext item\b[,.;:]?|\n/i)
     .map(x => x.trim().replace(/^[,.;:]\s*/, ''))
-    .filter(Boolean)
-    .map(x => x.slice(0, 200));
+    .filter(Boolean);
 function capture(v) {
   const items = splitItems(v);
   if (!items.length) return 0;
-  items.reverse().forEach(t => S.inbox.unshift({ id: uid(), text: t[0].toUpperCase() + t.slice(1) }));
+  items.reverse().forEach(full => {
+    // Capitalised, unless it starts with a web address (or has nothing to capitalise).
+    const t = /^[a-z][\w+.-]*:\/\//i.test(full) ? full : full[0].toUpperCase() + full.slice(1),
+      it = { id: uid(), text: t.slice(0, 200) };
+    if (t.length > 200) it.node = fix({ id: uid(), text: it.text, notes: t }); // the rest in the notes
+    S.inbox.unshift(it);
+  });
   save();
   renderAll();
   beep([880]);

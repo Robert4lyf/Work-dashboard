@@ -71,6 +71,7 @@ document.addEventListener('submit', e => {
       b = snapshot(),
       p = find(f.dataset.parent).n;
     p.children.push(fix({ id: uid(), text: v, opt }));
+    p.done = false; // (it was finished before it had steps: with one to do, it isn't now)
     settle(b);
     $('#sin').focus();
     if (opt) $('#sopt').checked = true;
@@ -124,6 +125,7 @@ document.addEventListener('submit', e => {
     if (!v || !it) return;
     it.node = it.node || inboxToNode(it);
     it.node.children.push(fix({ id: uid(), text: v }));
+    it.node.done = false;
     save();
     renderAll();
     const nf = document.querySelector(`[data-subfor="${id}"] input`);
@@ -224,7 +226,7 @@ document.addEventListener('change', e => {
       if (t) t.text = v;
       save();
       renderAll();
-    }
+    } else el.value = r.n.text; // a blank name: keep the old one, and show it
     return;
   }
   if (fld === 'month') {
@@ -298,7 +300,9 @@ document.addEventListener('click', e => {
   }
   if (d.crumb !== undefined) openPath(path.slice(0, +d.crumb + 1));
   if (d.toggle) {
-    const n = find(d.toggle).n,
+    const r = find(d.toggle);
+    if (!r) return;
+    const n = r.n,
       bf = snapshot();
     n.done = !n.done;
     settle(bf);
@@ -314,8 +318,9 @@ document.addEventListener('click', e => {
     });
   }
   if (d.up || d.down) {
-    const r = find(d.up || d.down),
-      i = r.arr.indexOf(r.n),
+    const r = find(d.up || d.down);
+    if (!r) return;
+    const i = r.arr.indexOf(r.n),
       j = d.up ? i - 1 : i + 1;
     if (j < 0 || j >= r.arr.length) return;
     [r.arr[i], r.arr[j]] = [r.arr[j], r.arr[i]];
@@ -336,7 +341,9 @@ document.addEventListener('click', e => {
     renderToday();
   }
   if (d.savetpl) {
-    const n = find(d.savetpl).n,
+    const r = find(d.savetpl);
+    if (!r) return;
+    const n = r.n,
       t = Object.assign({ id: uid(), days: [] }, strip(n)),
       i = S.templates.findIndex(x => x.text === n.text);
     if (i >= 0) {
@@ -353,6 +360,7 @@ document.addEventListener('click', e => {
   }
   if (d.tpl) {
     const t = S.templates.find(x => x.id === d.tpl);
+    if (!t) return;
     const bf = snapshot(),
       q = inst(t);
     q.tpl = t.id;
@@ -371,6 +379,7 @@ document.addEventListener('click', e => {
   if (d.rep) {
     const t = S.templates.find(x => x.id === d.rep),
       wd = +d.wd;
+    if (!t) return;
     t.days = t.days.includes(wd) ? t.days.filter(x => x !== wd) : [...t.days, wd];
     if (t.auto && !repeats(t)) {
       S.templates = S.templates.filter(x => x !== t);
@@ -692,7 +701,7 @@ document.addEventListener('click', e => {
         renderSyncBadge();
         renderAccount();
       })
-      .catch(() => {}); // chose to stay signed in
+      .catch(e => e && toast("Couldn't sign out: " + (e.message || e), false, 4000)); // (0: chose to stay)
   }
   if (b.id === 'syncNow') sync();
   if (b.id === 'pushkeys') setupPushKeys();
@@ -749,6 +758,8 @@ document.addEventListener('keydown', e => {
   if (talk) return k === 'Escape' && closeTalk();
   // During a running session only pause and help work (see focusLocked).
   if (focusLocked() && k !== 'p' && k !== '?') return;
+  // Single-task mode covers the page: only its own keys.
+  if (zen && !['z', 'Escape', 'p', '?'].includes(k)) return;
   const field = id => {
     const f = $(id);
     if (!f) return false;
@@ -778,9 +789,13 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
-    rollover();
-    if (timerDue()) finishTimer(true);
-    else renderAll();
+    rolloverLocal();
+    // A session another device already stopped mustn't be finished here too: hear from the
+    // server first when possible.
+    if (timerDue()) {
+      if (sb && session && navigator.onLine) syncSettled().then(() => timerDue() && finishTimer(true));
+      else finishTimer(true);
+    } else renderAll();
     sync();
     verifyPush();
     talkWake();
@@ -794,17 +809,21 @@ setInterval(() => {
   if (document.hidden) return;
   // Midnight with the app open: the new day starts here too, not only on coming back to it.
   if (S.day !== today()) {
-    rollover();
+    rolloverLocal();
     inBackground(renderAll);
   }
   sync();
-  inBackground(renderToday); // keeps the free time on Today current
+  // Keeps the free time on Today current (not under a "Delete?" waiting for its second tap).
+  if (!$('#v-today .armed')) inBackground(renderToday);
   renderHeader(); // and the next alarm
 }, 60000);
 
 load();
-rollover();
-if (timerDue()) finishTimer(true);
+// Signed in and online, the day's reset (and finishing a session that ended while the app was
+// closed) waits for the server's copy: see onAuthStateChange. Otherwise it happens here.
+const deferStart = !!sb && navigator.onLine;
+if (!deferStart) rollover();
+if (!deferStart && timerDue()) finishTimer(true);
 else renderAll();
 go(view);
 receiveShare();
@@ -835,6 +854,14 @@ if (sb) {
     session = s;
     renderSyncBadge();
     renderAccount(); // even when not on screen, so Settings never shows a stale sign-in form
+    if (!s) unlisten(); // signed out, or the session expired: live updates would be dead anyway
+    if (ev === 'INITIAL_SESSION' && deferStart) {
+      if (!s) {
+        rollover();
+        if (timerDue()) finishTimer(true);
+        else renderAll();
+      } else syncSettled().then(() => timerDue() && finishTimer(true)); // (sync runs the reset)
+    }
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
       setTimeout(sync, 0);
       setTimeout(verifyPush, 3000); // after the first sync has brought the current key

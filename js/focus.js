@@ -40,7 +40,7 @@ function startTimer(q) {
   const top = topOf(q);
   askNotify();
   beep([440]);
-  S.timer = { end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
+  S.timer = { id: uid(), end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
   save();
   zen = true; // a focus session opens in single-task mode
   renderAll();
@@ -157,9 +157,10 @@ function renderStats() {
   });
   return h + '</div>';
 }
-function logSession(tag, mins, t, q) {
+function logSession(tag, mins, t, q, tid) {
   const p = projectOf(q);
-  S.sessions.push({ tag, mins, t, q: q || null, p });
+  // tid: the timer's id, so the same session ended on two devices is one record, not two.
+  S.sessions.push({ tag, mins, t, q: q || null, p, ...(tid ? { tid } : {}) });
   addDaily(fmt(new Date(t)), tag, mins);
   addPDaily(fmt(new Date(t)), p, mins);
 }
@@ -168,7 +169,7 @@ function finishTimer(silent) {
   S.timer = null;
   leftFor = t.q;
   S.focusQ = null;
-  logSession(t.tag, t.mins, t.end, t.q);
+  logSession(t.tag, t.mins, t.end, t.q, t.id);
   addXP(20);
   save();
   if (!silent) {
@@ -189,7 +190,7 @@ function stopAndSave(done) {
   S.timer = null;
   S.focusQ = null;
   if (m >= 1) {
-    logSession(t.tag, m, t.left != null && t.pausedAt ? t.pausedAt : Date.now(), t.q);
+    logSession(t.tag, m, t.left != null && t.pausedAt ? t.pausedAt : Date.now(), t.q, t.id);
     addXP(Math.max(1, Math.round((20 * m) / t.mins)));
   }
   const r = done && t.q && find(t.q);

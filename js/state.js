@@ -42,14 +42,19 @@ const cleanId = x => {
   if (x && typeof x.id === 'string') x.id = x.id.replace(/["'<>&\s`]/g, '');
   return x;
 };
+// Dates go into the page inside attributes too: only a real yyyy-mm-dd, else none.
+const cleanDay = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
 function fix(n) {
   cleanId(n);
   n.children = (n.children || []).map(fix);
+  if (n.start) n.start = cleanDay(n.start);
+  if (n.wait) n.wait.due = cleanDay(n.wait.due);
+  if (n.since) n.since = cleanDay(n.since);
   n.tag = n.tag || '';
   n.project = n.project || '';
   n.opt = !!n.opt;
   n.notes = n.notes || '';
-  n.due = n.due || '';
+  n.due = cleanDay(n.due);
   n.done = !!n.done;
   return n;
 }
@@ -178,12 +183,21 @@ function load() {
   try {
     s = JSON.parse(localStorage.getItem(KEY));
   } catch (e) {}
+  // The saved copy is gone (or unreadable) but the sync bookkeeping isn't: forget that too, so
+  // the next sync starts from the server's copy rather than deleting everything it can't see.
+  if (!s && typeof sync2 !== 'undefined' && sync2.user) {
+    sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0 };
+    saveSyncState();
+  }
   norm(s);
 }
 function persistLocal() {
   try {
     localStorage.setItem(KEY, JSON.stringify(S));
-  } catch (e) {}
+    return true;
+  } catch (e) {
+    return false; // no room (or storage blocked)
+  }
 }
 function save() {
   const cut = Date.now() - 400 * 864e5,
@@ -196,7 +210,9 @@ function save() {
   stampSince();
   S.editedAt = Date.now();
   dropUndo();
-  persistLocal();
+  // Not saved here: not marked as synced either, or after a reload the old copy would look
+  // like a newer edit and go over the server's.
+  if (!persistLocal()) return toast("Couldn't save: this device is out of storage", false, 4000);
   markDirty();
   schedulePush();
 }
@@ -204,6 +220,13 @@ function save() {
 // date-based ids), so whichever device syncs first, nothing is doubled.
 // (Alarms need no reset here: one on for a past day simply isn't on any more; see alarmOn.
 // Writing a reset could overwrite a newer switch-on synced from another device.)
+// Where the day's changes are worked out. Signed in and online, the server's copy comes first
+// (see sync): yesterday's edits from another device mustn't be undone by a reset run on stale
+// data. Otherwise (or if the sync fails) it runs here.
+function rolloverLocal() {
+  if (typeof sb !== 'undefined' && sb && session && navigator.onLine) return sync();
+  rollover();
+}
 function rollover() {
   if (S.day === today()) return;
   const last = S.day;
@@ -218,7 +241,8 @@ function rollover() {
     S.templates.forEach(t => {
       const hit =
         t.days.includes(wd) || (t.monthDay && (t.monthDay === dd || (t.monthDay > end && dd === end)));
-      if (hit && !S.quests.some(q => q.tpl === t.id || q.text === t.text)) {
+      const gone = sync2.gone && sync2.gone['quest:' + t.id + '-' + d]; // done and cleared elsewhere
+      if (hit && !gone && !S.quests.some(q => q.tpl === t.id || q.text === t.text)) {
         const q = inst(t);
         q.tpl = t.id;
         q.id = t.id + '-' + d; // the same on every device, so two devices don't both add it
@@ -234,6 +258,8 @@ function rollover() {
     return false;
   });
   stampSince();
+  // Cleared copies older than the look-back are of no further use.
+  for (const k in sync2.gone || {}) if (k.slice(-10) < shift(today(), -31)) delete sync2.gone[k];
   persistLocal();
   // As of midnight: any real edit made today on another device wins over this tidy-up.
   markDirty(new Date(new Date().setHours(0, 0, 0, 0)).getTime());

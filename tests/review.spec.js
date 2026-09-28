@@ -119,7 +119,7 @@ test('health check, signed out: says what is and isn’t set up', async ({ app, 
   const rows = page.locator('.health .hrow2');
   await expect(rows.first()).toContainText('Supabase settings');
   await expect(rows.first()).toHaveClass(/bad/);
-  await expect(rows.first()).toContainText('Fill in config.js');
+  await expect(rows.first()).toContainText('Library not loaded'); // (the CDN is blocked in tests)
   await expect(page.locator('.health')).toContainText('Works offline');
   await expect(page.locator('#healthrun')).toHaveText('Run again');
 });

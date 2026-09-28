@@ -40,7 +40,7 @@ function stepWaitBadge(n) {
 // On a quest's page: set it waiting, change the details, or stop waiting.
 function waitPanel(n) {
   const w = n.wait || {};
-  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : 'Waiting on someone?'}</summary>
+  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}${n.wait ? ' data-held="1"' : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : 'Waiting on someone?'}</summary>
     <label class="f" for="wwho">Who</label><input class="fld" id="wwho" maxlength="60" value="${esc(w.who || '')}" list="wholist" autocomplete="off">
     <label class="f" for="wnote">For what</label><input class="fld" id="wnote" maxlength="160" value="${esc(w.note || '')}" autocomplete="off">
     <label class="f" for="wdue">Chase on</label><input class="fld" type="date" id="wdue" value="${w.due || ''}">

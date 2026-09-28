@@ -15,8 +15,15 @@ async function runHealth() {
       return { error: e };
     }
   };
-  if (!CFG.supabaseUrl || !CFG.supabaseAnonKey || !sb)
+  if (!CFG.supabaseUrl || !CFG.supabaseAnonKey)
     add('Supabase settings', false, 'Not set up', 'Fill in config.js (README, step 2).');
+  else if (!sb)
+    add(
+      'Supabase settings',
+      false,
+      'Library not loaded',
+      'Offline, or the CDN is blocked. Reload once online.',
+    );
   else add('Supabase settings', true, 'Found');
   if (!session) add('Signed in', sb ? false : null, 'Not signed in', sb ? 'Sign in above.' : '');
   else {

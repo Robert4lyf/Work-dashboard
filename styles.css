@@ -11,6 +11,7 @@
   --blue: #29adff;
   --plum: #7e2553;
   --pink-ink: var(--plum); /* pink as text: readable on the light background */
+  --meter-track: #fff1e8; /* the unfilled part of a quest's meter: its dark text stays readable */
   color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   --on-accent: #1d2b53;
   --head-ink: #fff1e8;
@@ -576,6 +577,7 @@ nav {
   gap: 2px;
   padding: 0 4px;
   overflow-x: auto;
+  scroll-padding-inline: 44px; /* the current tab lands clear of the fades */
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }

@@ -133,7 +133,7 @@ test('round 2: inbox waiting from older versions carries over; the waiting panel
     norm({ inbox: [{ id: 'i9', text: 'Old', node: { id: 'n9', text: 'Old', wait: { who: 'Bo' } } }] });
     return [S.inbox[0].wait, S.inbox[0].node.wait];
   });
-  expect(w).toEqual([{ who: 'Bo' }, undefined]);
+  expect(w).toEqual([{ who: 'Bo', due: '' }, undefined]);
 
   await page.evaluate(() => {
     S.quests = [fix({ id: 'wq', text: 'Chase' })];

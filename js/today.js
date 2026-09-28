@@ -20,7 +20,7 @@ function row(n, i, len, sib) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
       p = Math.round(frac(n) * 100);
-    left = `<button class="meter" data-open="${n.id}" aria-label="${p}% complete" style="background:linear-gradient(to top,var(--green) ${p}%,var(--bg) ${p}%)">${set.filter(isDone).length}/${set.length}</button>`;
+    left = `<button class="meter" data-open="${n.id}" aria-label="${p}% complete" style="background:linear-gradient(to top,var(--green) ${p}%,var(--meter-track) ${p}%)">${set.filter(isDone).length}/${set.length}</button>`;
   } else {
     left = `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
   }
@@ -62,7 +62,8 @@ function list(ns) {
 function renderToday() {
   $('#v-today')
     .querySelectorAll('details[id]')
-    .forEach(d => (panels[d.id] = d.open));
+    // (the waiting panel is held open on a waiting quest: that isn't a choice to remember)
+    .forEach(d => (d.id !== 'waitd' || !d.dataset.held ? (panels[d.id] = d.open) : 0));
   path = path.filter((id, i) => {
     const r = find(id);
     return r && (i === 0 ? S.quests.includes(r.n) : find(path[i - 1]).n.children.includes(r.n));

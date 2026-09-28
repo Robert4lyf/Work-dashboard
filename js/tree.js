@@ -74,7 +74,8 @@ function settle(before) {
     addXP(gain);
     if (gain > 0) beep([659, 988]);
   }
-  if (S.quests.length && S.quests.every(isDone) && S.bonusDay !== today()) {
+  // (only on finishing the last one: deleting the rest isn't clearing the stage)
+  if (gain > 0 && S.quests.length && S.quests.every(isDone) && S.bonusDay !== today()) {
     S.bonusDay = today();
     addXP(50);
     toast('Stage clear!');
@@ -181,7 +182,19 @@ function withUndo(msg, fn) {
 // Redraws triggered in the background (sync, the timer ending) must not wipe what
 // the user is typing or move their cursor. Views set their HTML through setHTML for that.
 let background = false;
-const COMPOSE = ['sin', 'iin', 'tagin', 'projin', 'aemail', 'apass', 'leftin', 'whyin', 'wwhat', 'wfrom'];
+const COMPOSE = [
+  'sin',
+  'iin',
+  'tagin',
+  'projin',
+  'aemail',
+  'apass',
+  'leftin',
+  'whyin',
+  'wwhat',
+  'wfrom',
+  'wchase',
+];
 // (Not the waiting panel's Who and For what: they show the saved details, which a sync may
 // have changed; while being typed in, they're kept like any field being edited.)
 function inBackground(fn) {
@@ -212,7 +225,9 @@ function setHTML(el, html) {
   if (fid && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) typed[fid] = a.value;
   // And any typed into but not yet saved (the waiting panel's, saved together by its button).
   el.querySelectorAll('[data-typed][id]').forEach(i => (typed[i.id] = i.value));
+  const opt = $('#sopt') && $('#sopt').checked; // "Add as optional", ticked but not yet added
   el.innerHTML = html;
+  if (opt && $('#sopt')) $('#sopt').checked = true;
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i) i.value = typed[id];
@@ -270,3 +285,5 @@ function arm(b, label) {
   }, 3000);
   return false;
 }
+// "1 quest", "2 quests".
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
