@@ -9,8 +9,8 @@ select cron.schedule(
   'dashboard-notices',
   '* * * * *',
   $$ select net.http_post(
-       url := 'https://YOUR-PROJECT-REF.supabase.co/functions/v1/send-notices',
-       headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', 'YOUR-CRON-SECRET'),
+       url := 'https://grhfdmnakkacyitniqly.supabase.co/functions/v1/send-notices',
+       headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', 'Akdhbmls'),
        body := '{}'::jsonb
      ) $$
 );
