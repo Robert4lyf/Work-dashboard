@@ -234,3 +234,33 @@ begin
 end $$;
 revoke execute on function public.cockpit_alert(text, text, text, text, text, text) from public;
 grant execute on function public.cockpit_alert(text, text, text, text, text, text) to anon, authenticated;
+
+-- For the app's health check: is the every-minute job that sends notifications set up, and what
+-- did its last call to the send-notices function get back? (Only states and status codes.)
+create or replace function public.cockpit_notify_status() returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  out jsonb := jsonb_build_object('cron', false, 'net', false);
+  r record;
+  n int;
+begin
+  if auth.uid() is null then raise exception 'sign in first'; end if;
+  begin
+    execute $q$ select active from cron.job where jobname = 'dashboard-notices' $q$ into r;
+    get diagnostics n = row_count; -- (EXECUTE doesn't set FOUND)
+    out := out || jsonb_build_object('cron', n > 0, 'active', n > 0 and r.active);
+  exception when others then null; -- pg_cron isn't enabled
+  end;
+  begin
+    execute $q$ select status_code, created, error_msg from net._http_response order by created desc limit 1 $q$ into r;
+    get diagnostics n = row_count;
+    out := out || jsonb_build_object('net', true);
+    if n > 0 then
+      out := out || jsonb_build_object('status', r.status_code, 'at', r.created, 'error', left(r.error_msg, 200));
+    end if;
+  exception when others then null; -- pg_net isn't enabled
+  end;
+  return out;
+end $$;
+revoke execute on function public.cockpit_notify_status() from public, anon;
+grant execute on function public.cockpit_notify_status() to authenticated;

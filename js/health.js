@@ -50,6 +50,46 @@ async function runHealth() {
         'Turn them on under Notifications below (allow them when the browser asks).',
       );
     if (S.pushKey) {
+      // The every-minute job that runs send-notices, and what its last call got back.
+      const job = await q(() => sb.rpc('cockpit_notify_status'));
+      const j = job.data || {},
+        code = j.status;
+      if (job.error) add('Notification job', null, 'Unknown', '');
+      else if (!j.cron || !j.net)
+        add(
+          'Notification job',
+          false,
+          'Not set up',
+          'In Supabase, Database > Extensions: enable pg_cron and pg_net. Then run notifications-cron.sql with your project ref and CRON_SECRET (README > Notifications, step 5).',
+        );
+      else if (!j.active)
+        add(
+          'Notification job',
+          false,
+          'Paused',
+          'In Supabase, Integrations > Cron: turn dashboard-notices back on.',
+        );
+      else if (code && code !== 200)
+        add(
+          'Notification job',
+          false,
+          `The function answered ${code}`,
+          {
+            401: 'Turn off "Enforce JWT verification" for send-notices (Edge Functions).',
+            403: "The secret in notifications-cron.sql doesn't match the function's CRON_SECRET: make them the same and re-run it.",
+            404: 'Check the URL in notifications-cron.sql (project ref) and that the function is named send-notices.',
+          }[code] ||
+            'Open Edge Functions > send-notices > Logs for the error (often a missing secret, or VAPID_SUBJECT not starting with mailto:).',
+        );
+      else if (!code && j.error) add('Notification job', false, "Couldn't reach the function", j.error);
+      else
+        add(
+          'Notification job',
+          code === 200 ? true : null,
+          code === 200
+            ? 'Running (last call ' + new Date(j.at).toLocaleTimeString() + ')'
+            : 'Set up, not run yet',
+        );
       const sent = await q(() =>
         sb
           .from('cockpit_notices')
