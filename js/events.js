@@ -651,10 +651,12 @@ document.addEventListener('click', e => {
   if (b.id === 'pushtest') testPush();
   if (b.id === 'capnew') newCaptureToken();
   if (b.id === 'captest') testCapture();
+  if (b.id === 'alerttest') testAlert();
   if (d.copy)
     copyText(
       {
         url: captureUrl(),
+        alert: alertUrl(),
         key: CFG.supabaseAnonKey,
         token: captureToken,
         vpub: S.pushKey,

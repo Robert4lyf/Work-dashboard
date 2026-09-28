@@ -220,3 +220,26 @@ test('lost the private key: New keys makes a fresh pair after a confirm', async 
   await expect(page.locator('#pushnewkeys')).toHaveCount(0); // hidden while the new pair shows
   expect(errors).toEqual([]);
 });
+
+test("the app's notice sync leaves alerts sent by scripts alone", async ({ browser }) => {
+  const { page, errors } = await open(browser, new Date('2026-09-23T08:00:00+01:00'));
+  await page.evaluate(() => {
+    window.__notices.push({
+      key: 'alert:abc',
+      at: new Date().toISOString(),
+      title: 'Flow failed',
+      sent_at: null,
+    });
+    window.__notices.push({
+      key: 'due:gone:2026-09-24',
+      at: new Date().toISOString(),
+      title: 'Old',
+      sent_at: null,
+    });
+    S.pushKey = 'x';
+    save();
+  });
+  await page.evaluate(() => syncNotices());
+  expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc']);
+  expect(errors).toEqual([]);
+});

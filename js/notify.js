@@ -229,7 +229,7 @@ async function syncNotices() {
   const { data, error } = await sb.from('cockpit_notices').select('key').is('sent_at', null);
   if (error) return;
   const keep = new Set(want.map(n => n.key)),
-    stale = data.map(r => r.key).filter(k => !keep.has(k) && !k.startsWith('test:'));
+    stale = data.map(r => r.key).filter(k => !keep.has(k) && !/^(test|alert):/.test(k));
   if (want.length) {
     const { error: e2 } = await sb.from('cockpit_notices').upsert(
       want.map(n => ({ ...n, at: new Date(n.at).toISOString() })),
