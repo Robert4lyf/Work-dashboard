@@ -714,6 +714,7 @@ document.addEventListener('visibilitychange', () => {
     else renderAll();
     sync();
     verifyPush();
+    talkWake();
   }
 });
 window.addEventListener('online', () => sync());
@@ -723,7 +724,7 @@ window.addEventListener('offline', () => {
 setInterval(() => {
   if (document.hidden) return;
   sync();
-  renderHeader(); // keeps the free time current
+  inBackground(renderToday); // keeps the free time on Today current
 }, 60000);
 
 load();

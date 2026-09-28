@@ -50,11 +50,24 @@ async function testAlert() {
         to: 'inbox',
       }),
     });
-    if (!r.ok) throw new Error(r.status);
+    if (!r.ok) {
+      const msg = ((await r.json().catch(() => ({}))).message || '').toLowerCase();
+      return toast(
+        r.status === 404 || msg.includes('cockpit_alert')
+          ? 'Alerts aren’t set up yet. Run the updated supabase-setup.sql'
+          : msg.includes('unknown capture token')
+            ? 'This token was replaced on another device. Tap New link here to get a current one'
+            : msg.includes('too many alerts')
+              ? 'Too many alerts in the last hour. Try again later'
+              : "The alert didn't go through (" + (msg || r.status) + ')',
+        false,
+        4000,
+      );
+    }
     toast('Sent. A notification should arrive within a minute');
     sync();
   } catch (e) {
-    toast("The alert didn't go through. Run the updated supabase-setup.sql", false, 4000);
+    toast("Couldn't reach Supabase. Check the connection", false, 4000);
   }
 }
 function copyText(text) {
@@ -100,8 +113,10 @@ function renderCapture() {
 // Launched from an app-icon shortcut (manifest "shortcuts").
 function receiveLaunch() {
   const q = new URLSearchParams(location.search);
-  if (!q.has('capture') && !q.has('talk')) return;
+  // ?focus came from a removed shortcut that installed apps may still show: just tidy the URL.
+  if (!q.has('capture') && !q.has('talk') && !q.has('focus')) return;
   history.replaceState(null, '', location.pathname);
+  if (q.has('focus')) return;
   if (q.has('talk')) return talkable() ? openTalk(false) : undefined;
   go('inbox');
   const i = $('#iin');

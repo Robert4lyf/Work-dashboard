@@ -189,6 +189,7 @@ declare
   id text := 'alert' || replace(gen_random_uuid()::text, '-', '');
   ms bigint := (extract(epoch from now()) * 1000)::bigint;
   item jsonb;
+  chase text := '';
 begin
   select c.user_id into u from cockpit_capture_tokens c where c.token = cockpit_alert.token;
   if u is null then raise exception 'unknown capture token'; end if;
@@ -196,7 +197,9 @@ begin
   if dest not in ('phone', 'inbox', 'today', 'waiting') then
     raise exception 'to must be phone, inbox, today or waiting';
   end if;
-  -- A runaway script (or a leaked token) can't flood the phone or the lists.
+  -- A runaway script (or a leaked token) can't flood the phone or the lists. The lock makes
+  -- calls for the same person take turns, so parallel requests can't all slip under the limit.
+  perform pg_advisory_xact_lock(hashtext('cockpit_alert:' || u::text));
   if (select count(*) from cockpit_notices n where n.user_id = u and n.key like 'alert:%'
       and n.at > now() - interval '1 hour') >= 60 then
     raise exception 'too many alerts: at most 60 an hour';
@@ -212,9 +215,16 @@ begin
       item := item || jsonb_build_object('node', jsonb_build_object('id', id || 'n', 'text', t, 'notes', b, 'children', '[]'::jsonb));
     end if;
     if dest = 'waiting' then
+      -- Only a real date (2026-02-30 isn't one) becomes the chase date.
+      begin
+        if coalesce(due, '') ~ '^\d{4}-\d{2}-\d{2}$' and to_char(due::date, 'YYYY-MM-DD') = due then
+          chase := due;
+        end if;
+      exception when others then chase := '';
+      end;
       item := item || jsonb_build_object('wait', jsonb_build_object(
         'who', left(trim(coalesce(who, '')), 60), 'note', '', 'since', to_char(now(), 'YYYY-MM-DD'),
-        'due', case when coalesce(due, '') ~ '^\d{4}-\d{2}-\d{2}$' then due else '' end));
+        'due', chase));
     end if;
     insert into cockpit_items (user_id, key, kind, data, edited_at) values (u, 'inbox:' || id, 'inbox', item, ms);
   end if;

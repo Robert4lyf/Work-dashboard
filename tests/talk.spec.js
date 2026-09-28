@@ -171,3 +171,18 @@ test('talk: an empty name is asked for, and speech can be skipped', async ({ app
   expect(await said(page)).toBe('Who are you waiting on?');
   expect((await app.state()).quests[0].wait).toBeUndefined();
 });
+
+test('talk: a blocked microphone says so instead of "didn’t hear anything"', async ({ app, page }) => {
+  await app.go('account');
+  await page.click('[data-talkpref="on"]');
+  await page.click('#talkbtn');
+  await page.waitForFunction(() => window.__rec);
+  await page.evaluate(() => {
+    const r = window.__rec;
+    window.__rec = null;
+    r.onerror({ error: 'not-allowed' });
+    r.onend();
+  });
+  await expect(page.locator('#v-talk .tstate')).toContainText('microphone is blocked');
+  await expect(page.locator('#talkmic')).toHaveText('Tap to speak');
+});

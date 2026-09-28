@@ -44,20 +44,18 @@ async function replacePushKeys() {
   pushTest = null;
   await setupPushKeys();
 }
-// This device's subscription must use the current key: after New keys on another device it
-// no longer does (and its row was removed), so show it as off here until turned on again.
+// After New keys on another device, every device's subscription row is removed. This device
+// then shows notifications as off, so they can be turned on again with the new key. (The row,
+// not the synced key, is the signal: a stale key can briefly sync back from another device.)
 async function verifyPush() {
-  if (!pushEndpoint || !S.pushKey || !pushSupported()) return;
+  if (!pushEndpoint || !sb || !session) return;
+  const { data, error } = await sb.from('cockpit_push_subs').select('endpoint').eq('endpoint', pushEndpoint);
+  if (error || !data || data.length) return;
   try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) return; // can't tell yet
-    const sub = await reg.pushManager.getSubscription(),
-      key = sub && sub.options && sub.options.applicationServerKey;
-    if (sub && (!key || b64u(new Uint8Array(key)) === S.pushKey)) return;
+    const reg = await navigator.serviceWorker.getRegistration(),
+      sub = reg && (await reg.pushManager.getSubscription());
     if (sub) await sub.unsubscribe();
-  } catch (e) {
-    return;
-  }
+  } catch (e) {}
   pushEndpoint = '';
   try {
     localStorage.removeItem(PUSH_KEY);
@@ -81,6 +79,7 @@ async function enablePush() {
       .upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' });
     if (error) throw error;
     pushEndpoint = j.endpoint;
+    pushTest = null;
     localStorage.setItem(PUSH_KEY, pushEndpoint);
     toast('Notifications on for this device');
   } catch (e) {
@@ -98,6 +97,7 @@ async function disablePush() {
     await sb.from('cockpit_push_subs').delete().eq('endpoint', pushEndpoint);
   } catch (e) {}
   pushEndpoint = '';
+  pushTest = null; // old test results no longer apply
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
@@ -106,7 +106,17 @@ async function disablePush() {
 // "Send a test" checks each link in the chain and says which one is broken:
 // this phone showing notifications, this device's subscription, then the server sending one.
 let pushTest = null; // steps: { name, ok (true/false/null = waiting), msg }
+let pushTesting = false;
 async function testPush() {
+  if (pushTesting) return;
+  pushTesting = true;
+  try {
+    await runPushTest();
+  } finally {
+    pushTesting = false;
+  }
+}
+async function runPushTest() {
   const steps = (pushTest = []),
     step = (name, ok, msg) => {
       const s = steps.find(x => x.name === name);

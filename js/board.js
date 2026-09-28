@@ -15,7 +15,8 @@ function moveToInbox(id) {
   toast('Moved to inbox');
 }
 
-let dragging = null;
+let dragging = null,
+  dragRank = null; // the dragged quest's group, worked out once per drag
 // Where a drop would land for the current drag, or null if it can't land here.
 function dropZone(target, y) {
   if (!dragging || !target.closest) return null;
@@ -27,7 +28,7 @@ function dropZone(target, y) {
   // Reordering only within the same list, and (outside Reorder mode, where waiting and finished
   // quests are shown lower down) within the same group, so a drop lands where it looks.
   if (!me || me.arr !== other.arr || me.n === other.n) return null;
-  if (!reorder && listRank(me.n) !== listRank(other.n)) return null;
+  if (!reorder && (dragRank ??= listRank(me.n)) !== listRank(other.n)) return null;
   const box = rowEl.getBoundingClientRect();
   return { id, rowEl, other, after: y > box.top + box.height / 2 };
 }
@@ -38,6 +39,7 @@ document.addEventListener('dragstart', e => {
   const el = e.target.closest && e.target.closest('[data-drag]');
   if (!el) return;
   dragging = el.dataset.drag;
+  dragRank = null;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', dragging);
 });

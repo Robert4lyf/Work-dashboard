@@ -246,3 +246,14 @@ test("the app's notice sync leaves alerts sent by scripts alone", async ({ brows
   expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc']);
   expect(errors).toEqual([]);
 });
+
+test('after New keys elsewhere removed this device, it shows notifications as off', async ({ browser }) => {
+  const { page, errors } = await open(browser, new Date('2026-09-23T08:00:00+01:00'));
+  await page.evaluate(() => {
+    S.pushKey = 'k';
+    pushEndpoint = 'https://push.example/old'; // no longer in cockpit_push_subs
+  });
+  await page.evaluate(() => verifyPush());
+  expect(await page.evaluate(() => pushEndpoint)).toBe('');
+  expect(errors).toEqual([]);
+});

@@ -19,10 +19,10 @@ function setTalkPref(on) {
 let talk = null,
   talkRec = null,
   talkLock = null;
-// Opened from the Talk button (a tap, so it can speak straight away) or a launcher shortcut
-// (it can't: browsers only speak after a tap, so it waits for Start).
-function openTalk(tapped) {
-  talk = { log: [], state: 'ready', sorting: null, skipped: new Set(), quiet: 0 };
+// Keep the screen on while talk mode is open. Browsers drop the lock whenever the page is
+// hidden, so it's asked for again on return (see the visibilitychange handler).
+function talkWake() {
+  if (!talk || (talkLock && !talkLock.released)) return;
   try {
     const mine = talk;
     navigator.wakeLock.request('screen').then(
@@ -31,6 +31,12 @@ function openTalk(tapped) {
       () => {},
     );
   } catch (e) {}
+}
+// Opened from the Talk button (a tap, so it can speak straight away) or a launcher shortcut
+// (it can't: browsers only speak after a tap, so it waits for Start).
+function openTalk(tapped) {
+  talk = { log: [], state: 'ready', sorting: null, skipped: new Set(), quiet: 0 };
+  talkWake();
   renderTalk();
   if (tapped) talkSay(talkBrief());
 }
@@ -74,13 +80,19 @@ function talkListen() {
     speechSynthesis.cancel();
   } catch (e) {}
   let heard = '';
+  talk.problem = '';
   try {
     talkRec = new SR();
     talkRec.lang = navigator.language || 'en-GB';
     talkRec.interimResults = false;
     talkRec.continuous = false;
     talkRec.onresult = e => (heard = e.results[e.results.length - 1][0].transcript);
-    talkRec.onerror = () => {};
+    // A blocked microphone or no connection would otherwise look like silence.
+    talkRec.onerror = e => {
+      if (!talk) return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') talk.problem = 'mic';
+      else if (e.error === 'network') talk.problem = 'network';
+    };
     talkRec.onend = () => {
       talkRec = null;
       if (!talk) return;
@@ -88,6 +100,10 @@ function talkListen() {
         talk.quiet = 0;
         talk.log.push({ me: true, t: heard.trim() });
         return talkHeard(heard.trim());
+      }
+      if (talk.problem) {
+        talk.state = 'idle';
+        return renderTalk();
       }
       // Nothing said: try again once, then wait for a tap.
       if (++talk.quiet < 2) return talkListen();
@@ -227,7 +243,12 @@ function renderTalk() {
       ready: 'Tap Start, then talk.',
       speaking: 'Speaking…',
       listening: 'Listening…',
-      idle: "Didn't hear anything.",
+      idle:
+        talk.problem === 'mic'
+          ? 'The microphone is blocked. Allow it for this app in Chrome’s site settings.'
+          : talk.problem === 'network'
+            ? 'Speech recognition needs a connection. Check you’re online.'
+            : "Didn't hear anything.",
     }[st];
   const btn =
     st === 'ready'
