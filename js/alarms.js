@@ -43,7 +43,7 @@ function forgetDevice(id) {
 function renderDevices() {
   const others = S.devices.filter(d => d.id !== thisDevice.id);
   if (!others.length) return '';
-  return `<p class="hint" style="margin:6px 0 0">Other devices: ${others
+  return `<p class="hint" style="margin:6px 0 0">Other devices (forget ones you no longer use; one still in use adds itself back): ${others
     .map(
       d =>
         `<span class="tchip"><span>${esc(d.name)}</span><button class="tdel" data-forgetdev="${d.id}" aria-label="Forget ${esc(d.name)}">×</button></span>`,
@@ -190,11 +190,13 @@ function dismissAlarm(id) {
 let closeKey = '',
   closeAt = 0;
 function closeAlarmNotes(ringingHere) {
-  if (!navigator.serviceWorker || !S.alarms.some(a => a.day)) return;
+  if (!navigator.serviceWorker) return;
   const live = new Set(S.alarms.filter(alarmLive).map(a => a.id)),
     here = new Set(document.hidden ? [] : ringingHere.map(a => a.id)),
     key = [...live].join() + '|' + [...here].join();
-  if (key === closeKey && Date.now() - closeAt < 20000) return;
+  // Every second while ringing here (a push arriving over the full-screen alarm is cleared at
+  // once), otherwise on changes or every 20 s.
+  if (key === closeKey && !here.size && Date.now() - closeAt < 20000) return;
   closeKey = key;
   closeAt = Date.now();
   navigator.serviceWorker
@@ -263,7 +265,9 @@ function renderAlarms() {
 // The next alarm to go off today, for the header.
 function nextAlarm() {
   const now = Date.now();
-  return S.alarms.filter(a => alarmLive(a) && alarmAt(a) > now).sort((a, b) => alarmAt(a) - alarmAt(b))[0];
+  return S.alarms
+    .filter(a => alarmLive(a) && alarmAt(a) > now && (!a.device || a.device === thisDevice.id))
+    .sort((a, b) => alarmAt(a) - alarmAt(b))[0];
 }
 
 // Browsers only allow sound after a tap: start (or resume) the audio on the first one, so an

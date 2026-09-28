@@ -20,6 +20,16 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
   let sent = 0,
     skipped = 0;
   const gone = new Set();
+  // Repeats of one alarm (keys alarm:…:<n>) that are all due at once, say queued late: send
+  // only the newest, and mark the rest done, rather than a burst of back-to-back rings.
+  const newest = {};
+  for (const n of due)
+    if (n.key.startsWith('alarm:')) {
+      const g = n.user_id + '|' + n.key.replace(/:\d+$/, '');
+      if (!newest[g] || Date.parse(n.at) > Date.parse(newest[g].at)) newest[g] = n;
+    }
+  const catchUp = n =>
+    n.key.startsWith('alarm:') && newest[n.user_id + '|' + n.key.replace(/:\d+$/, '')] !== n;
   for (const n of due) {
     // Why a notice didn't reach any device, kept on the notice so the app's test can show it.
     const errs = [];
@@ -27,8 +37,9 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
     const mine = subs.filter(
       s => s.user_id === n.user_id && !gone.has(s.endpoint) && (!n.device || s.endpoint === n.device),
     );
-    // Anything more than 6 hours overdue (say the job was paused) is marked done unsent.
-    if (new Date(n.at) < late) skipped++;
+    // Anything more than 6 hours overdue (say the job was paused) is marked done unsent, as are
+    // an alarm's older repeats when a newer one is due too.
+    if (new Date(n.at) < late || catchUp(n)) skipped++;
     else if (!mine.length) errs.push('no devices have notifications turned on');
     else
       for (const s of mine) {

@@ -77,7 +77,8 @@ test('overnight every alarm switches off but stays listed', async ({ app, page }
   await page.clock.setSystemTime(new Date(2026, 8, 24, 8));
   await page.reload();
   const s = await app.state();
-  expect(s.alarms).toMatchObject([{ time: '17:00', label: 'Gym', day: '', done: '' }]);
+  expect(s.alarms).toMatchObject([{ time: '17:00', label: 'Gym' }]);
+  expect(await page.evaluate(() => alarmOn(S.alarms[0]))).toBe(false); // yesterday's: off
   await page.click('#alarmd summary'); // folded: nothing is on
   await expect(page.locator('.arow [data-aon]')).toHaveText('Off');
   await page.locator('.arow [data-aon]').click(); // on again for the new day
@@ -222,7 +223,8 @@ test('an alarm ringing at midnight keeps ringing until dismissed; empty notes ne
   // Next morning it's off, still listed.
   await page.clock.setSystemTime(new Date(2026, 8, 24, 8));
   await page.reload();
-  expect((await app.state()).alarms[0]).toMatchObject({ time: '23:58', day: '' });
+  expect((await app.state()).alarms[0]).toMatchObject({ time: '23:58' });
+  expect(await page.evaluate(() => alarmOn(S.alarms[0]))).toBe(false);
   // No notes: no notes record (so an empty copy can't win over real notes elsewhere).
   expect(await page.evaluate(() => toRecords(S).has('meta:notes'))).toBe(false);
 });
@@ -245,4 +247,28 @@ test('queued repeats aren’t dropped once due; the list can be folded while an 
   await page.click('#alarmd summary');
   await page.evaluate(() => renderAll());
   expect(await page.locator('#alarmd').getAttribute('open')).toBeNull();
+});
+
+test('malformed synced alarms and devices are cleaned before they reach the page', async ({ page }) => {
+  const s = await page.evaluate(() => {
+    norm({
+      alarms: [
+        { id: 'ok1', time: '"><img src=x onerror=alert(1)>', label: '<b>x</b>', device: '"bad"' },
+        { id: '"><script>', time: '10:00' },
+      ],
+      devices: [
+        { id: 'fine', name: 'PC' },
+        { id: '<bad>', name: 'x' },
+      ],
+    });
+    renderAll();
+    return {
+      alarms: S.alarms,
+      devices: S.devices.map(d => d.id),
+      imgs: document.querySelectorAll('img[src=x]').length,
+    };
+  });
+  expect(s.alarms).toMatchObject([{ id: 'ok1', time: '09:00', device: '' }]);
+  expect(s.devices).toEqual(['fine']);
+  expect(s.imgs).toBe(0);
 });

@@ -153,6 +153,23 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       { user_id: 'u1', key: 'later', at: '2026-09-23T10:00:00Z', title: 'Later', body: '', sent_at: null },
       { user_id: 'u2', key: 'lonely', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
       { user_id: 'u3', key: 'expired', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
+      // Two repeats of one alarm both due (queued late): only the newest rings.
+      {
+        user_id: 'u1',
+        key: 'alarm:y:1:0:0',
+        at: '2026-09-23T08:58:00Z',
+        title: 'Late',
+        body: '',
+        sent_at: null,
+      },
+      {
+        user_id: 'u1',
+        key: 'alarm:y:1:0:1',
+        at: '2026-09-23T08:59:00Z',
+        title: 'Late',
+        body: '',
+        sent_at: null,
+      },
       // An alarm for one device: only that endpoint gets it.
       {
         user_id: 'u1',
@@ -202,9 +219,10 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
     },
   };
   const r = await sendDue({ db, push, now, log: { warn() {} } });
-  expect(r).toEqual({ sent: 2, skipped: 1, removed: 2 });
+  expect(r).toEqual({ sent: 3, skipped: 2, removed: 2 });
   expect(sent).toEqual([
     ['e1', { title: 'Due today', body: 'Report', tag: 'a' }],
+    ['e1', { title: 'Late', body: '', tag: 'alarm:y:1:0:1' }],
     ['e1', { title: 'Alarm', body: '', tag: 'alarm:x' }],
   ]);
   expect(
@@ -212,7 +230,7 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       .filter(n => n.sent_at)
       .map(n => n.key)
       .sort(),
-  ).toEqual(['a', 'alarm:x', 'expired', 'lonely', 'old']);
+  ).toEqual(['a', 'alarm:x', 'alarm:y:1:0:0', 'alarm:y:1:0:1', 'expired', 'lonely', 'old']);
   expect(db.subs.map(s => s.endpoint)).toEqual(['e1']);
   // Why a notice didn't go out is kept on it, for the app's test to show.
   expect(db.notices.find(n => n.key === 'a').error).toBeNull(); // reached e1; the gone device doesn't count

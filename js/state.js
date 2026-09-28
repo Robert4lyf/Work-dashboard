@@ -74,6 +74,14 @@ function norm(s) {
     s || {},
   );
   delete S.streak;
+  // Alarms and devices come from sync and go into the page as-is: keep only well-formed ones.
+  const okId = x => x && typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id);
+  S.alarms = S.alarms.filter(okId).map(a => ({
+    ...a,
+    time: /^\d\d:\d\d$/.test(a.time) ? a.time : '09:00',
+    device: okId({ id: a.device }) ? a.device : '',
+  }));
+  S.devices = S.devices.filter(okId);
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
   S.inbox = S.inbox.map(i => (i.node ? Object.assign(i, { node: fix(i.node) }) : i));
@@ -176,23 +184,9 @@ function save() {
 }
 // The daily reset. Every device runs it and makes the same changes (repeat copies get
 // date-based ids), so whichever device syncs first, nothing is doubled.
-// Alarms are for one day: once past it they switch off, staying in the list to switch on again
-// (one still ringing or snoozed across midnight stays on until dismissed).
-function tidyAlarms() {
-  let changed = false;
-  S.alarms.forEach(a => {
-    if (a.day && a.day !== today() && !alarmOn(a)) {
-      Object.assign(a, { day: '', done: '', snooze: 0 });
-      changed = true;
-    }
-  });
-  return changed;
-}
+// (Alarms need no reset here: one on for a past day simply isn't on any more; see alarmOn.
+// Writing a reset could overwrite a newer switch-on synced from another device.)
 function rollover() {
-  if (tidyAlarms() && S.day === today()) {
-    persistLocal();
-    markDirty();
-  }
   if (S.day === today()) return;
   const last = S.day;
   S.quests = S.quests.filter(q => !isDone(q));
