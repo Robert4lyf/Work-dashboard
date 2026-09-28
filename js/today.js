@@ -95,7 +95,7 @@ function renderToday() {
     h += '<div class="tpls"><span class="hint" style="margin:0">From a template:</span>';
     own.forEach(
       t =>
-        (h += `<span class="tchip"><button data-tpl="${t.id}">${esc(t.text)} (${count(t)})</button><button class="tdel" data-deltpl="${t.id}" aria-label="Delete template ${esc(t.text)}">×</button></span>`),
+        (h += `<span class="tchip"><button data-tpl="${t.id}"${S.quests.some(q => q.tpl === t.id) ? ' disabled title="Already on Today"' : ''}>${esc(t.text)} (${count(t)})</button><button class="tdel" data-deltpl="${t.id}" aria-label="Delete template ${esc(t.text)}">×</button></span>`),
     );
     h += '</div>';
   }

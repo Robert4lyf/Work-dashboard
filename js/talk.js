@@ -69,7 +69,9 @@ function talkSay(text, after) {
     if (after) after();
     else talkListen();
   };
-  speechSynthesis.cancel();
+  try {
+    speechSynthesis.cancel();
+  } catch (e) {}
   speechSynthesis.speak(u);
 }
 function talkListen() {

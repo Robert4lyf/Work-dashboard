@@ -339,7 +339,7 @@ document.addEventListener('click', e => {
     const r = find(d.savetpl);
     if (!r) return;
     const n = r.n,
-      t = Object.assign({ id: uid(), days: [] }, strip(n)),
+      t = Object.assign({ id: uid(), days: [], monthDay: 0 }, strip(n)),
       i = S.templates.findIndex(x => x.text === n.text);
     if (i >= 0) {
       t.id = S.templates[i].id;
@@ -358,6 +358,7 @@ document.addEventListener('click', e => {
   if (d.tpl) {
     const t = S.templates.find(x => x.id === d.tpl);
     if (!t) return;
+    if (S.quests.some(q => q.tpl === t.id)) return toast('Already on Today');
     const bf = snapshot(),
       q = inst(t);
     q.tpl = t.id;
@@ -798,7 +799,12 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Leaving (closing, switching app): notes typed in the last moment are saved now, not after
+// the typing pause.
+const saveNotesNow = () => notesDirty && $('#notesin') && saveNotes($('#notesin').value);
+window.addEventListener('pagehide', saveNotesNow);
 document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveNotesNow();
   if (!document.hidden) {
     const started = rolloverLocal(); // (a sync, when signed in)
     // A session another device already stopped mustn't be finished here too: hear from the

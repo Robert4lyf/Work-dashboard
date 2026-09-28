@@ -50,7 +50,7 @@ $('#v-inbox').addEventListener('pointermove', e => {
   const dx = e.clientX - s.x,
     dy = e.clientY - s.y;
   if (!s.on) {
-    if (Math.abs(dy) > 12) return (swipe = null); // scrolling, not swiping
+    if (Math.abs(dy) > 12 || Math.abs(dy) > Math.abs(dx)) return (swipe = null); // scrolling, not swiping
     if (Math.abs(dx) < 12) return;
     s.on = true;
     s.el.classList.add('swiping');
@@ -162,7 +162,7 @@ function receiveShare() {
   S.inbox.unshift(item);
   save();
   renderAll();
-  go('inbox');
+  if (!focusLocked()) go('inbox'); // (mid-session, single-task mode stays: the toast says)
   toast('Added to inbox');
 }
 
