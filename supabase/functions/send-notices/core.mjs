@@ -42,7 +42,12 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
     // an alarm's older repeats when a newer one is due too.
     const alarm = n.key.startsWith('alarm:');
     if (new Date(n.at) < late || catchUp(n)) skipped++;
-    else if (!mine.length) errs.push('no devices have notifications turned on');
+    else if (!mine.length)
+      errs.push(
+        n.device && gone.has(n.device)
+          ? "a device's subscription had expired and was removed: turn notifications on again there"
+          : 'no devices have notifications turned on',
+      );
     else
       // All of a notice's devices at once: a run stays well inside the minute.
       await Promise.all(

@@ -3,7 +3,8 @@
 let notesTimer = null,
   notesOverride = false, // typed after being told the notes changed elsewhere: replace them
   notesDirty = false, // typed here and not saved yet
-  notesBase = null; // the synced text the box last showed, to spot changes from elsewhere
+  notesBase = null, // the synced text the box last showed, to spot changes from elsewhere
+  notesPromptAt = 0; // when the "changed on another device" prompt appeared
 function renderNotes() {
   const cur = $('#notesin');
   if (cur && cur.value === (S.notes || '')) {
@@ -16,9 +17,11 @@ function renderNotes() {
   // overwriting them on the next save.
   if (cur && (document.activeElement === cur || notesDirty)) {
     const st = $('#notesstate');
-    if (st && notesChanged() && !$('#notesload'))
+    if (st && notesChanged() && !$('#notesload')) {
+      notesPromptAt = Date.now();
       st.innerHTML =
         'Changed on another device. <button class="linkbtn" id="notesload">Show those notes</button> (or keep typing to replace them)';
+    }
     return;
   }
   notesBase = S.notes || '';
@@ -42,8 +45,9 @@ function saveNotes(v) {
 function typedNotes(v) {
   clearTimeout(notesTimer);
   notesDirty = true;
-  // Typing on with the "changed on another device" prompt showing means: replace them.
-  if ($('#notesload')) notesOverride = true;
+  // Typing on with the "changed on another device" prompt showing means: replace them (once
+  // it's been there long enough to be seen; a keystroke already under way doesn't count).
+  if ($('#notesload') && Date.now() - notesPromptAt > 2000) notesOverride = true;
   const st = $('#notesstate');
   if (st && !notesChanged()) st.textContent = 'Saving…';
   notesTimer = setTimeout(() => {

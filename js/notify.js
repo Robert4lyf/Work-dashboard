@@ -69,8 +69,14 @@ async function enablePush() {
       toast('Notifications are blocked in browser settings', false, 3000);
       return;
     }
-    const reg = await navigator.serviceWorker.ready,
-      sub = await reg.pushManager.subscribe({
+    const reg = await navigator.serviceWorker.ready;
+    // A subscription made under earlier keys (New keys elsewhere) can't be reused: drop it first.
+    const old = await reg.pushManager.getSubscription();
+    if (old && old.options && old.options.applicationServerKey) {
+      const k = b64u(new Uint8Array(old.options.applicationServerKey));
+      if (k !== S.pushKey) await old.unsubscribe();
+    }
+    const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: unb64u(S.pushKey),
       }),
@@ -212,7 +218,8 @@ function wantedNotices(now = Date.now()) {
       const [y, m, d] = ds.split('-').map(Number);
       return new Date(y, m - 1, d, 9).getTime();
     },
-    soon = t => t > now && t < now + 30 * 864e5;
+    // (kept a few minutes past due too: a sync between 9am and the minute job mustn't cancel it)
+    soon = t => t > now - 5 * 60e3 && t < now + 30 * 864e5;
   const t = S.timer;
   if (t && t.left == null && soon(t.end))
     out.push({ key: 'timer:' + t.end, at: t.end, title: 'Focus session done', body: timerLabel(t) || '' });
@@ -265,16 +272,17 @@ async function syncNotices() {
   // (the minute job may not have run yet: the timer just ended, 9am just passed). One cancelled
   // before it was due (a session paused a second before its end) goes, even if this runs later.
   // An alarm's repeats always go once it's dismissed.
-  const now = S.editedAt || Date.now(),
+  const now = Math.max(S.editedAt || 0, sync2.serverAt || 0) || Date.now(),
     keep = new Set(want.map(n => n.key)),
     stale = data
       .filter(r => !keep.has(r.key) && !/^(test|alert):/.test(r.key))
       .filter(r => r.key.startsWith('alarm:') || Date.parse(r.at) > now)
       .map(r => r.key);
   if (want.length) {
+    // (every row with the same keys: the API rejects a batch whose rows differ)
     const put = rows =>
       sb.from('cockpit_notices').upsert(
-        rows.map(n => ({ ...n, at: new Date(n.at).toISOString() })),
+        rows.map(n => ({ ...n, at: new Date(n.at).toISOString(), device: n.device || null })),
         { onConflict: 'user_id,key' },
       );
     let { error: e2 } = await put(want);

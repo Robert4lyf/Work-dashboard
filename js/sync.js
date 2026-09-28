@@ -64,6 +64,7 @@ function applyRows(rows, firstSync, keep) {
   let changed = firstSync;
   for (const r of rows) {
     sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
+    sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0); // (newest change anywhere)
     // A kind from a newer version: nothing here to change (and not a reason to reload).
     if (!knownKey(r.key)) continue;
     // A repeat's copy for a day (id <template>-<date>) cleared by another device's reset:

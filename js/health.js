@@ -53,8 +53,16 @@ async function runHealth() {
       add(
         'Notifications on this device',
         pushEndpoint && Notification.permission === 'granted' ? true : S.pushKey ? false : null,
-        pushEndpoint ? 'On' : S.pushKey ? 'Off' : 'Not set up',
-        'Turn them on under Notifications below (allow them when the browser asks).',
+        pushEndpoint
+          ? Notification.permission === 'granted'
+            ? 'On'
+            : 'On, but blocked by the browser'
+          : S.pushKey
+            ? 'Off'
+            : 'Not set up',
+        pushEndpoint && Notification.permission !== 'granted'
+          ? 'Allow notifications for this site in the browser (or Android) settings.'
+          : 'Turn them on under Notifications below (allow them when the browser asks).',
       );
     if (S.pushKey) {
       // The every-minute job that runs send-notices, and what its last call got back.

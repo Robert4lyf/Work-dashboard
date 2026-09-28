@@ -308,7 +308,8 @@ test('round 5: editing an off alarm left from yesterday never rings; a pending n
   await page.clock.fastForward(1000); // the pending save would fire now
   expect((await app.state()).notes).toBe('laptop text'); // not overwritten
   await expect(page.locator('#notesstate')).toContainText('Changed on another device');
-  // Typing on means "replace them".
+  // Typing on (once the prompt has been up a moment) means "replace them".
+  await page.clock.fastForward(2500);
   await page.type('#notesin', '!');
   await page.clock.fastForward(1000);
   expect((await app.state()).notes).toBe('phone text!');
