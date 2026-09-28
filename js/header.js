@@ -59,5 +59,6 @@ function setIfChanged(el, html) {
   el.innerHTML = html;
   const f = sel && el.querySelector(sel);
   if (f) f.focus({ preventScroll: true });
-  else if (sel) (el.querySelector('button') || el).focus({ preventScroll: true });
+  // (after the user's own action only: a sync's redraw mustn't move the keyboard to another tick)
+  else if (sel && !background) (el.querySelector('button') || el).focus({ preventScroll: true });
 }

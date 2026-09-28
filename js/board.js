@@ -10,6 +10,10 @@ function moveToInbox(id) {
   r.arr.splice(r.arr.indexOf(r.n), 1);
   delete r.n.since; // it starts afresh if it comes back to Today
   delete r.n.kept;
+  (function undone(x) {
+    x.done = false;
+    x.children.forEach(undone);
+  })(r.n);
   const it = { id: uid(), text: r.n.text, node: r.n, tag: r.n.tag, project: r.n.project };
   if (r.n.wait) it.wait = r.n.wait; // still waiting (and chased) from the Inbox
   S.inbox.unshift(it);

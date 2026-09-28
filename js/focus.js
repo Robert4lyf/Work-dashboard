@@ -48,6 +48,7 @@ function releaseHeld(id) {
 }
 function startTimer(q) {
   const top = topOf(q);
+  leftFor = null; // (the last session's "where did you leave it?" is past)
   askNotify();
   beep([440]);
   S.timer = { id: uid(), end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
@@ -195,8 +196,9 @@ function finishTimer(silent) {
   renderAll();
 }
 function stopAndSave(done) {
-  const t = S.timer,
-    m = Math.floor((t.mins * 60000 - remaining()) / 60000);
+  const t = S.timer;
+  if (!t) return;
+  const m = Math.floor((t.mins * 60000 - remaining()) / 60000);
   S.timer = null;
   S.focusQ = null;
   if (m >= 1) {

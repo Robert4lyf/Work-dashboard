@@ -18,7 +18,10 @@ self.addEventListener('install', e => {
     .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))
       // The sync library comes from a CDN that may be blocked or slow: the app must still install
       // (and work offline) without it; it's cached when it does load.
-      .then(() => c.add(new Request(SUPABASE_JS, { cache: 'reload' })).catch(() => {})))
+      .then(() => Promise.race([
+        c.add(new Request(SUPABASE_JS, { cache: 'reload' })),
+        new Promise(r => setTimeout(r, 10000)), // (a hanging CDN mustn't hold up installing)
+      ]).catch(() => {})))
     .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {

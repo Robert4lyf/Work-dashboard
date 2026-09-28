@@ -255,7 +255,11 @@ function rollover() {
       const hit =
         t.days.includes(wd) || (t.monthDay && (t.monthDay === dd || (t.monthDay > end && dd === end)));
       const gone = sync2.gone && sync2.gone['quest:' + t.id + '-' + d]; // done and cleared elsewhere
-      if (hit && !gone && !S.quests.some(q => q.tpl === t.id || q.text === t.text)) {
+      const has = // (a copy moved to Upcoming or the Inbox still counts, or it would come back doubled)
+        S.quests.some(q => q.tpl === t.id || q.text === t.text) ||
+        S.later.some(q => q.tpl === t.id) ||
+        S.inbox.some(i => i.node && i.node.tpl === t.id);
+      if (hit && !gone && !has) {
         const q = inst(t);
         q.tpl = t.id;
         q.id = t.id + '-' + d; // the same on every device, so two devices don't both add it

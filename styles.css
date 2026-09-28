@@ -108,6 +108,9 @@ textarea {
   outline: 3px dashed var(--yellow);
   outline-offset: 3px;
 }
+section[tabindex='-1']:focus-visible {
+  outline: none; /* a view given the keyboard after its control went: no ring round the page */
+}
 
 .wrap {
   max-width: 520px;

@@ -64,10 +64,16 @@ function renderToday() {
     .querySelectorAll('details[id]')
     // (the waiting panel is held open on a waiting quest: that isn't a choice to remember)
     .forEach(d => (d.id !== 'waitd' || !d.dataset.held ? (panels[d.id] = d.open) : 0));
-  path = path.filter((id, i) => {
-    const r = find(id);
-    return r && (i === 0 ? S.quests.includes(r.n) : find(path[i - 1]).n.children.includes(r.n));
-  });
+  // Down the path as far as it still leads (a level moved or removed elsewhere cuts it there).
+  const ok = [];
+  let arr = S.quests;
+  for (const id of path) {
+    const n = arr.find(x => x.id === id);
+    if (!n) break;
+    ok.push(id);
+    arr = n.children;
+  }
+  path = ok;
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
   let h = renderAttention() + renderCarried();
@@ -247,7 +253,7 @@ function renderNode({ n, parents }) {
     h += `<button class="btn ${d ? '' : 'green'}" data-toggle="${n.id}">${d ? 'Mark not done' : 'Mark done'}</button>`;
   h += `${d ? '' : `<button class="btn blue" data-focuson="${n.id}">Focus on this</button>`}</div>`;
   h += `<div class="links"><button class="linkbtn" data-savetpl="${n.id}">Save as template</button><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this quest</button></div>`;
-  h += `<details${n.notes ? ' open' : ''}><summary>Notes and deadline</summary>
+  h += `<details id="fdet"${(panels.fdet ?? !!n.notes) ? ' open' : ''}><summary>Notes and deadline</summary>
     <label class="f" for="fname">Name</label><input class="fld" id="fname" data-field="text" data-id="${n.id}" value="${esc(n.text)}" maxlength="120">
     <label class="f" for="fdue">Deadline</label><input class="fld" type="date" id="fdue" data-field="due" data-id="${n.id}" value="${n.due}">
     <label class="f" for="fnotes">Notes</label><textarea class="fld" id="fnotes" data-field="notes" data-id="${n.id}">${esc(n.notes)}</textarea>

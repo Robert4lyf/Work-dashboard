@@ -260,3 +260,85 @@ test('round 5: the keyboard stays in the view after an action; Restore backup is
   await page.clock.fastForward(200);
   expect(await page.locator('#undo').count()).toBe(0);
 });
+
+test('round 6: repeats sent to Tomorrow aren’t doubled; a broken path is cut, not thrown; removing steps earns nothing', async ({
+  page,
+}) => {
+  const r = await page.evaluate(() => {
+    const t = {
+      id: 't1',
+      text: 'Standup',
+      days: [0, 1, 2, 3, 4, 5, 6],
+      monthDay: 0,
+      children: [],
+      auto: true,
+    };
+    S.templates.push(t);
+    S.quests.push(Object.assign(inst(t), { id: 'q-standup', tpl: 't1' }));
+    // Yesterday it was sent to "Tomorrow" (today): overnight it comes back, once.
+    S.later.push(Object.assign(S.quests.pop(), { start: today() }));
+    S.day = shift(today(), -1);
+    save();
+    rollover();
+    const standups = S.quests.filter(q => q.text === 'Standup').length;
+
+    // A/B open here; B became top-level and A went (as another device could do).
+    S.quests = [fix({ id: 'B', text: 'B' })];
+    path = ['A', 'B'];
+    renderToday();
+    const pathAfter = [...path];
+
+    // Removing the open step of a quest doesn't finish it for points.
+    const xp = S.xp;
+    S.quests = [
+      fix({
+        id: 'P',
+        text: 'P',
+        children: [fix({ id: 's1', text: 'done', done: true }), fix({ id: 's2', text: 'open' })],
+      }),
+    ];
+    const bf = snapshot();
+    S.quests[0].children.pop();
+    settle(bf);
+    return { standups, pathAfter, gained: S.xp - xp, logged: S.log.filter(x => x.id === 'P').length };
+  });
+  expect(r).toEqual({ standups: 1, pathAfter: [], gained: 0, logged: 0 });
+});
+
+test('round 6: a saved template with the same name is left alone by Repeat; a finished quest moved to the Inbox comes back open', async ({
+  page,
+}) => {
+  const r = await page.evaluate(() => {
+    S.templates = [
+      {
+        id: 'saved',
+        text: 'Weekly report',
+        days: [1],
+        monthDay: 0,
+        children: [fix({ id: 'st', text: 'Gather numbers' })],
+      },
+    ];
+    S.quests = [fix({ id: 'wr', text: 'Weekly report' })];
+    setRepeat(S.quests[0], t => (t.days = [3]));
+    const savedSteps = S.templates.find(t => t.id === 'saved').children.length;
+
+    S.quests.push(fix({ id: 'fin', text: 'Finished', done: true }));
+    moveToInbox('fin');
+    promoteInbox(S.inbox[0].id);
+    return { savedSteps, done: S.quests.find(q => q.id === 'fin').done };
+  });
+  expect(r).toEqual({ savedSteps: 1, done: false });
+});
+
+test('round 6: adding a step while a row’s × menu is open still adds it', async ({ app, page }) => {
+  await page.evaluate(() => {
+    S.quests = [fix({ id: 'm1', text: 'Menu quest', children: [fix({ id: 'm1a', text: 'Step' })] })];
+    save();
+    renderAll();
+  });
+  await app.openQuest('Menu quest');
+  await page.click('[data-xopen="m1a"]');
+  await page.fill('#sin', 'Another step');
+  await page.press('#sin', 'Enter');
+  expect(await page.evaluate(() => S.quests[0].children.map(c => c.text))).toEqual(['Step', 'Another step']);
+});

@@ -41,6 +41,7 @@ $('#v-inbox').addEventListener('pointerdown', e => {
   swipeClick = false;
   // The title is a button (tap to expand) but still swipes.
   if (!el || e.target.closest('button:not(.ititle), input, select, textarea, form, a')) return;
+  if (e.pointerType === 'mouse' && matchMedia('(min-width: 700px)').matches) return; // (a desktop drag isn't a swipe)
   swipe = { el, id: el.dataset.id, x: e.clientX, y: e.clientY, dx: 0, on: false, pid: e.pointerId };
 });
 $('#v-inbox').addEventListener('pointermove', e => {
@@ -74,7 +75,8 @@ function endSwipe() {
     renderInbox();
   }
 }
-$('#v-inbox').addEventListener('pointerup', endSwipe);
+// On the document: a finger lifted outside the list (over the header, say) still ends the swipe.
+document.addEventListener('pointerup', endSwipe);
 $('#v-inbox').addEventListener(
   'click',
   e => {
@@ -83,7 +85,7 @@ $('#v-inbox').addEventListener(
   },
   true,
 );
-$('#v-inbox').addEventListener('pointercancel', endSwipe);
+document.addEventListener('pointercancel', endSwipe);
 function renderInbox() {
   let h = '<h2>Inbox</h2>';
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;

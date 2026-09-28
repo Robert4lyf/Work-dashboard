@@ -84,10 +84,11 @@ function applyRows(rows, firstSync, keep) {
   if (changed) {
     dropUndo();
     norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt }));
+    // The quest on screen went (in the rows, not through the day's reset or a chosen replace).
+    const open = !firstSync && path.length && !find(path[path.length - 1]);
     persistLocal();
     rollover();
     markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
-    const open = path.length && !find(path[path.length - 1]); // the quest on screen went
     inBackground(renderAll);
     if (open) toast('The quest you had open was removed on another device', false, 4000);
   }
@@ -118,6 +119,7 @@ async function firstSync() {
     .maybeSingle();
   if (error) throw error;
   if (data && Number(data.edited_at) > (S.editedAt || 0)) {
+    dropUndo();
     norm(data.data);
     persistLocal();
     rollover();
@@ -199,12 +201,14 @@ async function sync() {
     if (sync2.user !== session.user.id) {
       // Another account was signed in here before: its data mustn't move into this one.
       if (sync2.user) {
-        if (Object.keys(sync2.dirty).length)
+        // (dirty marks from the day's reset alone aren't the user's edits)
+        if (Object.values(sync2.dirty).some(d => d.at > new Date().setHours(0, 0, 0, 0)))
           toast(
-            'Changes made before switching account were left behind (they belonged to the other one)',
+            "This device's unsent changes belonged to the other account and were left behind",
             false,
             5000,
           );
+        dropUndo();
         norm(null);
         persistLocal();
         inBackground(renderAll);

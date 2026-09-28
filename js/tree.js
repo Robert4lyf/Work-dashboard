@@ -39,7 +39,7 @@ function snapshot() {
   const m = new Map();
   (function w(ns, trail) {
     ns.forEach(n => {
-      m.set(n.id, { done: isDone(n), top: !trail.length, text: n.text, trail });
+      m.set(n.id, { done: isDone(n), top: !trail.length, text: n.text, trail, kids: n.children.length });
       w(n.children, [...trail, n.text]);
     });
   })(S.quests, []);
@@ -61,6 +61,8 @@ function settle(before) {
     if (!before.has(id)) return;
     const was = before.get(id).done;
     const pts = v.top ? 30 : 10;
+    // (done because its open steps were removed, not finished: no points, no log)
+    if (v.done && !was && v.kids < before.get(id).kids) return;
     if (v.done && !was) {
       gain += pts;
       S.log.push({ id, d: today(), text: v.text, trail: v.trail, p: projectOf(id) });
@@ -135,7 +137,7 @@ function repLabel(t) {
 }
 // Change how a quest repeats. The repeat copies the quest as it is now, subquests included.
 function setRepeat(n, fn) {
-  let t = tplFor(n) || S.templates.find(x => x.text === n.text);
+  let t = tplFor(n) || S.templates.find(x => x.auto && x.text === n.text); // (never a saved one)
   if (!t) {
     t = { id: uid(), days: [], monthDay: 0, auto: true };
     S.templates.push(t);
@@ -167,7 +169,10 @@ function toast(msg, undo, ms) {
   tt = setTimeout(
     () => {
       t.classList.remove('show', 'act');
-      t.innerHTML = ''; // (no invisible Undo button left for the keyboard to land on)
+      // (no invisible Undo button left for the keyboard to land on; a keyboard on it moves on)
+      if (t.contains(document.activeElement))
+        ($('#v-' + view) || document.body).focus({ preventScroll: true });
+      t.innerHTML = '';
       if (undo) undoSnap = null;
     },
     ms || (undo ? 5000 : 1600),
@@ -231,6 +236,7 @@ function setHTML(el, html) {
   }
   const a = document.activeElement,
     fid = a && a.id && el.contains(a) ? a.id : '',
+    fsel = a && el.contains(a) ? focusSel(a) : '', // (buttons have no id: by their data attributes)
     sel = fid && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null,
     typed = {};
   // Fixed compose boxes, plus any input marked data-keep (e.g. one per project).
@@ -250,9 +256,9 @@ function setHTML(el, html) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i) i.value = typed[id];
   }
-  const f = fid && el.querySelector('#' + CSS.escape(fid));
+  const f = fsel && el.querySelector(fsel);
   if (f) {
-    f.focus();
+    f.focus({ preventScroll: true });
     if (sel)
       try {
         f.setSelectionRange(sel[0], sel[1]);

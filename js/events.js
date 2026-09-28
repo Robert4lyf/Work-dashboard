@@ -67,9 +67,11 @@ document.addEventListener('submit', e => {
   if (f.id === 'sform') {
     const v = $('#sin').value.trim();
     if (!v) return;
+    const r = find(f.dataset.parent);
+    if (!r) return;
     const opt = $('#sopt').checked,
       b = snapshot(),
-      p = find(f.dataset.parent).n;
+      p = r.n;
     p.children.push(fix({ id: uid(), text: v, opt }));
     p.done = false; // (it was finished before it had steps: with one to do, it isn't now)
     settle(b);
@@ -264,16 +266,9 @@ document.addEventListener('click', e => {
   // A tap anywhere else closes a row's Inbox/Delete choice.
   if (xOpen && !(b && (b.dataset.xopen || b.dataset.toinbox || b.dataset.delnow))) {
     xOpen = null;
-    renderToday();
-    // That redraw replaced the tapped button if it was on Today: carry on with its new copy (a
-    // two-tap Delete marks the button on the page).
-    if (b && !b.isConnected && Object.keys(b.dataset).length) {
-      const sel = [...b.attributes]
-        .filter(a => a.name.startsWith('data-'))
-        .map(a => `[${a.name}="${CSS.escape(a.value)}"]`)
-        .join('');
-      b = $('#v-today button' + sel) || b;
-    }
+    // Redrawn once this tap has finished (a submit or a label's tick lands on the live page),
+    // and not over a "Delete?" waiting for its second tap.
+    setTimeout(() => !$('#v-today .armed') && inBackground(renderToday), 0);
   }
   if (!b) return;
   const d = b.dataset;
@@ -350,6 +345,7 @@ document.addEventListener('click', e => {
       t.id = S.templates[i].id;
       t.days = S.templates[i].days;
       t.monthDay = S.templates[i].monthDay;
+      if (S.templates[i].auto) t.auto = true; // (a repeat's own template stays out of the list)
       S.templates[i] = t;
       toast('Template updated');
     } else {
@@ -357,6 +353,7 @@ document.addEventListener('click', e => {
       toast('Template saved');
     }
     save();
+    renderAll();
   }
   if (d.tpl) {
     const t = S.templates.find(x => x.id === d.tpl);
@@ -658,9 +655,17 @@ document.addEventListener('click', e => {
   if (b.id === 'doRestore') {
     // What's current across devices isn't taken from the backup: the notification keys (an old
     // copy would break every device's notifications), the device list and any running session.
-    const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer };
-    norm(pending);
+    const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
+      was = JSON.stringify(S);
+    try {
+      norm(pending);
+    } catch (e) {
+      norm(JSON.parse(was));
+      pending = null;
+      return toast("That backup couldn't be read", false, 3000);
+    }
     Object.assign(S, keep);
+    rollover(); // (it may be from another day)
     pending = null;
     path = [];
     save();
@@ -687,10 +692,14 @@ document.addEventListener('click', e => {
       })
       .then(() => {
         unlisten();
-        return sb.auth.signOut();
+        return sb.auth.signOut().then(r => {
+          if (r && r.error) throw r.error;
+        });
       })
       .then(() => {
         captureToken = '';
+        pushTest = null;
+        health = null;
         try {
           localStorage.removeItem(CAPTURE_KEY);
           localStorage.removeItem(NOTICE_HASH);
@@ -797,8 +806,8 @@ document.addEventListener('visibilitychange', () => {
     if (timerDue() && started) {
       const held = holdDue();
       syncDone().finally(() => releaseHeld(held));
-    } else if (timerDue()) finishTimer(true);
-    else renderAll();
+    } else if (timerDue() && !holdTimer) finishTimer(true);
+    else inBackground(renderAll); // (keeps anything being typed)
     if (!started) sync();
     verifyPush();
     talkWake();
@@ -858,7 +867,7 @@ if (sb) {
   sb.auth.onAuthStateChange((ev, s) => {
     session = s;
     renderSyncBadge();
-    renderAccount(); // even when not on screen, so Settings never shows a stale sign-in form
+    inBackground(renderAccount); // even when not on screen, so Settings never shows a stale sign-in form
     if (!s) unlisten(); // signed out, or the session expired: live updates would be dead anyway
     authSeen = true;
     if (ev === 'INITIAL_SESSION' && deferStart) {
@@ -866,7 +875,7 @@ if (sb) {
         rollover();
         releaseHeld(heldAtStart);
         if (timerDue()) finishTimer(true);
-        else renderAll();
+        else inBackground(renderAll);
       } else sync().finally(() => releaseHeld(heldAtStart)); // (the sync runs the day's reset)
     }
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
