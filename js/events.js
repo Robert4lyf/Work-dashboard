@@ -135,7 +135,7 @@ document.addEventListener('change', e => {
   const el = e.target;
   // Committed. (Not a time: those change a part at a time and are still being typed.)
   // Nor the waiting panel's fields: they're only saved with its Save button.
-  if (el.dataset && !el.dataset.atime && el.id !== 'wwho' && el.id !== 'wnote') delete el.dataset.typed;
+  if (el.dataset && !el.dataset.atime && !el.closest('#waitd')) delete el.dataset.typed;
   // Alarms: time, label and device; this device's name (Settings).
   if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
   if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
@@ -286,8 +286,10 @@ document.addEventListener('click', e => {
   if (d.goupd) {
     // An Upcoming item (from the Waiting tab): Today's list, with Upcoming open.
     path = [];
-    panels.upd = true;
     go('today');
+    renderToday();
+    const u = $('#upd');
+    if (u) u.open = panels.upd = true;
   }
   if (d.goto) {
     go(d.goto);
@@ -665,12 +667,17 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
-    unlisten();
-    // Alarms and alerts stop coming here, and nothing of this account is left for the next.
-    // Unsent edits go first.
-    (pushEndpoint ? disablePush() : Promise.resolve())
-      .then(() => sync())
-      .then(() => sb.auth.signOut())
+    // Unsent edits go first. Then alarms and alerts stop coming here, and nothing of this
+    // account is left for the next.
+    syncSettled()
+      .then(ok => {
+        if (!ok && !confirm("Your latest changes haven't reached the server yet. Sign out anyway?")) throw 0;
+        return pushEndpoint && disablePush().then(syncSettled);
+      })
+      .then(() => {
+        unlisten();
+        return sb.auth.signOut();
+      })
       .then(() => {
         captureToken = '';
         try {
@@ -684,7 +691,8 @@ document.addEventListener('click', e => {
         versions = null;
         renderSyncBadge();
         renderAccount();
-      });
+      })
+      .catch(() => {}); // chose to stay signed in
   }
   if (b.id === 'syncNow') sync();
   if (b.id === 'pushkeys') setupPushKeys();

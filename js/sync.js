@@ -155,6 +155,12 @@ async function saveSnapshot() {
     saveSyncState();
   }
 }
+// Waits for any sync under way, then runs one: whether everything here reached the server.
+async function syncSettled() {
+  for (let i = 0; syncing && i < 100; i++) await new Promise(r => setTimeout(r, 100));
+  await sync();
+  return !syncing && !Object.keys(sync2.dirty).length;
+}
 async function sync() {
   if (!sb || !session) return;
   if (syncing) {

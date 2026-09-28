@@ -218,6 +218,8 @@ function closeAlarmNotes(ringingHere) {
       (ns || []).forEach(n => {
         const m = /^alarm:(.+)$/.exec(n.tag || '');
         if (m && (!live.has(m[1]) || here.has(m[1]))) n.close();
+        // The server's "session done" arriving where the app is open (and already said so).
+        if (/^timer:/.test(n.tag || '') && !document.hidden && !S.timer) n.close();
       }),
     )
     .catch(() => {});

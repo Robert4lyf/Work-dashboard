@@ -261,9 +261,11 @@ async function syncNotices() {
   } catch (e) {}
   const { data, error } = await sb.from('cockpit_notices').select('key,at').is('sent_at', null);
   if (error) return;
-  // A notice already due is left for the server to send (the minute job may not have run yet:
-  // the timer just ended, 9am just passed), except an alarm's repeats once it's dismissed.
-  const now = Date.now(),
+  // A notice already due when the last change here was made is left for the server to send
+  // (the minute job may not have run yet: the timer just ended, 9am just passed). One cancelled
+  // before it was due (a session paused a second before its end) goes, even if this runs later.
+  // An alarm's repeats always go once it's dismissed.
+  const now = S.editedAt || Date.now(),
     keep = new Set(want.map(n => n.key)),
     stale = data
       .filter(r => !keep.has(r.key) && !/^(test|alert):/.test(r.key))

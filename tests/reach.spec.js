@@ -274,9 +274,22 @@ test("the app's notice sync leaves alerts sent by scripts alone", async ({ brows
       sent_at: null,
     });
     // Already due (the session just ended here): left for the server's minute job to send.
-    window.__notices.push({ key: 'timer:1', at: new Date().toISOString(), title: 'Done', sent_at: null });
+    window.__notices.push({
+      key: 'timer:1',
+      at: new Date(Date.now() - 120e3).toISOString(),
+      title: 'Done',
+      sent_at: null,
+    });
+    // Due by now, but called off (paused, discarded) before then: goes.
+    window.__notices.push({
+      key: 'timer:2',
+      at: new Date(Date.now() - 1000).toISOString(),
+      title: 'Done',
+      sent_at: null,
+    });
     S.pushKey = 'x';
     save();
+    S.editedAt = Date.now() - 60e3; // the change was made a minute ago; this sync runs late
   });
   await page.evaluate(() => syncNotices());
   expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc', 'timer:1']);

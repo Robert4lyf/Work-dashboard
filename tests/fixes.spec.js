@@ -165,3 +165,29 @@ test('round 2: stopping a paused session later counts its minutes when they were
   expect(s.t).toBe(d);
   expect(s.mins).toBe(20);
 });
+
+test('round 3: Upcoming rows on Waiting open the Upcoming list; the chase date is kept until Save', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.quests = [fix({ id: 'p1', text: 'Parent' })];
+    S.later = [
+      fix({ id: 'u1', text: 'Later waiting', start: '2026-10-01', wait: { who: 'Di', since: today() } }),
+    ];
+    save();
+    renderAll();
+  });
+  await app.openQuest('Parent');
+  await app.go('waiting');
+  await page.click('#v-waiting [data-goupd]');
+  await expect(page.locator('#upd')).toHaveAttribute('open', '');
+  await expect(page.locator('#upd')).toContainText('Later waiting');
+
+  await app.openQuest('Parent');
+  if (!(await page.locator('#wdue').isVisible())) await page.click('#waitd summary');
+  await page.fill('#wdue', '2026-09-30');
+  await page.dispatchEvent('#wdue', 'change');
+  await page.evaluate(() => inBackground(renderToday));
+  await expect(page.locator('#wdue')).toHaveValue('2026-09-30');
+});
