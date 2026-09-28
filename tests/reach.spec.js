@@ -269,15 +269,17 @@ test("the app's notice sync leaves alerts sent by scripts alone", async ({ brows
     });
     window.__notices.push({
       key: 'due:gone:2026-09-24',
-      at: new Date().toISOString(),
+      at: new Date(Date.now() + 864e5).toISOString(),
       title: 'Old',
       sent_at: null,
     });
+    // Already due (the session just ended here): left for the server's minute job to send.
+    window.__notices.push({ key: 'timer:1', at: new Date().toISOString(), title: 'Done', sent_at: null });
     S.pushKey = 'x';
     save();
   });
   await page.evaluate(() => syncNotices());
-  expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc']);
+  expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc', 'timer:1']);
   expect(errors).toEqual([]);
 });
 

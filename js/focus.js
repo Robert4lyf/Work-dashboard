@@ -189,7 +189,7 @@ function stopAndSave(done) {
   S.timer = null;
   S.focusQ = null;
   if (m >= 1) {
-    logSession(t.tag, m, Date.now(), t.q);
+    logSession(t.tag, m, t.left != null && t.pausedAt ? t.pausedAt : Date.now(), t.q);
     addXP(Math.max(1, Math.round((20 * m) / t.mins)));
   }
   const r = done && t.q && find(t.q);
@@ -240,9 +240,11 @@ function togglePause() {
   if (t.left != null) {
     t.end = Date.now() + t.left;
     delete t.left;
+    delete t.pausedAt;
     pauseAsk = null;
   } else {
     t.left = Math.max(0, t.end - Date.now());
+    t.pausedAt = Date.now(); // stopped later, the minutes count for when they were done
     pauseAsk = { t: Date.now(), q: t.q || null };
   }
   save();

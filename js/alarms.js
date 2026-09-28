@@ -336,5 +336,12 @@ function renderRinging(r) {
         `<div class="ring box"><p class="ringtime">${a.time}</p><p class="ringlabel">${esc(a.label || 'Alarm')}</p><div class="acts"><button class="btn green big" data-adismiss="${a.id}">Dismiss</button><button class="btn big" data-asnooze="${a.id}">Snooze 5 min</button></div></div>`,
     )
     .join('');
-  if (opening) el.querySelector('[data-adismiss]').focus();
+  // Dismiss takes focus (again after one of several is dismissed); closing gives it back.
+  if (opening) ringFocus = document.activeElement;
+  if (r.length && !el.contains(document.activeElement)) el.querySelector('[data-adismiss]').focus();
+  if (!r.length && ringFocus) {
+    if (ringFocus.isConnected) ringFocus.focus();
+    ringFocus = null;
+  }
 }
+let ringFocus = null;

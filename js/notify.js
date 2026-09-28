@@ -228,7 +228,7 @@ function wantedNotices(now = Date.now()) {
         });
       w(n.children, [...trail, n.text]);
     });
-  })(S.quests, []);
+  })([...S.quests, ...S.later], []);
   S.later.forEach(n => {
     if (soon(at9(n.start)))
       out.push({
@@ -259,10 +259,16 @@ async function syncNotices() {
   try {
     if (localStorage.getItem(NOTICE_HASH) === h) return;
   } catch (e) {}
-  const { data, error } = await sb.from('cockpit_notices').select('key').is('sent_at', null);
+  const { data, error } = await sb.from('cockpit_notices').select('key,at').is('sent_at', null);
   if (error) return;
-  const keep = new Set(want.map(n => n.key)),
-    stale = data.map(r => r.key).filter(k => !keep.has(k) && !/^(test|alert):/.test(k));
+  // A notice already due is left for the server to send (the minute job may not have run yet:
+  // the timer just ended, 9am just passed), except an alarm's repeats once it's dismissed.
+  const now = Date.now(),
+    keep = new Set(want.map(n => n.key)),
+    stale = data
+      .filter(r => !keep.has(r.key) && !/^(test|alert):/.test(r.key))
+      .filter(r => r.key.startsWith('alarm:') || Date.parse(r.at) > now)
+      .map(r => r.key);
   if (want.length) {
     const put = rows =>
       sb.from('cockpit_notices').upsert(
@@ -276,7 +282,10 @@ async function syncNotices() {
       ({ error: e2 } = await put(want.map(({ device, ...n }) => n)));
     if (e2) return;
   }
-  if (stale.length) await sb.from('cockpit_notices').delete().in('key', stale);
+  if (stale.length) {
+    const { error: e3 } = await sb.from('cockpit_notices').delete().in('key', stale);
+    if (e3) return; // tried again next time
+  }
   try {
     localStorage.setItem(NOTICE_HASH, h);
   } catch (e) {}

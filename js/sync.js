@@ -64,6 +64,8 @@ function applyRows(rows, firstSync) {
   let changed = firstSync;
   for (const r of rows) {
     sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
+    // A kind from a newer version: nothing here to change (and not a reason to reload).
+    if (!knownKey(r.key)) continue;
     const h = r.deleted ? null : hashOf(r.data),
       mine = sync2.dirty[r.key];
     if (mine && mine.at > Number(r.edited_at)) continue;
@@ -174,8 +176,11 @@ async function sync() {
         inBackground(renderAll);
       }
       // New device, or a different account: start from the server's copy.
-      sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0, user: session.user.id };
+      // The account is noted once that's done: if it fails part-way, it starts over next time.
+      sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0 };
       await firstSync();
+      sync2.user = session.user.id;
+      saveSyncState();
     } else applyRows(await pullRows(Math.max(0, sync2.cursor - OVERLAP)), false);
     await pushDirty();
     await saveSnapshot();

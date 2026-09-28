@@ -134,7 +134,8 @@ document.addEventListener('submit', e => {
 document.addEventListener('change', e => {
   const el = e.target;
   // Committed. (Not a time: those change a part at a time and are still being typed.)
-  if (el.dataset && !el.dataset.atime) delete el.dataset.typed;
+  // Nor the waiting panel's fields: they're only saved with its Save button.
+  if (el.dataset && !el.dataset.atime && el.id !== 'wwho' && el.id !== 'wnote') delete el.dataset.typed;
   // Alarms: time, label and device; this device's name (Settings).
   if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
   if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
@@ -168,7 +169,11 @@ document.addEventListener('change', e => {
   }
   if (el.dataset.projpick) {
     const r = el.value && find(el.value);
-    if (r) r.n.project = el.dataset.projpick;
+    if (r) {
+      r.n.project = el.dataset.projpick;
+      const t = tplFor(r.n); // tomorrow's copy of a repeat too
+      if (t) t.project = el.dataset.projpick;
+    }
     save();
     renderAll();
     return;
@@ -260,10 +265,12 @@ document.addEventListener('click', e => {
     renderToday();
     // That redraw replaced the tapped button if it was on Today: carry on with its new copy (a
     // two-tap Delete marks the button on the page).
-    if (b && !b.isConnected) {
-      const k = Object.keys(b.dataset)[0],
-        attr = k && 'data-' + k.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
-      b = (attr && $(`#v-today button[${attr}="${CSS.escape(b.dataset[k])}"]`)) || b;
+    if (b && !b.isConnected && Object.keys(b.dataset).length) {
+      const sel = [...b.attributes]
+        .filter(a => a.name.startsWith('data-'))
+        .map(a => `[${a.name}="${CSS.escape(a.value)}"]`)
+        .join('');
+      b = $('#v-today button' + sel) || b;
     }
   }
   if (!b) return;
@@ -276,6 +283,12 @@ document.addEventListener('click', e => {
     }
   }
   if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (d.goupd) {
+    // An Upcoming item (from the Waiting tab): Today's list, with Upcoming open.
+    path = [];
+    panels.upd = true;
+    go('today');
+  }
   if (d.goto) {
     go(d.goto);
     const i = d.goto === 'inbox' && $('#iin');
@@ -534,6 +547,7 @@ document.addEventListener('click', e => {
       eachTagged(n => {
         if (n.tag === name) n.tag = '';
       });
+      if (S.timer && S.timer.tag === name) S.timer.tag = '';
       save();
       renderAll();
     });
@@ -629,7 +643,11 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'exp') exportData();
   if (b.id === 'doRestore') {
+    // What's current across devices isn't taken from the backup: the notification keys (an old
+    // copy would break every device's notifications), the device list and any running session.
+    const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer };
     norm(pending);
+    Object.assign(S, keep);
     pending = null;
     path = [];
     save();
@@ -649,7 +667,9 @@ document.addEventListener('click', e => {
   if (b.id === 'signout') {
     unlisten();
     // Alarms and alerts stop coming here, and nothing of this account is left for the next.
+    // Unsent edits go first.
     (pushEndpoint ? disablePush() : Promise.resolve())
+      .then(() => sync())
       .then(() => sb.auth.signOut())
       .then(() => {
         captureToken = '';

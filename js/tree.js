@@ -210,6 +210,8 @@ function setHTML(el, html) {
   // And whatever field is being edited right now.
   // (only once typed into, so a committed field shows edits synced from elsewhere).
   if (fid && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) typed[fid] = a.value;
+  // And any typed into but not yet saved (the waiting panel's, saved together by its button).
+  el.querySelectorAll('[data-typed][id]').forEach(i => (typed[i.id] = i.value));
   el.innerHTML = html;
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));

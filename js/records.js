@@ -121,15 +121,18 @@ const knownKey = k =>
 // `now`: when the change counts as made (the daily reset back-dates its changes to midnight).
 function markDirty(now = Date.now()) {
   const recs = toRecords(S),
-    seen = new Set();
+    seen = new Set(),
+    // A record already waiting to be sent keeps its time if later: back-dating the daily reset
+    // mustn't make an edit made just before it (in the minute after midnight) count as older.
+    at = k => Math.max(now, (sync2.dirty[k] && sync2.dirty[k].at) || 0);
   recs.forEach((v, k) => {
     seen.add(k);
     const h = hashOf(v);
     if (sync2.synced[k] === h) delete sync2.dirty[k];
-    else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: now };
+    else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: at(k) };
   });
   for (const k in sync2.synced)
     if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null))
-      sync2.dirty[k] = { h: null, at: now };
+      sync2.dirty[k] = { h: null, at: at(k) };
   saveSyncState();
 }

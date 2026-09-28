@@ -92,6 +92,11 @@ function norm(s) {
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
   S.inbox = S.inbox.map(i => (i.node ? Object.assign(cleanId(i), { node: fix(i.node) }) : cleanId(i)));
+  // Waiting details on an Inbox item live on the item (older versions left them on its quest).
+  S.inbox.forEach(i => {
+    if (i.node && i.node.wait && !i.wait) i.wait = i.node.wait;
+    if (i.node) delete i.node.wait;
+  });
   S.projects.forEach(cleanId);
   S.templates.forEach(t => {
     cleanId(t);

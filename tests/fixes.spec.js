@@ -106,3 +106,62 @@ test('the header keeps keyboard focus through its minute refresh; Delete arms on
   await page.click('[data-dellater="L1"]');
   await expect(page.locator('[data-dellater="L1"]')).toHaveText('Delete?');
 });
+
+test('round 2: unknown synced kinds don’t reload or drop Undo; a pending edit keeps its time through the reset', async ({
+  page,
+}) => {
+  const r = await page.evaluate(() => {
+    undoSnap = '{}';
+    applyRows([{ key: 'widget:1', data: { a: 1 }, deleted: false, edited_at: 1, seq: 5 }], false);
+    applyRows([{ key: 'widget:1', data: { a: 1 }, deleted: false, edited_at: 1, seq: 5 }], false);
+    const kept = undoSnap !== null;
+    S.quests.push(fix({ id: 'e1', text: 'edit' }));
+    markDirty(Date.now());
+    const t = sync2.dirty['meta:order'].at;
+    S.quests.push(fix({ id: 'e2', text: 'reset' }));
+    markDirty(1);
+    return { kept, same: sync2.dirty['meta:order'].at === t };
+  });
+  expect(r).toEqual({ kept: true, same: true });
+});
+
+test('round 2: inbox waiting from older versions carries over; the waiting panel keeps Who while typing For what', async ({
+  app,
+  page,
+}) => {
+  const w = await page.evaluate(() => {
+    norm({ inbox: [{ id: 'i9', text: 'Old', node: { id: 'n9', text: 'Old', wait: { who: 'Bo' } } }] });
+    return [S.inbox[0].wait, S.inbox[0].node.wait];
+  });
+  expect(w).toEqual([{ who: 'Bo' }, undefined]);
+
+  await page.evaluate(() => {
+    S.quests = [fix({ id: 'wq', text: 'Chase' })];
+    save();
+    renderAll();
+  });
+  await app.openQuest('Chase');
+  if (!(await page.locator('#wwho').isVisible())) await page.click('text=Waiting on someone');
+  await page.fill('#wwho', 'Alice');
+  await page.dispatchEvent('#wwho', 'change');
+  await page.focus('#wnote');
+  await page.evaluate(() => inBackground(renderToday));
+  await expect(page.locator('#wwho')).toHaveValue('Alice');
+});
+
+test('round 2: stopping a paused session later counts its minutes when they were done', async ({ page }) => {
+  const d = await page.evaluate(() => {
+    S.quests = [fix({ id: 'tq', text: 'Work' })];
+    startTimer('tq');
+    S.timer.end = Date.now() + (S.timer.mins - 20) * 60000; // 20 minutes in
+    togglePause(); // at 23:58
+    return S.timer.pausedAt;
+  });
+  await page.clock.fastForward('10:00'); // past midnight
+  const s = await page.evaluate(() => {
+    stopAndSave(false);
+    return S.sessions[S.sessions.length - 1];
+  });
+  expect(s.t).toBe(d);
+  expect(s.mins).toBe(20);
+});
