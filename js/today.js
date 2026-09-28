@@ -20,7 +20,7 @@ function row(n, i, len, sib) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
       p = Math.round(frac(n) * 100);
-    left = `<button class="meter" data-open="${n.id}" aria-label="${p}% complete" style="background:linear-gradient(to top,var(--green) ${p}%,var(--meter-track) ${p}%)">${set.filter(isDone).length}/${set.length}</button>`;
+    left = `<button class="meter" data-open="${n.id}" aria-label="${esc(n.text)}: ${p}% complete" style="background:linear-gradient(to top,var(--green) ${p}%,var(--meter-track) ${p}%)">${set.filter(isDone).length}/${set.length}</button>`;
   } else {
     left = `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
   }

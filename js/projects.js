@@ -20,7 +20,7 @@ function projectPicker(kind, id, cur) {
     .filter(p => !p.done || p.id === cur)
     .map(p => `<option value="${p.id}"${p.id === cur ? ' selected' : ''}>${esc(p.name)}</option>`)
     .join('');
-  return `<label class="f">Project</label><select class="fld" data-setproject="${id}" data-kind="${kind}"><option value="">No project</option>${opts}<option value="__new">+ New project…</option></select>`;
+  return `<label class="f" for="proj-${kind}-${id}">Project</label><select class="fld" id="proj-${kind}-${id}" data-setproject="${id}" data-kind="${kind}"><option value="">No project</option>${opts}<option value="__new">+ New project…</option></select>`;
 }
 function newProject(name) {
   name = (name || '').trim().slice(0, 40);

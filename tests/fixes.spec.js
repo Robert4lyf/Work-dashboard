@@ -229,3 +229,34 @@ test('round 4: a due session waits for the server while held; the waiting panel 
   await page.click('#v-today .open >> text="Plain"');
   expect(await page.locator('#waitd').getAttribute('open')).toBeNull();
 });
+
+test('round 5: the keyboard stays in the view after an action; Restore backup is a real button; a hidden toast has no Undo', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.quests = [fix({ id: 'k1', text: 'Keyboard one' }), fix({ id: 'k2', text: 'Keyboard two' })];
+    save();
+    renderAll();
+  });
+  await page.focus('#v-today [aria-label="Mark done: Keyboard one"]');
+  await page.keyboard.press('Space');
+  expect(await page.evaluate(() => document.activeElement.getAttribute('aria-label'))).toBe(
+    'Mark done: Keyboard one',
+  );
+  // The header's tick too: it moves on to the next quest, and keeps the keyboard.
+  await page.focus('#hnow [data-toggle]');
+  await page.keyboard.press('Space');
+  expect(await page.evaluate(() => document.activeElement.closest('#hnow') !== null)).toBe(true);
+  await page.focus('[data-xopen="k2"]');
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => document.activeElement.closest('#v-today') !== null)).toBe(true);
+
+  await app.go('account');
+  await page.focus('#impbtn');
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('impbtn');
+
+  await page.evaluate(() => toast('Gone', true, 100));
+  await page.clock.fastForward(200);
+  expect(await page.locator('#undo').count()).toBe(0);
+});

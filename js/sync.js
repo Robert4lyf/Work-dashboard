@@ -87,7 +87,9 @@ function applyRows(rows, firstSync, keep) {
     persistLocal();
     rollover();
     markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
+    const open = path.length && !find(path[path.length - 1]); // the quest on screen went
     inBackground(renderAll);
+    if (open) toast('The quest you had open was removed on another device', false, 4000);
   }
   saveSyncState();
 }
@@ -197,6 +199,12 @@ async function sync() {
     if (sync2.user !== session.user.id) {
       // Another account was signed in here before: its data mustn't move into this one.
       if (sync2.user) {
+        if (Object.keys(sync2.dirty).length)
+          toast(
+            'Changes made before switching account were left behind (they belonged to the other one)',
+            false,
+            5000,
+          );
         norm(null);
         persistLocal();
         inBackground(renderAll);
@@ -385,7 +393,7 @@ function renderAccount() {
   h +=
     '<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form>';
   h +=
-    '<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><label class="btn">Restore backup<input type="file" id="imp" accept=".json,application/json" hidden></label></div>';
+    '<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
   setHTML($('#v-account'), h);
 }
 

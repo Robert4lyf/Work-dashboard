@@ -98,7 +98,7 @@ function renderInbox() {
       h +=
         tagPicker('i', it.id, it.tag) +
         projectPicker('i', it.id, it.project) +
-        `<label class="f">Waiting on (optional)</label><input class="fld" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
+        `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
         laterPicker('i', it.id);
       if (kids.length) {
         h += '<ul class="subs">';

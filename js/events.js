@@ -642,6 +642,7 @@ document.addEventListener('click', e => {
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) togglePause();
   if (b.id === 'undo') undo();
+  if (b.id === 'impbtn') $('#imp').click();
   if (b.id === 'copylog') copyLog();
   if (b.id === 'hist') loadHistory();
   if (d.hist) {

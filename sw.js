@@ -6,7 +6,7 @@ const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/
 const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'board', 'talk', 'notes', 'alarms', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
-  './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png', SUPABASE_JS];
+  './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png'];
 
 try { importScripts('./config.js'); } catch (e) {}
 let apiOrigin = '';
@@ -15,7 +15,11 @@ try { apiOrigin = new URL(self.COCKPIT_CONFIG.supabaseUrl).origin; } catch (e) {
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)
     // Past the browser's own cache, so a new version never stores the old files.
-    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
+    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))
+      // The sync library comes from a CDN that may be blocked or slow: the app must still install
+      // (and work offline) without it; it's cached when it does load.
+      .then(() => c.add(new Request(SUPABASE_JS, { cache: 'reload' })).catch(() => {})))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()

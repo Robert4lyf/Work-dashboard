@@ -167,6 +167,7 @@ function toast(msg, undo, ms) {
   tt = setTimeout(
     () => {
       t.classList.remove('show', 'act');
+      t.innerHTML = ''; // (no invisible Undo button left for the keyboard to land on)
       if (undo) undoSnap = null;
     },
     ms || (undo ? 5000 : 1600),
@@ -206,9 +207,26 @@ function inBackground(fn) {
     background = was;
   }
 }
+// Where the keyboard was, as a selector: by id, else by the element's data attributes.
+function focusSel(a) {
+  if (!a || a === document.body) return '';
+  if (a.id) return '#' + CSS.escape(a.id);
+  const ds = [...a.attributes].filter(x => x.name.startsWith('data-'));
+  return ds.length ? a.tagName + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
+}
 function setHTML(el, html) {
   if (!background) {
+    // A redraw after a tap or key press: the keyboard stays on the same control, or (if it went)
+    // in this view, rather than falling back to the top of the page.
+    const a = document.activeElement,
+      inside = a && el.contains(a),
+      sel = inside ? focusSel(a) : '';
     el.innerHTML = html;
+    if (inside) {
+      const f = (sel && el.querySelector(sel)) || el;
+      if (f === el) el.tabIndex = -1;
+      f.focus({ preventScroll: true });
+    }
     return;
   }
   const a = document.activeElement,
@@ -245,6 +263,7 @@ function dropUndo() {
   if (!undoSnap) return;
   undoSnap = null;
   $('#toast').classList.remove('show', 'act');
+  $('#toast').innerHTML = '';
 }
 function undo() {
   const snap = undoSnap;
