@@ -133,7 +133,8 @@ document.addEventListener('submit', e => {
 
 document.addEventListener('change', e => {
   const el = e.target;
-  if (el.dataset) delete el.dataset.typed; // committed
+  // Committed. (Not a time: those change a part at a time and are still being typed.)
+  if (el.dataset && !el.dataset.atime) delete el.dataset.typed;
   // Alarms: time, label and device; this device's name (Settings).
   if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
   if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
@@ -761,11 +762,18 @@ setInterval(timerTick, 500);
 setInterval(alarmTick, 1000);
 // Leaving the notes box saves straight away rather than after the typing pause.
 document.addEventListener('focusout', e => {
+  if (e.target.dataset && e.target.dataset.atime) {
+    delete e.target.dataset.typed;
+    // Once focus has moved on (so the redraw keeps it where it went).
+    return setTimeout(leftAlarmTime, 0);
+  }
   if (e.target.id !== 'notesin') return;
   // Going to "Show those notes" (by Tab, say) mustn't save over the notes it's about to show.
   if (e.relatedTarget && e.relatedTarget.id === 'notesload') return clearTimeout(notesTimer);
   saveNotes(e.target.value);
-  setTimeout(renderNotes, 0); // once focus has left: shows notes that changed elsewhere meanwhile
+  // Once focus has left: shows notes that changed elsewhere meanwhile. Unless what's typed here
+  // couldn't be saved over them: that stays, with the choice, until one is made.
+  if (!notesDirty) setTimeout(renderNotes, 0);
 });
 // "Show those notes" mustn't take focus from the box first (that would save over them).
 document.addEventListener('mousedown', e => {

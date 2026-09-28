@@ -6,11 +6,17 @@ let notesTimer = null,
   notesBase = null; // the synced text the box last showed, to spot changes from elsewhere
 function renderNotes() {
   const cur = $('#notesin');
-  // Don't redraw under someone typing. If the notes changed on another device meanwhile, say
-  // so and offer to show them, rather than quietly overwriting them on the next save.
-  if (cur && document.activeElement === cur) {
+  if (cur && cur.value === (S.notes || '')) {
+    // Same text either way (say typed the same on both): nothing to choose between.
+    notesBase = cur.value;
+    notesDirty = false;
+  }
+  // Don't redraw under someone typing, or over text typed here and not saved yet. If the notes
+  // changed on another device meanwhile, say so and offer to show them, rather than quietly
+  // overwriting them on the next save.
+  if (cur && (document.activeElement === cur || notesDirty)) {
     const st = $('#notesstate');
-    if (st && S.notes !== notesBase && S.notes !== cur.value)
+    if (st && notesChanged() && !$('#notesload'))
       st.innerHTML =
         'Changed on another device. <button class="linkbtn" id="notesload">Show those notes</button> (or keep typing to replace them)';
     return;

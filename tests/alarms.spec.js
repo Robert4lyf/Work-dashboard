@@ -313,3 +313,69 @@ test('round 5: editing an off alarm left from yesterday never rings; a pending n
   await page.clock.fastForward(1000);
   expect((await app.state()).notes).toBe('phone text!');
 });
+
+test('round 6: notes kept on leaving during a conflict; time fields not rebuilt mid-entry; late alarm pushes closed', async ({
+  app,
+  page,
+}) => {
+  await app.go('notes');
+  await page.fill('#notesin', 'phone text');
+  await page.evaluate(() => {
+    S.notes = 'laptop text';
+    persistLocal();
+    inBackground(renderAll);
+  });
+  await page.evaluate(() => document.activeElement.blur());
+  await page.clock.fastForward(1000);
+  await page.evaluate(() => inBackground(renderAll)); // a later sync
+  await expect(page.locator('#notesin')).toHaveValue('phone text');
+  await expect(page.locator('#notesstate')).toContainText('Changed on another device');
+  expect((await app.state()).notes).toBe('laptop text');
+  await page.click('#notesload');
+  await expect(page.locator('#notesin')).toHaveValue('laptop text');
+
+  // The same text typed on both: no conflict to offer.
+  await page.fill('#notesin', 'same');
+  await page.evaluate(() => {
+    S.notes = 'same';
+    inBackground(renderAll);
+  });
+  await expect(page.locator('#notesload')).toHaveCount(0);
+
+  // A time field keeps its element (and focus) through a change, the list catching up after.
+  await app.go('today');
+  const row = await addAlarm(page, '10:00', 'x');
+  await row.locator('[data-aon]').click();
+  const t = row.locator('[data-atime]');
+  await t.focus();
+  await page.evaluate(() => (window.__t = document.activeElement));
+  await t.fill('08:00');
+  await t.dispatchEvent('change');
+  expect(await page.evaluate(() => window.__t === document.activeElement && window.__t.isConnected)).toBe(
+    true,
+  );
+  await row.locator('[data-alabel]').focus();
+  await page.clock.fastForward(100); // the clock is paused
+  await expect(row.locator('[data-aon]')).toHaveText('Done');
+
+  // Tab from the label, once committed, carries on to the next control.
+  await row.locator('[data-alabel]').fill('y');
+  await page.keyboard.press('Tab');
+  await page.clock.fastForward(100);
+  expect(await page.evaluate(() => document.activeElement.outerHTML.slice(0, 80))).toContain('data-aon');
+  expect((await app.state()).alarms[0].label).toBe('y');
+
+  // With nothing on, an alarm notification arriving late is still closed.
+  await page.evaluate(() => {
+    S.alarms = [];
+    save();
+    renderAll();
+    window.__closed = 0;
+    navigator.serviceWorker.getRegistration = () =>
+      Promise.resolve({
+        getNotifications: () => Promise.resolve([{ tag: 'alarm:gone', close: () => window.__closed++ }]),
+      });
+  });
+  await page.clock.fastForward(21000);
+  expect(await page.evaluate(() => window.__closed)).toBeGreaterThan(0);
+});
