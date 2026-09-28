@@ -119,7 +119,13 @@ Invoke-RestMethod -Method Post -Uri $url -Headers @{ apikey = $key } -ContentTyp
 ## Features worth knowing
 
 - **One way in:** new work always starts in the Inbox (typed, spoken, shared or captured from anywhere). Today only holds what you've chosen from it: tap **Today** on an inbox item, or set its project, waiting details or a later date first. Subquests are still added on a quest's page.
-- **Tabs:** Today, Inbox, Waiting, Review and Settings. Focus opens from the header (tap the focus time, **Single-task**, or **Focus on this** on a quest).
+- **Tabs:** Today, Inbox, Waiting, Notes, Review and Settings. Focus opens from the header (tap the focus time, **Single-task**, or **Focus on this** on a quest).
+- **Notes:** one free-text space, saved as you type and synced to your other devices. Handy for moving a phone number or a link from one device to another.
+- **Alarms (on Today):** **+ Alarm**, set the time and an optional label, and switch it **On**. Several can be on at once, and the header shows the next one. When one goes off it rings until you **Dismiss** it (or **Snooze 5 min**):
+  - with the app open on that device, it shows a full-screen alarm and keeps sounding;
+  - otherwise it sends a notification that sounds and vibrates again every minute for 10 minutes (it needs notifications set up, above; Android's silent or Do Not Disturb modes can still mute it).
+  
+  Choose which device rings (**Any device**, or one by name; name each device in **Settings > Appearance**). Alarms are for the current day: overnight they all switch off but stay listed, ready to edit or switch on again. Re-run `supabase-setup.sql` and redeploy `send-notices` so a device-specific alarm rings only on that device.
 - **Estimates:** on a quest (or a step), pick 15m, 30m, 1h or 2h. Today then shows what's planned against the free time left: from now to the end of your workday (Settings > Appearance, 17:30 by default). When it doesn't fit, the line turns orange. Waiting quests don't count.
 - **Inbox swipes (phone):** swipe an item left to send it to Today (with Undo); swipe right for quick options: Tomorrow, Next week, Waiting… or Clear.
 - **Weekly review:** Review > Week walks through the week in one page: empty the Inbox, decide on carried-over quests, chase what you're waiting on, projects with nothing open, what's coming up, and what you finished (with **Copy summary** for an update). From Friday until you tap **Mark week reviewed**, the header shows a **Weekly review** button.

@@ -1556,6 +1556,74 @@ nav .badge[hidden] {
     transition: none !important;
   }
 }
+/* notes */
+.fld.notes {
+  display: block;
+  width: 100%;
+  min-height: 55vh;
+  resize: vertical;
+  line-height: 1.5;
+}
+/* alarms (on Today) and the ringing card */
+.alarms {
+  margin: -4px 0 18px;
+}
+.arow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 2px dashed var(--muted);
+}
+.arow:first-of-type {
+  border-top: 0;
+}
+.arow .fld {
+  flex: 1 1 8em;
+  min-width: 0;
+  padding: 6px 8px;
+}
+.arow .atime {
+  flex: 0 0 7.5em;
+}
+.arow:not(.on) .atime {
+  opacity: 0.6;
+}
+#v-alarm {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px 20px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+#v-alarm[hidden] {
+  display: none;
+}
+.ring {
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px;
+  text-align: center;
+}
+.ringtime {
+  font-family: var(--display);
+  font-size: clamp(32px, 10vw, 56px);
+  margin: 0;
+}
+.ringlabel {
+  font-size: 20px;
+  margin: 8px 0 16px;
+  overflow-wrap: anywhere;
+}
+.ring .acts {
+  justify-content: center;
+}
 /* talk mode */
 body.talking .wrap,
 body.talking nav,

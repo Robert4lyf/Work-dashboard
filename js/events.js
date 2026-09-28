@@ -10,6 +10,8 @@ function renderAll() {
   renderProjectsView();
   renderLog();
   renderAccount();
+  renderNotes();
+  syncRinging();
   renderZen();
   if (talk) renderTalk();
 }
@@ -33,7 +35,7 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  ['today', 'inbox', 'waiting', 'review', 'projects', 'focus', 'log', 'account'].forEach(
+  ['today', 'inbox', 'waiting', 'notes', 'review', 'projects', 'focus', 'log', 'account'].forEach(
     k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)),
   );
   if (v === 'review') renderReview();
@@ -131,6 +133,11 @@ document.addEventListener('submit', e => {
 
 document.addEventListener('change', e => {
   const el = e.target;
+  // Alarms: time, label and device; this device's name (Settings).
+  if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
+  if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
+  if (el.dataset.adev !== undefined) return editAlarm(el.dataset.adev, 'device', el.value);
+  if (el.id === 'devname') return renameDevice(el.value);
   if (el.id === 'imp') {
     if (el.files && el.files[0]) importFile(el.files[0]);
     el.value = '';
@@ -231,6 +238,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.id === 'notesin') return typedNotes(el.value);
   if (el.dataset.field !== 'notes') return;
   const r = find(el.dataset.id);
   if (r) {
@@ -645,6 +653,14 @@ document.addEventListener('click', e => {
   if (b.id === 'capnew') newCaptureToken();
   if (b.id === 'captest') testCapture();
   if (b.id === 'alerttest') testAlert();
+  if (b.id === 'alarmadd') addAlarm();
+  if (d.aon) {
+    const a = S.alarms.find(x => x.id === d.aon);
+    if (a) setAlarmOn(a, !alarmOn(a));
+  }
+  if (d.adel) deleteAlarm(d.adel);
+  if (d.adismiss) dismissAlarm(d.adismiss);
+  if (d.asnooze) snoozeAlarm(d.asnooze);
   if (d.copy)
     copyText(
       {
@@ -735,6 +751,14 @@ go(view);
 receiveShare();
 receiveLaunch();
 setInterval(timerTick, 500);
+setInterval(alarmTick, 1000);
+// Leaving the notes box saves straight away rather than after the typing pause.
+document.addEventListener('focusout', e => {
+  if (e.target.id !== 'notesin' || S.notes === e.target.value) return;
+  clearTimeout(notesTimer);
+  S.notes = e.target.value;
+  save();
+});
 if (sb) {
   sb.auth.onAuthStateChange((ev, s) => {
     session = s;

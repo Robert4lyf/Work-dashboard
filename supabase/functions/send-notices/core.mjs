@@ -3,12 +3,12 @@
 //   push - the web-push library, already given the VAPID keys
 export async function sendDue({ db, push, now = new Date(), log = console }) {
   const late = new Date(now.getTime() - 6 * 3600e3);
-  const { data: due, error } = await db
-    .from('cockpit_notices')
-    .select('user_id,key,at,title,body')
-    .is('sent_at', null)
-    .lte('at', now.toISOString())
-    .limit(500);
+  const pending = cols =>
+    db.from('cockpit_notices').select(cols).is('sent_at', null).lte('at', now.toISOString()).limit(500);
+  // `device` (a push endpoint: send only there, e.g. an alarm for one device) is newer than the
+  // table; without the column every notice goes to all devices.
+  let { data: due, error } = await pending('user_id,key,at,title,body,device');
+  if (error) ({ data: due, error } = await pending('user_id,key,at,title,body'));
   if (error) throw error;
   if (!due.length) return { sent: 0, skipped: 0, removed: 0 };
   const { data: subs, error: e2 } = await db
@@ -23,7 +23,9 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
     // Why a notice didn't reach any device, kept on the notice so the app's test can show it.
     const errs = [];
     let delivered = 0;
-    const mine = subs.filter(s => s.user_id === n.user_id && !gone.has(s.endpoint));
+    const mine = subs.filter(
+      s => s.user_id === n.user_id && !gone.has(s.endpoint) && (!n.device || s.endpoint === n.device),
+    );
     // Anything more than 6 hours overdue (say the job was paused) is marked done unsent.
     if (new Date(n.at) < late) skipped++;
     else if (!mine.length) errs.push('no devices have notifications turned on');

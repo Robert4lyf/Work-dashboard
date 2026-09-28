@@ -108,7 +108,7 @@ function renderToday() {
   if (!qs.length)
     h +=
       '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
-  h += renderUpcoming();
+  h += renderAlarms() + renderUpcoming();
   setHTML($('#v-today'), h);
 }
 

@@ -67,6 +67,9 @@ function norm(s) {
       projects: [],
       pdaily: {},
       interrupts: [],
+      alarms: [],
+      devices: [],
+      notes: '',
     },
     s || {},
   );
@@ -201,6 +204,10 @@ function rollover() {
     delete n.start;
     S.quests.push(n);
     return false;
+  });
+  // Alarms are for one day: overnight they switch off, staying in the list to switch on again.
+  S.alarms.forEach(a => {
+    if (a.day && a.day !== today()) Object.assign(a, { day: '', done: '', snooze: 0 });
   });
   stampSince();
   persistLocal();

@@ -1,0 +1,222 @@
+/* alarms: set for times today. When one goes off it rings on the chosen device (or all of them)
+   until dismissed: continuously while the app is open there, and as a repeating notification
+   (once a minute for 10 minutes) when it isn't. At the end of the day every alarm switches off
+   but stays in the list, ready to edit or switch on again.
+   An alarm: { id, time 'HH:MM', label, device ('' = any), day (the day it's on for, else ''),
+   done (the day it was dismissed), snooze (ms time to ring again, or 0) } */
+
+// This device: an id and a name, kept on the device; the list of named devices is synced so an
+// alarm can pick one.
+const DEVICE_KEY = 'dashboard-device';
+let thisDevice = null;
+try {
+  thisDevice = JSON.parse(localStorage.getItem(DEVICE_KEY));
+} catch (e) {}
+if (!thisDevice || !thisDevice.id) {
+  const ua = navigator.userAgent;
+  thisDevice = {
+    id: 'd' + Math.random().toString(36).slice(2, 10),
+    name: /Android/i.test(ua) ? 'Android phone' : /Windows/i.test(ua) ? 'Windows PC' : 'This device',
+  };
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(thisDevice));
+  } catch (e) {}
+}
+// Keep this device's entry (name, and push endpoint for alarm notifications) up to date.
+function registerDevice() {
+  const cur = S.devices.find(d => d.id === thisDevice.id),
+    want = { id: thisDevice.id, name: thisDevice.name, endpoint: pushEndpoint || '' };
+  if (cur && cur.name === want.name && cur.endpoint === want.endpoint) return;
+  if (cur) Object.assign(cur, want);
+  else S.devices.push(want);
+  save();
+}
+function renameDevice(name) {
+  name = name.trim().slice(0, 40);
+  if (!name || name === thisDevice.name) return;
+  thisDevice.name = name;
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(thisDevice));
+  } catch (e) {}
+  registerDevice();
+  renderAll();
+}
+
+const alarmOn = a => a.day === today();
+const hhmmOf = t => {
+  const d = new Date(t);
+  return pad(d.getHours()) + ':' + pad(d.getMinutes());
+};
+// When it rings (ms): its time today, or the snooze time.
+function alarmAt(a) {
+  if (a.snooze) return a.snooze;
+  const [h, m] = a.time.split(':').map(Number),
+    d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
+}
+const ringing = (now = Date.now()) =>
+  S.alarms.filter(
+    a => alarmOn(a) && a.done !== today() && now >= alarmAt(a) && (!a.device || a.device === thisDevice.id),
+  );
+// The push endpoint that should get an alarm's notifications: '' for all devices, null if the
+// chosen device can't receive them.
+function alarmEndpoint(a) {
+  if (!a.device) return '';
+  const d = S.devices.find(x => x.id === a.device);
+  return d && d.endpoint ? d.endpoint : null;
+}
+// Notices for alarms that are on: one when it goes off, then once a minute for 10 minutes,
+// until dismissed. Ones just passed are kept for a couple of minutes so the server still sends
+// them if this device syncs in between.
+function alarmNotices(now) {
+  const out = [];
+  S.alarms.forEach(a => {
+    if (!alarmOn(a) || a.done === today()) return;
+    const ep = alarmEndpoint(a);
+    if (ep === null) return;
+    const start = alarmAt(a);
+    for (let n = 0; n < 10; n++) {
+      const at = start + n * 60000;
+      if (at <= now - 120000) continue;
+      const x = {
+        key: `alarm:${a.id}:${a.day}:${a.snooze || 0}:${n}`,
+        at,
+        title: '⏰ ' + (a.label || 'Alarm'),
+        body: 'Alarm for ' + a.time + '. Open the app to dismiss.',
+      };
+      if (ep) x.device = ep;
+      out.push(x);
+    }
+  });
+  return out;
+}
+
+function addAlarm() {
+  const d = new Date(),
+    h = (d.getHours() + 1) % 24;
+  S.alarms.push({ id: uid(), time: pad(h) + ':00', label: '', device: '', day: '', done: '', snooze: 0 });
+  panels.alarmd = true;
+  save();
+  renderAll();
+}
+// Switch on for today (only if the time is still to come) or off.
+function setAlarmOn(a, on) {
+  if (on) {
+    a.snooze = 0;
+    a.done = '';
+    const probe = { ...a, day: today() };
+    if (alarmAt(probe) <= Date.now()) {
+      toast('That time has already passed today', false, 2500);
+      return renderAll();
+    }
+    a.day = today();
+  } else Object.assign(a, { day: '', done: '', snooze: 0 });
+  save();
+  renderAll();
+}
+function editAlarm(id, field, value) {
+  const a = S.alarms.find(x => x.id === id);
+  if (!a) return;
+  if (field === 'time') {
+    if (!/^\d\d:\d\d$/.test(value)) return;
+    a.time = value;
+    a.snooze = 0;
+    a.done = '';
+    // Moved to a time already gone: it can't ring today, so it switches off.
+    if (alarmOn(a) && alarmAt(a) <= Date.now()) {
+      a.day = '';
+      toast('That time has already passed today, so the alarm is off', false, 2500);
+    }
+  } else if (field === 'label') a.label = value.trim().slice(0, 60);
+  else if (field === 'device') a.device = value;
+  save();
+  renderAll();
+}
+function deleteAlarm(id) {
+  withUndo('Alarm deleted', () => {
+    S.alarms = S.alarms.filter(x => x.id !== id);
+    save();
+    renderAll();
+  });
+}
+function dismissAlarm(id) {
+  const a = S.alarms.find(x => x.id === id);
+  if (!a) return;
+  a.done = today();
+  a.snooze = 0;
+  save();
+  renderAll();
+}
+function snoozeAlarm(id) {
+  const a = S.alarms.find(x => x.id === id);
+  if (!a) return;
+  a.snooze = Date.now() + 5 * 60000;
+  save();
+  renderAll();
+}
+
+// The alarm list, on Today.
+function renderAlarms() {
+  const on = S.alarms.filter(alarmOn).length,
+    devs = S.devices.length > 1 ? S.devices : [];
+  let h = `<details id="alarmd" class="alarms"${panels.alarmd || on ? ' open' : ''}><summary>Alarms${on ? ` <small>(${on} on)</small>` : ''}</summary>`;
+  [...S.alarms]
+    .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
+    .forEach(a => {
+      const live = alarmOn(a),
+        state = !live ? '' : a.done === today() ? 'Done' : a.snooze ? 'Snoozed' : '';
+      // data-keep: a background redraw (sync) keeps what's being typed.
+      h += `<div class="arow${live ? ' on' : ''}"><input class="fld atime" type="time" id="atime-${a.id}" data-keep data-atime="${a.id}" value="${a.time}" aria-label="Alarm time"><input class="fld" id="alabel-${a.id}" data-keep data-alabel="${a.id}" value="${esc(a.label || '')}" maxlength="60" placeholder="Label" aria-label="Alarm label">`;
+      if (devs.length)
+        h += `<select class="fld" data-adev="${a.id}" aria-label="Device"><option value="">Any device</option>${devs
+          .map(d => `<option value="${d.id}"${a.device === d.id ? ' selected' : ''}>${esc(d.name)}</option>`)
+          .join('')}</select>`;
+      h += `<button class="chip" data-aon="${a.id}" aria-pressed="${live}">${live ? state || 'On' : 'Off'}</button><button class="x" data-adel="${a.id}" aria-label="Delete alarm ${a.time}">×</button></div>`;
+    });
+  return (
+    h +
+    '<button class="btn sm" id="alarmadd">+ Alarm</button><p class="hint">Alarms are for today: they switch off overnight and stay here to switch on again.</p></details>'
+  );
+}
+// The next alarm to go off today, for the header.
+function nextAlarm() {
+  const now = Date.now();
+  return S.alarms
+    .filter(a => alarmOn(a) && a.done !== today() && alarmAt(a) > now)
+    .sort((a, b) => alarmAt(a) - alarmAt(b))[0];
+}
+
+// Ringing: a full-screen card with Dismiss and Snooze, sounding until dismissed.
+let ringIds = '';
+// Show or hide the ringing card to match; straight after Dismiss or Snooze too, not a second later.
+function syncRinging() {
+  const r = ringing(),
+    ids = r.map(a => a.id).join(',');
+  if (ids !== ringIds) {
+    ringIds = ids;
+    renderRinging(r);
+  }
+  return r;
+}
+function alarmTick() {
+  const r = syncRinging();
+  if (!r.length) return;
+  try {
+    if (ac && ac.state === 'suspended') ac.resume();
+  } catch (e) {}
+  beep([988, 784, 988, 784]);
+  try {
+    navigator.vibrate && navigator.vibrate([400, 200, 400]);
+  } catch (e) {}
+}
+function renderRinging(r) {
+  const el = $('#v-alarm');
+  el.hidden = !r.length;
+  document.body.classList.toggle('ringing', !!r.length);
+  el.innerHTML = r
+    .map(
+      a =>
+        `<div class="ring box"><p class="ringtime">${a.time}</p><p class="ringlabel">${esc(a.label || 'Alarm')}</p><div class="acts"><button class="btn green big" data-adismiss="${a.id}">Dismiss</button><button class="btn big" data-asnooze="${a.id}">Snooze 5 min</button></div></div>`,
+    )
+    .join('');
+}

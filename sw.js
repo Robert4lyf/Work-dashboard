@@ -3,7 +3,7 @@
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
 const VERSION = 'dashboard-v4';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
-const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'board', 'talk', 'events']
+const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'board', 'talk', 'notes', 'alarms', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
   './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png', SUPABASE_JS];
@@ -55,13 +55,17 @@ self.addEventListener('push', e => {
   } catch (x) {
     d = { body: e.data ? e.data.text() : '' };
   }
+  // Alarms repeat every minute until dismissed in the app: each repeat replaces the last one
+  // (same tag) but sounds again (renotify), vibrates hard and stays until tapped.
+  const alarm = /^alarm:/.test(d.tag || '');
   e.waitUntil(
     self.registration.showNotification(d.title || 'Dashboard', {
       body: d.body || '',
-      tag: d.tag,
+      tag: alarm ? d.tag.split(':').slice(0, 2).join(':') : d.tag,
       icon: 'icons/icon-192.png',
       // Android's status bar only shows a white shape; without this it shows a bell.
       badge: 'icons/badge-96.png',
+      ...(alarm ? { renotify: true, requireInteraction: true, vibrate: [600, 300, 600, 300, 600] } : {}),
     }),
   );
 });

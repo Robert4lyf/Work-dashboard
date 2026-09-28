@@ -13,11 +13,14 @@ const LISTS = {
   log: ['log', x => x.id + '|' + x.d],
   session: ['sessions', x => x.t + '|' + (x.q || '')],
   interrupt: ['interrupts', x => x.id],
+  alarm: ['alarms', x => x.id],
+  device: ['devices', x => x.id],
 };
 function toRecords(s) {
   const m = new Map();
   for (const [kind, [prop, key]] of Object.entries(LISTS))
-    s[prop].forEach(x => m.set(kind + ':' + key(x), x));
+    (s[prop] || []).forEach(x => m.set(kind + ':' + key(x), x));
+  m.set('meta:notes', { text: s.notes || '' });
   m.set('meta:order', {
     quests: s.quests.map(x => x.id),
     inbox: s.inbox.map(x => x.id),
@@ -60,6 +63,9 @@ function fromRecords(m, day) {
     log: (by.log || []).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)),
     sessions: (by.session || []).sort((a, b) => a.t - b.t),
     interrupts: (by.interrupt || []).sort((a, b) => a.t - b.t),
+    alarms: by.alarm || [],
+    devices: by.device || [],
+    notes: (m.get('meta:notes') || {}).text || '',
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),
     timer: (m.get('meta:timer') || {}).timer || null,

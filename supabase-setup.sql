@@ -166,6 +166,7 @@ create table if not exists public.cockpit_notices (
   primary key (user_id, key)
 );
 alter table public.cockpit_notices add column if not exists error text; -- why a notice wasn't delivered
+alter table public.cockpit_notices add column if not exists device text; -- send only to this push endpoint (alarms)
 create index if not exists cockpit_notices_due on public.cockpit_notices (at) where sent_at is null;
 alter table public.cockpit_notices enable row level security;
 drop policy if exists "own notices" on public.cockpit_notices;

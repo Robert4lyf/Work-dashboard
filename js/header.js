@@ -35,6 +35,9 @@ function renderHeader() {
   // One quiet line of stats; anything needing attention is on Today and in tab badges.
   const focus = Object.values(S.daily[today()] || {}).reduce((a, b) => a + b, 0);
   let st = `<button data-v="today">${done}/${qs.length} done</button><button data-v="focus">${hm(focus)} focus</button>`;
+  const na = nextAlarm();
+  if (na)
+    st += `<button data-v="today" class="halarm">Alarm ${na.snooze ? hhmmOf(na.snooze) : na.time}</button>`;
   $('#hstats').innerHTML = st;
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;

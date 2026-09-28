@@ -60,6 +60,7 @@ async function verifyPush() {
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
+  registerDevice();
   renderAccount();
 }
 async function enablePush() {
@@ -81,6 +82,7 @@ async function enablePush() {
     pushEndpoint = j.endpoint;
     pushTest = null;
     localStorage.setItem(PUSH_KEY, pushEndpoint);
+    registerDevice(); // alarms for this device are sent here
     toast('Notifications on for this device');
   } catch (e) {
     console.warn(e);
@@ -101,6 +103,7 @@ async function disablePush() {
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
+  registerDevice();
   renderAccount();
 }
 // "Send a test" checks each link in the chain and says which one is broken:
@@ -245,7 +248,7 @@ function wantedNotices(now = Date.now()) {
         body: n.text + (w.who ? ' (' + w.who + ')' : ''),
       });
   });
-  return out;
+  return out.concat(alarmNotices(now));
 }
 // Keep the server's queue matching wantedNotices(); only talks to the server when it changed.
 const NOTICE_HASH = 'dashboard-notices-hash';
@@ -261,10 +264,15 @@ async function syncNotices() {
   const keep = new Set(want.map(n => n.key)),
     stale = data.map(r => r.key).filter(k => !keep.has(k) && !/^(test|alert):/.test(k));
   if (want.length) {
-    const { error: e2 } = await sb.from('cockpit_notices').upsert(
-      want.map(n => ({ ...n, at: new Date(n.at).toISOString() })),
-      { onConflict: 'user_id,key' },
-    );
+    const put = rows =>
+      sb.from('cockpit_notices').upsert(
+        rows.map(n => ({ ...n, at: new Date(n.at).toISOString() })),
+        { onConflict: 'user_id,key' },
+      );
+    let { error: e2 } = await put(want);
+    // Before the device column was added (supabase-setup.sql not re-run), alarms for one device
+    // go to every device rather than stopping all notices.
+    if (e2 && want.some(n => n.device)) ({ error: e2 } = await put(want.map(({ device, ...n }) => n)));
     if (e2) return;
   }
   if (stale.length) await sb.from('cockpit_notices').delete().in('key', stale);
