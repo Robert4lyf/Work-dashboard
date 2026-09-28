@@ -166,7 +166,7 @@ test('round 2: stopping a paused session later counts its minutes when they were
   expect(s.mins).toBe(20);
 });
 
-test('round 3: Upcoming rows on Waiting open the Upcoming list; the chase date is kept until Save', async ({
+test('round 3: Upcoming rows on Waiting open the Upcoming list; the chase date is kept until Set waiting', async ({
   app,
   page,
 }) => {

@@ -120,6 +120,13 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
     since: '2026-09-23',
   });
   await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam');
+  // Once waiting there's no Save: each changed detail is saved straight away.
+  await expect(page.locator('[data-waitsave]')).toHaveCount(0);
+  await page.fill('#wnote', 'Q3 and Q4 figures');
+  await page.press('#wnote', 'Tab');
+  expect((await app.state()).quests[0].wait.note).toBe('Q3 and Q4 figures');
+  await page.fill('#wnote', 'Q3 figures');
+  await page.press('#wnote', 'Tab');
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Waiting on Sam');
   // Waiting rows look different (dark orange); others don't.

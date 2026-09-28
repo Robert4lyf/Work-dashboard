@@ -138,8 +138,11 @@ document.addEventListener('submit', e => {
 document.addEventListener('change', e => {
   const el = e.target;
   // Committed. (Not a time: those change a part at a time and are still being typed.)
-  // Nor the waiting panel's fields: they're only saved with its Save button.
-  if (el.dataset && !el.dataset.atime && !el.closest('#waitd')) delete el.dataset.typed;
+  // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
+  const waitd = el.closest('#waitd');
+  if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid)) delete el.dataset.typed;
+  // Already waiting: a changed detail is saved straight away.
+  if (waitd && waitd.dataset.waitid) return saveWaitPanel(waitd.dataset.waitid);
   // Alarms: time, label and device; this device's name (Settings).
   if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
   if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
@@ -627,12 +630,7 @@ document.addEventListener('click', e => {
         renderAll();
       });
   }
-  if (d.waitsave)
-    setWaiting(d.waitsave, {
-      who: $('#wwho').value.trim(),
-      note: $('#wnote').value.trim(),
-      due: $('#wdue').value || '',
-    });
+  if (d.waitsave) saveWaitPanel(d.waitsave);
   if (d.waitclear) {
     setWaiting(d.waitclear, null);
     toast('Back on your list');
