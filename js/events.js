@@ -133,6 +133,7 @@ document.addEventListener('submit', e => {
 
 document.addEventListener('change', e => {
   const el = e.target;
+  if (el.dataset) delete el.dataset.typed; // committed
   // Alarms: time, label and device; this device's name (Settings).
   if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
   if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
@@ -238,6 +239,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
   if (el.id === 'notesin') return typedNotes(el.value);
   if (el.dataset.field !== 'notes') return;
   const r = find(el.dataset.id);
@@ -248,6 +250,8 @@ document.addEventListener('input', e => {
 });
 
 document.addEventListener('click', e => {
+  const sum = e.target.closest && e.target.closest('#alarmd > summary');
+  if (sum) toggleAlarmsList(sum.parentElement);
   const b = e.target.closest('button');
   // A tap anywhere else closes a row's Inbox/Delete choice.
   if (xOpen && !(b && (b.dataset.xopen || b.dataset.toinbox || b.dataset.delnow))) {

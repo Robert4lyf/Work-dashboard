@@ -114,7 +114,7 @@ test('alarm notifications repeat each minute until dismissed, only to the chosen
     save();
   });
   n = await notices();
-  expect(n[0].device).toBeUndefined();
+  expect(n[0].device).toBeNull(); // explicitly every device, so queued rows are updated too
 });
 
 test('notes are saved as you type, and travel with sync records', async ({ app, page }) => {
@@ -225,4 +225,24 @@ test('an alarm ringing at midnight keeps ringing until dismissed; empty notes ne
   expect((await app.state()).alarms[0]).toMatchObject({ time: '23:58', day: '' });
   // No notes: no notes record (so an empty copy can't win over real notes elsewhere).
   expect(await page.evaluate(() => toRecords(S).has('meta:notes'))).toBe(false);
+});
+
+test('queued repeats aren’t dropped once due; the list can be folded while an alarm is on', async ({
+  app,
+  page,
+}) => {
+  const row = await addAlarm(page, '09:10');
+  await page.evaluate(() => {
+    S.devices.push({ id: 'phone', name: 'Phone', endpoint: 'https://push.example/phone' });
+    S.alarms[0].device = 'phone';
+    save();
+  });
+  await row.locator('[data-aon]').click();
+  await page.clock.fastForward('15:00'); // 09:15: five repeats are due
+  const n = await page.evaluate(() => wantedNotices(Date.now()).filter(x => x.key.startsWith('alarm:')));
+  expect(n).toHaveLength(10); // a device syncing now won't delete ones the server hasn't sent yet
+  // Fold it by hand: it stays folded across redraws.
+  await page.click('#alarmd summary');
+  await page.evaluate(() => renderAll());
+  expect(await page.locator('#alarmd').getAttribute('open')).toBeNull();
 });

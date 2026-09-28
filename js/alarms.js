@@ -63,6 +63,8 @@ function renameDevice(name) {
 
 // Dismissed (or passed) for the day it's on for.
 const alarmDone = a => !!a.done && a.done === a.day;
+// On and not yet dismissed: it will ring, is ringing, or is snoozed.
+const alarmLive = a => alarmOn(a) && !alarmDone(a);
 // On for today; or on for yesterday and still ringing or snoozed across midnight (until it's
 // dismissed, for up to 12 hours).
 const alarmOn = a =>
@@ -80,9 +82,7 @@ function alarmAt(a) {
   return new Date(y, mo - 1, d, h, m).getTime();
 }
 const ringing = (now = Date.now()) =>
-  S.alarms.filter(
-    a => alarmOn(a) && !alarmDone(a) && now >= alarmAt(a) && (!a.device || a.device === thisDevice.id),
-  );
+  S.alarms.filter(a => alarmLive(a) && now >= alarmAt(a) && (!a.device || a.device === thisDevice.id));
 // The push endpoint that should get an alarm's notifications: '' for all devices, null if the
 // chosen device can't receive them.
 function alarmEndpoint(a) {
@@ -91,18 +91,17 @@ function alarmEndpoint(a) {
   return d && d.endpoint ? d.endpoint : null;
 }
 // Notices for alarms that are on: one when it goes off, then once a minute for 10 minutes,
-// until dismissed. Ones just passed are kept for a couple of minutes so the server still sends
-// them if this device syncs in between.
+// until dismissed. All ten stay wanted while the alarm is live, even once due, so a device
+// syncing never removes one the server hasn't got round to sending yet.
 function alarmNotices(now) {
   const out = [];
   S.alarms.forEach(a => {
-    if (!alarmOn(a) || alarmDone(a)) return;
+    if (!alarmLive(a)) return;
     const ep = alarmEndpoint(a);
     if (ep === null) return;
     const start = alarmAt(a);
     for (let n = 0; n < 10; n++) {
       const at = start + n * 60000;
-      if (at <= now - 120000) continue;
       const x = {
         // `armed` changes whenever it's switched on or its time changes, so a new ring never
         // reuses a key the server has already marked sent.
@@ -111,7 +110,8 @@ function alarmNotices(now) {
         title: '⏰ ' + (a.label || 'Alarm'),
         body: 'Alarm for ' + a.time + '. Open the app to dismiss.',
       };
-      if (ep) x.device = ep;
+      // Always set (null = every device), so switching to Any device updates queued rows too.
+      x.device = ep || null;
       out.push(x);
     }
   });
@@ -129,7 +129,7 @@ function addAlarm() {
     done: '',
     snooze: 0,
   });
-  panels.alarmd = true;
+  alarmsOpen = true;
   save();
   renderAll();
 }
@@ -162,7 +162,7 @@ function editAlarm(id, field, value) {
     save();
     renderHeader();
     const chip = document.querySelector(`[data-aon="${a.id}"]`);
-    if (chip && alarmOn(a)) chip.textContent = a.done ? 'Passed' : 'On';
+    if (chip && alarmOn(a)) chip.textContent = a.done ? 'Done' : 'On';
     return;
   } else if (field === 'label') a.label = value.trim().slice(0, 60);
   else if (field === 'device') a.device = value;
@@ -187,10 +187,16 @@ function dismissAlarm(id) {
 // Clear shown notifications for alarms that are dismissed or off (here or on another device):
 // they stay on screen until tapped otherwise.
 // Also clears this device's pushed copy while the full-screen card is ringing here.
+let closeKey = '',
+  closeAt = 0;
 function closeAlarmNotes(ringingHere) {
-  if (!navigator.serviceWorker) return;
-  const live = new Set(S.alarms.filter(a => alarmOn(a) && !alarmDone(a)).map(a => a.id)),
-    here = new Set(ringingHere.map(a => a.id));
+  if (!navigator.serviceWorker || !S.alarms.some(a => a.day)) return;
+  const live = new Set(S.alarms.filter(alarmLive).map(a => a.id)),
+    here = new Set(document.hidden ? [] : ringingHere.map(a => a.id)),
+    key = [...live].join() + '|' + [...here].join();
+  if (key === closeKey && Date.now() - closeAt < 20000) return;
+  closeKey = key;
+  closeAt = Date.now();
   navigator.serviceWorker
     .getRegistration()
     .then(r => r && r.getNotifications())
@@ -210,12 +216,25 @@ function snoozeAlarm(id) {
   renderAll();
 }
 
-// The alarm list, on Today.
+// The alarm list, on Today. alarmsOpen is set by tapping its heading (null: follow whether
+// any alarm is on).
+let alarmsOpen = null,
+  alarmsOnSeen = -1;
+function toggleAlarmsList(det) {
+  alarmsOpen = !det.open;
+}
 function renderAlarms() {
   const on = S.alarms.filter(alarmOn).length,
     devs = S.devices.length > 1 ? S.devices : [];
-  // Open while an alarm is on, unless folded by hand.
-  let h = `<details id="alarmd" class="alarms"${(panels.alarmd ?? on) ? ' open' : ''}><summary>Alarms${on ? ` <small>(${on} on)</small>` : ''}</summary>`;
+  // Open while an alarm is on, unless folded by hand (until the number switched on changes).
+  if (on !== alarmsOnSeen) {
+    // One more switched on: show the list. One fewer: leave it as it is (not folding it under
+    // the finger that just switched an alarm off).
+    if (on > alarmsOnSeen) alarmsOpen = null;
+    else if (alarmsOpen === null) alarmsOpen = alarmsOnSeen > 0;
+    alarmsOnSeen = on;
+  }
+  let h = `<details id="alarmd" class="alarms"${(alarmsOpen ?? on > 0) ? ' open' : ''}><summary>Alarms${on ? ` <small>(${on} on)</small>` : ''}</summary>`;
   [...S.alarms]
     .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
     .forEach(a => {
@@ -244,9 +263,7 @@ function renderAlarms() {
 // The next alarm to go off today, for the header.
 function nextAlarm() {
   const now = Date.now();
-  return S.alarms
-    .filter(a => alarmOn(a) && !alarmDone(a) && alarmAt(a) > now)
-    .sort((a, b) => alarmAt(a) - alarmAt(b))[0];
+  return S.alarms.filter(a => alarmLive(a) && alarmAt(a) > now).sort((a, b) => alarmAt(a) - alarmAt(b))[0];
 }
 
 // Browsers only allow sound after a tap: start (or resume) the audio on the first one, so an
@@ -268,7 +285,7 @@ let ringIds = '';
 // Show or hide the ringing card to match; straight after Dismiss or Snooze too, not a second later.
 function syncRinging() {
   const r = ringing(),
-    ids = r.map(a => a.id).join(',');
+    ids = r.map(a => [a.id, a.time, a.label, a.snooze].join('|')).join(',');
   if (ids !== ringIds) {
     ringIds = ids;
     renderRinging(r);
