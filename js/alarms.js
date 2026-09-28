@@ -66,10 +66,9 @@ const alarmDone = a => !!a.done && a.done === a.day;
 // On and not yet dismissed: it will ring, is ringing, or is snoozed.
 const alarmLive = a => alarmOn(a) && !alarmDone(a);
 // On for today; or on for yesterday and still ringing or snoozed across midnight (until it's
-// dismissed, for up to 12 hours).
+// dismissed, for up to an hour past its time, so a missed one doesn't ring the next morning).
 const alarmOn = a =>
-  a.day === today() ||
-  (a.day === shift(today(), -1) && !alarmDone(a) && alarmAt(a) > Date.now() - 12 * 3600e3);
+  a.day === today() || (a.day === shift(today(), -1) && !alarmDone(a) && alarmAt(a) > Date.now() - 3600e3);
 const hhmmOf = t => {
   const d = new Date(t);
   return pad(d.getHours()) + ':' + pad(d.getMinutes());
@@ -81,12 +80,15 @@ function alarmAt(a) {
     [y, mo, d] = (a.day || today()).split('-').map(Number);
   return new Date(y, mo - 1, d, h, m).getTime();
 }
-const ringing = (now = Date.now()) =>
-  S.alarms.filter(a => alarmLive(a) && now >= alarmAt(a) && (!a.device || a.device === thisDevice.id));
+// The device an alarm rings on: '' for any (also when its device is no longer listed, e.g.
+// forgotten elsewhere at the same time the alarm was edited).
+const alarmTarget = a => (a.device && S.devices.some(d => d.id === a.device) ? a.device : '');
+const ringsHere = a => !alarmTarget(a) || alarmTarget(a) === thisDevice.id;
+const ringing = (now = Date.now()) => S.alarms.filter(a => alarmLive(a) && now >= alarmAt(a) && ringsHere(a));
 // The push endpoint that should get an alarm's notifications: '' for all devices, null if the
 // chosen device can't receive them.
 function alarmEndpoint(a) {
-  if (!a.device) return '';
+  if (!alarmTarget(a)) return '';
   const d = S.devices.find(x => x.id === a.device);
   return d && d.endpoint ? d.endpoint : null;
 }
@@ -154,15 +156,16 @@ function editAlarm(id, field, value) {
     a.time = value;
     a.snooze = 0;
     a.armed = Date.now();
-    if (wasOn) a.day = today(); // a new time is for today, even if it was ringing from last night
+    // A new time is for today if the alarm was on (even ringing from last night); an alarm
+    // that was off stays off (clearing any leftover day, which could otherwise make it ring).
+    a.day = wasOn ? today() : '';
     // A time already gone today (possibly just part-way through typing a new one) mustn't ring
-    // straight away: it counts as done until it's set to a time still to come. No redraw here,
-    // so the field keeps focus while the time is being typed.
+    // straight away: it counts as done until it's set to a time still to come.
     a.done = wasOn && alarmAt(a) <= Date.now() ? a.day : '';
     save();
     renderHeader();
-    const chip = document.querySelector(`[data-aon="${a.id}"]`);
-    if (chip && alarmOn(a)) chip.textContent = a.done ? 'Done' : 'On';
+    // A background redraw keeps the time field focused and as typed.
+    inBackground(renderToday);
     return;
   } else if (field === 'label') a.label = value.trim().slice(0, 60);
   else if (field === 'device') a.device = value;
@@ -248,12 +251,12 @@ function renderAlarms() {
         h += `<select class="fld" data-adev="${a.id}" aria-label="Device"><option value="">Any device</option>${devs
           .map(
             d =>
-              `<option value="${d.id}"${a.device === d.id ? ' selected' : ''}>${esc(d.name)}${d.endpoint ? '' : ' (no notifications)'}</option>`,
+              `<option value="${d.id}"${alarmTarget(a) === d.id ? ' selected' : ''}>${esc(d.name)}${d.endpoint ? '' : ' (no notifications)'}</option>`,
           )
           .join('')}</select>`;
       h += `<button class="chip" data-aon="${a.id}" aria-pressed="${live}">${live ? state || 'On' : 'Off'}</button><button class="x" data-adel="${a.id}" aria-label="Delete alarm ${a.time}">×</button>`;
-      const dev = a.device && S.devices.find(d => d.id === a.device);
-      if (a.device && alarmEndpoint(a) === null)
+      const dev = alarmTarget(a) && S.devices.find(d => d.id === a.device);
+      if (dev && alarmEndpoint(a) === null)
         h += `<p class="hint awarn">${dev ? esc(dev.name) + ' has' : 'That device has'} no notifications turned on, so this only rings while the app is open there.</p>`;
       h += '</div>';
     });
@@ -266,7 +269,7 @@ function renderAlarms() {
 function nextAlarm() {
   const now = Date.now();
   return S.alarms
-    .filter(a => alarmLive(a) && alarmAt(a) > now && (!a.device || a.device === thisDevice.id))
+    .filter(a => alarmLive(a) && alarmAt(a) > now && ringsHere(a))
     .sort((a, b) => alarmAt(a) - alarmAt(b))[0];
 }
 
@@ -299,6 +302,8 @@ function syncRinging() {
   return r;
 }
 function alarmTick() {
+  // Nothing on and nothing showing: nothing to do (changes come through renderAll anyway).
+  if (!ringIds && !S.alarms.some(alarmLive)) return;
   const r = syncRinging();
   if (!r.length) return;
   try {

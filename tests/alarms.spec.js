@@ -272,3 +272,44 @@ test('malformed synced alarms and devices are cleaned before they reach the page
   expect(s.devices).toEqual(['fine']);
   expect(s.imgs).toBe(0);
 });
+
+test('round 5: editing an off alarm left from yesterday never rings; a pending notes save waits on a remote change', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.alarms.push({
+      id: 'y1',
+      time: '22:00',
+      label: '',
+      device: '',
+      day: '2026-09-22',
+      done: '2026-09-22',
+      snooze: 0,
+    });
+    save();
+    renderAll();
+  });
+  if ((await page.locator('#alarmd').getAttribute('open')) === null) await page.click('#alarmd summary');
+  await page.fill('[data-atime="y1"]', '23:00');
+  await page.dispatchEvent('[data-atime="y1"]', 'change');
+  await page.clock.fastForward(2000);
+  await expect(page.locator('#v-alarm')).toBeHidden();
+  expect((await app.state()).alarms[0]).toMatchObject({ time: '23:00', day: '' });
+
+  // Notes: typed, then another device's edit lands before the save fires.
+  await app.go('notes');
+  await page.fill('#notesin', 'phone text');
+  await page.evaluate(() => {
+    S.notes = 'laptop text'; // as sync would bring it in
+    persistLocal();
+    inBackground(renderAll);
+  });
+  await page.clock.fastForward(1000); // the pending save would fire now
+  expect((await app.state()).notes).toBe('laptop text'); // not overwritten
+  await expect(page.locator('#notesstate')).toContainText('Changed on another device');
+  // Typing on means "replace them".
+  await page.type('#notesin', '!');
+  await page.clock.fastForward(1000);
+  expect((await app.state()).notes).toBe('phone text!');
+});

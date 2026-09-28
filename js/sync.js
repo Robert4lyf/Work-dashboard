@@ -19,7 +19,7 @@ try {
 function setSync(s) {
   syncStatus = s;
   renderSyncBadge();
-  if (view === 'account') renderAccount();
+  if (view === 'account') inBackground(renderAccount); // keeps what's being typed in Settings
 }
 function badgeText() {
   if (!sb) return 'Sync off';

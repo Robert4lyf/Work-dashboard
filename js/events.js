@@ -763,7 +763,7 @@ setInterval(alarmTick, 1000);
 document.addEventListener('focusout', e => {
   if (e.target.id !== 'notesin') return;
   // Going to "Show those notes" (by Tab, say) mustn't save over the notes it's about to show.
-  if (e.relatedTarget && e.relatedTarget.id === 'notesload') return;
+  if (e.relatedTarget && e.relatedTarget.id === 'notesload') return clearTimeout(notesTimer);
   saveNotes(e.target.value);
   setTimeout(renderNotes, 0); // once focus has left: shows notes that changed elsewhere meanwhile
 });
