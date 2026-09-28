@@ -126,3 +126,48 @@ test('the talk shortcut waits for a tap before speaking', async ({ page }) => {
   await page.click('#talkgo');
   expect(await said(page)).toContain('Nothing on Today yet.');
 });
+
+test('talk sorting: skipped items aren\'t asked again, "not today" is asked again, voice actions can be undone', async ({
+  app,
+  page,
+}) => {
+  await app.go('inbox');
+  for (const t of ['C item', 'B item', 'A item']) {
+    await page.fill('#iin', t);
+    await page.press('#iin', 'Enter');
+  }
+  await app.go('account');
+  await page.click('[data-talkpref="on"]');
+  await page.click('#talkbtn');
+  await hear(page, 'inbox');
+  expect(await said(page)).toContain('A item.');
+  await hear(page, 'skip');
+  expect(await said(page)).toContain('B item.');
+  await hear(page, 'not today');
+  expect(await said(page)).toBe('Say today, tomorrow, next week, delete, or skip.');
+  await hear(page, 'tomorrow');
+  expect(await said(page)).toContain('C item.'); // not A again
+  await hear(page, 'delete');
+  expect(await said(page)).toContain('That was the last one.');
+  let s = await app.state();
+  expect(s.inbox.map(x => x.text)).toEqual(['A item']);
+  await page.click('#undo'); // the voice delete offers Undo like a tap
+  s = await app.state();
+  expect(s.inbox.map(x => x.text)).toEqual(['A item', 'C item']);
+});
+
+test('talk: an empty name is asked for, and speech can be skipped', async ({ app, page }) => {
+  await app.addQuest('Report');
+  await app.go('account');
+  await page.click('[data-talkpref="on"]');
+  await page.evaluate(() => {
+    // Speech that never reports finishing (it happens on some desktops).
+    window.speechSynthesis.speak = u => window.__said.push(u.text);
+  });
+  await page.click('#talkbtn');
+  await expect(page.locator('#talkmic')).toHaveText('Skip to answer');
+  await page.click('#talkmic');
+  await hear(page, 'waiting on .');
+  expect(await said(page)).toBe('Who are you waiting on?');
+  expect((await app.state()).quests[0].wait).toBeUndefined();
+});

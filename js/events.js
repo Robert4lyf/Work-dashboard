@@ -455,14 +455,7 @@ document.addEventListener('click', e => {
       });
   }
   if (b.id === 'mic') toggleMic();
-  if (d.clear) {
-    withUndo('Cleared', () => {
-      S.inbox = S.inbox.filter(x => x.id !== d.clear);
-      addXP(5);
-      save();
-      renderAll();
-    });
-  }
+  if (d.clear) clearInbox(d.clear);
   if (d.settag !== undefined) {
     const v = d.settag;
     if (d.kind === 'q') {
@@ -720,6 +713,7 @@ document.addEventListener('visibilitychange', () => {
     if (timerDue()) finishTimer(true);
     else renderAll();
     sync();
+    verifyPush();
   }
 });
 window.addEventListener('online', () => sync());
@@ -747,6 +741,7 @@ if (sb) {
     renderAccount(); // even when not on screen, so Settings never shows a stale sign-in form
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
       setTimeout(sync, 0);
+      setTimeout(verifyPush, 3000); // after the first sync has brought the current key
       listen();
     }
   });

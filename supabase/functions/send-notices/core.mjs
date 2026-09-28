@@ -20,8 +20,9 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
     skipped = 0;
   const gone = new Set();
   for (const n of due) {
-    // Why a notice didn't go out, kept on the notice so the app's test can show it.
+    // Why a notice didn't reach any device, kept on the notice so the app's test can show it.
     const errs = [];
+    let delivered = 0;
     const mine = subs.filter(s => s.user_id === n.user_id && !gone.has(s.endpoint));
     // Anything more than 6 hours overdue (say the job was paused) is marked done unsent.
     if (new Date(n.at) < late) skipped++;
@@ -35,10 +36,15 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
             { TTL: 3600 },
           );
           sent++;
+          delivered++;
         } catch (err) {
           // 404/410: the device unsubscribed or the app was removed; forget it.
-          if (err.statusCode === 404 || err.statusCode === 410) gone.add(s.endpoint);
-          else {
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            gone.add(s.endpoint);
+            errs.push(
+              "a device's subscription had expired and was removed: turn notifications on again there",
+            );
+          } else {
             log.warn('push failed', err.statusCode || err.message);
             errs.push(
               err.statusCode === 401 || err.statusCode === 403
@@ -49,7 +55,9 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
         }
       }
     const mark = v => db.from('cockpit_notices').update(v).eq('user_id', n.user_id).eq('key', n.key);
-    let { error: e3 } = await mark({ sent_at: now.toISOString(), error: errs.join('; ') || null });
+    // Reaching at least one device counts as delivered.
+    const error = delivered ? null : errs.join('; ') || null;
+    let { error: e3 } = await mark({ sent_at: now.toISOString(), error });
     // The error column is newer than the table; without it, still mark the notice sent.
     if (e3) ({ error: e3 } = await mark({ sent_at: now.toISOString() }));
     if (e3) throw e3;

@@ -94,7 +94,7 @@ function renderCapture() {
     <li>Add it to your home screen, or run it from a Google Assistant routine.</li></ol></details>
     <p class="hint">Alerts: scripts and flows (PowerShell, Power Automate Desktop) can POST <code>{"token":"…","title":"…","body":"…","to":"inbox"}</code> to the alert URL to notify your phone. <b>to</b> is phone, inbox, today or waiting (with <b>who</b> and <b>due</b>). See the README for examples.</p>
     <div class="acts"><button class="btn" id="captest">Send a test</button><button class="btn" id="alerttest">Test alert</button><button class="btn" id="capnew">New link</button></div>
-    <p class="hint">Anyone with the token can add items to your inbox (nothing else). "New link" replaces it; old shortcuts then stop working.</p></details>`;
+    <p class="hint">Anyone with the token can add inbox items and quests and send you alerts, but can't read or change anything else. "New link" replaces it; old shortcuts then stop working.</p></details>`;
   return h;
 }
 // Launched from an app-icon shortcut (manifest "shortcuts").

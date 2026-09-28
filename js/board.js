@@ -24,8 +24,10 @@ function dropZone(target, y) {
   if (!rowEl) return null;
   const other = find(rowEl.dataset.drag.slice(2)),
     me = find(id);
-  // Reordering only within the same list.
+  // Reordering only within the same list, and (outside Reorder mode, where waiting and finished
+  // quests are shown lower down) within the same group, so a drop lands where it looks.
   if (!me || me.arr !== other.arr || me.n === other.n) return null;
+  if (!reorder && listRank(me.n) !== listRank(other.n)) return null;
   const box = rowEl.getBoundingClientRect();
   return { id, rowEl, other, after: y > box.top + box.height / 2 };
 }
@@ -59,8 +61,7 @@ document.addEventListener('drop', e => {
   const bf = snapshot(),
     { arr, n } = find(z.id);
   arr.splice(arr.indexOf(n), 1);
-  const at = z.other ? arr.indexOf(z.other.n) + (z.after ? 1 : 0) : arr.length;
-  arr.splice(at, 0, n);
+  arr.splice(arr.indexOf(z.other.n) + (z.after ? 1 : 0), 0, n);
   settle(bf);
 });
 wideMQ.addEventListener('change', () => {

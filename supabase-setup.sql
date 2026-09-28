@@ -196,6 +196,13 @@ begin
   if dest not in ('phone', 'inbox', 'today', 'waiting') then
     raise exception 'to must be phone, inbox, today or waiting';
   end if;
+  -- A runaway script (or a leaked token) can't flood the phone or the lists.
+  if (select count(*) from cockpit_notices n where n.user_id = u and n.key like 'alert:%'
+      and n.at > now() - interval '1 hour') >= 60 then
+    raise exception 'too many alerts: at most 60 an hour';
+  end if;
+  delete from cockpit_notices n where n.user_id = u and n.key like 'alert:%'
+    and n.sent_at < now() - interval '30 days';
   if dest = 'today' then
     insert into cockpit_items (user_id, key, kind, data, edited_at) values (u, 'quest:' || id, 'quest',
       jsonb_build_object('id', id, 'text', t, 'notes', b, 'children', '[]'::jsonb), ms);

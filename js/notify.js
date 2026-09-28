@@ -44,6 +44,26 @@ async function replacePushKeys() {
   pushTest = null;
   await setupPushKeys();
 }
+// This device's subscription must use the current key: after New keys on another device it
+// no longer does (and its row was removed), so show it as off here until turned on again.
+async function verifyPush() {
+  if (!pushEndpoint || !S.pushKey || !pushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return; // can't tell yet
+    const sub = await reg.pushManager.getSubscription(),
+      key = sub && sub.options && sub.options.applicationServerKey;
+    if (sub && (!key || b64u(new Uint8Array(key)) === S.pushKey)) return;
+    if (sub) await sub.unsubscribe();
+  } catch (e) {
+    return;
+  }
+  pushEndpoint = '';
+  try {
+    localStorage.removeItem(PUSH_KEY);
+  } catch (e) {}
+  renderAccount();
+}
 async function enablePush() {
   try {
     if ((await Notification.requestPermission()) !== 'granted') {

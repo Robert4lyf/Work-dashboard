@@ -51,9 +51,10 @@ function listHead(title, ns) {
 }
 // One card, one row per quest. Waiting ones show below the rest (above finished ones); their
 // place in the real order is kept, so they move back up when the wait is over.
+const listRank = n => (isDone(n) ? 2 : showsWaiting(n) ? 1 : 0);
 function list(ns) {
-  const rank = n => (isDone(n) ? 2 : showsWaiting(n) ? 1 : 0),
-    shown = reorder ? ns : [...ns].sort((a, b) => rank(a) - rank(b));
+  const rank = new Map(ns.map(n => [n, listRank(n)])),
+    shown = reorder ? ns : [...ns].sort((a, b) => rank.get(a) - rank.get(b));
   return ns.length
     ? `<div class="list box">${shown.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
     : '';
