@@ -18,7 +18,7 @@ create policy "insert own state" on public.cockpit_state for insert with check (
 create policy "update own state" on public.cockpit_state for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Safety net: every time sync replaces your data, the previous version is kept here.
--- The app lists these under Sync > Previous versions. The newest 200 per user are kept.
+-- The app lists these under Settings > Previous versions. The newest 200 per user are kept.
 create table if not exists public.cockpit_history (
   id         bigserial primary key,
   user_id    uuid not null references auth.users(id) on delete cascade,

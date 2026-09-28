@@ -367,7 +367,7 @@ function renderAccount() {
   }
   h += renderHealth();
   if (pending)
-    h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'quest')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced.</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
+    h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'quest')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced (notification keys and device names are kept).</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
   const opt = (k, v, label) =>
     `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>

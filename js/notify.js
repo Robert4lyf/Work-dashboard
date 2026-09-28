@@ -307,7 +307,7 @@ function renderNotifySettings() {
       <div class="caprow"><span>VAPID_PRIVATE_KEY</span><code>${esc(newPrivateKey)}</code><button class="linkbtn" data-copy="vpriv">Copy</button></div>
       <p class="hint">Then turn notifications on again on each device.</p></div>`;
   h += pushEndpoint
-    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines (9am on the day) and Upcoming items returning.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
+    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines and chase dates (9am on the day), Upcoming items returning, alarms, and alerts from scripts.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
       renderPushTest()
     : '<p class="hint" style="margin:0 0 8px">Off for this device.</p><button class="btn green" id="pushon">Turn on for this device</button>';
   if (!newPrivateKey)
