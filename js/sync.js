@@ -97,12 +97,15 @@ async function firstSync() {
   const rows = await pullRows(0);
   if (rows.length) {
     // This device already has things of its own: they can join the account's, or go.
+    // (asked only when signing in; a sync that starts on its own keeps them, which is safe)
     const n = S.quests.length + S.inbox.length + S.later.length;
     const keep =
       n &&
-      confirm(
-        `This account already has data. Add this device's ${plural(n, 'item')} to it as well? (Cancel replaces them.)`,
-      );
+      (!askMerge ||
+        confirm(
+          `This account already has data. Add this device's ${plural(n, 'item')} to it as well? (Cancel replaces them.)`,
+        ));
+    askMerge = false;
     applyRows(rows, true, keep ? toRecords(S) : null);
     return;
   }
@@ -170,9 +173,13 @@ async function saveSnapshot() {
 }
 // Waits for any sync under way, then runs one: whether everything here reached the server.
 async function syncSettled() {
-  for (let i = 0; syncing && i < 100; i++) await new Promise(r => setTimeout(r, 100));
+  await syncDone();
   await sync();
   return !syncing && !Object.keys(sync2.dirty).length;
+}
+// Waits for any sync under way (and one queued behind it).
+async function syncDone() {
+  for (let i = 0; (syncing || again) && i < 150; i++) await new Promise(r => setTimeout(r, 100));
 }
 async function sync() {
   if (!sb || !session) return;
@@ -231,7 +238,8 @@ async function sync() {
 }
 // Live updates: another device's change arrives within a second instead of at the next poll.
 let live = null,
-  liveFor = '';
+  liveFor = '',
+  askMerge = false;
 function listen() {
   if (!sb || !session || !sb.channel) return;
   if (live && liveFor === session.user.id) return;

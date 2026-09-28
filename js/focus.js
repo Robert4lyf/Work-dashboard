@@ -36,6 +36,8 @@ function focusTarget() {
   const nx = nextStep();
   return nx ? nx.n.id : null;
 }
+// Set while the server is being asked whether a due session was already stopped elsewhere.
+let holdTimer = false;
 function startTimer(q) {
   const top = topOf(q);
   askNotify();
@@ -329,7 +331,7 @@ function timerTick() {
     if (document.title !== TITLE) document.title = TITLE;
     return;
   }
-  if (timerDue()) return inBackground(() => finishTimer());
+  if (timerDue()) return holdTimer ? undefined : inBackground(() => finishTimer());
   const txt = mmss(remaining());
   document.title = txt + (t.left != null ? ' paused' : '') + ' · ' + TITLE;
   const c = $('#clock');

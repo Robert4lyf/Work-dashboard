@@ -191,3 +191,37 @@ test('round 3: Upcoming rows on Waiting open the Upcoming list; the chase date i
   await page.evaluate(() => inBackground(renderToday));
   await expect(page.locator('#wdue')).toHaveValue('2026-09-30');
 });
+
+test('round 4: a due session waits for the server while held; the waiting panel is not remembered open from a waiting quest', async ({
+  page,
+}) => {
+  // Held (as while the first sync after opening is under way): the tick doesn't finish it.
+  const r = await page.evaluate(async () => {
+    S.quests = [fix({ id: 'h1', text: 'Hold' })];
+    startTimer('h1');
+    S.timer.end = Date.now() - 1000;
+    holdTimer = true;
+    timerTick();
+    const held = !!S.timer;
+    holdTimer = false;
+    timerTick();
+    return { held, after: !!S.timer, sessions: S.sessions.length };
+  });
+  expect(r).toEqual({ held: true, after: false, sessions: 1 });
+
+  await page.evaluate(() => {
+    S.quests = [
+      fix({ id: 'w1', text: 'Waiting one', wait: { who: 'Al', since: today() } }),
+      fix({ id: 'p1', text: 'Plain' }),
+    ];
+    panels.waitd = false;
+    zen = false; // (the session above opened single-task mode)
+    save();
+    renderAll();
+  });
+  await page.click('#v-today .open >> text="Waiting one"');
+  await expect(page.locator('#waitd')).toHaveAttribute('open', '');
+  await page.evaluate(() => openPath([]));
+  await page.click('#v-today .open >> text="Plain"');
+  expect(await page.locator('#waitd').getAttribute('open')).toBeNull();
+});

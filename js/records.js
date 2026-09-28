@@ -109,6 +109,9 @@ try {
   sync2 = Object.assign(sync2, JSON.parse(localStorage.getItem(SYNC_KEY)) || {});
 } catch (e) {}
 function saveSyncState() {
+  // Not while the local copy couldn't be saved: after a reload the two must still agree, or
+  // the old copy would look like a newer edit and go over the server's.
+  if (!localSaved) return;
   try {
     localStorage.setItem(SYNC_KEY, JSON.stringify(sync2));
   } catch (e) {}

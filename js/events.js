@@ -738,7 +738,7 @@ document.addEventListener('click', e => {
 document.addEventListener(
   'toggle',
   e => {
-    if (e.target.id) panels[e.target.id] = e.target.open;
+    if (e.target.id && !e.target.dataset.held) panels[e.target.id] = e.target.open;
   },
   true,
 );
@@ -789,14 +789,18 @@ document.addEventListener('keydown', e => {
 
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
-    rolloverLocal();
+    const started = rolloverLocal(); // (a sync, when signed in)
     // A session another device already stopped mustn't be finished here too: hear from the
     // server first when possible.
-    if (timerDue()) {
-      if (sb && session && navigator.onLine) syncSettled().then(() => timerDue() && finishTimer(true));
-      else finishTimer(true);
-    } else renderAll();
-    sync();
+    if (timerDue() && started) {
+      holdTimer = true;
+      syncDone().finally(() => {
+        holdTimer = false;
+        if (timerDue()) finishTimer(true);
+      });
+    } else if (timerDue()) finishTimer(true);
+    else renderAll();
+    if (!started) sync();
     verifyPush();
     talkWake();
   }
@@ -825,6 +829,8 @@ const deferStart = !!sb && navigator.onLine;
 if (!deferStart) rollover();
 if (!deferStart && timerDue()) finishTimer(true);
 else renderAll();
+if (deferStart) holdTimer = true;
+setTimeout(() => (holdTimer = false), 20000); // (never held for long, whatever happens)
 go(view);
 receiveShare();
 receiveLaunch();
@@ -855,15 +861,23 @@ if (sb) {
     renderSyncBadge();
     renderAccount(); // even when not on screen, so Settings never shows a stale sign-in form
     if (!s) unlisten(); // signed out, or the session expired: live updates would be dead anyway
+    authSeen = true;
     if (ev === 'INITIAL_SESSION' && deferStart) {
       if (!s) {
+        holdTimer = false;
         rollover();
         if (timerDue()) finishTimer(true);
         else renderAll();
-      } else syncSettled().then(() => timerDue() && finishTimer(true)); // (sync runs the reset)
+      } else
+        // (the sync runs the day's reset)
+        sync().finally(() => {
+          holdTimer = false;
+          if (timerDue()) finishTimer(true);
+        });
     }
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
-      setTimeout(sync, 0);
+      askMerge = true; // signing in here: a choice about this device's own data can be put
+      if (!(ev === 'INITIAL_SESSION' && deferStart)) setTimeout(sync, 0);
       setTimeout(verifyPush, 3000); // after the first sync has brought the current key
       listen();
     }

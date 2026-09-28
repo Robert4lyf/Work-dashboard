@@ -67,10 +67,12 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
               );
             } else {
               log.warn('push failed', err.statusCode || err.message);
-              // Refused keys (401/403) or an oversized payload (413) won't clear by themselves.
-              if (![401, 403, 413].includes(err.statusCode)) giveUp = false;
+              // A busy or broken push service (429, 5xx, no answer) may clear by next minute;
+              // anything else it refused (bad keys, a bad subscription, too big) won't.
+              const sc = err.statusCode;
+              if (!sc || sc === 408 || sc === 429 || sc >= 500) giveUp = false;
               errs.push(
-                err.statusCode === 401 || err.statusCode === 403
+                sc === 400 || sc === 401 || sc === 403
                   ? `push service refused (${err.statusCode}): the VAPID keys in the function's secrets don't match this device's`
                   : `push failed: ${err.statusCode || err.message}`,
               );

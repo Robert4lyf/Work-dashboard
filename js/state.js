@@ -191,12 +191,13 @@ function load() {
   }
   norm(s);
 }
+let localSaved = true; // whether the last local save worked (see saveSyncState)
 function persistLocal() {
   try {
     localStorage.setItem(KEY, JSON.stringify(S));
-    return true;
+    return (localSaved = true);
   } catch (e) {
-    return false; // no room (or storage blocked)
+    return (localSaved = false); // no room (or storage blocked)
   }
 }
 function save() {
@@ -224,9 +225,17 @@ function save() {
 // (see sync): yesterday's edits from another device mustn't be undone by a reset run on stale
 // data. Otherwise (or if the sync fails) it runs here.
 function rolloverLocal() {
-  if (typeof sb !== 'undefined' && sb && session && navigator.onLine) return sync();
+  if (typeof sb !== 'undefined' && sb && session && navigator.onLine) {
+    sync();
+    return true; // (one is under way)
+  }
+  // Before the first auth event nothing is known yet: give it a few minutes before a local reset.
+  if (typeof deferStart !== 'undefined' && deferStart && !authSeen && ++startWait < 4) return false;
   rollover();
+  return false;
 }
+let authSeen = false,
+  startWait = 0;
 function rollover() {
   if (S.day === today()) return;
   const last = S.day;
