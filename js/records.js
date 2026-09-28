@@ -20,7 +20,9 @@ function toRecords(s) {
   const m = new Map();
   for (const [kind, [prop, key]] of Object.entries(LISTS))
     (s[prop] || []).forEach(x => m.set(kind + ':' + key(x), x));
-  m.set('meta:notes', { text: s.notes || '' });
+  // Only once there are notes: a device that never had any mustn't send an empty copy that
+  // could win over real notes from another device. (Clearing them deletes the record.)
+  if (s.notes) m.set('meta:notes', { text: s.notes });
   m.set('meta:order', {
     quests: s.quests.map(x => x.id),
     inbox: s.inbox.map(x => x.id),

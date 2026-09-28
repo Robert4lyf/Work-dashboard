@@ -176,7 +176,23 @@ function save() {
 }
 // The daily reset. Every device runs it and makes the same changes (repeat copies get
 // date-based ids), so whichever device syncs first, nothing is doubled.
+// Alarms are for one day: once past it they switch off, staying in the list to switch on again
+// (one still ringing or snoozed across midnight stays on until dismissed).
+function tidyAlarms() {
+  let changed = false;
+  S.alarms.forEach(a => {
+    if (a.day && a.day !== today() && !alarmOn(a)) {
+      Object.assign(a, { day: '', done: '', snooze: 0 });
+      changed = true;
+    }
+  });
+  return changed;
+}
 function rollover() {
+  if (tidyAlarms() && S.day === today()) {
+    persistLocal();
+    markDirty();
+  }
   if (S.day === today()) return;
   const last = S.day;
   S.quests = S.quests.filter(q => !isDone(q));
@@ -204,10 +220,6 @@ function rollover() {
     delete n.start;
     S.quests.push(n);
     return false;
-  });
-  // Alarms are for one day: overnight they switch off, staying in the list to switch on again.
-  S.alarms.forEach(a => {
-    if (a.day && a.day !== today() && !alarmOn(a)) Object.assign(a, { day: '', done: '', snooze: 0 });
   });
   stampSince();
   persistLocal();

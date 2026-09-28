@@ -61,23 +61,27 @@ function renameDevice(name) {
   renderAll();
 }
 
-// On for today; or on yesterday and snoozed past midnight (it still rings, then is done).
+// Dismissed (or passed) for the day it's on for.
+const alarmDone = a => !!a.done && a.done === a.day;
+// On for today; or on for yesterday and still ringing or snoozed across midnight (until it's
+// dismissed, for up to 12 hours).
 const alarmOn = a =>
-  a.day === today() || (!!a.snooze && a.day === shift(today(), -1) && a.snooze > Date.now() - 12 * 3600e3);
+  a.day === today() ||
+  (a.day === shift(today(), -1) && !alarmDone(a) && alarmAt(a) > Date.now() - 12 * 3600e3);
 const hhmmOf = t => {
   const d = new Date(t);
   return pad(d.getHours()) + ':' + pad(d.getMinutes());
 };
-// When it rings (ms): its time today, or the snooze time.
+// When it rings (ms): its time on the day it's on for (today if off), or the snooze time.
 function alarmAt(a) {
   if (a.snooze) return a.snooze;
   const [h, m] = a.time.split(':').map(Number),
-    d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
+    [y, mo, d] = (a.day || today()).split('-').map(Number);
+  return new Date(y, mo - 1, d, h, m).getTime();
 }
 const ringing = (now = Date.now()) =>
   S.alarms.filter(
-    a => alarmOn(a) && a.done !== today() && now >= alarmAt(a) && (!a.device || a.device === thisDevice.id),
+    a => alarmOn(a) && !alarmDone(a) && now >= alarmAt(a) && (!a.device || a.device === thisDevice.id),
   );
 // The push endpoint that should get an alarm's notifications: '' for all devices, null if the
 // chosen device can't receive them.
@@ -92,7 +96,7 @@ function alarmEndpoint(a) {
 function alarmNotices(now) {
   const out = [];
   S.alarms.forEach(a => {
-    if (!alarmOn(a) || a.done === today()) return;
+    if (!alarmOn(a) || alarmDone(a)) return;
     const ep = alarmEndpoint(a);
     if (ep === null) return;
     const start = alarmAt(a);
@@ -132,15 +136,11 @@ function addAlarm() {
 // Switch on for today (only if the time is still to come) or off.
 function setAlarmOn(a, on) {
   if (on) {
-    a.snooze = 0;
-    a.done = '';
-    const probe = { ...a, day: today() };
-    if (alarmAt(probe) <= Date.now()) {
+    if (alarmAt({ ...a, day: today(), snooze: 0 }) <= Date.now()) {
       toast('That time has already passed today', false, 2500);
       return renderAll();
     }
-    a.day = today();
-    a.armed = Date.now();
+    Object.assign(a, { day: today(), done: '', snooze: 0, armed: Date.now() });
   } else Object.assign(a, { day: '', done: '', snooze: 0 });
   save();
   renderAll();
@@ -150,13 +150,15 @@ function editAlarm(id, field, value) {
   if (!a) return;
   if (field === 'time') {
     if (!/^\d\d:\d\d$/.test(value) || value === a.time) return;
+    const wasOn = alarmOn(a);
     a.time = value;
     a.snooze = 0;
     a.armed = Date.now();
+    if (wasOn) a.day = today(); // a new time is for today, even if it was ringing from last night
     // A time already gone today (possibly just part-way through typing a new one) mustn't ring
     // straight away: it counts as done until it's set to a time still to come. No redraw here,
     // so the field keeps focus while the time is being typed.
-    a.done = alarmOn(a) && alarmAt(a) <= Date.now() ? today() : '';
+    a.done = wasOn && alarmAt(a) <= Date.now() ? a.day : '';
     save();
     renderHeader();
     const chip = document.querySelector(`[data-aon="${a.id}"]`);
@@ -177,23 +179,27 @@ function deleteAlarm(id) {
 function dismissAlarm(id) {
   const a = S.alarms.find(x => x.id === id);
   if (!a) return;
-  a.done = today();
+  a.done = a.day || today();
   a.snooze = 0;
   save();
   renderAll();
 }
 // Clear shown notifications for alarms that are dismissed or off (here or on another device):
 // they stay on screen until tapped otherwise.
-let closedFor = '';
-function closeAlarmNotes() {
-  const quiet = S.alarms.filter(a => !alarmOn(a) || a.done === today()).map(a => a.id),
-    k = quiet.join(',');
-  if (k === closedFor || !navigator.serviceWorker) return;
-  closedFor = k;
+// Also clears this device's pushed copy while the full-screen card is ringing here.
+function closeAlarmNotes(ringingHere) {
+  if (!navigator.serviceWorker) return;
+  const live = new Set(S.alarms.filter(a => alarmOn(a) && !alarmDone(a)).map(a => a.id)),
+    here = new Set(ringingHere.map(a => a.id));
   navigator.serviceWorker
     .getRegistration()
-    .then(r => r && Promise.all(quiet.map(id => r.getNotifications({ tag: 'alarm:' + id }))))
-    .then(lists => lists && lists.flat().forEach(n => n.close()))
+    .then(r => r && r.getNotifications())
+    .then(ns =>
+      (ns || []).forEach(n => {
+        const m = /^alarm:(.+)$/.exec(n.tag || '');
+        if (m && (!live.has(m[1]) || here.has(m[1]))) n.close();
+      }),
+    )
     .catch(() => {});
 }
 function snoozeAlarm(id) {
@@ -208,12 +214,13 @@ function snoozeAlarm(id) {
 function renderAlarms() {
   const on = S.alarms.filter(alarmOn).length,
     devs = S.devices.length > 1 ? S.devices : [];
-  let h = `<details id="alarmd" class="alarms"${panels.alarmd || on ? ' open' : ''}><summary>Alarms${on ? ` <small>(${on} on)</small>` : ''}</summary>`;
+  // Open while an alarm is on, unless folded by hand.
+  let h = `<details id="alarmd" class="alarms"${(panels.alarmd ?? on) ? ' open' : ''}><summary>Alarms${on ? ` <small>(${on} on)</small>` : ''}</summary>`;
   [...S.alarms]
     .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
     .forEach(a => {
       const live = alarmOn(a),
-        state = !live ? '' : a.done === today() ? 'Done' : a.snooze ? 'Snoozed' : '';
+        state = !live ? '' : alarmDone(a) ? 'Done' : a.snooze ? 'Snoozed' : '';
       // Ids let a background redraw (sync) keep the field being edited.
       h += `<div class="arow${live ? ' on' : ''}"><input class="fld atime" type="time" id="atime-${a.id}" data-atime="${a.id}" value="${a.time}" aria-label="Alarm time"><input class="fld" id="alabel-${a.id}" data-alabel="${a.id}" value="${esc(a.label || '')}" maxlength="60" placeholder="Label" aria-label="Alarm label">`;
       if (devs.length)
@@ -238,10 +245,24 @@ function renderAlarms() {
 function nextAlarm() {
   const now = Date.now();
   return S.alarms
-    .filter(a => alarmOn(a) && a.done !== today() && alarmAt(a) > now)
+    .filter(a => alarmOn(a) && !alarmDone(a) && alarmAt(a) > now)
     .sort((a, b) => alarmAt(a) - alarmAt(b))[0];
 }
 
+// Browsers only allow sound after a tap: start (or resume) the audio on the first one, so an
+// alarm later on can be heard.
+['pointerdown', 'keydown'].forEach(ev =>
+  document.addEventListener(
+    ev,
+    () => {
+      try {
+        ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+        if (ac.state === 'suspended') ac.resume();
+      } catch (e) {}
+    },
+    { capture: true, passive: true },
+  ),
+);
 // Ringing: a full-screen card with Dismiss and Snooze, sounding until dismissed.
 let ringIds = '';
 // Show or hide the ringing card to match; straight after Dismiss or Snooze too, not a second later.
@@ -253,7 +274,7 @@ function syncRinging() {
     renderRinging(r);
     renderHeader(); // the next-alarm pill moves on
   }
-  closeAlarmNotes();
+  closeAlarmNotes(r);
   return r;
 }
 function alarmTick() {

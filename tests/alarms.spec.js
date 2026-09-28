@@ -202,3 +202,27 @@ test('notes changed on another device while typing: offered, not silently lost',
   await page.click('#notesload');
   await expect(page.locator('#notesin')).toHaveValue('from the PC: https://example.com');
 });
+
+test('an alarm ringing at midnight keeps ringing until dismissed; empty notes never sync', async ({
+  app,
+  page,
+}) => {
+  await page.clock.setSystemTime(new Date(2026, 8, 23, 23, 50));
+  const row = await addAlarm(page, '23:58');
+  await row.locator('[data-aon]').click();
+  await page.clock.fastForward('09:00'); // 23:59, ringing
+  await expect(page.locator('#v-alarm')).toBeVisible();
+  await page.clock.fastForward('05:00'); // past midnight
+  await page.evaluate(() => rollover());
+  await page.clock.fastForward(1500);
+  await expect(page.locator('#v-alarm')).toBeVisible();
+  await page.click('[data-adismiss]');
+  await expect(page.locator('#v-alarm')).toBeHidden();
+  await page.evaluate(() => rollover());
+  // Next morning it's off, still listed.
+  await page.clock.setSystemTime(new Date(2026, 8, 24, 8));
+  await page.reload();
+  expect((await app.state()).alarms[0]).toMatchObject({ time: '23:58', day: '' });
+  // No notes: no notes record (so an empty copy can't win over real notes elsewhere).
+  expect(await page.evaluate(() => toRecords(S).has('meta:notes'))).toBe(false);
+});

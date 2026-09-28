@@ -757,7 +757,9 @@ setInterval(timerTick, 500);
 setInterval(alarmTick, 1000);
 // Leaving the notes box saves straight away rather than after the typing pause.
 document.addEventListener('focusout', e => {
-  if (e.target.id === 'notesin') saveNotes(e.target.value);
+  if (e.target.id !== 'notesin') return;
+  saveNotes(e.target.value);
+  setTimeout(renderNotes, 0); // once focus has left: shows notes that changed elsewhere meanwhile
 });
 // "Show those notes" mustn't take focus from the box first (that would save over them).
 document.addEventListener('mousedown', e => {
