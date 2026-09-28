@@ -11,6 +11,7 @@ function renderAll() {
   renderLog();
   renderAccount();
   renderNotes();
+  renderKnowledge();
   syncRinging();
   renderZen();
   if (talk) renderTalk();
@@ -35,9 +36,18 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  ['today', 'inbox', 'waiting', 'notes', 'review', 'projects', 'focus', 'log', 'account'].forEach(
-    k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)),
-  );
+  [
+    'today',
+    'inbox',
+    'waiting',
+    'notes',
+    'knowledge',
+    'review',
+    'projects',
+    'focus',
+    'log',
+    'account',
+  ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
   if (v === 'review') renderReview();
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
@@ -82,6 +92,13 @@ document.addEventListener('submit', e => {
   if (f.id === 'leftform') saveLeft($('#leftin').value.trim());
   if (f.id === 'whyform') saveWhy($('#whyin').value.trim());
   if (f.id === 'wform') addWaiting();
+  if (f.id === 'kbform') kbSave();
+  if (f.id === 'flowform') addFlow();
+  if (f.id === 'kbcatform') {
+    kbAddCat($('#kbcatin').value, '');
+    $('#kbcatin').value = '';
+    $('#kbcatin').focus();
+  }
   if (f.dataset.projadd) {
     const inp = f.querySelector('input'),
       v = inp.value.trim();
@@ -139,8 +156,10 @@ document.addEventListener('change', e => {
   const el = e.target;
   // Committed. (Not a time: those change a part at a time and are still being typed.)
   // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
+  // Nor an article being written: it's saved with its Save button.
   const waitd = el.closest('#waitd');
-  if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid)) delete el.dataset.typed;
+  if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid) && !el.closest('#kbform'))
+    delete el.dataset.typed;
   // Already waiting: a changed detail is saved straight away.
   if (waitd && waitd.dataset.waitid) return saveWaitPanel(waitd.dataset.waitid);
   // Alarms: time, label and device; this device's name (Settings).
@@ -148,6 +167,16 @@ document.addEventListener('change', e => {
   if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
   if (el.dataset.adev !== undefined) return editAlarm(el.dataset.adev, 'device', el.value);
   if (el.id === 'devname') return renameDevice(el.value);
+  if (el.dataset.flowname) {
+    const f = S.flows.find(x => x.id === el.dataset.flowname),
+      v = el.value.trim().slice(0, 60);
+    if (f && v && v !== f.name) {
+      f.name = v;
+      save();
+      renderKnowledge();
+    }
+    return;
+  }
   if (el.id === 'imp') {
     if (el.files && el.files[0]) importFile(el.files[0]);
     el.value = '';
@@ -254,6 +283,7 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
   if (el.id === 'notesin') return typedNotes(el.value);
+  if (el.id === 'kbq') return kbSearch(el.value);
   if (el.dataset.field !== 'notes') return;
   const r = find(el.dataset.id);
   if (r) {
@@ -631,6 +661,7 @@ document.addEventListener('click', e => {
       });
   }
   if (d.waitsave) saveWaitPanel(d.waitsave);
+  kbClick(d, b);
   if (d.waitclear) {
     setWaiting(d.waitclear, null);
     toast('Back on your list');

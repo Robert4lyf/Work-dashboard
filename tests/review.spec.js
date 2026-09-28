@@ -7,7 +7,7 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 25, 9, 0, 30));
 });
 
-test('six tabs; History and Projects sit under Review; Focus opens from the header', async ({
+test('seven tabs; History and Projects sit under Review; Focus opens from the header', async ({
   app,
   page,
 }) => {
@@ -16,6 +16,7 @@ test('six tabs; History and Projects sit under Review; Focus opens from the head
     /^Inbox/,
     'Waiting',
     'Notes',
+    'Knowledge',
     'Review',
     'Settings',
   ]);
