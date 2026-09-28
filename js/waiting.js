@@ -1,14 +1,16 @@
 /* waiting: a quest or step can wait on someone, n.wait = { who, note, due (when to chase), since }.
    It stays on Today with a "Waiting" tag, but isn't "Next up"; the Waiting tab lists them all. */
+// Open items waiting on someone among `ns` and their open steps, with the path to each.
+function openWaiting(ns, trail = [], out = []) {
+  ns.forEach(n => {
+    if (isDone(n)) return;
+    if (n.wait) out.push({ n, trail });
+    openWaiting(n.children, [...trail, n.text], out);
+  });
+  return out;
+}
 function waitingNodes() {
-  const out = [];
-  (function w(ns, trail) {
-    ns.forEach(n => {
-      if (isDone(n)) return;
-      if (n.wait) out.push({ n, trail });
-      w(n.children, [...trail, n.text]);
-    });
-  })(S.quests, []);
+  const out = openWaiting(S.quests);
   S.later.forEach(n => n.wait && out.push({ n, trail: [], start: n.start }));
   S.inbox.forEach(i => i.wait && out.push({ n: i, trail: [], inbox: true }));
   return out;
@@ -24,15 +26,7 @@ const waitBadge = n =>
   n.wait ? `<span class="tag wait">Waiting${n.wait.who ? ' on ' + esc(n.wait.who) : ''}</span>` : '';
 // Open steps somewhere under a quest that are waiting on someone.
 function waitingSteps(n) {
-  const out = [];
-  (function w(ns) {
-    ns.forEach(c => {
-      if (isDone(c)) return;
-      if (c.wait) out.push(c);
-      w(c.children);
-    });
-  })(n.children);
-  return out;
+  return openWaiting(n.children).map(x => x.n);
 }
 // Waiting on someone, itself or through one of its steps (such rows show dark orange).
 const showsWaiting = n => !isDone(n) && !!(n.wait || waitingSteps(n).length);

@@ -29,6 +29,10 @@ test('app-icon shortcuts: Capture opens the inbox ready to type; there is no Foc
   await page.goto('/index.html?capture=1');
   await expect(page.locator('#iin')).toBeFocused();
   expect(new URL(page.url()).search).toBe('');
+  // An old installed app may still offer the removed Focus shortcut: the URL is just tidied.
+  await page.goto('/index.html?focus=1');
+  await expect(page.locator('#v-today')).toBeVisible();
+  expect(new URL(page.url()).search).toBe('');
   const m = await (await page.request.get('/manifest.webmanifest')).json();
   expect(m.shortcuts.map(s => s.short_name)).toEqual(['Capture', 'Talk']);
 });

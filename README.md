@@ -75,6 +75,41 @@ Real notifications, even with the app closed: when a focus session ends, on the 
 
 **If the test doesn't arrive:** **Send a test** checks each link and shows which one is broken: *This phone* (a notification shown straight away, no server; if it fails, allow notifications for Chrome/the app in Android settings), *Subscription* (this device is subscribed with the current key; if not, **Turn off here** and turn it on again) and *Server* (the function picks it up within about a minute and sends it). If the server tried and failed it says why, for example the VAPID secrets not matching the keys the app generated (re-enter them from step 2, or generate new keys and turn notifications off and on again on each device). "Not picked up" means the function, its secrets or the cron job from step 5 isn't set up. After updating the app, re-run `supabase-setup.sql` and redeploy `send-notices` so the reason is recorded.
 
+## Alerts from scripts and flows (optional)
+
+Anything that can send a web request (PowerShell, Power Automate Desktop, Task Scheduler jobs, Tasker...) can notify your phone and add the alert to the Dashboard. It needs notifications set up (above) and a capture link (**Settings > Capture from anywhere**; the values are under **Set up a shortcut**). Run the updated `supabase-setup.sql` once first, then tap **Test alert** there.
+
+Send a POST to the **Alert URL** with the header `apikey: <apikey value>` and a JSON body:
+
+| Field | Required | Meaning |
+|---|---|---|
+| `token` | yes | the capture token |
+| `title` | yes | the notification title, and the item's name |
+| `body` | no | details: the notification text, and the item's notes |
+| `to` | no | `inbox` (default): notification + Inbox item; `phone`: notification only; `today`: notification + a quest on Today; `waiting`: notification + an Inbox item waiting on `who` |
+| `who`, `due` | no | for `waiting`: who you're waiting on, and when to chase (`yyyy-mm-dd`) |
+
+The notification arrives within about a minute. Keep work details out of messages ("Invoice flow failed at step 4", not the data itself); the token only lets callers add alerts and inbox items, and **New link** replaces it.
+
+**PowerShell**
+
+```powershell
+$url = 'https://YOUR-PROJECT.supabase.co/rest/v1/rpc/cockpit_alert'
+$key = 'YOUR-APIKEY'; $token = 'YOUR-TOKEN'
+Invoke-RestMethod -Method Post -Uri $url -Headers @{ apikey = $key } -ContentType 'application/json' `
+  -Body (@{ token = $token; title = 'Backup failed'; body = 'Robocopy exit code 8'; to = 'inbox' } | ConvertTo-Json)
+```
+
+**Power Automate Desktop** (alert when a flow fails)
+
+1. Set variables `DashURL` (the Alert URL), `DashKey` (apikey) and `DashToken` (token) at the top of the flow.
+2. Make a subflow `SendAlert`:
+   - **Get last error** into `LastError`.
+   - **Set variable** `Alert` to `%{ 'token': DashToken, 'title': 'Invoice flow failed', 'body': LastError.Message, 'to': 'inbox' }%`, then **Convert custom object to JSON** into `AlertJson` (this copes with quotes and line breaks in the error).
+   - **Invoke web service**: URL `%DashURL%`, method POST, accept and content type `application/json`, custom headers `apikey: %DashKey%`, request body `%AlertJson%`, "Encode request body" off. Set its own **On error** to continue, so a network problem can't hide the original failure.
+3. Wrap the main steps in **On block error** that runs `SendAlert` (or set a risky action's **On error** to run it).
+4. Run `SendAlert` once on its own to test. From a work PC, if it times out, the network is probably blocking `*.supabase.co`.
+
 ## How sync behaves
 
 - Each quest, inbox item, focus session and so on is stored as its own row, so devices only exchange what changed. Changes save instantly on the device, sync about a second later, and reach your other open devices within a second or two (live updates).

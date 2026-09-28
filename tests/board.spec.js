@@ -25,6 +25,20 @@ test.describe('desktop', () => {
     await expect(page.locator('#hnow b')).toHaveText('C');
   });
 
+  test('a waiting quest (shown lower down) can only be dropped among the waiting ones', async ({
+    app,
+    page,
+  }) => {
+    await app.setState(s => (s.quests[0].wait = { who: 'Sam', note: '', due: '', since: '2026-09-23' }));
+    await page.reload();
+    const row = t => page.locator(`#v-today .row:has(.open > span:text-is("${t}"))`);
+    await expect(page.locator('#v-today .list .row .open > span')).toHaveText(['B', 'C', 'A']);
+    await row('C').dragTo(row('A'), { targetPosition: { x: 20, y: 5 } }); // across groups: ignored
+    expect((await app.state()).quests.map(q => q.text)).toEqual(['A', 'B', 'C']);
+    await row('C').dragTo(row('B'), { targetPosition: { x: 20, y: 5 } }); // within: reorders
+    await expect(page.locator('#v-today .list .row .open > span')).toHaveText(['C', 'B', 'A']);
+  });
+
   test('a running session shows only itself until paused', async ({ page }) => {
     await page.click('header [data-zen]');
     await page.click('#v-zen [data-zstart]');

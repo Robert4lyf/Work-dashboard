@@ -15,7 +15,8 @@ function moveToInbox(id) {
   toast('Moved to inbox');
 }
 
-let dragging = null;
+let dragging = null,
+  dragRank = null; // the dragged quest's group, worked out once per drag
 // Where a drop would land for the current drag, or null if it can't land here.
 function dropZone(target, y) {
   if (!dragging || !target.closest) return null;
@@ -24,8 +25,10 @@ function dropZone(target, y) {
   if (!rowEl) return null;
   const other = find(rowEl.dataset.drag.slice(2)),
     me = find(id);
-  // Reordering only within the same list.
+  // Reordering only within the same list, and (outside Reorder mode, where waiting and finished
+  // quests are shown lower down) within the same group, so a drop lands where it looks.
   if (!me || me.arr !== other.arr || me.n === other.n) return null;
+  if (!reorder && (dragRank ??= listRank(me.n)) !== listRank(other.n)) return null;
   const box = rowEl.getBoundingClientRect();
   return { id, rowEl, other, after: y > box.top + box.height / 2 };
 }
@@ -36,6 +39,7 @@ document.addEventListener('dragstart', e => {
   const el = e.target.closest && e.target.closest('[data-drag]');
   if (!el) return;
   dragging = el.dataset.drag;
+  dragRank = null;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', dragging);
 });
@@ -59,8 +63,7 @@ document.addEventListener('drop', e => {
   const bf = snapshot(),
     { arr, n } = find(z.id);
   arr.splice(arr.indexOf(n), 1);
-  const at = z.other ? arr.indexOf(z.other.n) + (z.after ? 1 : 0) : arr.length;
-  arr.splice(at, 0, n);
+  arr.splice(arr.indexOf(z.other.n) + (z.after ? 1 : 0), 0, n);
   settle(bf);
 });
 wideMQ.addEventListener('change', () => {

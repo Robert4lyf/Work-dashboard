@@ -44,6 +44,24 @@ async function replacePushKeys() {
   pushTest = null;
   await setupPushKeys();
 }
+// After New keys on another device, every device's subscription row is removed. This device
+// then shows notifications as off, so they can be turned on again with the new key. (The row,
+// not the synced key, is the signal: a stale key can briefly sync back from another device.)
+async function verifyPush() {
+  if (!pushEndpoint || !sb || !session) return;
+  const { data, error } = await sb.from('cockpit_push_subs').select('endpoint').eq('endpoint', pushEndpoint);
+  if (error || !data || data.length) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration(),
+      sub = reg && (await reg.pushManager.getSubscription());
+    if (sub) await sub.unsubscribe();
+  } catch (e) {}
+  pushEndpoint = '';
+  try {
+    localStorage.removeItem(PUSH_KEY);
+  } catch (e) {}
+  renderAccount();
+}
 async function enablePush() {
   try {
     if ((await Notification.requestPermission()) !== 'granted') {
@@ -61,6 +79,7 @@ async function enablePush() {
       .upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth }, { onConflict: 'endpoint' });
     if (error) throw error;
     pushEndpoint = j.endpoint;
+    pushTest = null;
     localStorage.setItem(PUSH_KEY, pushEndpoint);
     toast('Notifications on for this device');
   } catch (e) {
@@ -78,6 +97,7 @@ async function disablePush() {
     await sb.from('cockpit_push_subs').delete().eq('endpoint', pushEndpoint);
   } catch (e) {}
   pushEndpoint = '';
+  pushTest = null; // old test results no longer apply
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
@@ -86,7 +106,17 @@ async function disablePush() {
 // "Send a test" checks each link in the chain and says which one is broken:
 // this phone showing notifications, this device's subscription, then the server sending one.
 let pushTest = null; // steps: { name, ok (true/false/null = waiting), msg }
+let pushTesting = false;
 async function testPush() {
+  if (pushTesting) return;
+  pushTesting = true;
+  try {
+    await runPushTest();
+  } finally {
+    pushTesting = false;
+  }
+}
+async function runPushTest() {
   const steps = (pushTest = []),
     step = (name, ok, msg) => {
       const s = steps.find(x => x.name === name);
@@ -229,7 +259,7 @@ async function syncNotices() {
   const { data, error } = await sb.from('cockpit_notices').select('key').is('sent_at', null);
   if (error) return;
   const keep = new Set(want.map(n => n.key)),
-    stale = data.map(r => r.key).filter(k => !keep.has(k) && !k.startsWith('test:'));
+    stale = data.map(r => r.key).filter(k => !keep.has(k) && !/^(test|alert):/.test(k));
   if (want.length) {
     const { error: e2 } = await sb.from('cockpit_notices').upsert(
       want.map(n => ({ ...n, at: new Date(n.at).toISOString() })),

@@ -149,10 +149,12 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       { user_id: 'u1', key: 'old', at: '2026-09-22T20:00:00Z', title: 'Old', body: '', sent_at: null },
       { user_id: 'u1', key: 'later', at: '2026-09-23T10:00:00Z', title: 'Later', body: '', sent_at: null },
       { user_id: 'u2', key: 'lonely', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
+      { user_id: 'u3', key: 'expired', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
     ],
     subs: [
       { endpoint: 'e1', user_id: 'u1', p256dh: 'p', auth: 'a' },
       { endpoint: 'gone', user_id: 'u1', p256dh: 'p', auth: 'a' },
+      { endpoint: 'gone3', user_id: 'u3', p256dh: 'p', auth: 'a' },
     ],
     from(t) {
       const self = this,
@@ -182,22 +184,23 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
   const sent = [];
   const push = {
     sendNotification: async (sub, payload) => {
-      if (sub.endpoint === 'gone') throw Object.assign(new Error('gone'), { statusCode: 410 });
+      if (sub.endpoint.startsWith('gone')) throw Object.assign(new Error('gone'), { statusCode: 410 });
       sent.push([sub.endpoint, JSON.parse(payload)]);
     },
   };
   const r = await sendDue({ db, push, now, log: { warn() {} } });
-  expect(r).toEqual({ sent: 1, skipped: 1, removed: 1 });
+  expect(r).toEqual({ sent: 1, skipped: 1, removed: 2 });
   expect(sent).toEqual([['e1', { title: 'Due today', body: 'Report', tag: 'a' }]]);
   expect(
     db.notices
       .filter(n => n.sent_at)
       .map(n => n.key)
       .sort(),
-  ).toEqual(['a', 'lonely', 'old']);
+  ).toEqual(['a', 'expired', 'lonely', 'old']);
   expect(db.subs.map(s => s.endpoint)).toEqual(['e1']);
   // Why a notice didn't go out is kept on it, for the app's test to show.
-  expect(db.notices.find(n => n.key === 'a').error).toBeNull();
+  expect(db.notices.find(n => n.key === 'a').error).toBeNull(); // reached e1; the gone device doesn't count
+  expect(db.notices.find(n => n.key === 'expired').error).toMatch(/subscription had expired/);
   expect(db.notices.find(n => n.key === 'lonely').error).toBe('no devices have notifications turned on');
 });
 
@@ -218,5 +221,39 @@ test('lost the private key: New keys makes a fresh pair after a confirm', async 
   expect(pub).not.toBe('old-key');
   expect(await page.evaluate(() => S.pushKey)).toBe(pub);
   await expect(page.locator('#pushnewkeys')).toHaveCount(0); // hidden while the new pair shows
+  expect(errors).toEqual([]);
+});
+
+test("the app's notice sync leaves alerts sent by scripts alone", async ({ browser }) => {
+  const { page, errors } = await open(browser, new Date('2026-09-23T08:00:00+01:00'));
+  await page.evaluate(() => {
+    window.__notices.push({
+      key: 'alert:abc',
+      at: new Date().toISOString(),
+      title: 'Flow failed',
+      sent_at: null,
+    });
+    window.__notices.push({
+      key: 'due:gone:2026-09-24',
+      at: new Date().toISOString(),
+      title: 'Old',
+      sent_at: null,
+    });
+    S.pushKey = 'x';
+    save();
+  });
+  await page.evaluate(() => syncNotices());
+  expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc']);
+  expect(errors).toEqual([]);
+});
+
+test('after New keys elsewhere removed this device, it shows notifications as off', async ({ browser }) => {
+  const { page, errors } = await open(browser, new Date('2026-09-23T08:00:00+01:00'));
+  await page.evaluate(() => {
+    S.pushKey = 'k';
+    pushEndpoint = 'https://push.example/old'; // no longer in cockpit_push_subs
+  });
+  await page.evaluate(() => verifyPush());
+  expect(await page.evaluate(() => pushEndpoint)).toBe('');
   expect(errors).toEqual([]);
 });

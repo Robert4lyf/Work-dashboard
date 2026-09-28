@@ -170,3 +170,67 @@ create index if not exists cockpit_notices_due on public.cockpit_notices (at) wh
 alter table public.cockpit_notices enable row level security;
 drop policy if exists "own notices" on public.cockpit_notices;
 create policy "own notices" on public.cockpit_notices for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Alerts from anywhere: scripts and flows (PowerShell, Power Automate Desktop...) call this with
+-- the capture token to notify your phone and, optionally, add the alert to the Dashboard.
+--   to = 'phone'   notification only
+--        'inbox'   notification + an Inbox item (the default)
+--        'today'   notification + a quest on Today
+--        'waiting' an Inbox item waiting on `who`, to chase on `due` (yyyy-mm-dd), + notification
+create or replace function public.cockpit_alert(
+  token text, title text, body text default '', "to" text default 'inbox', who text default '', due text default ''
+) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  u uuid;
+  t text := left(regexp_replace(trim(coalesce(title, '')), '\s+', ' ', 'g'), 200);
+  b text := left(trim(coalesce(body, '')), 4000);
+  dest text := lower(coalesce(nullif(trim("to"), ''), 'inbox'));
+  id text := 'alert' || replace(gen_random_uuid()::text, '-', '');
+  ms bigint := (extract(epoch from now()) * 1000)::bigint;
+  item jsonb;
+  chase text := '';
+begin
+  select c.user_id into u from cockpit_capture_tokens c where c.token = cockpit_alert.token;
+  if u is null then raise exception 'unknown capture token'; end if;
+  if t = '' then raise exception 'title is required'; end if;
+  if dest not in ('phone', 'inbox', 'today', 'waiting') then
+    raise exception 'to must be phone, inbox, today or waiting';
+  end if;
+  -- A runaway script (or a leaked token) can't flood the phone or the lists. The lock makes
+  -- calls for the same person take turns, so parallel requests can't all slip under the limit.
+  perform pg_advisory_xact_lock(hashtext('cockpit_alert:' || u::text));
+  if (select count(*) from cockpit_notices n where n.user_id = u and n.key like 'alert:%'
+      and n.at > now() - interval '1 hour') >= 60 then
+    raise exception 'too many alerts: at most 60 an hour';
+  end if;
+  delete from cockpit_notices n where n.user_id = u and n.key like 'alert:%'
+    and n.sent_at < now() - interval '30 days';
+  if dest = 'today' then
+    insert into cockpit_items (user_id, key, kind, data, edited_at) values (u, 'quest:' || id, 'quest',
+      jsonb_build_object('id', id, 'text', t, 'notes', b, 'children', '[]'::jsonb), ms);
+  elsif dest in ('inbox', 'waiting') then
+    item := jsonb_build_object('id', id, 'text', t);
+    if b <> '' then
+      item := item || jsonb_build_object('node', jsonb_build_object('id', id || 'n', 'text', t, 'notes', b, 'children', '[]'::jsonb));
+    end if;
+    if dest = 'waiting' then
+      -- Only a real date (2026-02-30 isn't one) becomes the chase date.
+      begin
+        if coalesce(due, '') ~ '^\d{4}-\d{2}-\d{2}$' and to_char(due::date, 'YYYY-MM-DD') = due then
+          chase := due;
+        end if;
+      exception when others then chase := '';
+      end;
+      item := item || jsonb_build_object('wait', jsonb_build_object(
+        'who', left(trim(coalesce(who, '')), 60), 'note', '', 'since', to_char(now(), 'YYYY-MM-DD'),
+        'due', chase));
+    end if;
+    insert into cockpit_items (user_id, key, kind, data, edited_at) values (u, 'inbox:' || id, 'inbox', item, ms);
+  end if;
+  -- The send-notices job pushes it within a minute.
+  insert into cockpit_notices (user_id, key, at, title, body) values (u, 'alert:' || id, now(), t, left(b, 300));
+  return true;
+end $$;
+revoke execute on function public.cockpit_alert(text, text, text, text, text, text) from public;
+grant execute on function public.cockpit_alert(text, text, text, text, text, text) to anon, authenticated;

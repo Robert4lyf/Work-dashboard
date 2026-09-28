@@ -2,9 +2,10 @@
 // The first unfinished step of the first unfinished quest, in list order. Quests with a waiting
 // step come last, as they're listed on Today.
 function nextStep() {
-  const qs = S.quests.filter(q => !isDone(q) && !q.wait),
-    free = qs.filter(q => !showsWaiting(q));
-  for (const q of [...free, ...qs.filter(q => showsWaiting(q))]) {
+  const free = [],
+    blocked = [];
+  S.quests.forEach(q => !isDone(q) && !q.wait && (showsWaiting(q) ? blocked : free).push(q));
+  for (const q of [...free, ...blocked]) {
     const n = q.children.length ? nextLeaf(q) : q;
     if (n) return { n, q };
   }

@@ -6,7 +6,9 @@ let captureToken = '';
 try {
   captureToken = localStorage.getItem(CAPTURE_KEY) || '';
 } catch (e) {}
-const captureUrl = () => (CFG.supabaseUrl || '').replace(/\/$/, '') + '/rest/v1/rpc/cockpit_capture';
+const rpcUrl = fn => (CFG.supabaseUrl || '').replace(/\/$/, '') + '/rest/v1/rpc/' + fn;
+const captureUrl = () => rpcUrl('cockpit_capture');
+const alertUrl = () => rpcUrl('cockpit_alert');
 const appUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');
 async function newCaptureToken() {
   const { data, error } = await sb.rpc('cockpit_new_capture_token');
@@ -33,6 +35,39 @@ async function testCapture() {
     sync();
   } catch (e) {
     toast("The test didn't go through", false, 3000);
+  }
+}
+// An alert, as a script or flow would send one: a notification plus an Inbox item.
+async function testAlert() {
+  try {
+    const r = await fetch(alertUrl(), {
+      method: 'POST',
+      headers: { apikey: CFG.supabaseAnonKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: captureToken,
+        title: 'Test alert',
+        body: 'Sent from Settings',
+        to: 'inbox',
+      }),
+    });
+    if (!r.ok) {
+      const msg = ((await r.json().catch(() => ({}))).message || '').toLowerCase();
+      return toast(
+        r.status === 404 || msg.includes('cockpit_alert')
+          ? 'Alerts aren’t set up yet. Run the updated supabase-setup.sql'
+          : msg.includes('unknown capture token')
+            ? 'This token was replaced on another device. Tap New link here to get a current one'
+            : msg.includes('too many alerts')
+              ? 'Too many alerts in the last hour. Try again later'
+              : "The alert didn't go through (" + (msg || r.status) + ')',
+        false,
+        4000,
+      );
+    }
+    toast('Sent. A notification should arrive within a minute');
+    sync();
+  } catch (e) {
+    toast("Couldn't reach Supabase. Check the connection", false, 4000);
   }
 }
 function copyText(text) {
@@ -63,21 +98,25 @@ function renderCapture() {
   h += `<details id="capsetup"${panels.capsetup ? ' open' : ''}><summary>Set up a shortcut</summary>`;
   h +=
     row('URL', captureUrl(), 'url') +
+    row('Alert URL', alertUrl(), 'alert') +
     row('apikey header', CFG.supabaseAnonKey, 'key') +
     row('token', captureToken, 'token');
   h += `<details id="capand"${panels.capand ? ' open' : ''}><summary>Android</summary><ol class="steps">
     <li>Install the free <b>HTTP Shortcuts</b> app and create a Regular Shortcut.</li>
     <li>Method <b>POST</b>, the URL above, a header <b>apikey</b> with the value above, and a JSON body <code>{"token":"…","text":"{{text}}"}</code> where <b>text</b> is a variable that asks for input (it can use voice).</li>
     <li>Add it to your home screen, or run it from a Google Assistant routine.</li></ol></details>
-    <div class="acts"><button class="btn" id="captest">Send a test</button><button class="btn" id="capnew">New link</button></div>
-    <p class="hint">Anyone with the token can add items to your inbox (nothing else). "New link" replaces it; old shortcuts then stop working.</p></details>`;
+    <p class="hint">Alerts: scripts and flows (PowerShell, Power Automate Desktop) can POST <code>{"token":"…","title":"…","body":"…","to":"inbox"}</code> to the alert URL to notify your phone. <b>to</b> is phone, inbox, today or waiting (with <b>who</b> and <b>due</b>). See the README for examples.</p>
+    <div class="acts"><button class="btn" id="captest">Send a test</button><button class="btn" id="alerttest">Test alert</button><button class="btn" id="capnew">New link</button></div>
+    <p class="hint">Anyone with the token can add inbox items and quests and send you alerts, but can't read or change anything else. "New link" replaces it; old shortcuts then stop working.</p></details>`;
   return h;
 }
 // Launched from an app-icon shortcut (manifest "shortcuts").
 function receiveLaunch() {
   const q = new URLSearchParams(location.search);
-  if (!q.has('capture') && !q.has('talk')) return;
+  // ?focus came from a removed shortcut that installed apps may still show: just tidy the URL.
+  if (!q.has('capture') && !q.has('talk') && !q.has('focus')) return;
   history.replaceState(null, '', location.pathname);
+  if (q.has('focus')) return;
   if (q.has('talk')) return talkable() ? openTalk(false) : undefined;
   go('inbox');
   const i = $('#iin');

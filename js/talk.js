@@ -19,16 +19,24 @@ function setTalkPref(on) {
 let talk = null,
   talkRec = null,
   talkLock = null;
-// Opened from the Talk button (a tap, so it can speak straight away) or a launcher shortcut
-// (it can't: browsers only speak after a tap, so it waits for Start).
-function openTalk(tapped) {
-  talk = { log: [], state: 'ready', sorting: null, quiet: 0 };
+// Keep the screen on while talk mode is open. Browsers drop the lock whenever the page is
+// hidden, so it's asked for again on return (see the visibilitychange handler).
+function talkWake() {
+  if (!talk || (talkLock && !talkLock.released)) return;
   try {
+    const mine = talk;
     navigator.wakeLock.request('screen').then(
-      l => (talkLock = l),
+      // Closed (or reopened) before the lock arrived: let it go straight away.
+      l => (talk === mine ? (talkLock = l) : l.release().catch(() => {})),
       () => {},
     );
   } catch (e) {}
+}
+// Opened from the Talk button (a tap, so it can speak straight away) or a launcher shortcut
+// (it can't: browsers only speak after a tap, so it waits for Start).
+function openTalk(tapped) {
+  talk = { log: [], state: 'ready', sorting: null, skipped: new Set(), quiet: 0 };
+  talkWake();
   renderTalk();
   if (tapped) talkSay(talkBrief());
 }
@@ -66,14 +74,25 @@ function talkSay(text, after) {
 }
 function talkListen() {
   if (!talk) return;
+  // "Skip to answer" can interrupt speech that never reports finishing.
+  talk.u = null;
+  try {
+    speechSynthesis.cancel();
+  } catch (e) {}
   let heard = '';
+  talk.problem = '';
   try {
     talkRec = new SR();
     talkRec.lang = navigator.language || 'en-GB';
     talkRec.interimResults = false;
     talkRec.continuous = false;
     talkRec.onresult = e => (heard = e.results[e.results.length - 1][0].transcript);
-    talkRec.onerror = () => {};
+    // A blocked microphone or no connection would otherwise look like silence.
+    talkRec.onerror = e => {
+      if (!talk) return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') talk.problem = 'mic';
+      else if (e.error === 'network') talk.problem = 'network';
+    };
     talkRec.onend = () => {
       talkRec = null;
       if (!talk) return;
@@ -81,6 +100,10 @@ function talkListen() {
         talk.quiet = 0;
         talk.log.push({ me: true, t: heard.trim() });
         return talkHeard(heard.trim());
+      }
+      if (talk.problem) {
+        talk.state = 'idle';
+        return renderTalk();
       }
       // Nothing said: try again once, then wait for a tap.
       if (++talk.quiet < 2) return talkListen();
@@ -144,7 +167,8 @@ function talkHeard(said) {
   const who = said.match(/^(?:it's |its |i'm |im )?waiting (?:on|for)\s+(.+)/i);
   if (who) {
     if (!nx) return talkSay('Nothing to mark waiting.');
-    const name = who[1].replace(/[.!?]$/, '').trim();
+    const name = who[1].replace(/[.,!?]/g, '').trim();
+    if (!name) return talkSay('Who are you waiting on?');
     setWaiting(nx.n.id, { who: name[0].toUpperCase() + name.slice(1), note: '', due: '' });
     return talkSay(`${nx.n.text} is waiting on ${name}. ${sayNext()}`);
   }
@@ -169,17 +193,19 @@ function talkHeard(said) {
     schedule('q', nx.q.id, shift(today(), 1));
     return talkSay(`Moved ${name} to tomorrow. ${sayNext()}`);
   }
-  if (is(/^(inbox|sort|triage)\b/)) return talkSortNext();
+  if (is(/^(inbox|sort|triage)\b/)) {
+    talk.skipped.clear();
+    return talkSortNext();
+  }
   if (is(/^(what's next|whats next|next|what now)\b/)) return talkSay(sayNext());
   if (is(/^(repeat|again|brief|plan|status|my day)\b/)) return talkSay(talkBrief());
   if (is(/^(help|commands|what can i say)\b/)) return talkSay(TALK_HELP);
   talkSay(`I heard "${said}". Say help for what I understand.`);
 }
 // Sorting the inbox: each item in turn, answered with today, tomorrow, next week, delete or skip.
-function talkSortNext(skip) {
-  const ids = S.inbox.map(x => x.id),
-    from = skip ? ids.indexOf(skip) + 1 : 0,
-    it = S.inbox[from];
+// Skipped items aren't asked again this round.
+function talkSortNext() {
+  const it = S.inbox.find(x => !talk.skipped.has(x.id));
   if (!it) {
     talk.sorting = null;
     return talkSay((S.inbox.length ? 'That was the last one.' : 'Inbox clear.') + ' ' + sayNext());
@@ -196,19 +222,14 @@ function talkSort(s) {
     talk.sorting = null;
     return talkSay('Stopped sorting. ' + sayNext());
   }
-  if (is(/\btoday\b/)) {
-    S.quests.push(inboxToNode(S.inbox[i]));
-    S.inbox.splice(i, 1);
-    save();
-    renderAll();
-  } else if (is(/\btomorrow\b/)) schedule('i', id, shift(today(), 1));
+  const again = () => talkSay('Say today, tomorrow, next week, delete, or skip.');
+  if (is(/\b(not|don't|dont)\b/)) return again(); // "not today": ask rather than guess
+  if (is(/\btomorrow\b/)) schedule('i', id, shift(today(), 1));
   else if (is(/\bnext week\b/)) schedule('i', id, nextMonday());
-  else if (is(/^(delete|clear|remove|bin|drop)\b/)) {
-    S.inbox.splice(i, 1);
-    save();
-    renderAll();
-  } else if (is(/^(skip|keep|leave|pass)\b/)) return talkSortNext(id);
-  else return talkSay('Say today, tomorrow, next week, delete, or skip.');
+  else if (is(/\btoday\b/)) promoteInbox(id);
+  else if (is(/^(delete|clear|remove|bin|drop)\b/)) clearInbox(id);
+  else if (is(/^(skip|keep|leave|pass)\b/)) talk.skipped.add(id);
+  else return again();
   talkSortNext();
 }
 
@@ -222,14 +243,21 @@ function renderTalk() {
       ready: 'Tap Start, then talk.',
       speaking: 'Speaking…',
       listening: 'Listening…',
-      idle: "Didn't hear anything.",
+      idle:
+        talk.problem === 'mic'
+          ? 'The microphone is blocked. Allow it for this app in Chrome’s site settings.'
+          : talk.problem === 'network'
+            ? 'Speech recognition needs a connection. Check you’re online.'
+            : "Didn't hear anything.",
     }[st];
   const btn =
     st === 'ready'
       ? '<button class="btn blue big" id="talkgo">Start</button>'
       : st === 'idle'
         ? '<button class="btn blue big" id="talkmic">Tap to speak</button>'
-        : '';
+        : st === 'speaking'
+          ? '<button class="btn big" id="talkmic">Skip to answer</button>'
+          : '';
   el.innerHTML = `<button class="linkbtn zx" id="talkexit">Exit talk</button><div class="tbody"><p class="tstate${st === 'listening' ? ' on' : ''}" role="status">${line}</p>${btn}<div class="tlog">${talk.log
     .slice(-8)
     .map(x => `<p class="${x.me ? 'me' : ''}">${esc(x.t)}</p>`)

@@ -135,6 +135,21 @@ async function device(browser, srv, seed) {
     });
     r.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
   });
+  // The alert endpoint, doing what cockpit_alert does for to = 'inbox'.
+  await page.route('**/rest/v1/rpc/cockpit_alert', async r => {
+    const body = r.request().postDataJSON();
+    if (body.token !== srv.token) return r.fulfill({ status: 400, body: '{}' });
+    const id = 'alert' + ++srv.seq;
+    srv.alerts = [...(srv.alerts || []), body];
+    srv.rows.set('inbox:' + id, {
+      key: 'inbox:' + id,
+      data: { id, text: body.title },
+      deleted: false,
+      edited_at: Date.now(),
+      seq: ++srv.seq,
+    });
+    r.fulfill({ status: 200, contentType: 'application/json', body: 'true' });
+  });
   await page.exposeFunction('srvSnapshot', row => {
     srv.state = { data: row.data, edited_at: row.edited_at };
     srv.snapshots++;
@@ -322,17 +337,25 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   const a = await device(browser, srv);
   await a.page.click('nav [data-v=account]');
   await a.page.click('#capnew');
-  await expect(a.page.locator('.caprow code').nth(2)).toHaveText('tok123');
+  await expect(a.page.locator('.caprow code').nth(3)).toHaveText('tok123');
   await a.page.click('#captest');
   await expect
     .poll(async () => (await a.state()).inbox.map(i => i.text))
     .toEqual(['Test capture from Settings']);
+  // Test alert: what a script would send, landing in the inbox too.
+  await a.page.click('#alerttest');
+  await expect
+    .poll(async () => (await a.state()).inbox.map(i => i.text))
+    .toEqual(['Test alert', 'Test capture from Settings']);
+  expect(srv.alerts).toEqual([
+    { token: 'tok123', title: 'Test alert', body: 'Sent from Settings', to: 'inbox' },
+  ]);
   // The details survive a reload on this device, folded away until opened.
   await a.page.reload();
   await a.page.click('nav [data-v=account]');
   await expect(a.page.locator('.caprow').first()).toBeHidden();
   await a.page.click('#capsetup summary');
-  await expect(a.page.locator('.caprow code').nth(2)).toHaveText('tok123');
+  await expect(a.page.locator('.caprow code').nth(3)).toHaveText('tok123');
   expect(a.errors).toEqual([]);
 });
 
