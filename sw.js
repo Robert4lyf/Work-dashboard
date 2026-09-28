@@ -75,7 +75,10 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {
-    for (const c of list) if ('focus' in c) return c.focus();
+    // The app's own tab (not another site on the same host), else a new one.
+    const scope = new URL(self.registration.scope).pathname;
+    for (const c of list)
+      if ('focus' in c && new URL(c.url).pathname.startsWith(scope)) return c.focus();
     return self.clients.openWindow('./');
-  }));
+  }).catch(() => self.clients.openWindow('./')));
 });

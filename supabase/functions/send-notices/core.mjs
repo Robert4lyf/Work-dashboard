@@ -33,44 +33,61 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
   for (const n of due) {
     // Why a notice didn't reach any device, kept on the notice so the app's test can show it.
     const errs = [];
-    let delivered = 0;
+    let delivered = 0,
+      giveUp = true; // false once a device failed for a reason that may clear (429, 5xx, timeout)
     const mine = subs.filter(
       s => s.user_id === n.user_id && !gone.has(s.endpoint) && (!n.device || s.endpoint === n.device),
     );
     // Anything more than 6 hours overdue (say the job was paused) is marked done unsent, as are
     // an alarm's older repeats when a newer one is due too.
+    const alarm = n.key.startsWith('alarm:');
     if (new Date(n.at) < late || catchUp(n)) skipped++;
     else if (!mine.length) errs.push('no devices have notifications turned on');
     else
-      for (const s of mine) {
-        try {
-          await push.sendNotification(
-            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-            JSON.stringify({ title: n.title, body: n.body, tag: n.key }),
-            { TTL: 3600 },
-          );
-          sent++;
-          delivered++;
-        } catch (err) {
-          // 404/410: the device unsubscribed or the app was removed; forget it.
-          if (err.statusCode === 404 || err.statusCode === 410) {
-            gone.add(s.endpoint);
-            errs.push(
-              "a device's subscription had expired and was removed: turn notifications on again there",
+      // All of a notice's devices at once: a run stays well inside the minute.
+      await Promise.all(
+        mine.map(async s => {
+          try {
+            await push.sendNotification(
+              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+              // The body is kept under the push services' payload limit (a deep quest's trail).
+              JSON.stringify({ title: n.title, body: String(n.body || '').slice(0, 300), tag: n.key }),
+              // An alarm must ring now, not when the phone next wakes; and a repeat that couldn't
+              // be delivered within its minute is replaced by the next, not queued up behind it.
+              alarm ? { TTL: 60, urgency: 'high' } : { TTL: 3600 },
             );
-          } else {
-            log.warn('push failed', err.statusCode || err.message);
-            errs.push(
-              err.statusCode === 401 || err.statusCode === 403
-                ? `push service refused (${err.statusCode}): the VAPID keys in the function's secrets don't match this device's`
-                : `push failed: ${err.statusCode || err.message}`,
-            );
+            sent++;
+            delivered++;
+          } catch (err) {
+            // 404/410: the device unsubscribed or the app was removed; forget it.
+            if (err.statusCode === 404 || err.statusCode === 410) {
+              gone.add(s.endpoint);
+              errs.push(
+                "a device's subscription had expired and was removed: turn notifications on again there",
+              );
+            } else {
+              log.warn('push failed', err.statusCode || err.message);
+              // Refused keys (401/403) or an oversized payload (413) won't clear by themselves.
+              if (![401, 403, 413].includes(err.statusCode)) giveUp = false;
+              errs.push(
+                err.statusCode === 401 || err.statusCode === 403
+                  ? `push service refused (${err.statusCode}): the VAPID keys in the function's secrets don't match this device's`
+                  : `push failed: ${err.statusCode || err.message}`,
+              );
+            }
           }
-        }
-      }
+        }),
+      );
     const mark = v => db.from('cockpit_notices').update(v).eq('user_id', n.user_id).eq('key', n.key);
     // Reaching at least one device counts as delivered.
     const error = delivered ? null : errs.join('; ') || null;
+    // A push service that was busy or down is tried again next minute (until the 6-hour cut-off);
+    // the error is noted meanwhile. An alarm repeat isn't: the next one is due in a minute anyway.
+    if (!delivered && !giveUp && !alarm) {
+      const { error: e4 } = await mark({ error });
+      if (e4 && !/error/.test(e4.message || '')) throw e4;
+      continue;
+    }
     let { error: e3 } = await mark({ sent_at: now.toISOString(), error });
     // The error column is newer than the table; without it, still mark the notice sent.
     if (e3) ({ error: e3 } = await mark({ sent_at: now.toISOString() }));

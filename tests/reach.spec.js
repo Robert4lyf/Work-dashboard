@@ -153,6 +153,15 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       { user_id: 'u1', key: 'later', at: '2026-09-23T10:00:00Z', title: 'Later', body: '', sent_at: null },
       { user_id: 'u2', key: 'lonely', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
       { user_id: 'u3', key: 'expired', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
+      // The push service was busy: tried again next minute, not marked sent.
+      {
+        user_id: 'u4',
+        key: 'busy',
+        at: '2026-09-23T08:59:00Z',
+        title: 'Hi',
+        body: 'x'.repeat(400),
+        sent_at: null,
+      },
       // Two repeats of one alarm both due (queued late): only the newest rings.
       {
         user_id: 'u1',
@@ -185,6 +194,7 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       { endpoint: 'e1', user_id: 'u1', p256dh: 'p', auth: 'a' },
       { endpoint: 'gone', user_id: 'u1', p256dh: 'p', auth: 'a' },
       { endpoint: 'gone3', user_id: 'u3', p256dh: 'p', auth: 'a' },
+      { endpoint: 'busy4', user_id: 'u4', p256dh: 'p', auth: 'a' },
     ],
     from(t) {
       const self = this,
@@ -215,6 +225,7 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
   const push = {
     sendNotification: async (sub, payload) => {
       if (sub.endpoint.startsWith('gone')) throw Object.assign(new Error('gone'), { statusCode: 410 });
+      if (sub.endpoint.startsWith('busy')) throw Object.assign(new Error('busy'), { statusCode: 503 });
       sent.push([sub.endpoint, JSON.parse(payload)]);
     },
   };
@@ -231,11 +242,16 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       .map(n => n.key)
       .sort(),
   ).toEqual(['a', 'alarm:x', 'alarm:y:1:0:0', 'alarm:y:1:0:1', 'expired', 'lonely', 'old']);
-  expect(db.subs.map(s => s.endpoint)).toEqual(['e1']);
+  expect(db.subs.map(s => s.endpoint)).toEqual(['e1', 'busy4']);
   // Why a notice didn't go out is kept on it, for the app's test to show.
   expect(db.notices.find(n => n.key === 'a').error).toBeNull(); // reached e1; the gone device doesn't count
   expect(db.notices.find(n => n.key === 'expired').error).toMatch(/subscription had expired/);
   expect(db.notices.find(n => n.key === 'lonely').error).toBe('no devices have notifications turned on');
+  const busy = db.notices.find(n => n.key === 'busy');
+  expect(busy.sent_at).toBeFalsy();
+  expect(busy.error).toBe('push failed: 503');
+  // Long bodies are cut to fit the push services' payload limit.
+  expect(sent.every(([, p]) => p.body.length <= 300)).toBe(true);
 });
 
 test('lost the private key: New keys makes a fresh pair after a confirm', async ({ browser }) => {

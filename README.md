@@ -89,7 +89,7 @@ Send a POST to the **Alert URL** with the header `apikey: <apikey value>` and a 
 | `to` | no | `inbox` (default): notification + Inbox item; `phone`: notification only; `today`: notification + a quest on Today; `waiting`: notification + an Inbox item waiting on `who` |
 | `who`, `due` | no | for `waiting`: who you're waiting on, and when to chase (`yyyy-mm-dd`) |
 
-The notification arrives within about a minute. Keep work details out of messages ("Invoice flow failed at step 4", not the data itself); the token only lets callers add alerts and inbox items, and **New link** replaces it.
+The notification arrives within about a minute. Keep work details out of messages ("Invoice flow failed at step 4", not the data itself); the token only lets callers add alerts and items to the Inbox or Today (never read anything), and **New link** replaces it.
 
 **PowerShell**
 
