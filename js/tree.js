@@ -181,20 +181,9 @@ function withUndo(msg, fn) {
 // Redraws triggered in the background (sync, the timer ending) must not wipe what
 // the user is typing or move their cursor. Views set their HTML through setHTML for that.
 let background = false;
-const COMPOSE = [
-  'sin',
-  'iin',
-  'tagin',
-  'projin',
-  'aemail',
-  'apass',
-  'leftin',
-  'whyin',
-  'wwhat',
-  'wfrom',
-  'wwho',
-  'wnote',
-];
+const COMPOSE = ['sin', 'iin', 'tagin', 'projin', 'aemail', 'apass', 'leftin', 'whyin', 'wwhat', 'wfrom'];
+// (Not the waiting panel's Who and For what: they show the saved details, which a sync may
+// have changed; while being typed in, they're kept like any field being edited.)
 function inBackground(fn) {
   const was = background;
   background = true;

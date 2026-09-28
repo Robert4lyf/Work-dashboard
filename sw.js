@@ -13,7 +13,9 @@ let apiOrigin = '';
 try { apiOrigin = new URL(self.COCKPIT_CONFIG.supabaseUrl).origin; } catch (e) {}
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION)
+    // Past the browser's own cache, so a new version never stores the old files.
+    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
@@ -33,7 +35,7 @@ self.addEventListener('fetch', e => {
   // The app itself (page, scripts, styles, config): network first so updates arrive
   // together, cache when offline
   if (req.mode === 'navigate' || (url.origin === self.location.origin && /\.(js|css)$/.test(url.pathname))) {
-    e.respondWith(fetch(req).then(res => {
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => { // checked with the server
       if (res.ok) put(req.mode === 'navigate' ? './index.html' : req, res.clone());
       return res;
     }).catch(() => caches.match(req.mode === 'navigate' ? './index.html' : req)));

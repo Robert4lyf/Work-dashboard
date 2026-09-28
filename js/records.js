@@ -38,6 +38,9 @@ function toRecords(s) {
     reviewed: s.reviewed || '',
     dayEnd: s.dayEnd || '',
   });
+  // Its own record too, so a prefs change on a device that hadn't yet heard of new keys can't
+  // bring the old ones back. (Still in prefs for older versions.)
+  if (s.pushKey) m.set('meta:pushkey', { key: s.pushKey });
   m.set('meta:timer', { timer: s.timer });
   m.set('meta:score', { xp: s.xp, bonusDay: s.bonusDay });
   m.set('meta:legacy', { daily: s.oldDaily, pdaily: s.oldPdaily });
@@ -73,6 +76,7 @@ function fromRecords(m, day) {
     timer: (m.get('meta:timer') || {}).timer || null,
     day,
   };
+  if (m.get('meta:pushkey')) s.pushKey = m.get('meta:pushkey').key || '';
   const legacy = m.get('meta:legacy') || {};
   s.oldDaily = legacy.daily || {};
   s.oldPdaily = legacy.pdaily || {};
@@ -109,9 +113,14 @@ function saveSyncState() {
     localStorage.setItem(SYNC_KEY, JSON.stringify(sync2));
   } catch (e) {}
 }
-function markDirty() {
-  const now = Date.now(),
-    recs = toRecords(S),
+// Record kinds this version knows. Rows of other kinds (from a newer version on another
+// device) are left alone, never deleted for being missing here.
+const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy'];
+const knownKey = k =>
+  k.slice(0, k.indexOf(':')) in LISTS || (k.startsWith('meta:') && META_KEYS.includes(k.slice(5)));
+// `now`: when the change counts as made (the daily reset back-dates its changes to midnight).
+function markDirty(now = Date.now()) {
+  const recs = toRecords(S),
     seen = new Set();
   recs.forEach((v, k) => {
     seen.add(k);
@@ -120,6 +129,7 @@ function markDirty() {
     else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: now };
   });
   for (const k in sync2.synced)
-    if (!seen.has(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null)) sync2.dirty[k] = { h: null, at: now };
+    if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null))
+      sync2.dirty[k] = { h: null, at: now };
   saveSyncState();
 }

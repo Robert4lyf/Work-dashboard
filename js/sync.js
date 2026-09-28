@@ -108,10 +108,15 @@ async function firstSync() {
 async function pushDirty() {
   const keys = Object.keys(sync2.dirty);
   if (!keys.length) return;
-  const recs = toRecords(S),
-    uid_ = session.user.id;
+  const uid_ = session.user.id;
   for (let i = 0; i < keys.length; i += 500) {
-    const batch = keys.slice(i, i + 500).map(k => ({ k, d: sync2.dirty[k] }));
+    // Read now, with the dirty marks: edits made while an earlier batch was sending are in both.
+    const recs = toRecords(S),
+      batch = keys
+        .slice(i, i + 500)
+        .map(k => ({ k, d: sync2.dirty[k] }))
+        .filter(x => x.d);
+    if (!batch.length) continue;
     const { error } = await sb.from('cockpit_items').upsert(
       batch.map(({ k, d }) => ({
         user_id: uid_,
@@ -162,6 +167,12 @@ async function sync() {
   setSync('syncing');
   try {
     if (sync2.user !== session.user.id) {
+      // Another account was signed in here before: its data mustn't move into this one.
+      if (sync2.user) {
+        norm(null);
+        persistLocal();
+        inBackground(renderAll);
+      }
       // New device, or a different account: start from the server's copy.
       sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0, user: session.user.id };
       await firstSync();

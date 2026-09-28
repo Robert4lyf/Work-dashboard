@@ -26,7 +26,7 @@ function renderHeader() {
   }
   // Talk mode, if turned on for this device (Settings).
   if (talkPref && talkable() && !S.timer) h += '<button class="btn sm zenbtn" id="talkbtn">Talk</button>';
-  $('#hnow').innerHTML = h;
+  setIfChanged($('#hnow'), h); // unchanged: left alone, keeping keyboard focus
   const qs = S.quests,
     done = qs.filter(isDone).length,
     p = qs.length ? Math.round((done / qs.length) * 100) : 0;
@@ -38,7 +38,7 @@ function renderHeader() {
   const na = nextAlarm();
   if (na)
     st += `<button data-v="today" class="halarm">Alarm ${na.snooze ? hhmmOf(na.snooze) : na.time}</button>`;
-  $('#hstats').innerHTML = st;
+  setIfChanged($('#hstats'), st);
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;
   b.textContent = S.inbox.length;
@@ -48,4 +48,10 @@ function renderHeader() {
   w.textContent = ch || '';
   $('#reviewDot').hidden = !reviewDue();
   renderSyncBadge();
+}
+const shown = new WeakMap();
+function setIfChanged(el, html) {
+  if (shown.get(el) === html) return;
+  shown.set(el, html);
+  el.innerHTML = html;
 }

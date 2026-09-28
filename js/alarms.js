@@ -324,8 +324,11 @@ function alarmTick() {
   } catch (e) {}
 }
 function renderRinging(r) {
-  const el = $('#v-alarm');
+  const el = $('#v-alarm'),
+    opening = el.hidden && r.length;
   el.hidden = !r.length;
+  // The page behind is out of reach (keyboard and screen readers too) while it rings.
+  ['.wrap', 'nav', '#v-zen', '#v-talk'].forEach(s => $(s) && ($(s).inert = !!r.length));
   document.body.classList.toggle('ringing', !!r.length);
   el.innerHTML = r
     .map(
@@ -333,4 +336,5 @@ function renderRinging(r) {
         `<div class="ring box"><p class="ringtime">${a.time}</p><p class="ringlabel">${esc(a.label || 'Alarm')}</p><div class="acts"><button class="btn green big" data-adismiss="${a.id}">Dismiss</button><button class="btn big" data-asnooze="${a.id}">Snooze 5 min</button></div></div>`,
     )
     .join('');
+  if (opening) el.querySelector('[data-adismiss]').focus();
 }

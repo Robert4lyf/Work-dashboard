@@ -63,14 +63,14 @@
         <button data-v="waiting">Waiting<span class="badge" id="waitBadge" hidden></span></button>
         <button data-v="notes">Notes</button>
         <button data-v="review">
-          Review<span class="dot" id="reviewDot" hidden aria-label="weekly review due"></span>
+          Review<span class="dot" id="reviewDot" hidden role="img" aria-label="weekly review due"></span>
         </button>
         <button data-v="account">Settings</button>
       </div>
     </nav>
     <section id="v-zen" hidden aria-label="Single-task mode"></section>
     <section id="v-talk" hidden aria-label="Talk mode"></section>
-    <section id="v-alarm" hidden aria-label="Alarm" role="alertdialog"></section>
+    <section id="v-alarm" hidden aria-label="Alarm" role="alertdialog" aria-modal="true"></section>
     <div class="toast" id="toast" role="status"></div>
     <script src="config.js"></script>
     <script

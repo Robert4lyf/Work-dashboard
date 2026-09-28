@@ -85,7 +85,7 @@ function renderZen() {
   } else if (r) {
     h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
   }
-  el.innerHTML = h + '</div>';
+  setHTML(el, h + '</div>'); // a background redraw keeps what's being typed
 }
 function setZen(on) {
   if (!on && focusLocked()) return;

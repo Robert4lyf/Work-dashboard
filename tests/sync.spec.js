@@ -321,6 +321,8 @@ test('daily repeats created on two devices are not doubled', async ({ browser })
   await a.page.click('[data-rpreset="daily"]');
   await a.page.click('[aria-label="Mark done: Standup"]');
   await a.sync();
+  // All that happened yesterday (the daily reset's changes count as of midnight).
+  srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 86400e3));
   const b = await device(browser, srv);
   // Next morning both devices run the daily reset before hearing from each other.
   for (const d of [a, b])

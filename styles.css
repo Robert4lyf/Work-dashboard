@@ -10,6 +10,8 @@
   --orange: #ffa300;
   --blue: #29adff;
   --plum: #7e2553;
+  --pink-ink: var(--plum); /* pink as text: readable on the light background */
+  color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   --on-accent: #1d2b53;
   --head-ink: #fff1e8;
   --head-track: #1d2b53;
@@ -31,6 +33,8 @@
     --muted: #c2c3c7;
     --edge: #000000;
     --wait-ink: #fdba74;
+    --pink-ink: var(--pink);
+    color-scheme: dark;
   }
 }
 :root[data-font='plain'] {
@@ -69,6 +73,8 @@
   --muted: #c2c3c7;
   --edge: #000000;
   --wait-ink: #fdba74;
+  --pink-ink: var(--pink);
+  color-scheme: dark;
 }
 html {
   scroll-padding-top: env(safe-area-inset-top, 0px);
@@ -840,7 +846,7 @@ nav button[aria-current='page'] {
   border: 0;
   padding: 8px 0 0;
   margin-top: 6px;
-  color: var(--pink);
+  color: var(--pink-ink);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -1585,7 +1591,7 @@ nav .badge[hidden] {
   padding: 6px 8px;
 }
 .arow .atime {
-  flex: 0 0 7.5em;
+  flex: 0 0 auto; /* room for a 12-hour clock's AM/PM */
 }
 .arow:not(.on) .atime {
   opacity: 0.6;
@@ -1596,13 +1602,18 @@ nav .badge[hidden] {
   z-index: 50;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center; /* several ringing at once: scroll, never cut off */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: 16px;
   padding: 24px 20px;
   background: color-mix(in srgb, var(--bg) 92%, transparent);
 }
 #v-alarm[hidden] {
   display: none;
+}
+body.ringing {
+  overflow: hidden; /* the page behind stays put */
 }
 .ring {
   max-width: 480px;

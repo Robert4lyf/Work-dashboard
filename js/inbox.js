@@ -5,7 +5,9 @@ function inboxToNode(it) {
   const n = it.node || fix({ id: uid(), text: it.text });
   n.tag = it.tag || n.tag;
   n.project = it.project || n.project;
+  // The item's waiting details are the ones that count ("Got it" in the Inbox clears only those).
   if (it.wait) n.wait = it.wait;
+  else delete n.wait;
   return n;
 }
 // Inbox item to Today (the Today button, or a swipe left), with Undo.

@@ -36,7 +36,14 @@ const dayLabel = ds => {
 };
 
 let S;
+// Ids go into the page inside attributes: characters that could break out of one (only ever
+// in a crafted backup or synced row) are dropped.
+const cleanId = x => {
+  if (x && typeof x.id === 'string') x.id = x.id.replace(/["'<>&\s`]/g, '');
+  return x;
+};
 function fix(n) {
+  cleanId(n);
   n.children = (n.children || []).map(fix);
   n.tag = n.tag || '';
   n.project = n.project || '';
@@ -84,8 +91,10 @@ function norm(s) {
   S.devices = S.devices.filter(okId);
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
-  S.inbox = S.inbox.map(i => (i.node ? Object.assign(i, { node: fix(i.node) }) : i));
+  S.inbox = S.inbox.map(i => (i.node ? Object.assign(cleanId(i), { node: fix(i.node) }) : cleanId(i)));
+  S.projects.forEach(cleanId);
   S.templates.forEach(t => {
+    cleanId(t);
     if (!Array.isArray(t.days)) t.days = [];
     t.monthDay = t.monthDay || 0;
   });
@@ -104,6 +113,10 @@ function norm(s) {
     });
   delete S.promises;
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
+  // Colours go into style attributes: only the palette's, or a plain hex colour.
+  S.tags.forEach(t => {
+    if (!PALETTE.includes(t.color) && !/^#[0-9a-f]{3,8}$/i.test(t.color)) t.color = '#C2C3C7';
+  });
   // Focus totals per day are worked out from the sessions. Older days whose sessions are gone
   // keep their totals in oldDaily/oldPdaily (on first run, whatever the sessions don't explain).
   if (!S.oldDaily) {
@@ -217,5 +230,6 @@ function rollover() {
   });
   stampSince();
   persistLocal();
-  markDirty();
+  // As of midnight: any real edit made today on another device wins over this tidy-up.
+  markDirty(new Date(new Date().setHours(0, 0, 0, 0)).getTime());
 }

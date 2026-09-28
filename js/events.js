@@ -253,11 +253,18 @@ document.addEventListener('input', e => {
 document.addEventListener('click', e => {
   const sum = e.target.closest && e.target.closest('#alarmd > summary');
   if (sum) toggleAlarmsList(sum.parentElement);
-  const b = e.target.closest('button');
+  let b = e.target.closest('button');
   // A tap anywhere else closes a row's Inbox/Delete choice.
   if (xOpen && !(b && (b.dataset.xopen || b.dataset.toinbox || b.dataset.delnow))) {
     xOpen = null;
     renderToday();
+    // That redraw replaced the tapped button if it was on Today: carry on with its new copy (a
+    // two-tap Delete marks the button on the page).
+    if (b && !b.isConnected) {
+      const k = Object.keys(b.dataset)[0],
+        attr = k && 'data-' + k.replace(/[A-Z]/g, c => '-' + c.toLowerCase());
+      b = (attr && $(`#v-today button[${attr}="${CSS.escape(b.dataset[k])}"]`)) || b;
+    }
   }
   if (!b) return;
   const d = b.dataset;
@@ -641,13 +648,23 @@ document.addEventListener('click', e => {
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
     unlisten();
-    sb.auth.signOut().then(() => {
-      session = null;
-      syncStatus = '';
-      versions = null;
-      renderSyncBadge();
-      renderAccount();
-    });
+    // Alarms and alerts stop coming here, and nothing of this account is left for the next.
+    (pushEndpoint ? disablePush() : Promise.resolve())
+      .then(() => sb.auth.signOut())
+      .then(() => {
+        captureToken = '';
+        try {
+          localStorage.removeItem(CAPTURE_KEY);
+          localStorage.removeItem(NOTICE_HASH);
+        } catch (e) {}
+      })
+      .then(() => {
+        session = null;
+        syncStatus = '';
+        versions = null;
+        renderSyncBadge();
+        renderAccount();
+      });
   }
   if (b.id === 'syncNow') sync();
   if (b.id === 'pushkeys') setupPushKeys();
@@ -694,6 +711,7 @@ const KEYS =
   'i or n capture (n on a quest: subquest) · t today · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
   const el = e.target;
   if (el.closest && el.closest('input,textarea,select,[contenteditable]')) {
     if (e.key === 'Escape') el.blur();
@@ -746,6 +764,11 @@ window.addEventListener('offline', () => {
 });
 setInterval(() => {
   if (document.hidden) return;
+  // Midnight with the app open: the new day starts here too, not only on coming back to it.
+  if (S.day !== today()) {
+    rollover();
+    inBackground(renderAll);
+  }
   sync();
   inBackground(renderToday); // keeps the free time on Today current
   renderHeader(); // and the next alarm

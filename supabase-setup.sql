@@ -223,8 +223,9 @@ begin
         end if;
       exception when others then chase := '';
       end;
+      -- The date where you are (the database runs on UTC): change the zone if you're elsewhere.
       item := item || jsonb_build_object('wait', jsonb_build_object(
-        'who', left(trim(coalesce(who, '')), 60), 'note', '', 'since', to_char(now(), 'YYYY-MM-DD'),
+        'who', left(trim(coalesce(who, '')), 60), 'note', '', 'since', to_char(now() at time zone 'Europe/London', 'YYYY-MM-DD'),
         'due', chase));
     end if;
     insert into cockpit_items (user_id, key, kind, data, edited_at) values (u, 'inbox:' || id, 'inbox', item, ms);
