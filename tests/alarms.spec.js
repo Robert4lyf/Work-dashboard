@@ -19,7 +19,7 @@ async function addAlarm(page, time, label) {
     await row.locator('[data-alabel]').fill(label);
     await row.locator('[data-alabel]').dispatchEvent('change');
   }
-  return page.locator('.arow', { has: page.locator(`[data-atime][value="${time}"]`) });
+  return row;
 }
 
 test('an alarm rings at its time until dismissed, and can be snoozed', async ({ app, page }) => {
@@ -140,4 +140,65 @@ test('notes are saved as you type, and travel with sync records', async ({ app, 
   await page.reload();
   await app.go('notes');
   await expect(page.locator('#notesin')).toHaveValue('Door code 4821\nParking: level 2');
+});
+
+test('review fixes: re-arming makes new notices, a half-typed past time never rings, device warnings', async ({
+  app,
+  page,
+}) => {
+  const row = await addAlarm(page, '10:00');
+  await row.locator('[data-aon]').click();
+  const keys = () =>
+    page.evaluate(() =>
+      wantedNotices(Date.now())
+        .filter(n => n.key.startsWith('alarm:'))
+        .map(n => n.key),
+    );
+  const first = await keys();
+  // Off and on again (or a new time): fresh keys, so the server doesn't treat them as already sent.
+  await row.locator('[data-aon]').click();
+  await page.clock.fastForward(1000);
+  await row.locator('[data-aon]').click();
+  const second = await keys();
+  expect(second).toHaveLength(10);
+  expect(second.some(k => first.includes(k))).toBe(false);
+  // Typing a new time: a past value on the way (08:00) doesn't ring or switch it off.
+  await row.locator('[data-atime]').fill('08:00');
+  await row.locator('[data-atime]').dispatchEvent('change');
+  await page.clock.fastForward(2000);
+  await expect(page.locator('#v-alarm')).toBeHidden();
+  await row.locator('[data-atime]').fill('11:30');
+  await row.locator('[data-atime]').dispatchEvent('change');
+  let a = (await app.state()).alarms[0];
+  expect(a).toMatchObject({ time: '11:30', day: '2026-09-23', done: '' });
+  // A device without notifications is flagged.
+  await page.evaluate(() => {
+    S.devices.push({ id: 'old', name: 'Old phone', endpoint: '' });
+    S.alarms[0].device = 'old';
+    save();
+    renderAll();
+  });
+  await expect(page.locator('.arow .awarn')).toContainText('Old phone has no notifications turned on');
+  // Forgetting that device moves its alarms to any device.
+  await app.go('account');
+  await page.click('[data-forgetdev="old"]');
+  await page.click('[data-forgetdev="old"]');
+  a = (await app.state()).alarms[0];
+  expect(a.device).toBe('');
+  expect((await app.state()).devices.some(d => d.id === 'old')).toBe(false);
+});
+
+test('notes changed on another device while typing: offered, not silently lost', async ({ app, page }) => {
+  await app.go('notes');
+  await page.fill('#notesin', 'mine');
+  await page.clock.fastForward(1000);
+  await page.focus('#notesin');
+  await page.evaluate(() => {
+    S.notes = 'from the PC: https://example.com';
+    inBackground(renderAll);
+  });
+  await expect(page.locator('#notesstate')).toContainText('Changed on another device');
+  await expect(page.locator('#notesin')).toHaveValue('mine');
+  await page.click('#notesload');
+  await expect(page.locator('#notesin')).toHaveValue('from the PC: https://example.com');
 });

@@ -314,7 +314,7 @@ function renderAccount() {
     <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
     <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
     <label class="f" for="dayend">Workday ends (for "free" time on Today)</label><input class="fld" type="time" id="dayend" value="${S.dayEnd || '17:30'}" style="max-width:10em">
-    <label class="f" for="devname">This device's name (to choose where an alarm rings)</label><input class="fld" id="devname" data-keep value="${esc(thisDevice.name)}" maxlength="40" style="max-width:20em">`;
+    <label class="f" for="devname">This device's name (to choose where an alarm rings)</label><input class="fld" id="devname" value="${esc(thisDevice.name)}" maxlength="40" style="max-width:20em">${renderDevices()}`;
   h += renderTalkSettings();
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
   S.tags.forEach(

@@ -8,7 +8,8 @@ export async function sendDue({ db, push, now = new Date(), log = console }) {
   // `device` (a push endpoint: send only there, e.g. an alarm for one device) is newer than the
   // table; without the column every notice goes to all devices.
   let { data: due, error } = await pending('user_id,key,at,title,body,device');
-  if (error) ({ data: due, error } = await pending('user_id,key,at,title,body'));
+  if (error && /device/.test(error.message || ''))
+    ({ data: due, error } = await pending('user_id,key,at,title,body'));
   if (error) throw error;
   if (!due.length) return { sent: 0, skipped: 0, removed: 0 };
   const { data: subs, error: e2 } = await db

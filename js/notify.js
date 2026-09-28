@@ -272,7 +272,8 @@ async function syncNotices() {
     let { error: e2 } = await put(want);
     // Before the device column was added (supabase-setup.sql not re-run), alarms for one device
     // go to every device rather than stopping all notices.
-    if (e2 && want.some(n => n.device)) ({ error: e2 } = await put(want.map(({ device, ...n }) => n)));
+    if (e2 && /device/.test(e2.message || '') && want.some(n => n.device))
+      ({ error: e2 } = await put(want.map(({ device, ...n }) => n)));
     if (e2) return;
   }
   if (stale.length) await sb.from('cockpit_notices').delete().in('key', stale);

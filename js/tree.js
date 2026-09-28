@@ -218,6 +218,8 @@ function setHTML(el, html) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i && i.value) typed[id] = i.value;
   });
+  // And whatever field is being edited right now.
+  if (fid && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'checkbox') typed[fid] = a.value;
   el.innerHTML = html;
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));

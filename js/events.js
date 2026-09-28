@@ -654,11 +654,13 @@ document.addEventListener('click', e => {
   if (b.id === 'captest') testCapture();
   if (b.id === 'alerttest') testAlert();
   if (b.id === 'alarmadd') addAlarm();
+  if (b.id === 'notesload') loadNotes();
   if (d.aon) {
     const a = S.alarms.find(x => x.id === d.aon);
     if (a) setAlarmOn(a, !alarmOn(a));
   }
   if (d.adel) deleteAlarm(d.adel);
+  if (d.forgetdev && arm(b, 'Forget?')) forgetDevice(d.forgetdev);
   if (d.adismiss) dismissAlarm(d.adismiss);
   if (d.asnooze) snoozeAlarm(d.asnooze);
   if (d.copy)
@@ -741,6 +743,7 @@ setInterval(() => {
   if (document.hidden) return;
   sync();
   inBackground(renderToday); // keeps the free time on Today current
+  renderHeader(); // and the next alarm
 }, 60000);
 
 load();
@@ -754,10 +757,11 @@ setInterval(timerTick, 500);
 setInterval(alarmTick, 1000);
 // Leaving the notes box saves straight away rather than after the typing pause.
 document.addEventListener('focusout', e => {
-  if (e.target.id !== 'notesin' || S.notes === e.target.value) return;
-  clearTimeout(notesTimer);
-  S.notes = e.target.value;
-  save();
+  if (e.target.id === 'notesin') saveNotes(e.target.value);
+});
+// "Show those notes" mustn't take focus from the box first (that would save over them).
+document.addEventListener('mousedown', e => {
+  if (e.target.id === 'notesload') e.preventDefault();
 });
 if (sb) {
   sb.auth.onAuthStateChange((ev, s) => {

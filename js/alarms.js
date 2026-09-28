@@ -31,6 +31,25 @@ function registerDevice() {
   else S.devices.push(want);
   save();
 }
+// Forget another device (e.g. an old phone, or a browser whose data was cleared). Its alarms
+// ring on any device instead.
+function forgetDevice(id) {
+  if (id === thisDevice.id) return;
+  S.devices = S.devices.filter(d => d.id !== id);
+  S.alarms.forEach(a => a.device === id && (a.device = ''));
+  save();
+  renderAll();
+}
+function renderDevices() {
+  const others = S.devices.filter(d => d.id !== thisDevice.id);
+  if (!others.length) return '';
+  return `<p class="hint" style="margin:6px 0 0">Other devices: ${others
+    .map(
+      d =>
+        `<span class="tchip"><span>${esc(d.name)}</span><button class="tdel" data-forgetdev="${d.id}" aria-label="Forget ${esc(d.name)}">×</button></span>`,
+    )
+    .join(' ')}</p>`;
+}
 function renameDevice(name) {
   name = name.trim().slice(0, 40);
   if (!name || name === thisDevice.name) return;
@@ -42,7 +61,9 @@ function renameDevice(name) {
   renderAll();
 }
 
-const alarmOn = a => a.day === today();
+// On for today; or on yesterday and snoozed past midnight (it still rings, then is done).
+const alarmOn = a =>
+  a.day === today() || (!!a.snooze && a.day === shift(today(), -1) && a.snooze > Date.now() - 12 * 3600e3);
 const hhmmOf = t => {
   const d = new Date(t);
   return pad(d.getHours()) + ':' + pad(d.getMinutes());
@@ -79,7 +100,9 @@ function alarmNotices(now) {
       const at = start + n * 60000;
       if (at <= now - 120000) continue;
       const x = {
-        key: `alarm:${a.id}:${a.day}:${a.snooze || 0}:${n}`,
+        // `armed` changes whenever it's switched on or its time changes, so a new ring never
+        // reuses a key the server has already marked sent.
+        key: `alarm:${a.id}:${a.armed || a.day}:${a.snooze || 0}:${n}`,
         at,
         title: '⏰ ' + (a.label || 'Alarm'),
         body: 'Alarm for ' + a.time + '. Open the app to dismiss.',
@@ -92,9 +115,16 @@ function alarmNotices(now) {
 }
 
 function addAlarm() {
-  const d = new Date(),
-    h = (d.getHours() + 1) % 24;
-  S.alarms.push({ id: uid(), time: pad(h) + ':00', label: '', device: '', day: '', done: '', snooze: 0 });
+  const h = new Date().getHours() + 1;
+  S.alarms.push({
+    id: uid(),
+    time: h > 23 ? '23:59' : pad(h) + ':00', // not 00:00, which could never be switched on today
+    label: '',
+    device: '',
+    day: '',
+    done: '',
+    snooze: 0,
+  });
   panels.alarmd = true;
   save();
   renderAll();
@@ -110,6 +140,7 @@ function setAlarmOn(a, on) {
       return renderAll();
     }
     a.day = today();
+    a.armed = Date.now();
   } else Object.assign(a, { day: '', done: '', snooze: 0 });
   save();
   renderAll();
@@ -118,15 +149,19 @@ function editAlarm(id, field, value) {
   const a = S.alarms.find(x => x.id === id);
   if (!a) return;
   if (field === 'time') {
-    if (!/^\d\d:\d\d$/.test(value)) return;
+    if (!/^\d\d:\d\d$/.test(value) || value === a.time) return;
     a.time = value;
     a.snooze = 0;
-    a.done = '';
-    // Moved to a time already gone: it can't ring today, so it switches off.
-    if (alarmOn(a) && alarmAt(a) <= Date.now()) {
-      a.day = '';
-      toast('That time has already passed today, so the alarm is off', false, 2500);
-    }
+    a.armed = Date.now();
+    // A time already gone today (possibly just part-way through typing a new one) mustn't ring
+    // straight away: it counts as done until it's set to a time still to come. No redraw here,
+    // so the field keeps focus while the time is being typed.
+    a.done = alarmOn(a) && alarmAt(a) <= Date.now() ? today() : '';
+    save();
+    renderHeader();
+    const chip = document.querySelector(`[data-aon="${a.id}"]`);
+    if (chip && alarmOn(a)) chip.textContent = a.done ? 'Passed' : 'On';
+    return;
   } else if (field === 'label') a.label = value.trim().slice(0, 60);
   else if (field === 'device') a.device = value;
   save();
@@ -147,6 +182,20 @@ function dismissAlarm(id) {
   save();
   renderAll();
 }
+// Clear shown notifications for alarms that are dismissed or off (here or on another device):
+// they stay on screen until tapped otherwise.
+let closedFor = '';
+function closeAlarmNotes() {
+  const quiet = S.alarms.filter(a => !alarmOn(a) || a.done === today()).map(a => a.id),
+    k = quiet.join(',');
+  if (k === closedFor || !navigator.serviceWorker) return;
+  closedFor = k;
+  navigator.serviceWorker
+    .getRegistration()
+    .then(r => r && Promise.all(quiet.map(id => r.getNotifications({ tag: 'alarm:' + id }))))
+    .then(lists => lists && lists.flat().forEach(n => n.close()))
+    .catch(() => {});
+}
 function snoozeAlarm(id) {
   const a = S.alarms.find(x => x.id === id);
   if (!a) return;
@@ -165,13 +214,20 @@ function renderAlarms() {
     .forEach(a => {
       const live = alarmOn(a),
         state = !live ? '' : a.done === today() ? 'Done' : a.snooze ? 'Snoozed' : '';
-      // data-keep: a background redraw (sync) keeps what's being typed.
-      h += `<div class="arow${live ? ' on' : ''}"><input class="fld atime" type="time" id="atime-${a.id}" data-keep data-atime="${a.id}" value="${a.time}" aria-label="Alarm time"><input class="fld" id="alabel-${a.id}" data-keep data-alabel="${a.id}" value="${esc(a.label || '')}" maxlength="60" placeholder="Label" aria-label="Alarm label">`;
+      // Ids let a background redraw (sync) keep the field being edited.
+      h += `<div class="arow${live ? ' on' : ''}"><input class="fld atime" type="time" id="atime-${a.id}" data-atime="${a.id}" value="${a.time}" aria-label="Alarm time"><input class="fld" id="alabel-${a.id}" data-alabel="${a.id}" value="${esc(a.label || '')}" maxlength="60" placeholder="Label" aria-label="Alarm label">`;
       if (devs.length)
         h += `<select class="fld" data-adev="${a.id}" aria-label="Device"><option value="">Any device</option>${devs
-          .map(d => `<option value="${d.id}"${a.device === d.id ? ' selected' : ''}>${esc(d.name)}</option>`)
+          .map(
+            d =>
+              `<option value="${d.id}"${a.device === d.id ? ' selected' : ''}>${esc(d.name)}${d.endpoint ? '' : ' (no notifications)'}</option>`,
+          )
           .join('')}</select>`;
-      h += `<button class="chip" data-aon="${a.id}" aria-pressed="${live}">${live ? state || 'On' : 'Off'}</button><button class="x" data-adel="${a.id}" aria-label="Delete alarm ${a.time}">×</button></div>`;
+      h += `<button class="chip" data-aon="${a.id}" aria-pressed="${live}">${live ? state || 'On' : 'Off'}</button><button class="x" data-adel="${a.id}" aria-label="Delete alarm ${a.time}">×</button>`;
+      const dev = a.device && S.devices.find(d => d.id === a.device);
+      if (a.device && alarmEndpoint(a) === null)
+        h += `<p class="hint awarn">${dev ? esc(dev.name) + ' has' : 'That device has'} no notifications turned on, so this only rings while the app is open there.</p>`;
+      h += '</div>';
     });
   return (
     h +
@@ -195,7 +251,9 @@ function syncRinging() {
   if (ids !== ringIds) {
     ringIds = ids;
     renderRinging(r);
+    renderHeader(); // the next-alarm pill moves on
   }
+  closeAlarmNotes();
   return r;
 }
 function alarmTick() {
