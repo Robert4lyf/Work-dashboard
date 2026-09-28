@@ -37,14 +37,14 @@ function stepWaitBadge(n) {
   const who = [...new Set(ws.map(c => c.wait.who).filter(Boolean))];
   return `<span class="tag wait">${ws.length > 1 ? ws.length + ' steps waiting' : 'Step waiting'}${who.length === 1 ? ' on ' + esc(who[0]) : ''}</span>`;
 }
-// On a quest's page: set it waiting, change the details, or stop waiting.
+// On a quest's page: set it waiting, change the details (saved as each is changed), or stop waiting.
 function waitPanel(n) {
   const w = n.wait || {};
-  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}${n.wait ? ' data-held="1"' : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : 'Waiting on someone?'}</summary>
+  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}${n.wait ? ` data-held="1" data-waitid="${n.id}"` : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : 'Waiting on someone?'}</summary>
     <label class="f" for="wwho">Who</label><input class="fld" id="wwho" maxlength="60" value="${esc(w.who || '')}" list="wholist" autocomplete="off">
     <label class="f" for="wnote">For what</label><input class="fld" id="wnote" maxlength="160" value="${esc(w.note || '')}" autocomplete="off">
     <label class="f" for="wdue">Chase on</label><input class="fld" type="date" id="wdue" value="${w.due || ''}">
-    ${whoList()}<div class="acts"><button class="btn blue" data-waitsave="${n.id}">${n.wait ? 'Save' : 'Set waiting'}</button>${n.wait ? `<button class="btn green" data-waitclear="${n.id}">Got it</button>` : ''}</div></details>`;
+    ${whoList()}<div class="acts">${n.wait ? `<button class="btn green" data-waitclear="${n.id}">Got it</button>` : `<button class="btn blue" data-waitsave="${n.id}">Set waiting</button>`}</div></details>`;
 }
 function whoList() {
   const people = [
@@ -55,6 +55,14 @@ function whoList() {
     ),
   ];
   return `<datalist id="wholist">${people.map(w => `<option value="${esc(w)}">`).join('')}</datalist>`;
+}
+// The waiting panel's fields, as they are now.
+function saveWaitPanel(id) {
+  setWaiting(id, {
+    who: $('#wwho').value.trim(),
+    note: $('#wnote').value.trim(),
+    due: $('#wdue').value || '',
+  });
 }
 function setWaiting(id, w) {
   const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };

@@ -1686,3 +1686,58 @@ body.talking #v-zen {
   text-align: right;
   color: var(--muted);
 }
+/* knowledge: flows, categories and articles */
+.flows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 8px 0 4px;
+}
+.flows .btn {
+  display: inline-block;
+  text-decoration: none;
+}
+.kbhint {
+  margin-top: 12px;
+}
+.kbhead {
+  margin-top: 26px;
+}
+#kbres {
+  margin-top: 10px;
+}
+.kcat > summary small,
+.kbrow small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.kbody {
+  padding-left: 14px;
+  border-left: 2px dashed var(--line);
+  margin-top: 4px;
+}
+.kbody .kcat {
+  margin-top: 8px;
+}
+.kbempty {
+  margin: 8px 0 0;
+}
+.kbadd {
+  margin-top: 18px;
+}
+.kbtrail {
+  margin: 8px 0 4px;
+}
+.kbtext {
+  padding: 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.kbtext a {
+  color: var(--ink);
+}
+textarea.fld.kbbody {
+  min-height: 40vh;
+  line-height: 1.5;
+}

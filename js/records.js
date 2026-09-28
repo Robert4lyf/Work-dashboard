@@ -15,6 +15,9 @@ const LISTS = {
   interrupt: ['interrupts', x => x.id],
   alarm: ['alarms', x => x.id],
   device: ['devices', x => x.id],
+  kbcat: ['kbcats', x => x.id],
+  kb: ['kb', x => x.id],
+  flow: ['flows', x => x.id],
 };
 function toRecords(s) {
   const m = new Map();
@@ -70,6 +73,9 @@ function fromRecords(m, day) {
     interrupts: (by.interrupt || []).sort((a, b) => a.t - b.t),
     alarms: by.alarm || [],
     devices: by.device || [],
+    kbcats: by.kbcat || [],
+    kb: by.kb || [],
+    flows: by.flow || [],
     notes: (m.get('meta:notes') || {}).text || '',
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),

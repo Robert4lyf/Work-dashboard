@@ -119,8 +119,10 @@ Invoke-RestMethod -Method Post -Uri $url -Headers @{ apikey = $key } -ContentTyp
 ## Features worth knowing
 
 - **One way in:** new work always starts in the Inbox (typed, spoken, shared or captured from anywhere). Today only holds what you've chosen from it: tap **Today** on an inbox item, or set its project, waiting details or a later date first. Subquests are still added on a quest's page.
-- **Tabs:** Today, Inbox, Waiting, Notes, Review and Settings. Focus opens from the header (tap the focus time, **Single-task**, or **Focus on this** on a quest).
+- **Tabs:** Today, Inbox, Waiting, Notes, Knowledge, Review and Settings. Focus opens from the header (tap the focus time, **Single-task**, or **Focus on this** on a quest).
 - **Notes:** one free-text space, saved as you type and synced to your other devices. Handy for moving a phone number or a link from one device to another.
+- **Knowledge:** reference articles (step-by-step guides, who manages what, links to tools) filed in categories and sub-categories. Categories are listed A to Z and open and close with a tap; search looks through every article. Web links in an article are clickable.
+- **Flows (on the Knowledge tab):** one button per Power Automate Desktop flow. Add a flow with its Run URL (in Power Automate Desktop: the flow's Properties, then Details). A button runs the flow on the computer it's tapped on, which needs Power Automate Desktop installed; it may ask you to confirm each run.
 - **Alarms (on Today):** **+ Alarm**, set the time and an optional label, and switch it **On**. Several can be on at once, and the header shows the next one. When one goes off it rings until you **Dismiss** it (or **Snooze 5 min**):
   - with the app open on that device, it shows a full-screen alarm and keeps sounding (browsers only allow sound once the app has been tapped since it was opened, so tap it once after opening);
   - otherwise it sends a notification that sounds and vibrates again every minute for 10 minutes (it needs notifications set up, above; Android's silent or Do Not Disturb modes can still mute it).

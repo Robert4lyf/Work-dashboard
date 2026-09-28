@@ -200,6 +200,9 @@ const COMPOSE = [
   'wwhat',
   'wfrom',
   'wchase',
+  'kbcatin',
+  'flowname',
+  'flowurl',
 ];
 // (Not the waiting panel's Who and For what: they show the saved details, which a sync may
 // have changed; while being typed in, they're kept like any field being edited.)

@@ -82,6 +82,9 @@ function norm(s) {
       alarms: [],
       devices: [],
       notes: '',
+      kbcats: [],
+      kb: [],
+      flows: [],
     },
     s || {},
   );
@@ -94,6 +97,7 @@ function norm(s) {
     device: okId({ id: a.device }) ? a.device : '',
   }));
   S.devices = S.devices.filter(okId);
+  normKnowledge();
   // Preferences go into the page too (and a bad value would crash Today): only sound ones.
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;
