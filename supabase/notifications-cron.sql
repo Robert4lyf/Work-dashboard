@@ -13,7 +13,8 @@ select cron.schedule(
   $$ select net.http_post(
        url := 'https://YOUR-PROJECT-REF.supabase.co/functions/v1/send-notices',
        headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', 'YOUR-CRON-SECRET'),
-       body := '{}'::jsonb
+       body := '{}'::jsonb,
+       timeout_milliseconds := 30000
      ) $$
 );
 

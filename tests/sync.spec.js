@@ -321,6 +321,8 @@ test('daily repeats created on two devices are not doubled', async ({ browser })
   await a.page.click('[data-rpreset="daily"]');
   await a.page.click('[aria-label="Mark done: Standup"]');
   await a.sync();
+  // All that happened yesterday (the daily reset's changes count as of midnight).
+  srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 86400e3));
   const b = await device(browser, srv);
   // Next morning both devices run the daily reset before hearing from each other.
   for (const d of [a, b])
@@ -370,4 +372,65 @@ test('health check, signed in: sync, live updates and optional parts', async ({ 
   await expect(row('Last sync')).toHaveClass(/ok/);
   await expect(row('Live updates')).toContainText('Connected');
   expect(a.errors).toEqual([]);
+});
+
+test('the daily reset waits for the server: a quest reopened elsewhere yesterday survives', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Report');
+  await a.page.click('[aria-label="Mark done: Report"]');
+  await a.sync();
+  const b = await device(browser, srv);
+  // B adds a step to it later that day, so it's no longer done.
+  await b.page.evaluate(() => {
+    S.quests[0].children.push(fix({ id: 'c1', text: 'Proofread' }));
+    S.quests[0].done = false;
+    save();
+  });
+  await b.sync();
+  srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 86400e3)); // all of that was yesterday
+  // Next morning A opens first, on yesterday's copy (B's change not yet pulled).
+  await a.page.evaluate(() => {
+    S.day = shift(today(), -1);
+    persistLocal();
+  });
+  await a.page.evaluate(() => rolloverLocal());
+  await settle(a, b);
+  for (const d of [a, b]) expect(texts(await d.state())).toEqual(['Report']);
+  expect((await b.state()).quests[0].children.length).toBe(1);
+});
+
+test('a repeat finished and cleared on one device isn’t brought back by another’s look-back', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const yday = await a.page.evaluate(() => shift(today(), -1));
+  // A: yesterday's copy of a daily repeat, done and synced; then the reset clears it.
+  await a.page.evaluate(y => {
+    S.templates.push({ id: 'tpl1', text: 'Standup', days: [0, 1, 2, 3, 4, 5, 6], monthDay: 0, children: [] });
+    S.quests.push(Object.assign(inst(S.templates[0]), { id: 'tpl1-' + y, tpl: 'tpl1', done: true }));
+    save();
+  }, yday);
+  await a.sync();
+  srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 2 * 86400e3)); // (done two days ago)
+  await a.page.evaluate(y => {
+    S.day = y;
+    rollover();
+  }, yday);
+  await a.sync();
+  // All of which happened yesterday.
+  srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 86400e3));
+  const b = await device(browser, srv);
+  // B, last opened two days ago, walks the missed days.
+  await b.page.evaluate(y => {
+    S.quests = S.quests.filter(q => q.tpl !== 'tpl1');
+    S.day = shift(y, -1);
+    rollover();
+  }, yday);
+  await settle(a, b);
+  const ids = (await b.state()).quests.map(q => q.id);
+  expect(ids).not.toContain('tpl1-' + yday);
 });

@@ -36,11 +36,22 @@ function focusTarget() {
   const nx = nextStep();
   return nx ? nx.n.id : null;
 }
+// The id of a session already due when the server is being asked whether it was stopped
+// elsewhere: only that one waits (a session running out meanwhile still rings).
+let holdTimer = '';
+const holdDue = () => (holdTimer = timerDue() ? S.timer.id || 'held' : '');
+// Once the answer is in (or it took too long): finish it, quietly, if it's still there.
+function releaseHeld(id) {
+  if (!id || holdTimer !== id) return;
+  holdTimer = '';
+  if (timerDue()) finishTimer(true);
+}
 function startTimer(q) {
   const top = topOf(q);
+  leftFor = null; // (the last session's "where did you leave it?" is past)
   askNotify();
   beep([440]);
-  S.timer = { end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
+  S.timer = { id: uid(), end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
   save();
   zen = true; // a focus session opens in single-task mode
   renderAll();
@@ -83,9 +94,9 @@ function renderZen() {
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
   } else if (r) {
-    h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
+    h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${+S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
   }
-  el.innerHTML = h + '</div>';
+  setHTML(el, h + '</div>'); // a background redraw keeps what's being typed
 }
 function setZen(on) {
   if (!on && focusLocked()) return;
@@ -123,7 +134,7 @@ function renderFocus() {
     [15, 25, 45].forEach(
       m => (h += `<button class="chip" data-mins="${m}" aria-pressed="${S.mins === m}">${m} min</button>`),
     );
-    h += `</div><button class="btn green" id="start" style="width:100%">Start ${S.mins} min</button>`;
+    h += `</div><button class="btn green" id="start" style="width:100%">Start ${+S.mins} min</button>`;
   }
   setHTML($('#v-focus'), h);
 }
@@ -157,9 +168,10 @@ function renderStats() {
   });
   return h + '</div>';
 }
-function logSession(tag, mins, t, q) {
+function logSession(tag, mins, t, q, tid) {
   const p = projectOf(q);
-  S.sessions.push({ tag, mins, t, q: q || null, p });
+  // tid: the timer's id, so the same session ended on two devices is one record, not two.
+  S.sessions.push({ tag, mins, t, q: q || null, p, ...(tid ? { tid } : {}) });
   addDaily(fmt(new Date(t)), tag, mins);
   addPDaily(fmt(new Date(t)), p, mins);
 }
@@ -168,7 +180,7 @@ function finishTimer(silent) {
   S.timer = null;
   leftFor = t.q;
   S.focusQ = null;
-  logSession(t.tag, t.mins, t.end, t.q);
+  logSession(t.tag, t.mins, t.end, t.q, t.id);
   addXP(20);
   save();
   if (!silent) {
@@ -184,12 +196,13 @@ function finishTimer(silent) {
   renderAll();
 }
 function stopAndSave(done) {
-  const t = S.timer,
-    m = Math.floor((t.mins * 60000 - remaining()) / 60000);
+  const t = S.timer;
+  if (!t) return;
+  const m = Math.floor((t.mins * 60000 - remaining()) / 60000);
   S.timer = null;
   S.focusQ = null;
   if (m >= 1) {
-    logSession(t.tag, m, Date.now(), t.q);
+    logSession(t.tag, m, t.left != null && t.pausedAt ? t.pausedAt : Date.now(), t.q, t.id);
     addXP(Math.max(1, Math.round((20 * m) / t.mins)));
   }
   const r = done && t.q && find(t.q);
@@ -236,13 +249,15 @@ function saveLeft(text) {
    "Just a break" (or ignoring it) logs nothing. */
 function togglePause() {
   const t = S.timer;
-  if (!t) return;
+  if (!t || timerDue()) return; // (over: it's about to finish)
   if (t.left != null) {
     t.end = Date.now() + t.left;
     delete t.left;
+    delete t.pausedAt;
     pauseAsk = null;
   } else {
     t.left = Math.max(0, t.end - Date.now());
+    t.pausedAt = Date.now(); // stopped later, the minutes count for when they were done
     pauseAsk = { t: Date.now(), q: t.q || null };
   }
   save();
@@ -326,7 +341,7 @@ function timerTick() {
     if (document.title !== TITLE) document.title = TITLE;
     return;
   }
-  if (timerDue()) return inBackground(() => finishTimer());
+  if (timerDue() && (t.id || 'held') !== holdTimer) return inBackground(() => finishTimer());
   const txt = mmss(remaining());
   document.title = txt + (t.left != null ? ' paused' : '') + ' · ' + TITLE;
   const c = $('#clock');

@@ -3,17 +3,26 @@
 // If you deploy from a branch instead, bump it by hand whenever you upload changed files.
 const VERSION = 'dashboard-v4';
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.0/dist/umd/supabase.js';
-const APP = ['state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'board', 'talk', 'events']
+const APP = ['theme', 'state', 'tree', 'records', 'header', 'today', 'inbox', 'focus', 'waiting', 'review', 'health', 'projects', 'history', 'sync', 'capture', 'notify', 'board', 'talk', 'notes', 'alarms', 'events']
   .map(n => `./js/${n}.js`);
 const SHELL = ['./', './index.html', './config.js', './styles.css', './manifest.webmanifest', ...APP,
-  './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png', SUPABASE_JS];
+  './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png'];
 
 try { importScripts('./config.js'); } catch (e) {}
 let apiOrigin = '';
 try { apiOrigin = new URL(self.COCKPIT_CONFIG.supabaseUrl).origin; } catch (e) {}
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION)
+    // Past the browser's own cache, so a new version never stores the old files.
+    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))
+      // The sync library comes from a CDN that may be blocked or slow: the app must still install
+      // (and work offline) without it; it's cached when it does load.
+      .then(() => Promise.race([
+        c.add(new Request(SUPABASE_JS, { cache: 'reload' })),
+        new Promise(r => setTimeout(r, 10000)), // (a hanging CDN mustn't hold up installing)
+      ]).catch(() => {})))
+    .then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
@@ -33,7 +42,7 @@ self.addEventListener('fetch', e => {
   // The app itself (page, scripts, styles, config): network first so updates arrive
   // together, cache when offline
   if (req.mode === 'navigate' || (url.origin === self.location.origin && /\.(js|css)$/.test(url.pathname))) {
-    e.respondWith(fetch(req).then(res => {
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => { // checked with the server
       if (res.ok) put(req.mode === 'navigate' ? './index.html' : req, res.clone());
       return res;
     }).catch(() => caches.match(req.mode === 'navigate' ? './index.html' : req)));
@@ -41,7 +50,7 @@ self.addEventListener('fetch', e => {
   }
   // Everything else (icons, fonts, library): cache first
   e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(res => {
-    if (res.ok || res.type === 'opaque') put(req, res.clone());
+    if (res.ok) put(req, res.clone()); // (never an error page, or an opaque response of unknown worth)
     return res;
   })));
 });
@@ -55,13 +64,17 @@ self.addEventListener('push', e => {
   } catch (x) {
     d = { body: e.data ? e.data.text() : '' };
   }
+  // Alarms repeat every minute until dismissed in the app: each repeat replaces the last one
+  // (same tag) but sounds again (renotify), vibrates hard and stays until tapped.
+  const alarm = /^alarm:/.test(d.tag || '');
   e.waitUntil(
     self.registration.showNotification(d.title || 'Dashboard', {
       body: d.body || '',
-      tag: d.tag,
+      tag: alarm ? d.tag.split(':').slice(0, 2).join(':') : d.tag,
       icon: 'icons/icon-192.png',
       // Android's status bar only shows a white shape; without this it shows a bell.
       badge: 'icons/badge-96.png',
+      ...(alarm ? { renotify: true, requireInteraction: true, vibrate: [600, 300, 600, 300, 600] } : {}),
     }),
   );
 });
@@ -69,7 +82,10 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({type: 'window', includeUncontrolled: true}).then(list => {
-    for (const c of list) if ('focus' in c) return c.focus();
+    // The app's own tab (not another site on the same host), else a new one.
+    const scope = new URL(self.registration.scope).pathname;
+    for (const c of list)
+      if ('focus' in c && new URL(c.url).pathname.startsWith(scope)) return c.focus();
     return self.clients.openWindow('./');
-  }));
+  }).catch(() => self.clients.openWindow('./')));
 });

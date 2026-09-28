@@ -20,13 +20,13 @@ function renderHeader() {
   } else {
     const nx = nextStep();
     if (nx)
-      h = `<button class="check" data-toggle="${nx.n.id}" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button><button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
+      h = `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button><button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
     else
       h = `<button class="go" data-v="today"><small>Next up</small><b>${S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
   }
   // Talk mode, if turned on for this device (Settings).
   if (talkPref && talkable() && !S.timer) h += '<button class="btn sm zenbtn" id="talkbtn">Talk</button>';
-  $('#hnow').innerHTML = h;
+  setIfChanged($('#hnow'), h); // unchanged: left alone, keeping keyboard focus
   const qs = S.quests,
     done = qs.filter(isDone).length,
     p = qs.length ? Math.round((done / qs.length) * 100) : 0;
@@ -35,7 +35,10 @@ function renderHeader() {
   // One quiet line of stats; anything needing attention is on Today and in tab badges.
   const focus = Object.values(S.daily[today()] || {}).reduce((a, b) => a + b, 0);
   let st = `<button data-v="today">${done}/${qs.length} done</button><button data-v="focus">${hm(focus)} focus</button>`;
-  $('#hstats').innerHTML = st;
+  const na = nextAlarm();
+  if (na)
+    st += `<button data-v="today" class="halarm">Alarm ${na.snooze ? hhmmOf(na.snooze) : na.time}</button>`;
+  setIfChanged($('#hstats'), st);
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;
   b.textContent = S.inbox.length;
@@ -45,4 +48,17 @@ function renderHeader() {
   w.textContent = ch || '';
   $('#reviewDot').hidden = !reviewDue();
   renderSyncBadge();
+}
+const shown = new WeakMap();
+function setIfChanged(el, html) {
+  if (shown.get(el) === html) return;
+  shown.set(el, html);
+  // The keyboard stays on the same control (say the tick, after ticking) if it's still there.
+  const a = document.activeElement,
+    sel = a && el.contains(a) ? focusSel(a) : '';
+  el.innerHTML = html;
+  const f = sel && el.querySelector(sel);
+  if (f) f.focus({ preventScroll: true });
+  // (after the user's own action only: a sync's redraw mustn't move the keyboard to another tick)
+  else if (sel && !background) (el.querySelector('button') || el).focus({ preventScroll: true });
 }

@@ -6,15 +6,23 @@
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by Supabase automatically.
 // Deploy with JWT verification turned off; the CRON_SECRET header protects it instead.
 import webpush from 'npm:web-push@3.6.7';
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.117.0';
 import { sendDue } from './core.mjs';
 
 const env = (k: string) => Deno.env.get(k) ?? '';
 webpush.setVapidDetails(env('VAPID_SUBJECT'), env('VAPID_PUBLIC_KEY'), env('VAPID_PRIVATE_KEY'));
 const db = createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'));
 
+// Compared in constant time, so response timing gives nothing away about the secret.
+const same = (a: string, b: string) => {
+  const x = new TextEncoder().encode(a),
+    y = new TextEncoder().encode(b);
+  let d = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return d === 0;
+};
 Deno.serve(async req => {
-  if (!env('CRON_SECRET') || req.headers.get('x-cron-secret') !== env('CRON_SECRET'))
+  if (!env('CRON_SECRET') || !same(req.headers.get('x-cron-secret') ?? '', env('CRON_SECRET')))
     return new Response('forbidden', { status: 403 });
   try {
     return Response.json(await sendDue({ db, push: webpush }));

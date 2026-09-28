@@ -18,7 +18,7 @@ create policy "insert own state" on public.cockpit_state for insert with check (
 create policy "update own state" on public.cockpit_state for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Safety net: every time sync replaces your data, the previous version is kept here.
--- The app lists these under Sync > Previous versions. The newest 200 per user are kept.
+-- The app lists these under Settings > Previous versions. The newest 200 per user are kept.
 create table if not exists public.cockpit_history (
   id         bigserial primary key,
   user_id    uuid not null references auth.users(id) on delete cascade,
@@ -31,6 +31,8 @@ create index if not exists cockpit_history_user on public.cockpit_history (user_
 alter table public.cockpit_history enable row level security;
 drop policy if exists "read own history" on public.cockpit_history;
 create policy "read own history" on public.cockpit_history for select using (auth.uid() = user_id);
+drop policy if exists "delete own history" on public.cockpit_history;
+create policy "delete own history" on public.cockpit_history for delete using (auth.uid() = user_id);
 
 create or replace function public.cockpit_keep_history() returns trigger
 language plpgsql security definer set search_path = public as $$
@@ -76,6 +78,9 @@ create policy "update own items" on public.cockpit_items for update using (auth.
 create or replace function public.cockpit_items_stamp() returns trigger
 language plpgsql set search_path = public as $$
 begin
+  -- The newer edit wins (as in the app): an older one arriving later is dropped, and the
+  -- device that sent it takes the newer row on its next pull.
+  if tg_op = 'UPDATE' and new.edited_at < old.edited_at then return null; end if;
   new.seq := nextval('public.cockpit_items_seq');
   return new;
 end $$;
@@ -125,6 +130,14 @@ begin
   select t.user_id into u from cockpit_capture_tokens t where t.token = cockpit_capture.token;
   if u is null then raise exception 'unknown capture token'; end if;
   if body = '' then return false; end if;
+  -- As for alerts: a runaway script or a leaked link can't flood the Inbox (or every device
+  -- that syncs it) with huge or endless items.
+  body := left(body, 20000);
+  perform pg_advisory_xact_lock(hashtext('cockpit_capture:' || u::text));
+  if (select count(*) from cockpit_items i where i.user_id = u and i.key like 'inbox:cap%'
+      and i.edited_at > (extract(epoch from now() - interval '1 hour') * 1000)::bigint) >= 60 then
+    raise exception 'too many captures: at most 60 an hour';
+  end if;
   item := jsonb_build_object('id', id, 'text', left(regexp_replace(body, '\s+', ' ', 'g'), 200));
   -- Long text keeps its full version in the notes.
   if length(body) > 200 then
@@ -166,6 +179,7 @@ create table if not exists public.cockpit_notices (
   primary key (user_id, key)
 );
 alter table public.cockpit_notices add column if not exists error text; -- why a notice wasn't delivered
+alter table public.cockpit_notices add column if not exists device text; -- send only to this push endpoint (alarms)
 create index if not exists cockpit_notices_due on public.cockpit_notices (at) where sent_at is null;
 alter table public.cockpit_notices enable row level security;
 drop policy if exists "own notices" on public.cockpit_notices;
@@ -222,8 +236,9 @@ begin
         end if;
       exception when others then chase := '';
       end;
+      -- The date where you are (the database runs on UTC): change the zone if you're elsewhere.
       item := item || jsonb_build_object('wait', jsonb_build_object(
-        'who', left(trim(coalesce(who, '')), 60), 'note', '', 'since', to_char(now(), 'YYYY-MM-DD'),
+        'who', left(trim(coalesce(who, '')), 60), 'note', '', 'since', to_char(now() at time zone 'Europe/London', 'YYYY-MM-DD'),
         'due', chase));
     end if;
     insert into cockpit_items (user_id, key, kind, data, edited_at) values (u, 'inbox:' || id, 'inbox', item, ms);
@@ -256,7 +271,9 @@ begin
     get diagnostics n = row_count;
     out := out || jsonb_build_object('net', true);
     if n > 0 then
-      out := out || jsonb_build_object('status', r.status_code, 'at', r.created, 'error', left(r.error_msg, 200));
+      -- (only whether it timed out or failed: the log is project-wide, not this job's alone)
+      out := out || jsonb_build_object('status', r.status_code, 'at', r.created, 'error',
+        case when r.error_msg is null then null when r.error_msg ilike '%timeout%' then 'Timed out' else 'Failed' end);
     end if;
   exception when others then null; -- pg_net isn't enabled
   end;

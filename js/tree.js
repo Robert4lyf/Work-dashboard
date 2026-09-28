@@ -39,7 +39,7 @@ function snapshot() {
   const m = new Map();
   (function w(ns, trail) {
     ns.forEach(n => {
-      m.set(n.id, { done: isDone(n), top: !trail.length, text: n.text, trail });
+      m.set(n.id, { done: isDone(n), top: !trail.length, text: n.text, trail, kids: n.children.length });
       w(n.children, [...trail, n.text]);
     });
   })(S.quests, []);
@@ -61,6 +61,8 @@ function settle(before) {
     if (!before.has(id)) return;
     const was = before.get(id).done;
     const pts = v.top ? 30 : 10;
+    // (done because its open steps were removed, not finished: no points, no log)
+    if (v.done && !was && v.kids < before.get(id).kids) return;
     if (v.done && !was) {
       gain += pts;
       S.log.push({ id, d: today(), text: v.text, trail: v.trail, p: projectOf(id) });
@@ -74,7 +76,8 @@ function settle(before) {
     addXP(gain);
     if (gain > 0) beep([659, 988]);
   }
-  if (S.quests.length && S.quests.every(isDone) && S.bonusDay !== today()) {
+  // (only on finishing the last one: deleting the rest isn't clearing the stage)
+  if (gain > 0 && S.quests.length && S.quests.every(isDone) && S.bonusDay !== today()) {
     S.bonusDay = today();
     addXP(50);
     toast('Stage clear!');
@@ -134,7 +137,7 @@ function repLabel(t) {
 }
 // Change how a quest repeats. The repeat copies the quest as it is now, subquests included.
 function setRepeat(n, fn) {
-  let t = tplFor(n) || S.templates.find(x => x.text === n.text);
+  let t = tplFor(n) || S.templates.find(x => x.auto && x.text === n.text); // (never a saved one)
   if (!t) {
     t = { id: uid(), days: [], monthDay: 0, auto: true };
     S.templates.push(t);
@@ -166,6 +169,10 @@ function toast(msg, undo, ms) {
   tt = setTimeout(
     () => {
       t.classList.remove('show', 'act');
+      // (no invisible Undo button left for the keyboard to land on; a keyboard on it moves on)
+      if (t.contains(document.activeElement))
+        ($('#v-' + view) || document.body).focus({ preventScroll: true });
+      t.innerHTML = '';
       if (undo) undoSnap = null;
     },
     ms || (undo ? 5000 : 1600),
@@ -192,9 +199,10 @@ const COMPOSE = [
   'whyin',
   'wwhat',
   'wfrom',
-  'wwho',
-  'wnote',
+  'wchase',
 ];
+// (Not the waiting panel's Who and For what: they show the saved details, which a sync may
+// have changed; while being typed in, they're kept like any field being edited.)
 function inBackground(fn) {
   const was = background;
   background = true;
@@ -204,13 +212,31 @@ function inBackground(fn) {
     background = was;
   }
 }
+// Where the keyboard was, as a selector: by id, else by the element's data attributes.
+function focusSel(a) {
+  if (!a || a === document.body) return '';
+  if (a.id) return '#' + CSS.escape(a.id);
+  const ds = [...a.attributes].filter(x => x.name.startsWith('data-'));
+  return ds.length ? a.tagName + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
+}
 function setHTML(el, html) {
   if (!background) {
+    // A redraw after a tap or key press: the keyboard stays on the same control, or (if it went)
+    // in this view, rather than falling back to the top of the page.
+    const a = document.activeElement,
+      inside = a && el.contains(a),
+      sel = inside ? focusSel(a) : '';
     el.innerHTML = html;
+    if (inside) {
+      const f = (sel && el.querySelector(sel)) || el;
+      if (f === el) el.tabIndex = -1;
+      f.focus({ preventScroll: true });
+    }
     return;
   }
   const a = document.activeElement,
     fid = a && a.id && el.contains(a) ? a.id : '',
+    fsel = a && el.contains(a) ? focusSel(a) : '', // (buttons have no id: by their data attributes)
     sel = fid && typeof a.selectionStart === 'number' ? [a.selectionStart, a.selectionEnd] : null,
     typed = {};
   // Fixed compose boxes, plus any input marked data-keep (e.g. one per project).
@@ -218,14 +244,21 @@ function setHTML(el, html) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i && i.value) typed[id] = i.value;
   });
+  // And whatever field is being edited right now.
+  // (only once typed into, so a committed field shows edits synced from elsewhere).
+  if (fid && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) typed[fid] = a.value;
+  // And any typed into but not yet saved (the waiting panel's, saved together by its button).
+  el.querySelectorAll('[data-typed][id]').forEach(i => (typed[i.id] = i.value));
+  const opt = $('#sopt') && $('#sopt').checked; // "Add as optional", ticked but not yet added
   el.innerHTML = html;
+  if (opt && $('#sopt')) $('#sopt').checked = true;
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i) i.value = typed[id];
   }
-  const f = fid && el.querySelector('#' + CSS.escape(fid));
+  const f = fsel && el.querySelector(fsel);
   if (f) {
-    f.focus();
+    f.focus({ preventScroll: true });
     if (sel)
       try {
         f.setSelectionRange(sel[0], sel[1]);
@@ -236,6 +269,7 @@ function dropUndo() {
   if (!undoSnap) return;
   undoSnap = null;
   $('#toast').classList.remove('show', 'act');
+  $('#toast').innerHTML = '';
 }
 function undo() {
   const snap = undoSnap;
@@ -276,3 +310,5 @@ function arm(b, label) {
   }, 3000);
   return false;
 }
+// "1 quest", "2 quests".
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;

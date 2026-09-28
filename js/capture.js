@@ -30,7 +30,16 @@ async function testCapture() {
       headers: { apikey: CFG.supabaseAnonKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ token: captureToken, text: 'Test capture from Settings' }),
     });
-    if (!r.ok) throw new Error(r.status);
+    if (!r.ok) {
+      const msg = ((await r.json().catch(() => ({}))).message || '').toLowerCase();
+      if (msg.includes('unknown capture token'))
+        return toast(
+          'This link was replaced on another device. Tap New link here to get a current one',
+          false,
+          4000,
+        );
+      throw new Error(r.status);
+    }
     toast('Sent. It will appear in your inbox');
     sync();
   } catch (e) {
@@ -89,7 +98,7 @@ function renderCapture() {
   if (!captureToken) {
     return (
       h +
-      '<p class="hint" style="margin:0 0 8px">For Android or other tools, create a private capture link.</p><button class="btn" id="capnew">Create capture link</button>'
+      '<p class="hint" style="margin:0 0 8px">For Android or other tools, create a private capture link. If you made one on another device, this replaces it (shortcuts using the old one stop working).</p><button class="btn" id="capnew">Create capture link</button>'
     );
   }
   const row = (label, value, id) =>
@@ -117,8 +126,8 @@ function receiveLaunch() {
   if (!q.has('capture') && !q.has('talk') && !q.has('focus')) return;
   history.replaceState(null, '', location.pathname);
   if (q.has('focus')) return;
-  if (q.has('talk')) return talkable() ? openTalk(false) : undefined;
-  go('inbox');
+  if (q.has('talk') && talkable()) return openTalk(false);
+  go('inbox'); // (?talk where talking isn't possible: the capture box instead)
   const i = $('#iin');
   if (i) i.focus();
 }

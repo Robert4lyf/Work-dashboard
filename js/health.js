@@ -15,8 +15,15 @@ async function runHealth() {
       return { error: e };
     }
   };
-  if (!CFG.supabaseUrl || !CFG.supabaseAnonKey || !sb)
+  if (!CFG.supabaseUrl || !CFG.supabaseAnonKey)
     add('Supabase settings', false, 'Not set up', 'Fill in config.js (README, step 2).');
+  else if (!sb)
+    add(
+      'Supabase settings',
+      false,
+      'Library not loaded',
+      'Offline, or the CDN is blocked. Reload once online.',
+    );
   else add('Supabase settings', true, 'Found');
   if (!session) add('Signed in', sb ? false : null, 'Not signed in', sb ? 'Sign in above.' : '');
   else {
@@ -46,8 +53,16 @@ async function runHealth() {
       add(
         'Notifications on this device',
         pushEndpoint && Notification.permission === 'granted' ? true : S.pushKey ? false : null,
-        pushEndpoint ? 'On' : S.pushKey ? 'Off' : 'Not set up',
-        'Turn them on under Notifications below (allow them when the browser asks).',
+        pushEndpoint
+          ? Notification.permission === 'granted'
+            ? 'On'
+            : 'On, but blocked by the browser'
+          : S.pushKey
+            ? 'Off'
+            : 'Not set up',
+        pushEndpoint && Notification.permission !== 'granted'
+          ? 'Allow notifications for this site in the browser (or Android) settings.'
+          : 'Turn them on under Notifications below (allow them when the browser asks).',
       );
     if (S.pushKey) {
       // The every-minute job that runs send-notices, and what its last call got back.
@@ -81,7 +96,15 @@ async function runHealth() {
           }[code] ||
             'Open Edge Functions > send-notices > Logs for the error (often a missing secret, or VAPID_SUBJECT not starting with mailto:).',
         );
-      else if (!code && j.error) add('Notification job', false, "Couldn't reach the function", j.error);
+      else if (!code && j.error)
+        add(
+          'Notification job',
+          false,
+          "Couldn't reach the function",
+          j.error === 'Timed out'
+            ? 'The last call timed out. Re-run supabase/notifications-cron.sql (it now allows 30 s) and check the function is deployed.'
+            : 'The last call failed. Check the function is deployed and the URL in the cron job is right.',
+        );
       else
         add(
           'Notification job',

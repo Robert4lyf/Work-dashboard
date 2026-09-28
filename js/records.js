@@ -11,13 +11,18 @@ const LISTS = {
   project: ['projects', x => x.id],
   tag: ['tags', x => x.name],
   log: ['log', x => x.id + '|' + x.d],
-  session: ['sessions', x => x.t + '|' + (x.q || '')],
+  session: ['sessions', x => (x.tid || x.t) + '|' + (x.q || '')],
   interrupt: ['interrupts', x => x.id],
+  alarm: ['alarms', x => x.id],
+  device: ['devices', x => x.id],
 };
 function toRecords(s) {
   const m = new Map();
   for (const [kind, [prop, key]] of Object.entries(LISTS))
-    s[prop].forEach(x => m.set(kind + ':' + key(x), x));
+    (s[prop] || []).forEach(x => m.set(kind + ':' + key(x), x));
+  // Only once there are notes: a device that never had any mustn't send an empty copy that
+  // could win over real notes from another device. (Clearing them deletes the record.)
+  if (s.notes) m.set('meta:notes', { text: s.notes });
   m.set('meta:order', {
     quests: s.quests.map(x => x.id),
     inbox: s.inbox.map(x => x.id),
@@ -33,6 +38,9 @@ function toRecords(s) {
     reviewed: s.reviewed || '',
     dayEnd: s.dayEnd || '',
   });
+  // Its own record too, so a prefs change on a device that hadn't yet heard of new keys can't
+  // bring the old ones back. (Still in prefs for older versions.)
+  if (s.pushKey) m.set('meta:pushkey', { key: s.pushKey });
   m.set('meta:timer', { timer: s.timer });
   m.set('meta:score', { xp: s.xp, bonusDay: s.bonusDay });
   m.set('meta:legacy', { daily: s.oldDaily, pdaily: s.oldPdaily });
@@ -60,11 +68,15 @@ function fromRecords(m, day) {
     log: (by.log || []).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)),
     sessions: (by.session || []).sort((a, b) => a.t - b.t),
     interrupts: (by.interrupt || []).sort((a, b) => a.t - b.t),
+    alarms: by.alarm || [],
+    devices: by.device || [],
+    notes: (m.get('meta:notes') || {}).text || '',
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),
     timer: (m.get('meta:timer') || {}).timer || null,
     day,
   };
+  if (m.get('meta:pushkey')) s.pushKey = m.get('meta:pushkey').key || '';
   const legacy = m.get('meta:legacy') || {};
   s.oldDaily = legacy.daily || {};
   s.oldPdaily = legacy.pdaily || {};
@@ -97,21 +109,33 @@ try {
   sync2 = Object.assign(sync2, JSON.parse(localStorage.getItem(SYNC_KEY)) || {});
 } catch (e) {}
 function saveSyncState() {
+  // Not while the local copy couldn't be saved: after a reload the two must still agree, or
+  // the old copy would look like a newer edit and go over the server's.
+  if (!localSaved) return;
   try {
     localStorage.setItem(SYNC_KEY, JSON.stringify(sync2));
   } catch (e) {}
 }
-function markDirty() {
-  const now = Date.now(),
-    recs = toRecords(S),
-    seen = new Set();
+// Record kinds this version knows. Rows of other kinds (from a newer version on another
+// device) are left alone, never deleted for being missing here.
+const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy'];
+const knownKey = k =>
+  k.slice(0, k.indexOf(':')) in LISTS || (k.startsWith('meta:') && META_KEYS.includes(k.slice(5)));
+// `now`: when the change counts as made (the daily reset back-dates its changes to midnight).
+function markDirty(now = Date.now()) {
+  const recs = toRecords(S),
+    seen = new Set(),
+    // A record already waiting to be sent keeps its time if later: back-dating the daily reset
+    // mustn't make an edit made just before it (in the minute after midnight) count as older.
+    at = k => Math.max(now, (sync2.dirty[k] && sync2.dirty[k].at) || 0);
   recs.forEach((v, k) => {
     seen.add(k);
     const h = hashOf(v);
     if (sync2.synced[k] === h) delete sync2.dirty[k];
-    else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: now };
+    else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: at(k) };
   });
   for (const k in sync2.synced)
-    if (!seen.has(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null)) sync2.dirty[k] = { h: null, at: now };
+    if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null))
+      sync2.dirty[k] = { h: null, at: at(k) };
   saveSyncState();
 }

@@ -5,7 +5,9 @@ function inboxToNode(it) {
   const n = it.node || fix({ id: uid(), text: it.text });
   n.tag = it.tag || n.tag;
   n.project = it.project || n.project;
+  // The item's waiting details are the ones that count ("Got it" in the Inbox clears only those).
   if (it.wait) n.wait = it.wait;
+  else delete n.wait;
   return n;
 }
 // Inbox item to Today (the Today button, or a swipe left), with Undo.
@@ -39,6 +41,7 @@ $('#v-inbox').addEventListener('pointerdown', e => {
   swipeClick = false;
   // The title is a button (tap to expand) but still swipes.
   if (!el || e.target.closest('button:not(.ititle), input, select, textarea, form, a')) return;
+  if (e.pointerType === 'mouse' && matchMedia('(min-width: 700px)').matches) return; // (a desktop drag isn't a swipe)
   swipe = { el, id: el.dataset.id, x: e.clientX, y: e.clientY, dx: 0, on: false, pid: e.pointerId };
 });
 $('#v-inbox').addEventListener('pointermove', e => {
@@ -47,7 +50,7 @@ $('#v-inbox').addEventListener('pointermove', e => {
   const dx = e.clientX - s.x,
     dy = e.clientY - s.y;
   if (!s.on) {
-    if (Math.abs(dy) > 12) return (swipe = null); // scrolling, not swiping
+    if (Math.abs(dy) > 12 || Math.abs(dy) > Math.abs(dx)) return (swipe = null); // scrolling, not swiping
     if (Math.abs(dx) < 12) return;
     s.on = true;
     s.el.classList.add('swiping');
@@ -72,7 +75,8 @@ function endSwipe() {
     renderInbox();
   }
 }
-$('#v-inbox').addEventListener('pointerup', endSwipe);
+// On the document: a finger lifted outside the list (over the header, say) still ends the swipe.
+document.addEventListener('pointerup', endSwipe);
 $('#v-inbox').addEventListener(
   'click',
   e => {
@@ -81,7 +85,7 @@ $('#v-inbox').addEventListener(
   },
   true,
 );
-$('#v-inbox').addEventListener('pointercancel', endSwipe);
+document.addEventListener('pointercancel', endSwipe);
 function renderInbox() {
   let h = '<h2>Inbox</h2>';
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
@@ -96,7 +100,7 @@ function renderInbox() {
       h +=
         tagPicker('i', it.id, it.tag) +
         projectPicker('i', it.id, it.project) +
-        `<label class="f">Waiting on (optional)</label><input class="fld" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
+        `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
         laterPicker('i', it.id);
       if (kids.length) {
         h += '<ul class="subs">';
@@ -106,7 +110,7 @@ function renderInbox() {
         );
         h += '</ul>';
       }
-      h += `<form class="addrow" data-subfor="${it.id}"><input maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
+      h += `<form class="addrow" data-subfor="${it.id}"><input id="is-${it.id}" data-keep maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
     }
     const chip = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
     h +=
@@ -122,12 +126,17 @@ const splitItems = v =>
   v
     .split(/\bnext item\b[,.;:]?|\n/i)
     .map(x => x.trim().replace(/^[,.;:]\s*/, ''))
-    .filter(Boolean)
-    .map(x => x.slice(0, 200));
+    .filter(Boolean);
 function capture(v) {
   const items = splitItems(v);
   if (!items.length) return 0;
-  items.reverse().forEach(t => S.inbox.unshift({ id: uid(), text: t[0].toUpperCase() + t.slice(1) }));
+  items.reverse().forEach(full => {
+    // Capitalised, unless it starts with a web address (or has nothing to capitalise).
+    const t = /^[a-z][\w+.-]*:\/\//i.test(full) ? full : full[0].toUpperCase() + full.slice(1),
+      it = { id: uid(), text: t.slice(0, 200) };
+    if (t.length > 200) it.node = fix({ id: uid(), text: it.text, notes: t }); // the rest in the notes
+    S.inbox.unshift(it);
+  });
   save();
   renderAll();
   beep([880]);
@@ -153,7 +162,7 @@ function receiveShare() {
   S.inbox.unshift(item);
   save();
   renderAll();
-  go('inbox');
+  if (!focusLocked()) go('inbox'); // (mid-session, single-task mode stays: the toast says)
   toast('Added to inbox');
 }
 

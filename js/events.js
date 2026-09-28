@@ -10,6 +10,8 @@ function renderAll() {
   renderProjectsView();
   renderLog();
   renderAccount();
+  renderNotes();
+  syncRinging();
   renderZen();
   if (talk) renderTalk();
 }
@@ -33,7 +35,7 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  ['today', 'inbox', 'waiting', 'review', 'projects', 'focus', 'log', 'account'].forEach(
+  ['today', 'inbox', 'waiting', 'notes', 'review', 'projects', 'focus', 'log', 'account'].forEach(
     k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)),
   );
   if (v === 'review') renderReview();
@@ -65,10 +67,13 @@ document.addEventListener('submit', e => {
   if (f.id === 'sform') {
     const v = $('#sin').value.trim();
     if (!v) return;
+    const r = find(f.dataset.parent);
+    if (!r) return;
     const opt = $('#sopt').checked,
       b = snapshot(),
-      p = find(f.dataset.parent).n;
+      p = r.n;
     p.children.push(fix({ id: uid(), text: v, opt }));
+    p.done = false; // (it was finished before it had steps: with one to do, it isn't now)
     settle(b);
     $('#sin').focus();
     if (opt) $('#sopt').checked = true;
@@ -122,6 +127,7 @@ document.addEventListener('submit', e => {
     if (!v || !it) return;
     it.node = it.node || inboxToNode(it);
     it.node.children.push(fix({ id: uid(), text: v }));
+    it.node.done = false;
     save();
     renderAll();
     const nf = document.querySelector(`[data-subfor="${id}"] input`);
@@ -131,6 +137,14 @@ document.addEventListener('submit', e => {
 
 document.addEventListener('change', e => {
   const el = e.target;
+  // Committed. (Not a time: those change a part at a time and are still being typed.)
+  // Nor the waiting panel's fields: they're only saved with its Save button.
+  if (el.dataset && !el.dataset.atime && !el.closest('#waitd')) delete el.dataset.typed;
+  // Alarms: time, label and device; this device's name (Settings).
+  if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
+  if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
+  if (el.dataset.adev !== undefined) return editAlarm(el.dataset.adev, 'device', el.value);
+  if (el.id === 'devname') return renameDevice(el.value);
   if (el.id === 'imp') {
     if (el.files && el.files[0]) importFile(el.files[0]);
     el.value = '';
@@ -159,7 +173,11 @@ document.addEventListener('change', e => {
   }
   if (el.dataset.projpick) {
     const r = el.value && find(el.value);
-    if (r) r.n.project = el.dataset.projpick;
+    if (r) {
+      r.n.project = el.dataset.projpick;
+      const t = tplFor(r.n); // tomorrow's copy of a repeat too
+      if (t) t.project = el.dataset.projpick;
+    }
     save();
     renderAll();
     return;
@@ -210,7 +228,7 @@ document.addEventListener('change', e => {
       if (t) t.text = v;
       save();
       renderAll();
-    }
+    } else el.value = r.n.text; // a blank name: keep the old one, and show it
     return;
   }
   if (fld === 'month') {
@@ -231,6 +249,8 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
+  if (el.id === 'notesin') return typedNotes(el.value);
   if (el.dataset.field !== 'notes') return;
   const r = find(el.dataset.id);
   if (r) {
@@ -240,11 +260,15 @@ document.addEventListener('input', e => {
 });
 
 document.addEventListener('click', e => {
-  const b = e.target.closest('button');
+  const sum = e.target.closest && e.target.closest('#alarmd > summary');
+  if (sum) toggleAlarmsList(sum.parentElement);
+  let b = e.target.closest('button');
   // A tap anywhere else closes a row's Inbox/Delete choice.
   if (xOpen && !(b && (b.dataset.xopen || b.dataset.toinbox || b.dataset.delnow))) {
     xOpen = null;
-    renderToday();
+    // Redrawn once this tap has finished (a submit or a label's tick lands on the live page),
+    // and not over a "Delete?" waiting for its second tap.
+    setTimeout(() => !$('#v-today .armed') && inBackground(renderToday), 0);
   }
   if (!b) return;
   const d = b.dataset;
@@ -256,6 +280,14 @@ document.addEventListener('click', e => {
     }
   }
   if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (d.goupd) {
+    // An Upcoming item (from the Waiting tab): Today's list, with Upcoming open.
+    path = [];
+    go('today');
+    renderToday();
+    const u = $('#upd');
+    if (u) u.open = panels.upd = true;
+  }
   if (d.goto) {
     go(d.goto);
     const i = d.goto === 'inbox' && $('#iin');
@@ -263,7 +295,9 @@ document.addEventListener('click', e => {
   }
   if (d.crumb !== undefined) openPath(path.slice(0, +d.crumb + 1));
   if (d.toggle) {
-    const n = find(d.toggle).n,
+    const r = find(d.toggle);
+    if (!r) return;
+    const n = r.n,
       bf = snapshot();
     n.done = !n.done;
     settle(bf);
@@ -279,8 +313,9 @@ document.addEventListener('click', e => {
     });
   }
   if (d.up || d.down) {
-    const r = find(d.up || d.down),
-      i = r.arr.indexOf(r.n),
+    const r = find(d.up || d.down);
+    if (!r) return;
+    const i = r.arr.indexOf(r.n),
       j = d.up ? i - 1 : i + 1;
     if (j < 0 || j >= r.arr.length) return;
     [r.arr[i], r.arr[j]] = [r.arr[j], r.arr[i]];
@@ -301,13 +336,16 @@ document.addEventListener('click', e => {
     renderToday();
   }
   if (d.savetpl) {
-    const n = find(d.savetpl).n,
-      t = Object.assign({ id: uid(), days: [] }, strip(n)),
+    const r = find(d.savetpl);
+    if (!r) return;
+    const n = r.n,
+      t = Object.assign({ id: uid(), days: [], monthDay: 0 }, strip(n)),
       i = S.templates.findIndex(x => x.text === n.text);
     if (i >= 0) {
       t.id = S.templates[i].id;
       t.days = S.templates[i].days;
       t.monthDay = S.templates[i].monthDay;
+      if (S.templates[i].auto) t.auto = true; // (a repeat's own template stays out of the list)
       S.templates[i] = t;
       toast('Template updated');
     } else {
@@ -315,9 +353,12 @@ document.addEventListener('click', e => {
       toast('Template saved');
     }
     save();
+    renderAll();
   }
   if (d.tpl) {
     const t = S.templates.find(x => x.id === d.tpl);
+    if (!t) return;
+    if (S.quests.some(q => q.tpl === t.id)) return toast('Already on Today');
     const bf = snapshot(),
       q = inst(t);
     q.tpl = t.id;
@@ -336,6 +377,7 @@ document.addEventListener('click', e => {
   if (d.rep) {
     const t = S.templates.find(x => x.id === d.rep),
       wd = +d.wd;
+    if (!t) return;
     t.days = t.days.includes(wd) ? t.days.filter(x => x !== wd) : [...t.days, wd];
     if (t.auto && !repeats(t)) {
       S.templates = S.templates.filter(x => x !== t);
@@ -514,6 +556,7 @@ document.addEventListener('click', e => {
       eachTagged(n => {
         if (n.tag === name) n.tag = '';
       });
+      if (S.timer && S.timer.tag === name) S.timer.tag = '';
       save();
       renderAll();
     });
@@ -545,7 +588,7 @@ document.addEventListener('click', e => {
   if (d.talkpref) setTalkPref(d.talkpref === 'on');
   if (b.id === 'plus5' || d.plus5) {
     const t = S.timer;
-    if (!t) return;
+    if (!t || timerDue()) return;
     t.mins += 5;
     if (t.left != null) t.left += 300000;
     else t.end += 300000;
@@ -597,8 +640,10 @@ document.addEventListener('click', e => {
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) togglePause();
   if (b.id === 'undo') undo();
+  if (b.id === 'impbtn') $('#imp').click();
   if (b.id === 'copylog') copyLog();
   if (b.id === 'hist') loadHistory();
+  if (b.id === 'histclear' && arm(b, 'Delete all?')) clearHistory();
   if (d.hist) {
     const r = versions.find(x => String(x.id) === d.hist);
     if (r && r.data && Array.isArray(r.data.quests)) {
@@ -609,7 +654,19 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'exp') exportData();
   if (b.id === 'doRestore') {
-    norm(pending);
+    // What's current across devices isn't taken from the backup: the notification keys (an old
+    // copy would break every device's notifications), the device list and any running session.
+    const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
+      was = JSON.stringify(S);
+    try {
+      norm(pending);
+    } catch (e) {
+      norm(JSON.parse(was));
+      pending = null;
+      return toast("That backup couldn't be read", false, 3000);
+    }
+    Object.assign(S, keep);
+    rollover(); // (it may be from another day)
     pending = null;
     path = [];
     save();
@@ -627,14 +684,36 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
-    unlisten();
-    sb.auth.signOut().then(() => {
-      session = null;
-      syncStatus = '';
-      versions = null;
-      renderSyncBadge();
-      renderAccount();
-    });
+    // Unsent edits go first. Then alarms and alerts stop coming here, and nothing of this
+    // account is left for the next.
+    syncSettled()
+      .then(ok => {
+        if (!ok && !confirm("Your latest changes haven't reached the server yet. Sign out anyway?")) throw 0;
+        return pushEndpoint && disablePush().then(syncSettled);
+      })
+      .then(() => {
+        unlisten();
+        return sb.auth.signOut().then(r => {
+          if (r && r.error) throw r.error;
+        });
+      })
+      .then(() => {
+        captureToken = '';
+        pushTest = null;
+        health = null;
+        try {
+          localStorage.removeItem(CAPTURE_KEY);
+          localStorage.removeItem(NOTICE_HASH);
+        } catch (e) {}
+      })
+      .then(() => {
+        session = null;
+        syncStatus = '';
+        versions = null;
+        renderSyncBadge();
+        renderAccount();
+      })
+      .catch(e => e && toast("Couldn't sign out: " + (e.message || e), false, 4000)); // (0: chose to stay)
   }
   if (b.id === 'syncNow') sync();
   if (b.id === 'pushkeys') setupPushKeys();
@@ -645,6 +724,16 @@ document.addEventListener('click', e => {
   if (b.id === 'capnew') newCaptureToken();
   if (b.id === 'captest') testCapture();
   if (b.id === 'alerttest') testAlert();
+  if (b.id === 'alarmadd') addAlarm();
+  if (b.id === 'notesload') loadNotes();
+  if (d.aon) {
+    const a = S.alarms.find(x => x.id === d.aon);
+    if (a) setAlarmOn(a, !alarmOn(a));
+  }
+  if (d.adel) deleteAlarm(d.adel);
+  if (d.forgetdev && arm(b, 'Forget?')) forgetDevice(d.forgetdev);
+  if (d.adismiss) dismissAlarm(d.adismiss);
+  if (d.asnooze) snoozeAlarm(d.asnooze);
   if (d.copy)
     copyText(
       {
@@ -661,7 +750,7 @@ document.addEventListener('click', e => {
 document.addEventListener(
   'toggle',
   e => {
-    if (e.target.id) panels[e.target.id] = e.target.open;
+    if (e.target.id && !e.target.dataset.held) panels[e.target.id] = e.target.open;
   },
   true,
 );
@@ -671,6 +760,7 @@ const KEYS =
   'i or n capture (n on a quest: subquest) · t today · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
   const el = e.target;
   if (el.closest && el.closest('input,textarea,select,[contenteditable]')) {
     if (e.key === 'Escape') el.blur();
@@ -680,6 +770,8 @@ document.addEventListener('keydown', e => {
   if (talk) return k === 'Escape' && closeTalk();
   // During a running session only pause and help work (see focusLocked).
   if (focusLocked() && k !== 'p' && k !== '?') return;
+  // Single-task mode covers the page: only its own keys.
+  if (zen && !['z', 'Escape', 'p', '?'].includes(k)) return;
   const field = id => {
     const f = $(id);
     if (!f) return false;
@@ -707,12 +799,22 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Leaving (closing, switching app): notes typed in the last moment are saved now, not after
+// the typing pause.
+const saveNotesNow = () => notesDirty && $('#notesin') && saveNotes($('#notesin').value);
+window.addEventListener('pagehide', saveNotesNow);
 document.addEventListener('visibilitychange', () => {
+  if (document.hidden) saveNotesNow();
   if (!document.hidden) {
-    rollover();
-    if (timerDue()) finishTimer(true);
-    else renderAll();
-    sync();
+    const started = rolloverLocal(); // (a sync, when signed in)
+    // A session another device already stopped mustn't be finished here too: hear from the
+    // server first when possible.
+    if (timerDue() && started) {
+      const held = holdDue();
+      syncDone().finally(() => releaseHeld(held));
+    } else if (timerDue() && !holdTimer) finishTimer(true);
+    else inBackground(renderAll); // (keeps anything being typed)
+    if (!started) sync();
     verifyPush();
     talkWake();
   }
@@ -723,25 +825,68 @@ window.addEventListener('offline', () => {
 });
 setInterval(() => {
   if (document.hidden) return;
+  // Midnight with the app open: the new day starts here too, not only on coming back to it.
+  if (S.day !== today()) {
+    rolloverLocal();
+    inBackground(renderAll);
+  }
   sync();
-  inBackground(renderToday); // keeps the free time on Today current
+  // Keeps the free time on Today current (not under a "Delete?" waiting for its second tap).
+  if (!$('#v-today .armed')) inBackground(renderToday);
+  renderHeader(); // and the next alarm
 }, 60000);
 
 load();
-rollover();
-if (timerDue()) finishTimer(true);
+// Signed in and online, the day's reset (and finishing a session that ended while the app was
+// closed) waits for the server's copy: see onAuthStateChange. Otherwise it happens here.
+const deferStart = !!sb && navigator.onLine;
+if (!deferStart) rollover();
+if (!deferStart && timerDue()) finishTimer(true);
 else renderAll();
+const heldAtStart = deferStart ? holdDue() : '';
+setTimeout(() => releaseHeld(heldAtStart), 20000); // (never held for long, whatever happens)
 go(view);
 receiveShare();
 receiveLaunch();
 setInterval(timerTick, 500);
+setInterval(alarmTick, 1000);
+// Leaving the notes box saves straight away rather than after the typing pause.
+document.addEventListener('focusout', e => {
+  if (e.target.dataset && e.target.dataset.atime) {
+    delete e.target.dataset.typed;
+    // Once focus has moved on (so the redraw keeps it where it went).
+    return setTimeout(leftAlarmTime, 0);
+  }
+  if (e.target.id !== 'notesin') return;
+  // Going to "Show those notes" (by Tab, say) mustn't save over the notes it's about to show.
+  if (e.relatedTarget && e.relatedTarget.id === 'notesload') return clearTimeout(notesTimer);
+  saveNotes(e.target.value);
+  // Once focus has left: shows notes that changed elsewhere meanwhile. Unless what's typed here
+  // couldn't be saved over them: that stays, with the choice, until one is made.
+  if (!notesDirty) setTimeout(renderNotes, 0);
+});
+// "Show those notes" mustn't take focus from the box first (that would save over them).
+document.addEventListener('mousedown', e => {
+  if (e.target.id === 'notesload') e.preventDefault();
+});
 if (sb) {
   sb.auth.onAuthStateChange((ev, s) => {
     session = s;
     renderSyncBadge();
-    renderAccount(); // even when not on screen, so Settings never shows a stale sign-in form
+    inBackground(renderAccount); // even when not on screen, so Settings never shows a stale sign-in form
+    if (!s) unlisten(); // signed out, or the session expired: live updates would be dead anyway
+    authSeen = true;
+    if (ev === 'INITIAL_SESSION' && deferStart) {
+      if (!s) {
+        rollover();
+        releaseHeld(heldAtStart);
+        if (timerDue()) finishTimer(true);
+        else inBackground(renderAll);
+      } else sync().finally(() => releaseHeld(heldAtStart)); // (the sync runs the day's reset)
+    }
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {
-      setTimeout(sync, 0);
+      askMerge = true; // signing in here: a choice about this device's own data can be put
+      if (!(ev === 'INITIAL_SESSION' && deferStart)) setTimeout(sync, 0);
       setTimeout(verifyPush, 3000); // after the first sync has brought the current key
       listen();
     }

@@ -60,6 +60,7 @@ async function verifyPush() {
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
+  registerDevice();
   renderAccount();
 }
 async function enablePush() {
@@ -68,8 +69,14 @@ async function enablePush() {
       toast('Notifications are blocked in browser settings', false, 3000);
       return;
     }
-    const reg = await navigator.serviceWorker.ready,
-      sub = await reg.pushManager.subscribe({
+    const reg = await navigator.serviceWorker.ready;
+    // A subscription made under earlier keys (New keys elsewhere) can't be reused: drop it first.
+    const old = await reg.pushManager.getSubscription();
+    if (old && old.options && old.options.applicationServerKey) {
+      const k = b64u(new Uint8Array(old.options.applicationServerKey));
+      if (k !== S.pushKey) await old.unsubscribe();
+    }
+    const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: unb64u(S.pushKey),
       }),
@@ -81,6 +88,7 @@ async function enablePush() {
     pushEndpoint = j.endpoint;
     pushTest = null;
     localStorage.setItem(PUSH_KEY, pushEndpoint);
+    registerDevice(); // alarms for this device are sent here
     toast('Notifications on for this device');
   } catch (e) {
     console.warn(e);
@@ -101,6 +109,7 @@ async function disablePush() {
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
+  registerDevice();
   renderAccount();
 }
 // "Send a test" checks each link in the chain and says which one is broken:
@@ -209,7 +218,8 @@ function wantedNotices(now = Date.now()) {
       const [y, m, d] = ds.split('-').map(Number);
       return new Date(y, m - 1, d, 9).getTime();
     },
-    soon = t => t > now && t < now + 30 * 864e5;
+    // (kept a few minutes past due too: a sync between 9am and the minute job mustn't cancel it)
+    soon = t => t > now - 5 * 60e3 && t < now + 30 * 864e5;
   const t = S.timer;
   if (t && t.left == null && soon(t.end))
     out.push({ key: 'timer:' + t.end, at: t.end, title: 'Focus session done', body: timerLabel(t) || '' });
@@ -225,7 +235,7 @@ function wantedNotices(now = Date.now()) {
         });
       w(n.children, [...trail, n.text]);
     });
-  })(S.quests, []);
+  })([...S.quests, ...S.later], []);
   S.later.forEach(n => {
     if (soon(at9(n.start)))
       out.push({
@@ -245,7 +255,7 @@ function wantedNotices(now = Date.now()) {
         body: n.text + (w.who ? ' (' + w.who + ')' : ''),
       });
   });
-  return out;
+  return out.concat(alarmNotices(now));
 }
 // Keep the server's queue matching wantedNotices(); only talks to the server when it changed.
 const NOTICE_HASH = 'dashboard-notices-hash';
@@ -256,18 +266,36 @@ async function syncNotices() {
   try {
     if (localStorage.getItem(NOTICE_HASH) === h) return;
   } catch (e) {}
-  const { data, error } = await sb.from('cockpit_notices').select('key').is('sent_at', null);
+  const { data, error } = await sb.from('cockpit_notices').select('key,at').is('sent_at', null);
   if (error) return;
-  const keep = new Set(want.map(n => n.key)),
-    stale = data.map(r => r.key).filter(k => !keep.has(k) && !/^(test|alert):/.test(k));
+  // A notice already due when the last change here was made is left for the server to send
+  // (the minute job may not have run yet: the timer just ended, 9am just passed). One cancelled
+  // before it was due (a session paused a second before its end) goes, even if this runs later.
+  // An alarm's repeats always go once it's dismissed.
+  const now = Math.max(S.editedAt || 0, sync2.serverAt || 0) || Date.now(),
+    keep = new Set(want.map(n => n.key)),
+    stale = data
+      .filter(r => !keep.has(r.key) && !/^(test|alert):/.test(r.key))
+      .filter(r => r.key.startsWith('alarm:') || Date.parse(r.at) > now)
+      .map(r => r.key);
   if (want.length) {
-    const { error: e2 } = await sb.from('cockpit_notices').upsert(
-      want.map(n => ({ ...n, at: new Date(n.at).toISOString() })),
-      { onConflict: 'user_id,key' },
-    );
+    // (every row with the same keys: the API rejects a batch whose rows differ)
+    const put = rows =>
+      sb.from('cockpit_notices').upsert(
+        rows.map(n => ({ ...n, at: new Date(n.at).toISOString(), device: n.device || null })),
+        { onConflict: 'user_id,key' },
+      );
+    let { error: e2 } = await put(want);
+    // Before the device column was added (supabase-setup.sql not re-run), alarms for one device
+    // go to every device rather than stopping all notices.
+    if (e2 && /device/.test(e2.message || '') && want.some(n => 'device' in n))
+      ({ error: e2 } = await put(want.map(({ device, ...n }) => n)));
     if (e2) return;
   }
-  if (stale.length) await sb.from('cockpit_notices').delete().in('key', stale);
+  if (stale.length) {
+    const { error: e3 } = await sb.from('cockpit_notices').delete().in('key', stale);
+    if (e3) return; // tried again next time
+  }
   try {
     localStorage.setItem(NOTICE_HASH, h);
   } catch (e) {}
@@ -287,7 +315,7 @@ function renderNotifySettings() {
       <div class="caprow"><span>VAPID_PRIVATE_KEY</span><code>${esc(newPrivateKey)}</code><button class="linkbtn" data-copy="vpriv">Copy</button></div>
       <p class="hint">Then turn notifications on again on each device.</p></div>`;
   h += pushEndpoint
-    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines (9am on the day) and Upcoming items returning.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
+    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines and chase dates (9am on the day), Upcoming items returning, alarms, and alerts from scripts.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
       renderPushTest()
     : '<p class="hint" style="margin:0 0 8px">Off for this device.</p><button class="btn green" id="pushon">Turn on for this device</button>';
   if (!newPrivateKey)

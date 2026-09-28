@@ -10,6 +10,9 @@
   --orange: #ffa300;
   --blue: #29adff;
   --plum: #7e2553;
+  --pink-ink: var(--plum); /* pink as text: readable on the light background */
+  --meter-track: #fff1e8; /* the unfilled part of a quest's meter: its dark text stays readable */
+  color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   --on-accent: #1d2b53;
   --head-ink: #fff1e8;
   --head-track: #1d2b53;
@@ -31,6 +34,8 @@
     --muted: #c2c3c7;
     --edge: #000000;
     --wait-ink: #fdba74;
+    --pink-ink: var(--pink);
+    color-scheme: dark;
   }
 }
 :root[data-font='plain'] {
@@ -69,6 +74,8 @@
   --muted: #c2c3c7;
   --edge: #000000;
   --wait-ink: #fdba74;
+  --pink-ink: var(--pink);
+  color-scheme: dark;
 }
 html {
   scroll-padding-top: env(safe-area-inset-top, 0px);
@@ -100,6 +107,9 @@ textarea {
 :focus-visible {
   outline: 3px dashed var(--yellow);
   outline-offset: 3px;
+}
+section[tabindex='-1']:focus-visible {
+  outline: none; /* a view given the keyboard after its control went: no ring round the page */
 }
 
 .wrap {
@@ -570,6 +580,7 @@ nav {
   gap: 2px;
   padding: 0 4px;
   overflow-x: auto;
+  scroll-padding-inline: 44px; /* the current tab lands clear of the fades */
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
@@ -840,7 +851,7 @@ nav button[aria-current='page'] {
   border: 0;
   padding: 8px 0 0;
   margin-top: 6px;
-  color: var(--pink);
+  color: var(--pink-ink);
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -1555,6 +1566,79 @@ nav .badge[hidden] {
     animation: none !important;
     transition: none !important;
   }
+}
+/* notes */
+.fld.notes {
+  display: block;
+  width: 100%;
+  min-height: 55vh;
+  resize: vertical;
+  line-height: 1.5;
+}
+/* alarms (on Today) and the ringing card */
+.alarms {
+  margin: -4px 0 18px;
+}
+.arow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 2px dashed var(--muted);
+}
+.arow:first-of-type {
+  border-top: 0;
+}
+.arow .fld {
+  flex: 1 1 8em;
+  min-width: 0;
+  padding: 6px 8px;
+}
+.arow .atime {
+  flex: 0 0 auto; /* room for a 12-hour clock's AM/PM */
+}
+.arow:not(.on) .atime {
+  opacity: 0.6;
+}
+#v-alarm {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center; /* several ringing at once: scroll, never cut off */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  gap: 16px;
+  padding: 24px 20px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+}
+#v-alarm[hidden] {
+  display: none;
+}
+body.ringing {
+  overflow: hidden; /* the page behind stays put */
+}
+.ring {
+  max-width: 480px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px;
+  text-align: center;
+}
+.ringtime {
+  font-family: var(--display);
+  font-size: clamp(32px, 10vw, 56px);
+  margin: 0;
+}
+.ringlabel {
+  font-size: 20px;
+  margin: 8px 0 16px;
+  overflow-wrap: anywhere;
+}
+.ring .acts {
+  justify-content: center;
 }
 /* talk mode */
 body.talking .wrap,

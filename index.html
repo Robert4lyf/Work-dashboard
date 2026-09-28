@@ -7,6 +7,12 @@
     <meta name="description" content="Quests, inbox and focus timer." />
     <meta name="theme-color" content="#1D2B53" />
     <link rel="manifest" href="manifest.webmanifest" />
+    <!-- Scripts run only from here and the sync library's CDN: a crafted backup or synced row
+         can't smuggle one in. (GitHub Pages can't send headers, so it's set here.) -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'"
+    />
     <link rel="icon" type="image/png" href="icons/icon-192.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,16 +20,10 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;600&display=swap"
       rel="stylesheet"
+      crossorigin="anonymous"
     />
     <link rel="stylesheet" href="styles.css" />
-    <script>
-      // Apply this device's appearance before first paint (see "Appearance" in Settings).
-      try {
-        const l = JSON.parse(localStorage.getItem('dashboard-look')) || {};
-        if (l.font) document.documentElement.dataset.font = l.font;
-        if (l.theme) document.documentElement.dataset.theme = l.theme;
-      } catch (e) {}
-    </script>
+    <script src="js/theme.js"></script>
   </head>
   <body>
     <div class="wrap">
@@ -52,6 +52,7 @@
       <section id="v-projects" hidden></section>
       <section id="v-focus" hidden></section>
       <section id="v-log" hidden></section>
+      <section id="v-notes" hidden></section>
       <section id="v-account" hidden></section>
     </div>
 
@@ -60,14 +61,16 @@
         <button data-v="today" aria-current="page">Today</button>
         <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
         <button data-v="waiting">Waiting<span class="badge" id="waitBadge" hidden></span></button>
+        <button data-v="notes">Notes</button>
         <button data-v="review">
-          Review<span class="dot" id="reviewDot" hidden aria-label="weekly review due"></span>
+          Review<span class="dot" id="reviewDot" hidden role="img" aria-label="weekly review due"></span>
         </button>
         <button data-v="account">Settings</button>
       </div>
     </nav>
     <section id="v-zen" hidden aria-label="Single-task mode"></section>
     <section id="v-talk" hidden aria-label="Talk mode"></section>
+    <section id="v-alarm" hidden aria-label="Alarm" role="alertdialog" aria-modal="true"></section>
     <div class="toast" id="toast" role="status"></div>
     <script src="config.js"></script>
     <script
@@ -93,6 +96,8 @@
     <script src="js/notify.js"></script>
     <script src="js/board.js"></script>
     <script src="js/talk.js"></script>
+    <script src="js/notes.js"></script>
+    <script src="js/alarms.js"></script>
     <script src="js/events.js"></script>
   </body>
 </html>

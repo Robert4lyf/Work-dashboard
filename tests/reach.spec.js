@@ -153,11 +153,48 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
       { user_id: 'u1', key: 'later', at: '2026-09-23T10:00:00Z', title: 'Later', body: '', sent_at: null },
       { user_id: 'u2', key: 'lonely', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
       { user_id: 'u3', key: 'expired', at: '2026-09-23T08:59:00Z', title: 'Hi', body: '', sent_at: null },
+      // The push service was busy: tried again next minute, not marked sent.
+      {
+        user_id: 'u4',
+        key: 'busy',
+        at: '2026-09-23T08:59:00Z',
+        title: 'Hi',
+        body: 'x'.repeat(400),
+        sent_at: null,
+      },
+      // Two repeats of one alarm both due (queued late): only the newest rings.
+      {
+        user_id: 'u1',
+        key: 'alarm:y:1:0:0',
+        at: '2026-09-23T08:58:00Z',
+        title: 'Late',
+        body: '',
+        sent_at: null,
+      },
+      {
+        user_id: 'u1',
+        key: 'alarm:y:1:0:1',
+        at: '2026-09-23T08:59:00Z',
+        title: 'Late',
+        body: '',
+        sent_at: null,
+      },
+      // An alarm for one device: only that endpoint gets it.
+      {
+        user_id: 'u1',
+        key: 'alarm:x',
+        at: '2026-09-23T08:59:30Z',
+        title: 'Alarm',
+        body: '',
+        device: 'e1',
+        sent_at: null,
+      },
     ],
     subs: [
       { endpoint: 'e1', user_id: 'u1', p256dh: 'p', auth: 'a' },
       { endpoint: 'gone', user_id: 'u1', p256dh: 'p', auth: 'a' },
       { endpoint: 'gone3', user_id: 'u3', p256dh: 'p', auth: 'a' },
+      { endpoint: 'busy4', user_id: 'u4', p256dh: 'p', auth: 'a' },
     ],
     from(t) {
       const self = this,
@@ -188,23 +225,33 @@ test('send-notices: sends due notices, skips stale ones, forgets gone devices', 
   const push = {
     sendNotification: async (sub, payload) => {
       if (sub.endpoint.startsWith('gone')) throw Object.assign(new Error('gone'), { statusCode: 410 });
+      if (sub.endpoint.startsWith('busy')) throw Object.assign(new Error('busy'), { statusCode: 503 });
       sent.push([sub.endpoint, JSON.parse(payload)]);
     },
   };
   const r = await sendDue({ db, push, now, log: { warn() {} } });
-  expect(r).toEqual({ sent: 1, skipped: 1, removed: 2 });
-  expect(sent).toEqual([['e1', { title: 'Due today', body: 'Report', tag: 'a' }]]);
+  expect(r).toEqual({ sent: 3, skipped: 2, removed: 2 });
+  expect(sent).toEqual([
+    ['e1', { title: 'Due today', body: 'Report', tag: 'a' }],
+    ['e1', { title: 'Late', body: '', tag: 'alarm:y:1:0:1' }],
+    ['e1', { title: 'Alarm', body: '', tag: 'alarm:x' }],
+  ]);
   expect(
     db.notices
       .filter(n => n.sent_at)
       .map(n => n.key)
       .sort(),
-  ).toEqual(['a', 'expired', 'lonely', 'old']);
-  expect(db.subs.map(s => s.endpoint)).toEqual(['e1']);
+  ).toEqual(['a', 'alarm:x', 'alarm:y:1:0:0', 'alarm:y:1:0:1', 'expired', 'lonely', 'old']);
+  expect(db.subs.map(s => s.endpoint)).toEqual(['e1', 'busy4']);
   // Why a notice didn't go out is kept on it, for the app's test to show.
   expect(db.notices.find(n => n.key === 'a').error).toBeNull(); // reached e1; the gone device doesn't count
   expect(db.notices.find(n => n.key === 'expired').error).toMatch(/subscription had expired/);
   expect(db.notices.find(n => n.key === 'lonely').error).toBe('no devices have notifications turned on');
+  const busy = db.notices.find(n => n.key === 'busy');
+  expect(busy.sent_at).toBeFalsy();
+  expect(busy.error).toBe('push failed: 503');
+  // Long bodies are cut to fit the push services' payload limit.
+  expect(sent.every(([, p]) => p.body.length <= 300)).toBe(true);
 });
 
 test('lost the private key: New keys makes a fresh pair after a confirm', async ({ browser }) => {
@@ -238,15 +285,30 @@ test("the app's notice sync leaves alerts sent by scripts alone", async ({ brows
     });
     window.__notices.push({
       key: 'due:gone:2026-09-24',
-      at: new Date().toISOString(),
+      at: new Date(Date.now() + 864e5).toISOString(),
       title: 'Old',
+      sent_at: null,
+    });
+    // Already due (the session just ended here): left for the server's minute job to send.
+    window.__notices.push({
+      key: 'timer:1',
+      at: new Date(Date.now() - 120e3).toISOString(),
+      title: 'Done',
+      sent_at: null,
+    });
+    // Due by now, but called off (paused, discarded) before then: goes.
+    window.__notices.push({
+      key: 'timer:2',
+      at: new Date(Date.now() - 1000).toISOString(),
+      title: 'Done',
       sent_at: null,
     });
     S.pushKey = 'x';
     save();
+    S.editedAt = Date.now() - 60e3; // the change was made a minute ago; this sync runs late
   });
   await page.evaluate(() => syncNotices());
-  expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc']);
+  expect((await page.evaluate(() => window.__notices)).map(n => n.key)).toEqual(['alert:abc', 'timer:1']);
   expect(errors).toEqual([]);
 });
 

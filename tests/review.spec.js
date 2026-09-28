@@ -7,11 +7,18 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 25, 9, 0, 30));
 });
 
-test('five tabs; History and Projects sit under Review; Focus opens from the header', async ({
+test('six tabs; History and Projects sit under Review; Focus opens from the header', async ({
   app,
   page,
 }) => {
-  await expect(page.locator('nav [data-v]')).toHaveText(['Today', /^Inbox/, 'Waiting', 'Review', 'Settings']);
+  await expect(page.locator('nav [data-v]')).toHaveText([
+    'Today',
+    /^Inbox/,
+    'Waiting',
+    'Notes',
+    'Review',
+    'Settings',
+  ]);
   await page.click('nav [data-v=review]');
   await expect(page.locator('#v-review .rtabs button')).toHaveText(['Week', 'Projects', 'History']);
   await page.click('[data-rsub="log"]');
@@ -112,7 +119,7 @@ test('health check, signed out: says what is and isn’t set up', async ({ app, 
   const rows = page.locator('.health .hrow2');
   await expect(rows.first()).toContainText('Supabase settings');
   await expect(rows.first()).toHaveClass(/bad/);
-  await expect(rows.first()).toContainText('Fill in config.js');
+  await expect(rows.first()).toContainText('Library not loaded'); // (the CDN is blocked in tests)
   await expect(page.locator('.health')).toContainText('Works offline');
   await expect(page.locator('#healthrun')).toHaveText('Run again');
 });

@@ -19,7 +19,7 @@ try {
 function setSync(s) {
   syncStatus = s;
   renderSyncBadge();
-  if (view === 'account') renderAccount();
+  if (view === 'account') inBackground(renderAccount); // keeps what's being typed in Settings
 }
 function badgeText() {
   if (!sb) return 'Sync off';
@@ -59,11 +59,17 @@ async function pullRows(since) {
 }
 // Take in rows from the server. A record changed here and not yet sent keeps the local version
 // only if its edit is newer than the server's.
-function applyRows(rows, firstSync) {
-  const recs = firstSync ? new Map() : toRecords(S);
+function applyRows(rows, firstSync, keep) {
+  const recs = firstSync ? keep || new Map() : toRecords(S);
   let changed = firstSync;
   for (const r of rows) {
     sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
+    sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0); // (newest change anywhere)
+    // A kind from a newer version: nothing here to change (and not a reason to reload).
+    if (!knownKey(r.key)) continue;
+    // A repeat's copy for a day (id <template>-<date>) cleared by another device's reset:
+    // remembered, so this device's look-back doesn't make it again.
+    if (r.deleted && /^quest:.+-\d{4}-\d\d-\d\d$/.test(r.key)) (sync2.gone = sync2.gone || {})[r.key] = 1;
     const h = r.deleted ? null : hashOf(r.data),
       mine = sync2.dirty[r.key];
     if (mine && mine.at > Number(r.edited_at)) continue;
@@ -78,11 +84,14 @@ function applyRows(rows, firstSync) {
   }
   if (changed) {
     dropUndo();
-    norm(fromRecords(recs, S.day));
+    norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt }));
+    // The quest on screen went (in the rows, not through the day's reset or a chosen replace).
+    const open = !firstSync && path.length && !find(path[path.length - 1]);
     persistLocal();
     rollover();
     markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
     inBackground(renderAll);
+    if (open) toast('The quest you had open was removed on another device', false, 4000);
   }
   saveSyncState();
 }
@@ -90,7 +99,20 @@ function applyRows(rows, firstSync) {
 // device moves your data over, taking the old single-row copy if it is newer.
 async function firstSync() {
   const rows = await pullRows(0);
-  if (rows.length) return applyRows(rows, true);
+  if (rows.length) {
+    // This device already has things of its own: they can join the account's, or go.
+    // (asked only when signing in; a sync that starts on its own keeps them, which is safe)
+    const n = S.quests.length + S.inbox.length + S.later.length;
+    const keep =
+      n &&
+      (!askMerge ||
+        confirm(
+          `This account already has data. Add this device's ${plural(n, 'item')} to it as well? (Cancel replaces them.)`,
+        ));
+    askMerge = false;
+    applyRows(rows, true, keep ? toRecords(S) : null);
+    return;
+  }
   const { data, error } = await sb
     .from('cockpit_state')
     .select('data,edited_at')
@@ -98,6 +120,7 @@ async function firstSync() {
     .maybeSingle();
   if (error) throw error;
   if (data && Number(data.edited_at) > (S.editedAt || 0)) {
+    dropUndo();
     norm(data.data);
     persistLocal();
     rollover();
@@ -108,10 +131,15 @@ async function firstSync() {
 async function pushDirty() {
   const keys = Object.keys(sync2.dirty);
   if (!keys.length) return;
-  const recs = toRecords(S),
-    uid_ = session.user.id;
+  const uid_ = session.user.id;
   for (let i = 0; i < keys.length; i += 500) {
-    const batch = keys.slice(i, i + 500).map(k => ({ k, d: sync2.dirty[k] }));
+    // Read now, with the dirty marks: edits made while an earlier batch was sending are in both.
+    const recs = toRecords(S),
+      batch = keys
+        .slice(i, i + 500)
+        .map(k => ({ k, d: sync2.dirty[k] }))
+        .filter(x => x.d);
+    if (!batch.length) continue;
     const { error } = await sb.from('cockpit_items').upsert(
       batch.map(({ k, d }) => ({
         user_id: uid_,
@@ -148,6 +176,16 @@ async function saveSnapshot() {
     saveSyncState();
   }
 }
+// Waits for any sync under way, then runs one: whether everything here reached the server.
+async function syncSettled() {
+  await syncDone();
+  await sync();
+  return !syncing && !Object.keys(sync2.dirty).length;
+}
+// Waits for any sync under way (and one queued behind it).
+async function syncDone() {
+  for (let i = 0; (syncing || again) && i < 150; i++) await new Promise(r => setTimeout(r, 100));
+}
 async function sync() {
   if (!sb || !session) return;
   if (syncing) {
@@ -162,18 +200,48 @@ async function sync() {
   setSync('syncing');
   try {
     if (sync2.user !== session.user.id) {
+      // Another account was signed in here before: its data mustn't move into this one.
+      if (sync2.user) {
+        // (dirty marks from the day's reset alone aren't the user's edits)
+        if (Object.values(sync2.dirty).some(d => d.at > new Date().setHours(0, 0, 0, 0)))
+          toast(
+            "This device's unsent changes belonged to the other account and were left behind",
+            false,
+            5000,
+          );
+        dropUndo();
+        norm(null);
+        persistLocal();
+        inBackground(renderAll);
+      }
       // New device, or a different account: start from the server's copy.
-      sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0, user: session.user.id };
+      // The account is noted once that's done: if it fails part-way, it starts over next time.
+      sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0 };
       await firstSync();
+      sync2.user = session.user.id;
+      saveSyncState();
     } else applyRows(await pullRows(Math.max(0, sync2.cursor - OVERLAP)), false);
+    // The day's reset, now that the server's copy is in (applyRows ran it if anything came).
+    if (S.day !== today()) {
+      rollover();
+      inBackground(renderAll);
+    }
     await pushDirty();
     await saveSnapshot();
     await syncNotices();
     lastSync = Date.now();
+    askMerge = false; // (only the sync straight after a sign-in may ask)
     setSync('ok');
+    // After the first sync, so a new device never writes before it has the server's copy.
+    registerDevice();
   } catch (e) {
     console.warn('sync failed', e);
     setSync(navigator.onLine ? 'error' : 'offline');
+    // Couldn't hear from the server: the new day still starts, on what's here.
+    if (S.day !== today()) {
+      rollover();
+      inBackground(renderAll);
+    }
   } finally {
     syncing = false;
     if (again) {
@@ -183,9 +251,14 @@ async function sync() {
   }
 }
 // Live updates: another device's change arrives within a second instead of at the next poll.
-let live = null;
+let live = null,
+  liveFor = '',
+  askMerge = false;
 function listen() {
-  if (!sb || !session || live || !sb.channel) return;
+  if (!sb || !session || !sb.channel) return;
+  if (live && liveFor === session.user.id) return;
+  unlisten(); // a different account: the old channel would listen for the wrong rows
+  liveFor = session.user.id;
   live = sb
     .channel('items')
     .on(
@@ -264,7 +337,9 @@ function renderHistory() {
   if (versions === 'none')
     return '<p class="hint">Server history isn\'t set up. Run the updated supabase-setup.sql (see the README).</p>';
   if (!versions.length) return '<p class="hint">No previous versions yet.</p>';
-  let h = '';
+  // (they hold everything as it was, notes included: they can be cleared)
+  let h =
+    '<p class="hint">A copy is kept every few hours. <button class="linkbtn" id="histclear">Delete them all</button></p>';
   versions.forEach(r => {
     const d = r.data || {},
       when = new Date(r.saved_at).toLocaleString([], {
@@ -277,6 +352,12 @@ function renderHistory() {
     h += `<div class="soonrow" style="cursor:default"><span>${esc(when)}<br><small class="hint">${(d.quests || []).length} quests, ${(d.inbox || []).length} inbox</small></span><button class="btn" data-hist="${r.id}" style="padding:6px 10px">Restore</button></div>`;
   });
   return h;
+}
+async function clearHistory() {
+  const { error } = await sb.from('cockpit_history').delete().eq('user_id', session.user.id);
+  if (error) return toast("Couldn't delete them. Run the updated supabase-setup.sql", false, 4000);
+  versions = [];
+  renderAccount();
 }
 // Per-device appearance, kept out of synced data (a phone and laptop can differ).
 const LOOK_KEY = 'dashboard-look';
@@ -297,7 +378,10 @@ function setLook(k, v) {
 function renderAccount() {
   let h = '<h2>Sync</h2>';
   if (!sb) {
-    h += '<p class="hint">Sync isn\'t set up (see the README). Data is saved on this device only.</p>';
+    h +=
+      CFG.supabaseUrl && !window.supabase
+        ? '<p class="hint">The sync library didn\'t load (offline, or blocked). Reload once online.</p>'
+        : '<p class="hint">Sync isn\'t set up (see the README). Data is saved on this device only.</p>';
   } else if (!session) {
     h += `<form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg ? `<p class="msg">${esc(authMsg)}</p>` : ''}`;
   } else {
@@ -305,13 +389,14 @@ function renderAccount() {
   }
   h += renderHealth();
   if (pending)
-    h += `<div class="banner box"><p>Replace everything with this backup? It has ${pending.quests.length} quests and ${(pending.inbox || []).length} inbox items. Your current data${session ? ' on every synced device' : ''} will be replaced.</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
+    h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'quest')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced (notification keys and device names are kept).</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
   const opt = (k, v, label) =>
     `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
     <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
     <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
-    <label class="f" for="dayend">Workday ends (for "free" time on Today)</label><input class="fld" type="time" id="dayend" value="${S.dayEnd || '17:30'}" style="max-width:10em">`;
+    <label class="f" for="dayend">Workday ends (for "free" time on Today)</label><input class="fld" type="time" id="dayend" value="${esc(S.dayEnd || '17:30')}" style="max-width:10em">
+    <label class="f" for="devname">This device's name (to choose where an alarm rings)</label><input class="fld" id="devname" value="${esc(thisDevice.name)}" maxlength="40" style="max-width:20em">${renderDevices()}`;
   h += renderTalkSettings();
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
   S.tags.forEach(
@@ -321,7 +406,7 @@ function renderAccount() {
   h +=
     '<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form>';
   h +=
-    '<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><label class="btn">Restore backup<input type="file" id="imp" accept=".json,application/json" hidden></label></div>';
+    '<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
   setHTML($('#v-account'), h);
 }
 
