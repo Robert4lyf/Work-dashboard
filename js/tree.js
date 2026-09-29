@@ -233,7 +233,10 @@ function setHTML(el, html) {
       sel = inside ? focusSel(a) : '';
     el.innerHTML = html;
     if (inside) {
-      const f = (sel && el.querySelector(sel)) || el;
+      let f = (sel && el.querySelector(sel)) || el;
+      // (the control may now be folded away, say a quest just ticked into "Done today": the
+      // keyboard stays in the view rather than falling to the top of the page)
+      if (f !== el && f.closest('details:not([open])')) f = el;
       if (f === el) el.tabIndex = -1;
       f.focus({ preventScroll: true });
     }

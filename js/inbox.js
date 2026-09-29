@@ -89,7 +89,9 @@ document.addEventListener('pointercancel', endSwipe);
 function renderInbox() {
   let h = '<h2>Inbox</h2>';
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
-  if (!S.inbox.length) h += '<div class="empty">Inbox empty.</div>';
+  if (!S.inbox.length)
+    h +=
+      '<div class="empty">Nothing captured. Type a thought above (or say it with the mic); sort it into Today later.</div>';
   else h += '<div class="list box">';
   S.inbox.forEach(it => {
     const kids = it.node ? it.node.children : [],

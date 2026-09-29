@@ -7,15 +7,13 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 25, 9, 0, 30));
 });
 
-test('seven tabs; History and Projects sit under Review; Focus opens from the header', async ({
+test('five tabs; History and Projects sit under Review; Focus opens from the header', async ({
   app,
   page,
 }) => {
   await expect(page.locator('nav [data-v]')).toHaveText([
     'Today',
     /^Inbox/,
-    'Waiting',
-    'Notes',
     'Knowledge',
     'Review',
     'Settings',
@@ -28,6 +26,11 @@ test('seven tabs; History and Projects sit under Review; Focus opens from the he
   await page.click('[data-rsub="projects"]');
   await expect(page.locator('#v-projects')).toBeVisible();
   await expect(page.locator('#v-log')).toBeHidden();
+  // (the header shows today's focus time once there is some; tapping it opens Focus)
+  await page.evaluate(() => {
+    S.daily[today()] = { Design: 25 };
+    renderHeader();
+  });
   await page.click('header [data-v=focus]');
   await expect(page.locator('#v-focus')).toBeVisible();
   await page.keyboard.press('l'); // history shortcut still works

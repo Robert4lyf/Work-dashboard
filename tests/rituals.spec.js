@@ -158,7 +158,6 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   // It's blocked, so Next up moves on to the next quest.
   await expect(page.locator('#hnow')).toContainText('Write report');
   await expect(page.locator('#v-today .attn')).toContainText('1 to chase');
-  await expect(page.locator('nav #waitBadge')).toHaveText('1');
 
   await app.go('waiting');
   const v = page.locator('#v-waiting');
@@ -194,7 +193,7 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   // Ticking one off from the Waiting tab finishes the quest.
   await v.locator('[data-toggle]').click();
   expect((await app.state()).quests.find(q => q.text === 'Signed contract').done).toBe(true);
-  await expect(v.locator('.empty')).toHaveText('Nothing to chase.');
+  await expect(v.locator('.empty')).toContainText('Nothing to chase');
 });
 
 test('an inbox item can be marked waiting from its details', async ({ app, page }) => {

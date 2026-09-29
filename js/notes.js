@@ -31,7 +31,7 @@ function renderNotes() {
   notesBase = S.notes || '';
   setHTML(
     $('#v-notes'),
-    `<h2>Notes</h2><textarea class="fld notes" id="notesin" placeholder="Type here. It's saved as you go and appears on your other devices." aria-label="Notes">${esc(notesBase)}</textarea><p class="hint" id="notesstate">${notesBase ? 'Saved' : ''}</p><div id="noteimgs"></div>`,
+    `<button class="linkbtn" data-goto="knowledge">&lsaquo; Knowledge</button><h2>Scratchpad</h2><textarea class="fld notes" id="notesin" placeholder="Type here. It's saved as you go and appears on your other devices." aria-label="Notes">${esc(notesBase)}</textarea><p class="hint" id="notesstate">${notesBase ? 'Saved' : ''}</p><div id="noteimgs"></div>`,
   );
   renderNoteImgs();
 }

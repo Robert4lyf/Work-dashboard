@@ -102,13 +102,19 @@ test('flows: a button per flow opens its Run URL; only Run URLs are accepted', a
   await page.fill('#flowname', 'Archive emails');
   await page.fill('#flowurl', url + '4');
   await page.click('#flowform .btn');
-  await expect(v.locator('.flows a')).toHaveText(['Archive emails', 'Weekly report']);
-  await expect(v.locator('.flows a', { hasText: 'Weekly report' })).toHaveAttribute('href', url);
+  // The buttons live on Today, as quick actions; managing them stays here.
+  const flows = page.locator('#v-today .flows a');
+  await app.go('today');
+  await expect(flows).toHaveText(['▶ Archive emails', '▶ Weekly report']);
+  await expect(flows.filter({ hasText: 'Weekly report' })).toHaveAttribute('href', url);
+  await app.go('knowledge');
 
   // Renamed in place; deleted after a second tap.
   await v.locator('[data-flowname]').first().fill('Archive inbox');
   await v.locator('[data-flowname]').first().press('Tab');
-  await expect(v.locator('.flows a')).toHaveText(['Archive inbox', 'Weekly report']);
+  await app.go('today');
+  await expect(flows).toHaveText(['▶ Archive inbox', '▶ Weekly report']);
+  await app.go('knowledge');
   await v.locator('[data-delflow]').first().click();
   await v.locator('[data-delflow]').first().click();
   expect((await app.state()).flows.map(f => f.name)).toEqual(['Weekly report']);
@@ -255,15 +261,15 @@ test('a flow remembers when its button was last used', async ({ app, page }) => 
     save();
     renderAll();
   });
-  await app.go('knowledge');
-  await expect(page.locator('.flow small')).toHaveText('Not used yet');
+  await app.go('today');
+  await expect(page.locator('#v-today a[data-flow]')).toHaveAttribute('title', 'Not used yet');
   // (the link itself can't open here: just the tap is checked)
   await page.evaluate(() => {
     const a = document.querySelector('a[data-flow]');
     a.addEventListener('click', e => e.preventDefault());
     a.click();
   });
-  await expect(page.locator('.flow small')).toContainText('Last used Today');
+  await expect(page.locator('#v-today a[data-flow]')).toHaveAttribute('title', /Last used Today/);
   expect((await app.state()).flows[0].last).toBeGreaterThan(0);
 });
 

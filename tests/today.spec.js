@@ -9,6 +9,8 @@ test('completing a quest logs it, sinks it and moves Next up', async ({ app, pag
   expect(await app.order()).toEqual(['B', 'C', 'A']);
   await expect(page.locator('#hnow b')).toHaveText('B');
   expect((await app.state()).log.map(x => x.text)).toEqual(['A']);
+  // Finished quests fold away under "Done today"; open it to un-tick one.
+  await page.click('#donesec > summary');
   await page.click('[aria-label="Mark done: A"]');
   expect((await app.state()).log).toEqual([]);
   expect(await app.order()).toEqual(['B', 'C', 'A']);
@@ -148,10 +150,13 @@ test('estimates add up against free time until the end of the workday', async ({
   expect((await app.state()).dayEnd).toBe('18:00');
 });
 
-test('the header stays to three lines: Focus sits beside Next up', async ({ app, page }) => {
+test('the header is one line: the next step, Focus, Search and the sync dot', async ({ app, page }) => {
   await app.addQuest('Report');
   await expect(page.locator('#hnow [data-zen]')).toHaveText('Focus');
-  await expect(page.locator('#hstats button')).toHaveText(['0/1 done', '0m focus']);
+  await expect(page.locator('#hstats')).toBeEmpty(); // (no stats line until there's focus time or an alarm)
+  await expect(page.locator('#searchBtn')).toBeVisible();
+  const h = await page.locator('header').boundingBox();
+  expect(h.height).toBeLessThan(120);
 });
 
 test('a change redraws only the view on screen; another view is drawn when opened', async ({ app, page }) => {

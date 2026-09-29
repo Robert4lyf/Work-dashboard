@@ -52,12 +52,18 @@ function listHead(title, ns) {
 // One card, one row per quest. Waiting ones show below the rest (above finished ones); their
 // place in the real order is kept, so they move back up when the wait is over.
 const listRank = n => (isDone(n) ? 2 : showsWaiting(n) ? 1 : 0);
-function list(ns) {
+function list(ns, doneApart) {
   const rank = new Map(ns.map(n => [n, listRank(n)])),
-    shown = reorder ? ns : [...ns].sort((a, b) => rank.get(a) - rank.get(b));
-  return ns.length
-    ? `<div class="list box">${shown.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
+    shown = reorder ? ns : [...ns].sort((a, b) => rank.get(a) - rank.get(b)),
+    open = doneApart && !reorder ? shown.filter(n => !isDone(n)) : shown,
+    done = doneApart && !reorder ? shown.filter(isDone) : [];
+  let h = open.length
+    ? `<div class="list box">${open.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
     : '';
+  // Finished ones, folded away (open it to un-tick a mistake).
+  if (done.length)
+    h += `<details id="donesec"${panels.donesec ? ' open' : ''}><summary>Done today <small>${done.length}</small></summary><div class="list box">${done.map((c, i) => row(c, i, ns.length, ns)).join('')}</div></details>`;
+  return h;
 }
 function renderToday() {
   $('#v-today')
@@ -76,7 +82,7 @@ function renderToday() {
   path = ok;
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
-  let h = renderAttention() + renderCarried();
+  let h = renderAttention() + quickActions() + renderCarried();
   const soon = dueSoon().filter(s => s.t.length > 1); // top-level quests show their deadline in the list
   if (soon.length) {
     h += '<div class="soon box"><h2>Due soon</h2>';
@@ -89,7 +95,7 @@ function renderToday() {
   h += listHead("Today's quests", qs) + planLine();
   if (qs.length && qs.every(isDone))
     h += '<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
-  h += list(qs);
+  h += list(qs, true);
   const own = S.templates.filter(t => !t.auto);
   if (own.length) {
     h += '<div class="tpls"><span class="hint" style="margin:0">From a template:</span>';
@@ -115,8 +121,21 @@ function renderToday() {
   if (!qs.length)
     h +=
       '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
-  h += renderAlarms() + renderUpcoming();
+  h += renderWaitingSection() + renderAlarms() + renderUpcoming();
   setHTML($('#v-today'), h);
+}
+// Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
+function quickActions() {
+  if (!S.flows.length) return '';
+  const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
+  return `<div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}</a>`).join('')}</div>`;
+}
+// Things being waited on that aren't on Today's list (in the Inbox, or on Upcoming), folded away
+// under it; quests on the list already say so themselves. The chip at the top opens the full view.
+function renderWaitingSection() {
+  const all = waitingSorted().filter(x => x.inbox || x.start);
+  if (!all.length) return '';
+  return `<details id="waitsec"${panels.waitsec ? ' open' : ''}><summary>Also waiting on others <small>${all.length}</small></summary>${waitingRows(all)}<button class="linkbtn" data-goto="waiting">Open Waiting</button></details>`;
 }
 
 /* estimates: optional minutes on a quest or step (n.est). A quest with estimated steps counts

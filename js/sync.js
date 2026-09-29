@@ -31,7 +31,8 @@ function badgeText() {
 function renderSyncBadge() {
   const b = $('#syncBtn');
   if (!b) return;
-  b.textContent = badgeText();
+  b.innerHTML = `<span class="sr">${badgeText()}</span>`; // (a dot; the words for screen readers)
+  b.title = badgeText();
   b.dataset.state = !sb || !session ? 'off' : syncStatus;
 }
 function schedulePush() {

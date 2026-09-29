@@ -103,6 +103,7 @@ function kbLinkify(s) {
 }
 
 function renderKnowledge() {
+  if (!$('#v-knowledge')) return;
   // A background redraw (a sync, coming back to the app) leaves an article being written alone:
   // redrawing it would lose the scroll position, and on a phone break a word being typed.
   if (background && kbEdit && $('#kbform')) return;
@@ -118,17 +119,15 @@ function renderKnowledge() {
   else if (kbArt && S.kb.some(a => a.id === kbArt)) h = kbArticle(S.kb.find(a => a.id === kbArt));
   else {
     kbArt = null;
-    h = kbFlows() + kbIndex();
+    h = kbIndex() + kbFlows();
   }
   setHTML($('#v-knowledge'), h);
 }
 function kbFlows() {
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
-  let h = `<h2>Flows</h2>${
-    flows.length
-      ? `<div class="flows">${flows.map(f => `<div class="flow"><a class="btn blue" href="${esc(f.url)}" data-flow="${f.id}">${esc(f.name)}</a><small>${f.last ? 'Last used ' + whenLabel(f.last) : 'Not used yet'}</small></div>`).join('')}</div>`
-      : '<p class="hint">Buttons that run your Power Automate Desktop flows on this computer.</p>'
-  }`;
+  let h = flows.length
+    ? ''
+    : '<h2>Flows</h2><p class="hint">Buttons on Today that run your Power Automate Desktop flows on this computer.</p>';
   h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage flows' : 'Add a flow'}</summary>`;
   flows.forEach(
     f =>
@@ -140,8 +139,15 @@ function kbFlows() {
     <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run.</p></details>`;
   return h;
 }
+// The notes (one scratchpad, synced), pinned at the top of Knowledge.
+function notesTile() {
+  const first = (S.notes || '').split('\n').find(l => l.trim()) || '';
+  return `<button class="soonrow kbrow notestile" data-goto="notes"><span><b>Scratchpad</b><br><small class="hint">${first ? esc(first.slice(0, 80)) : 'Notes and pictures, synced to your other devices'}</small></span></button>`;
+}
 function kbIndex() {
-  let h = `<h2 class="kbhead">Knowledge</h2><input class="fld" type="search" id="kbq" placeholder="Search articles" aria-label="Search articles" autocomplete="off" value="${esc(kbQuery)}"><div id="kbres">${kbResults()}</div>`;
+  let h =
+    notesTile() +
+    `<h2 class="kbhead">Knowledge</h2><input class="fld" type="search" id="kbq" placeholder="Search articles" aria-label="Search articles" autocomplete="off" value="${esc(kbQuery)}"><div id="kbres">${kbResults()}</div>`;
   h += `<div id="kbtree"${kbQuery.trim() ? ' hidden' : ''}>`;
   const top = kbKids('');
   h += top.length
@@ -390,7 +396,7 @@ document.addEventListener(
     if (!f) return;
     f.last = Date.now();
     save();
-    setTimeout(renderKnowledge, 0); // (after the link has been followed)
+    setTimeout(renderView, 0); // (after the link has been followed; the chips are on Today)
   },
   true,
 );

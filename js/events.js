@@ -386,6 +386,12 @@ document.addEventListener('click', e => {
   }
   if (d.goto) {
     go(d.goto);
+    if (d.openadd) {
+      panels.waddd = true;
+      renderWaiting();
+      const w = $('#wwhat');
+      w && w.focus();
+    }
     const i = d.goto === 'inbox' && $('#iin');
     i && i.focus();
   }
