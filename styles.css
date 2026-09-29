@@ -261,6 +261,9 @@ header {
   flex: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
   gap: 6px;
   background: none;
   border: 0;

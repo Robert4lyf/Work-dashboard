@@ -159,9 +159,13 @@ function kbIndex() {
 function kbTop() {
   const top = kbKids(''),
     lost = kbLost();
-  let h = top.length
-    ? `<div class="tiles">${top.map(kbTile).join('')}${lost.length ? `<button class="tile lost" data-kbcat="lost"><b>Uncategorised</b> <small>${lost.length}</small></button>` : ''}</div>`
-    : '<p class="hint">No categories yet. Add one below, then add articles to it: step-by-step guides, who looks after what, links to tools.</p>';
+  const lostTile = lost.length
+    ? `<button class="tile lost" data-kbcat="lost"><b>Uncategorised</b> <small>${lost.length}</small></button>`
+    : '';
+  let h =
+    top.length || lost.length
+      ? `<div class="tiles">${top.map(kbTile).join('')}${lostTile}</div>`
+      : '<p class="hint">No categories yet. Add one below, then add articles to it: step-by-step guides, who looks after what, links to tools.</p>';
   h +=
     '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form>';
   return h;

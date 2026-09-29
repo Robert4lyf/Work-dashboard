@@ -114,3 +114,49 @@ test('the Move choice is kept over a background redraw', async ({ app, page }) =
   await page.click('[data-kbmvgo]');
   expect((await app.state()).kbcats.find(c => c.id === 'sub').parent).toBe('oth');
 });
+
+test('articles with no category left are still reachable when there are no categories', async ({
+  app,
+  page,
+}) => {
+  await app.setState(s => {
+    s.kbcats = [];
+    s.kb = [{ id: 'a1', cat: 'gone', title: 'Lost article', body: 'Still here.', imgs: [] }];
+  });
+  await app.go('knowledge');
+  await page.click('#v-knowledge [data-kbcat="lost"]');
+  await page.locator('#v-knowledge .kbrow', { hasText: 'Lost article' }).click();
+  await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Lost article');
+});
+
+test("the header's alarm button opens Today's list from a quest page; back from Notes goes to Knowledge", async ({
+  app,
+  page,
+}) => {
+  await app.setState(s => {
+    s.quests = [{ id: 'q1', text: 'Beta', children: [] }];
+    s.alarms = [
+      {
+        id: 'al1',
+        time: '09:00',
+        label: 'Late',
+        device: '',
+        day: today(),
+        done: '',
+        snooze: Date.now() + 3600e3,
+      },
+    ];
+  });
+  await app.go('today');
+  await page.click('#v-today [data-open="q1"]');
+  await expect(page.locator('#v-today .facts h1')).toHaveText('Beta');
+  await page.click('header .halarm');
+  await expect(page.locator('#v-today .facts')).toHaveCount(0);
+  await expect(page.locator('#alarmd')).toBeVisible();
+
+  await app.go('knowledge');
+  await page.click('#v-knowledge [data-goto="notes"]');
+  await expect(page.locator('#v-notes')).toBeVisible();
+  await page.evaluate(() => history.back());
+  await expect(page.locator('#v-knowledge')).toBeVisible();
+});

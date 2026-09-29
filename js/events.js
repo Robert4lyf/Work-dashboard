@@ -372,7 +372,10 @@ document.addEventListener('click', e => {
       if (view !== 'today') go('today');
     }
   }
-  if (d.v && b.closest('header, #v-waiting, #waitsec')) go(d.v);
+  if (d.v && b.closest('header, #v-waiting, #waitsec')) {
+    if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open quest)
+    go(d.v);
+  }
   if (b.id === 'searchBtn') openSearch();
   if (d.sart)
     leaveEditor(() => {
@@ -1078,6 +1081,7 @@ function appBack() {
     return true;
   }
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
+  if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view !== 'today') return (go('today'), true);
   return false;
 }
