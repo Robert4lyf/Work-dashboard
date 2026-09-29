@@ -185,7 +185,7 @@ document.addEventListener('change', e => {
   // field still has the keyboard, or the picker just closed on it) is saved once it's left,
   // and until then a redraw keeps it as entered.
   if (waitd && waitd.dataset.waitid && el.type === 'date' && document.activeElement === el) return;
-  if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid) && !el.closest('#kbform'))
+  if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid) && !el.closest('#kbform') && el.id !== 'kbmv')
     delete el.dataset.typed;
   if (waitd && waitd.dataset.waitid) {
     return saveWaitPanel(waitd.dataset.waitid, true);

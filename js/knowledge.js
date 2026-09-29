@@ -336,7 +336,9 @@ function kbReveal(cat) {
 function kbAddCat(name, parent) {
   name = cleanText(name.trim().slice(0, 80));
   if (!name) return;
-  const c = { id: uid(), name, parent: parent || '' };
+  // (A parent deleted meanwhile, on another device say: filed at the top level.)
+  parent = kbCat(parent) ? parent : '';
+  const c = { id: uid(), name, parent };
   S.kbcats.push(c);
   kbReveal(parent);
   save();
@@ -346,8 +348,9 @@ function kbRename(id) {
   const c = kbCat(id);
   if (!c) return;
   sheet({ title: 'Rename category', label: 'Name', value: c.name, ok: 'Rename' }, v => {
-    if (!v) return;
-    c.name = cleanText(v.slice(0, 80));
+    const cur = kbCat(id); // (looked up again: a sync meanwhile may have rebuilt the list)
+    if (!v || !cur) return;
+    cur.name = cleanText(v.slice(0, 80));
     save();
     renderKnowledge();
   });
