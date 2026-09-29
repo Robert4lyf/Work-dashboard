@@ -85,13 +85,13 @@ function renderNoteImgs() {
     ? `<div class="nimgs">${imgs
         .map(
           (m, i) =>
-            `<div class="nimg"><button class="nimgopen" data-nimg="${m.id}" aria-label="Show picture ${i + 1} full size"><img src="${m.src}" alt="Picture ${i + 1}"></button><button class="x" data-delnimg="${m.id}" aria-label="Delete picture ${i + 1}">×</button></div>`,
+            `<div class="nimg"><button class="nimgopen" data-nimg="${m.id}" aria-label="Show picture ${i + 1} full size"><img src="${m.src}" alt="Picture ${i + 1}"></button><button class="dellink" data-delnimg="${m.id}" aria-label="Delete picture ${i + 1}">Delete</button></div>`,
         )
         .join('')}</div>`
     : `<p class="hint">${imgBusy ? 'Adding…' : 'Paste a picture into the notes, or add one from a file.'}</p>`;
   const m = imgShown && imgs.find(x => x.id === imgShown);
   if (m)
-    h += `<div class="nimgfull" role="dialog" aria-label="Picture"><button class="nimgclose" data-nimgclose="1" aria-label="Close"><img src="${m.src}" alt="Picture, full size"></button></div>`;
+    h += `<div class="nimgfull" role="dialog" aria-label="Picture"><button class="nimgclose" data-nimgclose="1" aria-label="Close"><img src="${m.src}" alt="Picture, full size"></button><div class="acts"><button class="btn" data-nimgclose="1">Close</button><button class="btn pink" data-delnimg="${m.id}">Delete</button></div></div>`;
   else imgShown = null;
   el.innerHTML = h;
 }
