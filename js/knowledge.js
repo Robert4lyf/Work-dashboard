@@ -2,12 +2,21 @@
    plus Flows: buttons that run Power Automate Desktop flows on this computer. */
 let kbArt = null, // the article being read
   kbEdit = null, // the article being written: { id (none for a new one), cat }
-  kbQuery = ''; // what's typed in the search box
+  kbQuery = '', // what's typed in the search box
+  kbMoving = null, // the category being moved (its "Move to" choice is showing)
+  kbImgShown = null; // an article's picture shown full size
 const byName = (a, b) =>
   a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) || (a < b ? -1 : a > b ? 1 : 0);
 // A flow's Run URL (Power Automate Desktop: the flow's Properties > Details). Only that kind of
 // link: a synced row mustn't be able to put any other link behind a button.
 const FLOW_URL = /^ms-powerautomate:\/[^\s"'<>`]*$/i;
+// When something happened, as "Today 09:14" or "Mon 28 Sep 17:02".
+const whenLabel = ms => {
+  const d = new Date(ms);
+  return dayLabel(fmt(d)) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+};
+const KB_BODY = 50000, // characters in an article
+  KB_IMGS = 30; // pictures in an article
 const okText = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
 // Called from norm: keep only well-formed categories, articles and flows.
 function normKnowledge() {
@@ -33,12 +42,22 @@ function normKnowledge() {
     id: a.id,
     cat: okText(a.cat, 40),
     title: okText(a.title, 200) || 'Untitled',
-    body: okText(a.body, 50000),
+    body: okText(a.body, KB_BODY),
     edited: typeof a.edited === 'number' ? a.edited : 0,
+    imgs: (Array.isArray(a.imgs) ? a.imgs : [])
+      .filter(m => ok(m) && okImg(m.src))
+      .slice(0, KB_IMGS)
+      .map(m => ({ id: m.id, src: m.src })),
   }));
   S.flows = (Array.isArray(S.flows) ? S.flows : [])
     .filter(f => ok(f) && typeof f.url === 'string' && FLOW_URL.test(f.url))
-    .map(f => ({ id: f.id, name: okText(f.name, 60) || 'Flow', url: f.url }));
+    .map(f => ({
+      id: f.id,
+      name: okText(f.name, 60) || 'Flow',
+      url: f.url,
+      // (a time that can't be right, say from a device with its clock wrong, isn't shown)
+      last: Number.isFinite(+f.last) && f.last > 0 && f.last < Date.now() + 864e5 ? +f.last : 0,
+    }));
 }
 const kbCat = id => S.kbcats.find(c => c.id === id);
 const kbKids = id => S.kbcats.filter(c => c.parent === id).sort((a, b) => byName(a.name, b.name));
@@ -57,16 +76,39 @@ function kbCount(id) {
 function kbCatIds(id) {
   return [id, ...kbKids(id).flatMap(c => kbCatIds(c.id))];
 }
-// Text as written, with web links made clickable.
+// Text as written, with web links made clickable. Links are found in the text itself (before
+// escaping), so an & or a quote in one stays part of it; punctuation just after one isn't taken
+// in, except a closing bracket that one of its own opened (as in Wikipedia's).
 function kbLinkify(s) {
-  return esc(s).replace(/\bhttps?:\/\/[^\s<]+/g, m => {
-    const tail = (m.match(/(?:[.,;:!?)\]]|&#39;|&quot;)+$/) || [''])[0],
-      u = m.slice(0, m.length - tail.length);
-    return `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>${tail}`;
-  });
+  let out = '',
+    at = 0;
+  for (const m of s.matchAll(/\bhttps?:\/\/[^\s<>"]+/g)) {
+    let u = m[0];
+    for (;;) {
+      const last = u.slice(-1);
+      if (/[.,;:!?'*]/.test(last)) u = u.slice(0, -1);
+      else if (last === ')' && (u.match(/\(/g) || []).length < (u.match(/\)/g) || []).length)
+        u = u.slice(0, -1);
+      else if (last === ']' && (u.match(/\[/g) || []).length < (u.match(/\]/g) || []).length)
+        u = u.slice(0, -1);
+      else break;
+    }
+    out +=
+      esc(s.slice(at, m.index)) +
+      `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(u)}</a>`;
+    at = m.index + u.length;
+  }
+  return out + esc(s.slice(at));
 }
 
 function renderKnowledge() {
+  // What's typed in the editor is the draft: a redraw (a tick elsewhere, undo, a sync) shows it,
+  // not the saved article.
+  if (kbEdit && $('#kbform')) {
+    kbEdit.title = $('#kbt').value;
+    kbEdit.body = $('#kbb').value;
+    kbEdit.cat = $('#kbc').value;
+  }
   let h;
   if (kbEdit) h = kbEditor();
   else if (kbArt && S.kb.some(a => a.id === kbArt)) h = kbArticle(S.kb.find(a => a.id === kbArt));
@@ -80,7 +122,7 @@ function kbFlows() {
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
   let h = `<h2>Flows</h2>${
     flows.length
-      ? `<div class="flows">${flows.map(f => `<a class="btn blue" href="${esc(f.url)}" data-flow="${f.id}">${esc(f.name)}</a>`).join('')}</div>`
+      ? `<div class="flows">${flows.map(f => `<div class="flow"><a class="btn blue" href="${esc(f.url)}" data-flow="${f.id}">${esc(f.name)}</a><small>${f.last ? 'Last used ' + whenLabel(f.last) : 'Not used yet'}</small></div>`).join('')}</div>`
       : '<p class="hint">Buttons that run your Power Automate Desktop flows on this computer.</p>'
   }`;
   h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage flows' : 'Add a flow'}</summary>`;
@@ -117,7 +159,12 @@ function kbCatTree(c) {
     id = 'kc-' + c.id;
   return `<details id="${id}" class="kcat"${panels[id] ? ' open' : ''}><summary>${esc(c.name)} <small>${kbCount(c.id)}</small></summary><div class="kbody">
     ${kids.map(kbCatTree).join('')}${arts.map(kbRow).join('')}${!kids.length && !arts.length ? '<p class="hint kbempty">Empty.</p>' : ''}
-    <div class="links"><button class="linkbtn" data-kbnew="${c.id}">+ Article</button><button class="linkbtn" data-kbsub="${c.id}">+ Sub-category</button><button class="linkbtn" data-kbren="${c.id}">Rename</button><button class="dellink" data-kbdelcat="${c.id}">Delete</button></div></div></details>`;
+    ${kbMoving === c.id ? kbMovePanel(c) : ''}<div class="links"><button class="linkbtn" data-kbnew="${c.id}">+ Article</button><button class="linkbtn" data-kbsub="${c.id}">+ Sub-category</button><button class="linkbtn" data-kbren="${c.id}">Rename</button><button class="linkbtn" data-kbmove="${c.id}">Move</button><button class="dellink" data-kbdelcat="${c.id}">Delete</button></div></div></details>`;
+}
+// Where a category can go: the top level, or into any category that isn't itself or inside it.
+function kbMovePanel(c) {
+  const inside = new Set(kbCatIds(c.id));
+  return `<div class="kbmove box"><label class="f" for="kbmv">Move “${esc(c.name)}” into</label><select class="fld" id="kbmv"><option value=""${c.parent ? '' : ' selected'}>Top level</option>${kbCatOptions(c.parent, inside)}</select><div class="acts"><button class="btn sm blue" data-kbmvgo="${c.id}">Move</button><button class="btn sm" data-kbmvcancel="1">Cancel</button></div></div>`;
 }
 function kbResults() {
   const q = kbQuery.trim().toLowerCase();
@@ -138,14 +185,32 @@ function kbArticle(a) {
   return `<button class="linkbtn" data-kbback="1">‹ Knowledge</button>
     <p class="hint kbtrail">${esc(trail.join(' › ') || 'Uncategorised')}</p>
     <h2 class="kbtitle">${esc(a.title)}</h2>
-    <div class="kbtext box">${a.body ? kbLinkify(a.body) : '<span class="hint">Nothing written yet.</span>'}</div>
+    <div class="kbtext box">${a.body ? kbLinkify(a.body) : a.imgs.length ? '' : '<span class="hint">Nothing written yet.</span>'}</div>
+    ${kbImgGrid(a.imgs, false)}${kbImgFull(a.imgs)}
     <div class="acts"><button class="btn blue" data-kbedit="${a.id}">Edit</button><button class="btn" data-kbdel="${a.id}">Delete</button></div>`;
 }
-// Every category, as a path, for the article's "Category" choice.
-function kbCatOptions(sel) {
+// An article's pictures as thumbnails: tap one for full size (reading), or remove it (editing).
+function kbImgGrid(imgs, editing) {
+  if (!imgs.length) return '';
+  return `<div class="nimgs kbimgs">${imgs
+    .map((m, i) =>
+      editing
+        ? `<div class="nimg"><span class="nimgopen"><img src="${m.src}" alt="Picture ${i + 1}"></span><button class="dellink" data-kbimgdel="${m.id}" aria-label="Remove picture ${i + 1}">Remove</button></div>`
+        : `<div class="nimg"><button class="nimgopen" data-kbimg="${m.id}" aria-label="Show picture ${i + 1} full size"><img src="${m.src}" alt="Picture ${i + 1}"></button></div>`,
+    )
+    .join('')}</div>`;
+}
+function kbImgFull(imgs) {
+  const m = kbImgShown && imgs.find(x => x.id === kbImgShown);
+  if (!m) return ((kbImgShown = null), '');
+  return `<div class="nimgfull" role="dialog" aria-label="Picture"><button class="nimgclose" data-kbimgclose="1" aria-label="Close"><img src="${m.src}" alt="Picture, full size"></button><div class="acts"><button class="btn" data-kbimgclose="1">Close</button></div></div>`;
+}
+// Every category, as a path, for the article's "Category" choice (leaving out `skip`).
+function kbCatOptions(sel, skip) {
   const out = [];
   (function w(parent, trail) {
     kbKids(parent).forEach(c => {
+      if (skip && skip.has(c.id)) return;
       out.push([c.id, [...trail, c.name].join(' › ')]);
       w(c.id, [...trail, c.name]);
     });
@@ -156,10 +221,13 @@ function kbCatOptions(sel) {
 }
 function kbEditor() {
   const a = (kbEdit.id && S.kb.find(x => x.id === kbEdit.id)) || { title: '', body: '', cat: kbEdit.cat };
+  if (!kbEdit.imgs) kbEdit.imgs = [...(a.imgs || [])]; // (changed here, kept only on Save)
+  if (kbEdit.title === undefined) Object.assign(kbEdit, { title: a.title, body: a.body, cat: a.cat });
   return `<h2>${kbEdit.id ? 'Edit article' : 'New article'}</h2><form id="kbform">
-    <label class="f" for="kbt">Title</label><input class="fld" id="kbt" maxlength="200" value="${esc(a.title)}" autocomplete="off" required>
-    <label class="f" for="kbc">Category</label><select class="fld" id="kbc">${kbCatOptions(a.cat)}</select>
-    <label class="f" for="kbb">Article</label><textarea class="fld kbbody" id="kbb" placeholder="Steps, contacts, links... Web links become clickable.">${esc(a.body)}</textarea>
+    <label class="f" for="kbt">Title</label><input class="fld" id="kbt" maxlength="200" value="${esc(kbEdit.title)}" autocomplete="off" required>
+    <label class="f" for="kbc">Category</label><select class="fld" id="kbc">${kbCatOptions(kbEdit.cat)}</select>
+    <label class="f" for="kbb">Article</label><textarea class="fld kbbody" id="kbb" maxlength="${KB_BODY}" placeholder="Steps, contacts, links... Web links become clickable. Paste a screenshot to add it below.">${esc(kbEdit.body)}</textarea>
+    <div class="sechead kbimghead"><h2>Pictures</h2><button class="btn sm" type="button" id="kbimgadd">Add picture</button></div><input type="file" id="kbimgfile" accept="image/*" multiple hidden aria-hidden="true"><div id="kbimgs">${kbImgGrid(kbEdit.imgs, true)}</div>
     <div class="acts"><button class="btn green">Save</button><button class="btn" type="button" data-kbcancel="1">Cancel</button></div></form>`;
 }
 
@@ -203,9 +271,16 @@ function kbSave() {
   if (!title) return;
   let a = kbEdit.id && S.kb.find(x => x.id === kbEdit.id);
   if (!a) S.kb.push((a = { id: uid() }));
-  Object.assign(a, { title: title.slice(0, 200), cat, body, edited: Date.now() });
+  Object.assign(a, {
+    title: title.slice(0, 200),
+    cat,
+    body,
+    imgs: kbEdit.imgs || a.imgs || [],
+    edited: Date.now(),
+  });
   kbEdit = null;
   kbArt = a.id;
+  kbImgShown = null;
   kbReveal(cat);
   save();
   renderKnowledge();
@@ -227,12 +302,51 @@ function addFlow() {
   if (!name || !url) return;
   if (!FLOW_URL.test(url))
     return toast('That isn\'t a Run URL: it starts with "ms-powerautomate:/"', false, 4000);
-  S.flows.push({ id: uid(), name: name.slice(0, 60), url });
+  S.flows.push({ id: uid(), name: name.slice(0, 60), url, last: 0 });
   panels.kbflows = true; // (stays open for adding another)
   save();
   renderKnowledge();
   $('#flowname').focus();
 }
+function kbMoveCat(id, parent) {
+  const c = kbCat(id);
+  if (!c || kbCatIds(id).includes(parent) || (parent && !kbCat(parent))) return;
+  c.parent = parent;
+  kbMoving = null;
+  kbReveal(id);
+  save();
+  renderKnowledge();
+  toast('Moved to ' + (parent ? kbTrail(parent).join(' › ') : 'the top level'));
+}
+// The editor's pictures redraw on their own: redrawing the form would lose what's typed.
+function kbRenderEditImgs() {
+  const el = $('#kbimgs');
+  if (el && kbEdit) el.innerHTML = kbImgGrid(kbEdit.imgs, true);
+}
+async function kbAddImages(files) {
+  if (!kbEdit) return;
+  const room = KB_IMGS - kbEdit.imgs.length;
+  if (room <= 0) return toast(`An article can have up to ${KB_IMGS} pictures`, false, 3000);
+  const r = await readImages([...files].slice(0, room));
+  if (!kbEdit) return; // (closed meanwhile)
+  kbEdit.imgs.push(...r.srcs.slice(0, KB_IMGS - kbEdit.imgs.length).map(src => ({ id: uid(), src })));
+  kbRenderEditImgs();
+  imageToast(r);
+}
+// A tap on a flow's button: remembered, so it can say when it was last used. (Whether the flow
+// then ran is up to Power Automate: the page can't tell.)
+document.addEventListener(
+  'click',
+  e => {
+    const a = e.target.closest && e.target.closest('a[data-flow]'),
+      f = a && S.flows.find(x => x.id === a.dataset.flow);
+    if (!f) return;
+    f.last = Date.now();
+    save();
+    setTimeout(renderKnowledge, 0); // (after the link has been followed)
+  },
+  true,
+);
 // Typing a search shows the matches in place of the categories (the box itself isn't redrawn).
 function kbSearch(v) {
   kbQuery = v;
@@ -242,6 +356,7 @@ function kbSearch(v) {
 function kbClick(d, b) {
   if (d.kbart) {
     kbArt = d.kbart;
+    kbImgShown = null;
     renderKnowledge();
     window.scrollTo(0, 0);
   }
@@ -251,6 +366,7 @@ function kbClick(d, b) {
   }
   if (d.kbnew) {
     kbEdit = { cat: d.kbnew };
+    kbImgShown = null;
     renderKnowledge();
     window.scrollTo(0, 0);
     $('#kbt').focus();
@@ -259,7 +375,8 @@ function kbClick(d, b) {
     const a = S.kb.find(x => x.id === d.kbedit);
     if (!a) return;
     // (an article whose category went is filed in the first one, unless another is chosen)
-    kbEdit = { id: a.id, cat: a.cat };
+    kbEdit = { id: a.id };
+    kbImgShown = null;
     renderKnowledge();
     window.scrollTo(0, 0);
   }
@@ -273,6 +390,29 @@ function kbClick(d, b) {
     if (v) kbAddCat(v, d.kbsub);
   }
   if (d.kbren) kbRename(d.kbren);
+  if (d.kbmove) {
+    kbMoving = kbMoving === d.kbmove ? null : d.kbmove;
+    renderKnowledge();
+    if (kbMoving) $('#kbmv').focus();
+  }
+  if (d.kbmvgo) kbMoveCat(d.kbmvgo, $('#kbmv').value);
+  if (d.kbmvcancel) {
+    kbMoving = null;
+    renderKnowledge();
+  }
+  if (b.id === 'kbimgadd') $('#kbimgfile').click();
+  if (d.kbimgdel && kbEdit) {
+    kbEdit.imgs = kbEdit.imgs.filter(m => m.id !== d.kbimgdel);
+    kbRenderEditImgs();
+  }
+  if (d.kbimg) {
+    kbImgShown = d.kbimg;
+    renderKnowledge();
+  }
+  if (d.kbimgclose) {
+    kbImgShown = null;
+    renderKnowledge();
+  }
   if (d.kbdelcat) {
     const n = kbCount(d.kbdelcat);
     if (arm(b, n ? `Delete it and ${plural(n, 'article')}?` : 'Delete?')) kbDeleteCat(d.kbdelcat);

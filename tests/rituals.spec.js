@@ -120,6 +120,22 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
     since: '2026-09-23',
   });
   await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam');
+  // Once waiting there's no Save: each changed detail is saved straight away, and moving on
+  // with Tab keeps the keyboard where it went.
+  await page.fill('#wwho', 'Sam B');
+  await page.press('#wwho', 'Tab');
+  await expect(page.locator('#wnote')).toBeFocused();
+  expect((await app.state()).quests[0].wait.who).toBe('Sam B');
+  await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam B');
+  await page.fill('#wwho', 'Sam');
+  await page.press('#wwho', 'Tab');
+  // A date being typed is saved once the field is left, not a part at a time.
+  await page.click('#wdue');
+  await page.keyboard.type('10152026');
+  await page.press('#wdue', 'Tab');
+  expect((await app.state()).quests[0].wait.due).toBe('2026-10-15');
+  await page.fill('#wdue', '2026-09-23');
+  await page.press('#wdue', 'Tab');
   // Once waiting there's no Save: each changed detail is saved straight away.
   await expect(page.locator('[data-waitsave]')).toHaveCount(0);
   await page.fill('#wnote', 'Q3 and Q4 figures');

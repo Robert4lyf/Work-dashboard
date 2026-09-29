@@ -87,7 +87,7 @@ function applyRows(rows, firstSync, keep) {
     norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt }));
     // The quest on screen went (in the rows, not through the day's reset or a chosen replace).
     const open = !firstSync && path.length && !find(path[path.length - 1]);
-    persistLocal();
+    if (!persistLocal()) toast("Couldn't save: this device is out of storage", false, 4000);
     rollover();
     markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
     inBackground(renderAll);
@@ -167,7 +167,8 @@ async function saveSnapshot() {
   if (Date.now() - sync2.snapAt < 6 * 3600e3) return;
   const { error } = await sb.from('cockpit_state').upsert({
     user_id: session.user.id,
-    data: { ...S, noteImgs: undefined }, // (pictures are big: kept in their own rows only)
+    // (pictures are big: kept in their own rows only)
+    data: { ...S, noteImgs: undefined, kb: S.kb.map(a => ({ ...a, imgs: undefined })) },
     edited_at: Date.now(),
     updated_at: new Date().toISOString(),
   });

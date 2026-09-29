@@ -12,6 +12,7 @@ function renderAll() {
   renderAccount();
   renderNotes();
   renderKnowledge();
+  if (view === 'search') renderSearch();
   syncRinging();
   renderZen();
   if (talk) renderTalk();
@@ -31,6 +32,7 @@ function go(v) {
     v = 'review';
   }
   view = v;
+  if (imgShown || kbImgShown) closeImgs();
   renderHeader();
   document.querySelectorAll('nav button[data-v]').forEach(x => {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
@@ -42,6 +44,7 @@ function go(v) {
     'waiting',
     'notes',
     'knowledge',
+    'search',
     'review',
     'projects',
     'focus',
@@ -160,8 +163,12 @@ document.addEventListener('change', e => {
   const waitd = el.closest('#waitd');
   if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid) && !el.closest('#kbform'))
     delete el.dataset.typed;
-  // Already waiting: a changed detail is saved straight away.
-  if (waitd && waitd.dataset.waitid) return saveWaitPanel(waitd.dataset.waitid);
+  // Already waiting: a changed detail is saved straight away. (A date being typed changes a
+  // part at a time: it's saved once the field is left.)
+  if (waitd && waitd.dataset.waitid) {
+    if (el.type === 'date' && document.activeElement === el) return;
+    return saveWaitPanel(waitd.dataset.waitid, true);
+  }
   // Alarms: time, label and device; this device's name (Settings).
   if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
   if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
@@ -175,6 +182,11 @@ document.addEventListener('change', e => {
       save();
       renderKnowledge();
     }
+    return;
+  }
+  if (el.id === 'kbimgfile') {
+    kbAddImages(el.files || []);
+    el.value = '';
     return;
   }
   if (el.id === 'nimgfile') {
@@ -289,6 +301,7 @@ document.addEventListener('input', e => {
   if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
   if (el.id === 'notesin') return typedNotes(el.value);
   if (el.id === 'kbq') return kbSearch(el.value);
+  if (el.id === 'sq') return typedSearch(el.value);
   if (el.dataset.field !== 'notes') return;
   const r = find(el.dataset.id);
   if (r) {
@@ -318,6 +331,14 @@ document.addEventListener('click', e => {
     }
   }
   if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (b.id === 'searchBtn') openSearch();
+  if (d.sart && !(kbEdit && !confirm('Leave the article you are writing? Changes not saved will be lost.'))) {
+    kbArt = d.sart;
+    kbEdit = null;
+    kbImgShown = null;
+    go('knowledge');
+    renderKnowledge();
+  }
   if (d.goupd) {
     // An Upcoming item (from the Waiting tab): Today's list, with Upcoming open.
     path = [];
@@ -703,6 +724,11 @@ document.addEventListener('click', e => {
     // Nor the notes' pictures when it has none of its own (a previous version leaves them out).
     const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
       imgs = Array.isArray(pending.noteImgs) ? null : S.noteImgs,
+      artImgs = new Map(S.kb.map(a => [a.id, a.imgs])),
+      hadArtImgs = new Set(
+        (Array.isArray(pending.kb) ? pending.kb : []).filter(a => a && Array.isArray(a.imgs)).map(a => a.id),
+      ),
+      kept = { kb: S.kb, kbcats: S.kbcats, flows: S.flows },
       was = JSON.stringify(S);
     try {
       norm(pending);
@@ -713,6 +739,13 @@ document.addEventListener('click', e => {
     }
     Object.assign(S, keep);
     if (imgs) S.noteImgs = imgs;
+    // A copy from before the Knowledge tab has none of it: what's here stays.
+    ['kb', 'kbcats', 'flows'].forEach(k => {
+      if (!Array.isArray(pending[k])) S[k] = kept[k];
+    });
+    S.kb.forEach(a => {
+      if (!hadArtImgs.has(a.id) && artImgs.has(a.id)) a.imgs = artImgs.get(a.id);
+    });
     rollover(); // (it may be from another day)
     pending = null;
     path = [];
@@ -802,9 +835,15 @@ document.addEventListener(
   true,
 );
 
+// Any picture shown full size (Notes' or an article's) closes.
+function closeImgs() {
+  imgShown = kbImgShown = null;
+  renderNoteImgs();
+  renderKnowledge();
+}
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'i or n capture (n on a quest: subquest) · t today · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: subquest) · / search · t today · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
@@ -833,6 +872,9 @@ document.addEventListener('keydown', e => {
   } else if (k === 't') {
     if (view === 'today' && path.length) openPath([]);
     go('today');
+  } else if (k === '/') {
+    e.preventDefault();
+    openSearch();
   } else if (k === 'l') go('log');
   else if (k === 'p' && S.timer) {
     const b = $('[data-pause]');
@@ -841,7 +883,8 @@ document.addEventListener('keydown', e => {
   else if (k === 's') go('account');
   else if (k === 'z') setZen(!zen);
   else if (k === 'Escape') {
-    if (zen) setZen(false);
+    if (imgShown || kbImgShown) closeImgs();
+    else if (zen) setZen(false);
     else if (view === 'today' && path.length) openPath(path.slice(0, -1));
   }
 });
@@ -899,6 +942,8 @@ setInterval(timerTick, 500);
 setInterval(alarmTick, 1000);
 // Leaving the notes box saves straight away rather than after the typing pause.
 document.addEventListener('focusout', e => {
+  const wd = e.target.type === 'date' && e.target.closest && e.target.closest('#waitd[data-waitid]');
+  if (wd) return saveWaitPanel(wd.dataset.waitid, true);
   if (e.target.dataset && e.target.dataset.atime) {
     delete e.target.dataset.typed;
     // Once focus has moved on (so the redraw keeps it where it went).
