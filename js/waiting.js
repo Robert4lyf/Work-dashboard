@@ -81,10 +81,11 @@ function renderWaiting() {
         ? 1
         : 0,
   );
-  let h = `<h2>Waiting</h2><form class="pform box" id="wform">
+  // The add box starts closed, so the tab opens on the list.
+  let h = `<h2>Waiting</h2><details id="waddd"${panels.waddd ? ' open' : ''}><summary>Add a waiting item</summary><form class="pform box" id="wform">
     <input class="fld" id="wwhat" maxlength="120" placeholder="What you're waiting for" aria-label="What" autocomplete="off">
     <div class="prow2"><input class="fld" id="wfrom" maxlength="60" placeholder="From whom" aria-label="From whom" list="wholist2" autocomplete="off"><input class="fld" type="date" id="wchase" aria-label="Chase on (optional)"></div>
-    ${whoList().replace('wholist', 'wholist2')}<button class="btn">Add</button></form>`;
+    ${whoList().replace('wholist', 'wholist2')}<button class="btn">Add</button></form></details>`;
   if (!all.length) h += '<div class="empty">Nothing to chase.</div>';
   else {
     h += '<div class="list box">';
