@@ -983,8 +983,30 @@ setInterval(() => {
 // and only then does anything draw or sync.
 let deferStart = false,
   heldAtStart = '';
-function start(pics) {
-  load(pics);
+function start(pics, kv) {
+  // The sync bookkeeping from the store; the saved copy too, if it's there. If not (a first run
+  // on this version), both come from localStorage, as before, and move over: they're written to
+  // the store, and the localStorage copies go once what was written reads back the same.
+  let moving = false;
+  if (kv.sync !== null)
+    try {
+      sync2 = Object.assign({ cursor: 0, synced: {}, dirty: {}, snapAt: 0 }, JSON.parse(kv.sync));
+    } catch (e) {}
+  else moving = !!picDb;
+  load(pics, kv.state);
+  if (kv.state === null) moving = !!picDb;
+  if (moving) {
+    const written = stateJSON();
+    writeKV({ state: written, sync: JSON.stringify(sync2) }).then(async ok => {
+      if (!ok) return;
+      const back = await readKV(picDb);
+      if (back.state !== written) return;
+      try {
+        localStorage.removeItem(KEY);
+        localStorage.removeItem(SYNC_KEY);
+      } catch (e) {}
+    });
+  }
   // Signed in and online, the day's reset (and finishing a session that ended while the app was
   // closed) waits for the server's copy: see onAuthStateChange. Otherwise it happens here.
   deferStart = !!sb && navigator.onLine;
@@ -1009,9 +1031,9 @@ function start(pics) {
 }
 openPics().then(async db => {
   picDb = db;
-  const pics = await readPics(db);
+  const [pics, kv] = await Promise.all([readPics(db), readKV(db)]);
   picStored = new Set(pics.keys());
-  start(pics);
+  start(pics, kv);
 });
 // Android's back gesture: one history entry stands for "in the app". Going back runs the app's
 // own back step (close a picture, leave an article or a quest's page, back to Today...) and

@@ -10,9 +10,11 @@ const test = base.test.extend({
       u => !u.href.startsWith('http://localhost'),
       r => r.abort(),
     );
-    // A reload waits, like opening, for the app to have started (it reads IndexedDB first).
+    // A reload waits for writes to the store to finish first, then, like opening, for the app to
+    // have started (it reads the store first).
     const reload = page.reload.bind(page);
     page.reload = async (...a) => {
+      await page.evaluate(() => (window.storeDone ? storeDone() : null)).catch(() => {});
       const r = await reload(...a);
       await page.waitForFunction(() => window.appReady === true);
       return r;
@@ -24,19 +26,17 @@ const test = base.test.extend({
         await page.goto('/');
         await page.waitForFunction(() => window.appReady === true);
       },
-      // The saved copy, with the pictures' data (kept in IndexedDB: see js/pics.js) filled in.
-      state: () =>
-        page.evaluate(() => {
-          const s = JSON.parse(localStorage.getItem('work-cockpit-v1')),
-            m = new Map(allPics().map(p => [p.id, p.src]));
-          if (s) allPics(s).forEach(p => p.src === undefined && m.has(p.id) && (p.src = m.get(p.id)));
-          return s;
-        }),
+      // The app's data as saved (the state in memory is what the store holds, pictures included).
+      state: () => page.evaluate(() => JSON.parse(JSON.stringify(S))),
+      // Changes the saved data as a raw object (as a test would edit the saved copy), for the
+      // reload that usually follows.
       setState: fn =>
-        page.evaluate(src => {
-          const s = JSON.parse(localStorage.getItem('work-cockpit-v1'));
+        page.evaluate(async src => {
+          const s = JSON.parse(JSON.stringify(S));
           new Function('s', src)(s);
-          localStorage.setItem('work-cockpit-v1', JSON.stringify(s));
+          norm(s);
+          persistLocal();
+          await storeDone();
         }, `(${fn})(s)`),
       // New quests come in through the Inbox, then move to Today.
       addQuest: async text => {

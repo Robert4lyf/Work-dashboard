@@ -5,7 +5,13 @@ test.beforeEach(async ({ app }) => {
 });
 
 const PIC = 'data:image/png;base64,' + 'A'.repeat(2000);
-const saved = page => page.evaluate(() => JSON.parse(localStorage.getItem('work-cockpit-v1')));
+const saved = page => page.evaluate(() => storeDone().then(readSaved));
+const savedLen = page =>
+  page.evaluate(() =>
+    storeDone()
+      .then(() => readKV(picDb))
+      .then(kv => kv.state.length),
+  );
 const stored = page => page.waitForFunction(() => allPics().every(p => picStored.has(p.id)));
 
 test('pictures are kept in IndexedDB: the saved copy leaves their data out, and a reload brings them back', async ({
@@ -37,11 +43,17 @@ test('pictures are kept in IndexedDB: the saved copy leaves their data out, and 
 });
 
 test('a picture saved before this version (data in the saved copy) moves to IndexedDB', async ({ page }) => {
-  await page.evaluate(pic => {
-    const s = JSON.parse(localStorage.getItem('work-cockpit-v1')) || {};
-    s.noteImgs = [{ id: 'old', src: pic, at: 1 }];
-    localStorage.setItem('work-cockpit-v1', JSON.stringify(s));
-  }, PIC);
+  await page.evaluate(
+    pic =>
+      new Promise(ok => {
+        const s = JSON.parse(JSON.stringify(S));
+        s.noteImgs = [{ id: 'old', src: pic, at: 1 }];
+        const tx = picDb.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(JSON.stringify(s), 'state');
+        tx.oncomplete = ok;
+      }),
+    PIC,
+  );
   await page.reload();
   expect(await page.evaluate(() => S.noteImgs[0].src.length)).toBe(PIC.length);
   await page.evaluate(() => save());
@@ -172,21 +184,24 @@ test('round 6: many pictures at once still save (they move to IndexedDB first), 
     save();
   });
   await page.waitForFunction(() => localSaved && allPics().every(p => picStored.has(p.id)));
-  const r = await page.evaluate(() => ({
-    len: localStorage.getItem('work-cockpit-v1').length,
-    dirty: Object.keys(sync2.dirty).filter(k => k.startsWith('noteimg:')).length,
-  }));
-  expect(r.len).toBeLessThan(100000);
-  expect(r.dirty).toBe(12);
+  expect(await savedLen(page)).toBeLessThan(100000);
+  expect(
+    await page.evaluate(() => Object.keys(sync2.dirty).filter(k => k.startsWith('noteimg:')).length),
+  ).toBe(12);
   // A picture saved in the copy (a reload before it was stored, or an older version): moved on start.
-  await page.evaluate(() => {
-    const s = JSON.parse(localStorage.getItem('work-cockpit-v1'));
-    s.noteImgs.push({ id: 'late', src: 'data:image/png;base64,' + 'B'.repeat(200000), at: 99 });
-    localStorage.setItem('work-cockpit-v1', JSON.stringify(s));
-  });
+  await page.evaluate(
+    () =>
+      new Promise(ok => {
+        const s = JSON.parse(JSON.stringify(S));
+        s.noteImgs.push({ id: 'late', src: 'data:image/png;base64,' + 'B'.repeat(200000), at: 99 });
+        const tx = picDb.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(JSON.stringify(s), 'state');
+        tx.oncomplete = ok;
+      }),
+  );
   await page.reload();
   await page.waitForFunction(() => picStored.has('late'));
-  expect(await page.evaluate(() => localStorage.getItem('work-cockpit-v1').length)).toBeLessThan(100000);
+  expect(await savedLen(page)).toBeLessThan(100000);
 });
 
 test('round 6: back while an alarm rings stays in the app; reloads donâ€™t pile up history entries', async ({
@@ -235,4 +250,44 @@ test('round 6: taps before the app has started do nothing (no errors); a draftâ€
   await page.waitForFunction(() => window.appReady === true);
   expect(errors).toEqual([]);
   await expect(page.locator('#kbc')).toHaveValue('a');
+});
+
+test('stage 2: the saved copy and sync bookkeeping live in the store; an older localStorage copy moves over once', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.quests = [fix({ id: 'q', text: 'Kept' })];
+    save();
+  });
+  await page.evaluate(() => storeDone());
+  // Nothing of the app's data is in localStorage any more.
+  expect(
+    await page.evaluate(() => [
+      localStorage.getItem('work-cockpit-v1'),
+      localStorage.getItem('work-cockpit-v1-sync'),
+    ]),
+  ).toEqual([null, null]);
+  await page.reload();
+  expect(await page.evaluate(() => S.quests.map(q => q.text))).toEqual(['Kept']);
+  // A device from before (data in localStorage, nothing in the store): taken in, then removed.
+  await page.evaluate(
+    () =>
+      new Promise(ok => {
+        localStorage.setItem(
+          'work-cockpit-v1',
+          JSON.stringify({ ...JSON.parse(JSON.stringify(S)), quests: [fix({ id: 'o', text: 'Older' })] }),
+        );
+        localStorage.setItem(
+          'work-cockpit-v1-sync',
+          JSON.stringify({ cursor: 7, synced: {}, dirty: {}, snapAt: 0 }),
+        );
+        const r = indexedDB.deleteDatabase('dashboard-pics');
+        r.onsuccess = r.onerror = r.onblocked = ok;
+      }),
+  );
+  await page.reload();
+  expect(await page.evaluate(() => [S.quests.map(q => q.text), sync2.cursor])).toEqual([['Older'], 7]);
+  await page.waitForFunction(() => localStorage.getItem('work-cockpit-v1') === null);
+  await page.reload();
+  expect(await page.evaluate(() => [S.quests.map(q => q.text), sync2.cursor])).toEqual([['Older'], 7]);
 });

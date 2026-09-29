@@ -207,11 +207,12 @@ function addDaily(d, tag, mins) {
   const o = (S.daily[d] = S.daily[d] || {});
   o[tag] = (o[tag] || 0) + mins;
 }
-// `pics`: the pictures kept in IndexedDB (see js/pics.js), to fill in what the saved copy left out.
-function load(pics = new Map()) {
+// `pics`: the pictures kept in IndexedDB (see js/pics.js), to fill in what the saved copy left
+// out; `json`: the saved copy from there (else it's read from localStorage).
+function load(pics = new Map(), json = null) {
   let s = null;
   try {
-    s = JSON.parse(localStorage.getItem(KEY));
+    s = JSON.parse(json !== null ? json : localStorage.getItem(KEY));
   } catch (e) {}
   if (s) fillPics(s, pics);
   // The saved copy is gone (or unreadable) but the sync bookkeeping isn't: forget that too, so
@@ -225,6 +226,11 @@ function load(pics = new Map()) {
 let localSaved = true; // whether the last local save worked (see saveSyncState)
 function persistLocal() {
   schedulePics(); // (whatever happens below: pictures move out of this copy, making room)
+  if (picDb) {
+    // (with the sync bookkeeping, in one go: after a reload the two must still agree)
+    writeKV({ state: stateJSON(), sync: JSON.stringify(sync2) });
+    return (localSaved = true); // (a failure shows up later: see writeKV)
+  }
   try {
     localStorage.setItem(KEY, stateJSON());
     return (localSaved = true);
