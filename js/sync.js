@@ -167,7 +167,8 @@ async function saveSnapshot() {
   if (Date.now() - sync2.snapAt < 6 * 3600e3) return;
   const { error } = await sb.from('cockpit_state').upsert({
     user_id: session.user.id,
-    data: { ...S, noteImgs: undefined }, // (pictures are big: kept in their own rows only)
+    // (pictures are big: kept in their own rows only)
+    data: { ...S, noteImgs: undefined, kb: S.kb.map(a => ({ ...a, imgs: undefined })) },
     edited_at: Date.now(),
     updated_at: new Date().toISOString(),
   });

@@ -159,3 +159,108 @@ test('an article being written survives a background redraw', async ({ app, page
   await expect(page.locator('#kbb')).toHaveValue('Half written');
   await expect(page.locator('#kbt')).toHaveValue('Draft');
 });
+
+test('a category can be moved into another, or back to the top level, but not into itself', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.kbcats = [
+      { id: 'p', name: 'Processes', parent: '' },
+      { id: 'd', name: 'Day care', parent: '' },
+      { id: 'x', name: 'Extra', parent: 'd' },
+    ];
+    save();
+    renderAll();
+  });
+  await app.go('knowledge');
+  await page.click('#kc-d > summary');
+  await page.click('#kc-d > .kbody > .links [data-kbmove]');
+  // Not into itself or its own sub-category.
+  const opts = await page.$$eval('#kbmv option', o => o.map(x => x.textContent));
+  expect(opts).toEqual(['Top level', 'Processes']);
+  await page.selectOption('#kbmv', { label: 'Processes' });
+  expect((await app.state()).kbcats.find(c => c.id === 'd').parent).toBe('p');
+  await expect(page.locator('#kc-p #kc-d #kc-x')).toHaveCount(1);
+  await expect(page.locator('#kc-d > summary')).toBeVisible();
+  await expect(page.locator('#toast')).toContainText('Moved to Processes');
+  await page.click('#kc-d > .kbody > .links [data-kbmove]');
+  await page.selectOption('#kbmv', { label: 'Top level' });
+  expect((await app.state()).kbcats.find(c => c.id === 'd').parent).toBe('');
+});
+
+test('articles can have pictures: pasted or added while writing, kept only on Save', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.kbcats = [{ id: 'p', name: 'Processes', parent: '' }];
+    save();
+    renderAll();
+  });
+  await app.go('knowledge');
+  await page.click('#kc-p > summary');
+  await page.click('[data-kbnew]');
+  await page.fill('#kbt', 'Guide');
+  await page.fill('#kbb', 'Typed text');
+  // Pasted into the article box: added below, and the text is left alone.
+  await page.evaluate(async () => {
+    const c = document.createElement('canvas');
+    c.width = 400;
+    c.height = 300;
+    c.getContext('2d').fillRect(0, 0, 400, 300);
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], 's.png', { type: 'image/png' }));
+    document
+      .querySelector('#kbb')
+      .dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await expect(page.locator('#kbimgs img')).toHaveCount(1);
+  await expect(page.locator('#kbb')).toHaveValue('Typed text');
+  await expect(page.locator('#kbt')).toHaveValue('Guide');
+  await page.click('#kbform .btn.green');
+  let s = await app.state();
+  expect(s.kb[0].imgs).toHaveLength(1);
+  // Shown with the article; full size on a tap.
+  await expect(page.locator('#v-knowledge .kbimgs img')).toHaveCount(1);
+  await page.click('[data-kbimg]');
+  await expect(page.locator('#v-knowledge .nimgfull img')).toBeVisible();
+  await page.click('.nimgfull .btn[data-kbimgclose]');
+  await expect(page.locator('#v-knowledge .nimgfull')).toHaveCount(0);
+  // Removed while editing, then cancelled: still there.
+  await page.click('[data-kbedit]');
+  await page.click('[data-kbimgdel]');
+  await expect(page.locator('#kbimgs img')).toHaveCount(0);
+  await page.click('[data-kbcancel]');
+  expect((await app.state()).kb[0].imgs).toHaveLength(1);
+  // Removed and saved: gone. Pictures stay out of the snapshot history.
+  await page.click('[data-kbedit]');
+  await page.click('[data-kbimgdel]');
+  await page.click('#kbform .btn.green');
+  expect((await app.state()).kb[0].imgs).toEqual([]);
+  // Rows with anything but a picture are dropped.
+  const n = await page.evaluate(() => {
+    norm({ kb: [{ id: 'z', cat: '', title: 't', body: '', imgs: [{ id: 'm', src: 'javascript:1' }] }] });
+    return S.kb[0].imgs.length;
+  });
+  expect(n).toBe(0);
+});
+
+test('a flow remembers when its button was last used', async ({ app, page }) => {
+  await page.evaluate(() => {
+    S.flows = [{ id: 'f', name: 'Report', url: 'ms-powerautomate:/console/flow/run?workflowid=1' }];
+    save();
+    renderAll();
+  });
+  await app.go('knowledge');
+  await expect(page.locator('.flow small')).toHaveText('Not used yet');
+  // (the link itself can't open here: just the tap is checked)
+  await page.evaluate(() => {
+    const a = document.querySelector('a[data-flow]');
+    a.addEventListener('click', e => e.preventDefault());
+    a.click();
+  });
+  await expect(page.locator('.flow small')).toContainText('Last used Today');
+  expect((await app.state()).flows[0].last).toBeGreaterThan(0);
+});

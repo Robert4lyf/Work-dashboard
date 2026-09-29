@@ -71,7 +71,9 @@ function loadNotes() {
 /* pictures in the notes: pasted in (or added from a file), shrunk to a sensible size and synced
    like the text. Kept apart from it, below the box: a text box can't show them. */
 const IMG_MAX = 1600, // longest side, in pixels
-  IMG_TOTAL = 4e6; // all of them together (characters), well inside the device's storage
+  // All of them together (characters). Everything is kept in the browser's local storage, which
+  // Safari holds to about 5 MB, counting two bytes a character.
+  IMG_TOTAL = 2.2e6;
 const okImg = src =>
   typeof src === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src);
 let imgBusy = 0,
@@ -118,40 +120,61 @@ function shrinkImage(file) {
     rd.readAsDataURL(file);
   });
 }
-async function addNoteImages(files) {
+// Room is shared by every picture (the notes' and the articles', and any in an article being
+// written), and kept well inside what a phone's browser lets a page store.
+function imgUsed() {
+  const len = list => (list || []).reduce((t, m) => t + m.src.length, 0);
+  let used = len(S.noteImgs) + S.kb.reduce((t, a) => t + len(a.imgs), 0);
+  if (typeof kbEdit !== 'undefined' && kbEdit && kbEdit.imgs) {
+    const saved = new Set(
+      ((kbEdit.id && S.kb.find(a => a.id === kbEdit.id)) || { imgs: [] }).imgs.map(m => m.id),
+    );
+    used += len(kbEdit.imgs.filter(m => !saved.has(m.id)));
+  }
+  return used;
+}
+// Picture files in, shrunk ones out (as far as there's room).
+async function readImages(files) {
   files = [...files].filter(f => f && /^image\//.test(f.type));
-  if (!files.length) return;
-  imgBusy++;
-  renderNoteImgs();
-  let added = 0,
-    full = false,
-    bad = false;
+  const r = { srcs: [], full: false, bad: false };
+  let used = imgUsed();
   for (const f of files) {
     let src;
     try {
       src = await shrinkImage(f);
     } catch (e) {
-      bad = true;
+      r.bad = true;
       continue;
     }
     if (!okImg(src)) {
-      bad = true;
+      r.bad = true;
       continue;
     }
-    const used = S.noteImgs.reduce((t, m) => t + m.src.length, 0);
     if (used + src.length > IMG_TOTAL) {
-      full = true;
+      r.full = true;
       break;
     }
-    S.noteImgs.push({ id: uid(), src, at: Date.now() });
-    added++;
+    used += src.length;
+    r.srcs.push(src);
   }
-  imgBusy--;
-  if (added) save();
+  return r;
+}
+function imageToast(r) {
+  const n = r.srcs.length;
+  if (r.full) toast('No room for more pictures: delete some first', false, 4000);
+  else if (r.bad) toast("That picture couldn't be read", false, 3000);
+  else if (n) toast(n > 1 ? `${n} pictures added` : 'Picture added');
+}
+async function addNoteImages(files) {
+  if (![...files].some(f => f && /^image\//.test(f.type))) return;
+  imgBusy++;
   renderNoteImgs();
-  if (full) toast('No room for more pictures: delete some first', false, 4000);
-  else if (bad) toast("That picture couldn't be read", false, 3000);
-  else if (added) toast(added > 1 ? `${added} pictures added` : 'Picture added');
+  const r = await readImages(files);
+  imgBusy--;
+  r.srcs.forEach(src => S.noteImgs.push({ id: uid(), src, at: Date.now() }));
+  if (r.srcs.length) save();
+  renderNoteImgs();
+  imageToast(r);
 }
 function deleteNoteImg(id) {
   withUndo('Picture deleted', () => {
@@ -161,9 +184,11 @@ function deleteNoteImg(id) {
     renderNoteImgs();
   });
 }
-// Pasting a picture into the notes box adds it below (text pastes as usual).
+// Pasting a picture into the notes, or into an article being written, adds it below (text pastes
+// as usual).
 document.addEventListener('paste', e => {
-  if (view !== 'notes' || !e.clipboardData) return;
+  const kb = view === 'knowledge' && kbEdit && e.target.closest && e.target.closest('#kbform');
+  if ((view !== 'notes' && !kb) || !e.clipboardData) return;
   const files = [...(e.clipboardData.items || [])]
     .filter(i => i.kind === 'file' && /^image\//.test(i.type))
     .map(i => i.getAsFile())
@@ -172,5 +197,6 @@ document.addEventListener('paste', e => {
   // it's the text that's meant.
   if (!files.length || e.clipboardData.getData('text/plain').trim()) return;
   e.preventDefault();
-  addNoteImages(files);
+  if (kb) kbAddImages(files);
+  else addNoteImages(files);
 });

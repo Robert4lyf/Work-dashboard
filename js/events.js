@@ -12,6 +12,7 @@ function renderAll() {
   renderAccount();
   renderNotes();
   renderKnowledge();
+  if (view === 'search') renderSearch();
   syncRinging();
   renderZen();
   if (talk) renderTalk();
@@ -42,6 +43,7 @@ function go(v) {
     'waiting',
     'notes',
     'knowledge',
+    'search',
     'review',
     'projects',
     'focus',
@@ -177,6 +179,12 @@ document.addEventListener('change', e => {
     }
     return;
   }
+  if (el.dataset.kbmv) return kbMoveCat(el.dataset.kbmv, el.value);
+  if (el.id === 'kbimgfile') {
+    kbAddImages(el.files || []);
+    el.value = '';
+    return;
+  }
   if (el.id === 'nimgfile') {
     addNoteImages(el.files || []);
     el.value = '';
@@ -289,6 +297,7 @@ document.addEventListener('input', e => {
   if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
   if (el.id === 'notesin') return typedNotes(el.value);
   if (el.id === 'kbq') return kbSearch(el.value);
+  if (el.id === 'sq') return typedSearch(el.value);
   if (el.dataset.field !== 'notes') return;
   const r = find(el.dataset.id);
   if (r) {
@@ -318,6 +327,14 @@ document.addEventListener('click', e => {
     }
   }
   if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (b.id === 'searchBtn') openSearch();
+  if (d.sart) {
+    kbArt = d.sart;
+    kbEdit = null;
+    kbImgShown = null;
+    go('knowledge');
+    renderKnowledge();
+  }
   if (d.goupd) {
     // An Upcoming item (from the Waiting tab): Today's list, with Upcoming open.
     path = [];
@@ -703,6 +720,8 @@ document.addEventListener('click', e => {
     // Nor the notes' pictures when it has none of its own (a previous version leaves them out).
     const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
       imgs = Array.isArray(pending.noteImgs) ? null : S.noteImgs,
+      artImgs = new Map(S.kb.map(a => [a.id, a.imgs])),
+      hadArtImgs = new Set((pending.kb || []).filter(a => a && Array.isArray(a.imgs)).map(a => a.id)),
       was = JSON.stringify(S);
     try {
       norm(pending);
@@ -713,6 +732,9 @@ document.addEventListener('click', e => {
     }
     Object.assign(S, keep);
     if (imgs) S.noteImgs = imgs;
+    S.kb.forEach(a => {
+      if (!hadArtImgs.has(a.id) && artImgs.has(a.id)) a.imgs = artImgs.get(a.id);
+    });
     rollover(); // (it may be from another day)
     pending = null;
     path = [];
@@ -804,7 +826,7 @@ document.addEventListener(
 
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'i or n capture (n on a quest: subquest) · t today · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: subquest) · / search · t today · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
@@ -833,6 +855,9 @@ document.addEventListener('keydown', e => {
   } else if (k === 't') {
     if (view === 'today' && path.length) openPath([]);
     go('today');
+  } else if (k === '/') {
+    e.preventDefault();
+    openSearch();
   } else if (k === 'l') go('log');
   else if (k === 'p' && S.timer) {
     const b = $('[data-pause]');
