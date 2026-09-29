@@ -708,3 +708,18 @@ test('a device updated from before picture rows fetches the ones it passed over'
   expect((await b.state()).kb[0].imgs.map(p => p.id)).toEqual(['p']);
   for (const d of [a, b]) expect(d.errors).toEqual([]);
 });
+
+test('Settings shows how long the last sync took and what it moved', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Report');
+  await a.sync();
+  await a.sync();
+  await a.page.click('nav [data-v=account]');
+  const line = a.page.locator('#syncstats');
+  await expect(line).toContainText(
+    /Last sync: \d+ ms, [\d.]+ K?B down \(\d+ items? fetched\), [\d.]+ K?B up \(\d+ items? sent\)\./,
+  );
+  await expect(line).toContainText(/Last \d+: \d+ ms on average, slowest \d+ ms/);
+  expect(a.errors).toEqual([]);
+});

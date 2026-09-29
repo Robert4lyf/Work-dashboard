@@ -42,6 +42,17 @@ function schedulePush() {
 
 /* sync v2: one row per record in cockpit_items (see js/records.js and supabase-setup.sql) */
 const OVERLAP = 200; // re-read a few recent rows in case a write committed out of order
+// How long each sync took and how much it moved (shown in Settings). Sizes are the JSON sent or
+// received, a close guide to what goes over the network.
+let tally = null,
+  syncStats = []; // the last few, newest last
+const sizeOf = v => {
+  try {
+    return JSON.stringify(v).length;
+  } catch (e) {
+    return 0;
+  }
+};
 const FULL = 'key,data,deleted,edited_at,seq',
   LIGHT = 'key,deleted,edited_at,seq'; // (no data: just enough to tell what's new)
 async function pullRows(since, cols = FULL) {
@@ -55,6 +66,7 @@ async function pullRows(since, cols = FULL) {
       .limit(1000);
     if (error) throw error;
     rows.push(...data);
+    if (tally) tally.down += sizeOf(data);
     if (data.length < 1000) return rows;
     since = data[data.length - 1].seq;
   }
@@ -84,6 +96,10 @@ async function pullChanges() {
       .in('key', want.slice(i, i + 100));
     if (error) throw error;
     full.push(...data);
+    if (tally) {
+      tally.down += sizeOf(data);
+      tally.got += data.length;
+    }
   }
   // Only the versions listed: a row written again since then (a newer seq, past the end of the
   // list) waits for the next pull, which lists it along with anything written around it.
@@ -183,19 +199,21 @@ async function pushDirty() {
         .map(k => ({ k, d: sync2.dirty[k] }))
         .filter(x => x.d);
     if (!batch.length) continue;
+    const rows = batch.map(({ k, d }) => ({
+      user_id: uid_,
+      key: k,
+      kind: k.slice(0, k.indexOf(':')),
+      data: d.h === null ? null : recs.get(k),
+      deleted: d.h === null,
+      edited_at: d.at,
+    }));
+    if (tally) {
+      tally.up += sizeOf(rows);
+      tally.sent += rows.length;
+    }
     const { data: wrote, error } = await sb
       .from('cockpit_items')
-      .upsert(
-        batch.map(({ k, d }) => ({
-          user_id: uid_,
-          key: k,
-          kind: k.slice(0, k.indexOf(':')),
-          data: d.h === null ? null : recs.get(k),
-          deleted: d.h === null,
-          edited_at: d.at,
-        })),
-        { onConflict: 'user_id,key' },
-      )
+      .upsert(rows, { onConflict: 'user_id,key' })
       .select('key,seq');
     if (error) throw error;
     // The versions just written are this device's own: never read back down (see pullChanges).
@@ -246,6 +264,8 @@ async function sync() {
     return;
   }
   syncing = true;
+  const t0 = performance.now();
+  tally = { down: 0, up: 0, got: 0, sent: 0 };
   setSync('syncing');
   try {
     if (sync2.user !== session.user.id) {
@@ -280,6 +300,7 @@ async function sync() {
     await saveSnapshot();
     await syncNotices();
     lastSync = Date.now();
+    syncStats = [...syncStats, { ...tally, ms: Math.round(performance.now() - t0), at: lastSync }].slice(-10);
     askMerge = false; // (only the sync straight after a sign-in may ask)
     setSync('ok');
     // After the first sync, so a new device never writes before it has the server's copy.
@@ -369,6 +390,21 @@ function syncLine() {
         '.'
     : 'Not synced yet.';
 }
+const fmtSize = n =>
+  n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+const secs = ms => (ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + ' s');
+// The last sync's time and traffic, and the last few together (this session only).
+function syncStatsLine() {
+  const s = syncStats[syncStats.length - 1];
+  if (!s) return '';
+  let h = `Last sync: ${secs(s.ms)}, ${fmtSize(s.down)} down (${plural(s.got, 'item')} fetched), ${fmtSize(s.up)} up (${plural(s.sent, 'item')} sent).`;
+  if (syncStats.length > 1) {
+    const avg = Math.round(syncStats.reduce((t, x) => t + x.ms, 0) / syncStats.length),
+      slow = Math.max(...syncStats.map(x => x.ms));
+    h += ` Last ${syncStats.length}: ${secs(avg)} on average, slowest ${secs(slow)}, ${fmtSize(syncStats.reduce((t, x) => t + x.down, 0))} down in all.`;
+  }
+  return `<p class="hint" id="syncstats" style="margin:6px 0 0">${h}</p>`;
+}
 let versions = null; // null: not loaded, 'loading', 'none' (table missing), or rows
 async function loadHistory() {
   versions = 'loading';
@@ -435,7 +471,7 @@ function renderAccount() {
   } else if (!session) {
     h += `<form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg ? `<p class="msg">${esc(authMsg)}</p>` : ''}`;
   } else {
-    h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p><div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}${renderCapture()}${renderNotifySettings()}`;
+    h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p>${syncStatsLine()}<div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}${renderCapture()}${renderNotifySettings()}`;
   }
   h += renderHealth();
   if (pending)
