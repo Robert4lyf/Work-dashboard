@@ -159,9 +159,13 @@ function kbIndex() {
 function kbTop() {
   const top = kbKids(''),
     lost = kbLost();
-  let h = top.length
-    ? `<div class="tiles">${top.map(kbTile).join('')}${lost.length ? `<button class="tile lost" data-kbcat="lost"><b>Uncategorised</b> <small>${lost.length}</small></button>` : ''}</div>`
-    : '<p class="hint">No categories yet. Add one below, then add articles to it: step-by-step guides, who looks after what, links to tools.</p>';
+  const lostTile = lost.length
+    ? `<button class="tile lost" data-kbcat="lost"><b>Uncategorised</b> <small>${lost.length}</small></button>`
+    : '';
+  let h =
+    top.length || lost.length
+      ? `<div class="tiles">${top.map(kbTile).join('')}${lostTile}</div>`
+      : '<p class="hint">No categories yet. Add one below, then add articles to it: step-by-step guides, who looks after what, links to tools.</p>';
   h +=
     '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form>';
   return h;
@@ -336,7 +340,9 @@ function kbReveal(cat) {
 function kbAddCat(name, parent) {
   name = cleanText(name.trim().slice(0, 80));
   if (!name) return;
-  const c = { id: uid(), name, parent: parent || '' };
+  // (A parent deleted meanwhile, on another device say: filed at the top level.)
+  parent = kbCat(parent) ? parent : '';
+  const c = { id: uid(), name, parent };
   S.kbcats.push(c);
   kbReveal(parent);
   save();
@@ -346,8 +352,9 @@ function kbRename(id) {
   const c = kbCat(id);
   if (!c) return;
   sheet({ title: 'Rename category', label: 'Name', value: c.name, ok: 'Rename' }, v => {
-    if (!v) return;
-    c.name = cleanText(v.slice(0, 80));
+    const cur = kbCat(id); // (looked up again: a sync meanwhile may have rebuilt the list)
+    if (!v || !cur) return;
+    cur.name = cleanText(v.slice(0, 80));
     save();
     renderKnowledge();
   });
@@ -519,7 +526,7 @@ function kbClick(d, b) {
     kbMoving = null;
     renderKnowledge();
   }
-  if (b.id === 'kbimgadd') $('#kbimgfile').click();
+  if (b && b.id === 'kbimgadd') $('#kbimgfile').click();
   if (d.kbimgdel && kbEdit) {
     kbEdit.imgs = kbEdit.imgs.filter(m => m.id !== d.kbimgdel);
     kbRenderEditImgs();

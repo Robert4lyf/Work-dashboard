@@ -209,10 +209,6 @@ header {
 .hbtns > * {
   flex: none; /* (never squeezed away by a long next step) */
 }
-.hbtns {
-  align-items: center;
-  gap: 8px;
-}
 .hsearch svg {
   width: 18px;
   height: 18px;
@@ -224,10 +220,6 @@ header {
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
-}
-.syncbtn::before {
-  width: 10px;
-  height: 10px;
 }
 .hstats {
   display: flex;
@@ -261,14 +253,17 @@ header {
 .hbtns {
   flex: none;
   display: flex;
-  gap: 14px;
-  align-items: flex-end;
+  gap: 8px;
+  align-items: center;
 }
 .hsearch,
 .syncbtn {
   flex: none;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 40px;
   gap: 6px;
   background: none;
   border: 0;
@@ -281,8 +276,8 @@ header {
 }
 .syncbtn::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   background: color-mix(in srgb, var(--head-ink) 50%, transparent);
 }
 .syncbtn[data-state='ok']::before {
@@ -722,6 +717,9 @@ nav button[aria-current='page'] {
   align-items: center;
   gap: 12px;
   padding: 10px 6px 10px 12px;
+}
+.row[data-qid] {
+  touch-action: pan-y; /* (a sideways swipe is the row's, not the page's) */
 }
 .list > * + * {
   border-top: 1.5px solid var(--line);

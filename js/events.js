@@ -185,7 +185,13 @@ document.addEventListener('change', e => {
   // field still has the keyboard, or the picker just closed on it) is saved once it's left,
   // and until then a redraw keeps it as entered.
   if (waitd && waitd.dataset.waitid && el.type === 'date' && document.activeElement === el) return;
-  if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid) && !el.closest('#kbform'))
+  if (
+    el.dataset &&
+    !el.dataset.atime &&
+    (!waitd || waitd.dataset.waitid) &&
+    !el.closest('#kbform') &&
+    el.id !== 'kbmv'
+  )
     delete el.dataset.typed;
   if (waitd && waitd.dataset.waitid) {
     return saveWaitPanel(waitd.dataset.waitid, true);
@@ -366,7 +372,10 @@ document.addEventListener('click', e => {
       if (view !== 'today') go('today');
     }
   }
-  if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (d.v && b.closest('header, #v-waiting, #waitsec')) {
+    if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open quest)
+    go(d.v);
+  }
   if (b.id === 'searchBtn') openSearch();
   if (d.sart)
     leaveEditor(() => {
@@ -904,6 +913,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') el.closest('#sheet') ? closeSheet() : el.blur();
     return;
   }
+  if ($('#sheet') && e.key !== 'Escape') return; // a sheet is up: its buttons only
   const k = e.key;
   if (talk) return k === 'Escape' && closeTalk();
   // During a running session only pause and help work (see focusLocked).
@@ -1061,7 +1071,7 @@ function appBack() {
     return true;
   }
   if (view === 'knowledge' && kbArt) {
-    kbClick({ kbback: '1' });
+    kbClick({ kbback: '1' }, {});
     return true;
   }
   if (view === 'knowledge' && kbCatOpen) {
@@ -1071,6 +1081,7 @@ function appBack() {
     return true;
   }
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
+  if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view !== 'today') return (go('today'), true);
   return false;
 }
