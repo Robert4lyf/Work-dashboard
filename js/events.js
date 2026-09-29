@@ -84,6 +84,7 @@ function openPath(p) {
 document.querySelectorAll('nav button[data-v]').forEach(
   b =>
     (b.onclick = () => {
+      if (!window.appReady) return; // (not started yet)
       if (b.dataset.v === 'today' && view === 'today' && path.length) {
         openPath([]);
       }
@@ -93,6 +94,7 @@ document.querySelectorAll('nav button[data-v]').forEach(
 
 document.addEventListener('submit', e => {
   e.preventDefault();
+  if (!window.appReady) return;
   const f = e.target;
   if (f.id === 'sform') {
     const v = $('#sin').value.trim();
@@ -173,6 +175,7 @@ document.addEventListener('submit', e => {
 });
 
 document.addEventListener('change', e => {
+  if (!window.appReady) return;
   const el = e.target;
   // Committed. (Not a time: those change a part at a time and are still being typed.)
   // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
@@ -328,6 +331,7 @@ document.addEventListener(
   true,
 );
 document.addEventListener('input', e => {
+  if (!window.appReady) return;
   const el = e.target;
   if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
   if (el.id === 'notesin') return typedNotes(el.value);
@@ -342,6 +346,7 @@ document.addEventListener('input', e => {
 });
 
 document.addEventListener('click', e => {
+  if (!window.appReady) return e.preventDefault(); // (not started yet: nothing to act on)
   const sum = e.target.closest && e.target.closest('#alarmd > summary');
   if (sum) toggleAlarmsList(sum.parentElement);
   let b = e.target.closest('button');
@@ -880,6 +885,7 @@ function closeImgs() {
 const KEYS =
   'i or n capture (n on a quest: subquest) · / search · t today · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
+  if (!window.appReady) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
   const el = e.target;
@@ -956,12 +962,12 @@ document.addEventListener('visibilitychange', () => {
     talkWake();
   }
 });
-window.addEventListener('online', () => sync());
+window.addEventListener('online', () => window.appReady && sync());
 window.addEventListener('offline', () => {
   if (session) setSync('offline');
 });
 setInterval(() => {
-  if (document.hidden) return;
+  if (document.hidden || !window.appReady) return;
   // Midnight with the app open: the new day starts here too, not only on coming back to it.
   if (S.day !== today()) {
     rolloverLocal();
@@ -995,7 +1001,8 @@ function start(pics) {
   setInterval(timerTick, 500);
   setInterval(alarmTick, 1000);
   listenAuth();
-  setTimeout(prunePics, 30000);
+  setInterval(prunePics, 60000); // (deleted pictures leave IndexedDB now and then)
+  schedulePics(); // (pictures still in the saved copy, from before a reload or an older version)
   // (the app's data, pictures included, isn't cleared by the phone when space runs low)
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   window.appReady = true;
@@ -1010,6 +1017,7 @@ openPics().then(async db => {
 // own back step (close a picture, leave an article or a quest's page, back to Today...) and
 // puts the entry back; only from Today's list does it leave the app.
 function appBack() {
+  if (!$('#v-alarm').hidden) return true; // (an alarm is ringing: its buttons only)
   if (imgShown || kbImgShown) return (closeImgs(), true);
   if (talk) return (closeTalk(), true);
   if (zen && !focusLocked()) return (setZen(false), true);
@@ -1030,8 +1038,11 @@ function appBack() {
   return false;
 }
 try {
-  history.replaceState({ app: 'root' }, '');
-  history.pushState({ app: 'in' }, '');
+  // (after a reload the entries are already there)
+  if (!(history.state && history.state.app === 'in')) {
+    history.replaceState({ app: 'root' }, '');
+    history.pushState({ app: 'in' }, '');
+  }
 } catch (e) {}
 window.addEventListener('popstate', () => {
   if (!window.appReady) return;

@@ -261,7 +261,7 @@ function restoreKbDraft() {
   const okId = v => typeof v === 'string' && /^[\w-]{1,40}$/.test(v);
   kbEdit = {
     id: okId(d.id) ? d.id : undefined,
-    cat: okId(d.cat) ? d.cat : '',
+    cat: okId(d.cat) && kbCat(d.cat) ? d.cat : (kbKids('')[0] || {}).id || '',
     title: String(d.title || ''),
     body: String(d.body || ''),
     imgs: Array.isArray(d.imgs)

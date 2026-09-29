@@ -74,11 +74,14 @@ function stateJSON() {
     return k === 'src' && typeof v === 'string' && this && picStored.has(this.id) ? undefined : v;
   });
 }
-// Pictures not yet in IndexedDB go there (soon after a save); ones no longer in the state go.
+// Pictures not yet in IndexedDB go there, straight after a save (soon after: several saves in a
+// row store once). The saved copy in localStorage then no longer needs their data: with many of
+// them (a new device's first sync, say) it can't hold it, so that copy is written again once
+// they're stored, and the save is then done in full (see save) if it couldn't be before.
 function schedulePics() {
   if (!picDb || picTimer) return;
   if (allPics().every(p => picStored.has(p.id))) return;
-  picTimer = setTimeout(storePics, 300);
+  picTimer = setTimeout(storePics, 0);
 }
 function storePics() {
   picTimer = null;
@@ -91,8 +94,11 @@ function storePics() {
     want.forEach(p => st.put(p.src, p.id));
     tx.oncomplete = () => {
       want.forEach(p => picStored.add(p.id));
-      persistLocal(); // (now without their data)
+      if (localSaved)
+        persistLocal(); // (now without their data)
+      else save(); // (couldn't be saved with it: now it can, in full)
     };
+    tx.onerror = tx.onabort = () => {}; // (no room there either: they stay in the saved copy)
   } catch (e) {}
 }
 // Pictures deleted (and past any undo) are removed from IndexedDB; run now and then.

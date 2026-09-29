@@ -161,3 +161,78 @@ test('text the database can’t hold is dropped where it’s typed: notes, tag n
   });
   expect(tag).toEqual(['xy', 'xy']);
 });
+
+test('round 6: many pictures at once still save (they move to IndexedDB first), and a reload moves the rest', async ({
+  page,
+}) => {
+  // More than localStorage could hold with their data: still saved, in full, and synced.
+  await page.evaluate(() => {
+    const big = 'data:image/png;base64,' + 'A'.repeat(1e6);
+    S.noteImgs = Array.from({ length: 12 }, (_, i) => ({ id: 'b' + i, src: big + i, at: i }));
+    save();
+  });
+  await page.waitForFunction(() => localSaved && allPics().every(p => picStored.has(p.id)));
+  const r = await page.evaluate(() => ({
+    len: localStorage.getItem('work-cockpit-v1').length,
+    dirty: Object.keys(sync2.dirty).filter(k => k.startsWith('noteimg:')).length,
+  }));
+  expect(r.len).toBeLessThan(100000);
+  expect(r.dirty).toBe(12);
+  // A picture saved in the copy (a reload before it was stored, or an older version): moved on start.
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('work-cockpit-v1'));
+    s.noteImgs.push({ id: 'late', src: 'data:image/png;base64,' + 'B'.repeat(200000), at: 99 });
+    localStorage.setItem('work-cockpit-v1', JSON.stringify(s));
+  });
+  await page.reload();
+  await page.waitForFunction(() => picStored.has('late'));
+  expect(await page.evaluate(() => localStorage.getItem('work-cockpit-v1').length)).toBeLessThan(100000);
+});
+
+test('round 6: back while an alarm rings stays in the app; reloads don’t pile up history entries', async ({
+  app,
+  page,
+}) => {
+  const before = await page.evaluate(() => history.length);
+  await page.reload();
+  await page.reload();
+  expect(await page.evaluate(() => history.length)).toBe(before);
+  await page.evaluate(() => {
+    document.querySelector('#v-alarm').hidden = false;
+  });
+  await page.goBack();
+  await expect(page.locator('#v-alarm')).toBeVisible();
+  expect(page.url()).toContain('localhost');
+});
+
+test('round 6: taps before the app has started do nothing (no errors); a draft’s deleted category falls back', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.kbcats = [{ id: 'a', name: 'A', parent: '' }];
+    save();
+    localStorage.setItem('dashboard-kbdraft', JSON.stringify({ cat: 'zzz', title: 'D', body: 'b' }));
+  });
+  await page.addInitScript(() => {
+    const open = indexedDB.open.bind(indexedDB);
+    indexedDB.open = (...a) => {
+      const r = open(...a);
+      const d = Object.getOwnPropertyDescriptor(IDBRequest.prototype, 'onsuccess');
+      let cb = null;
+      Object.defineProperty(r, 'onsuccess', {
+        set: v => (cb = v),
+        get: () => cb,
+      });
+      r.addEventListener('success', e => setTimeout(() => cb && cb(e), 800));
+      return r;
+    };
+  });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await page.click('nav [data-v=inbox]');
+  await page.keyboard.press('p');
+  await page.waitForFunction(() => window.appReady === true);
+  expect(errors).toEqual([]);
+  await expect(page.locator('#kbc')).toHaveValue('a');
+});

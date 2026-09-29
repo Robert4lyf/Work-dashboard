@@ -224,9 +224,9 @@ function load(pics = new Map()) {
 }
 let localSaved = true; // whether the last local save worked (see saveSyncState)
 function persistLocal() {
+  schedulePics(); // (whatever happens below: pictures move out of this copy, making room)
   try {
     localStorage.setItem(KEY, stateJSON());
-    schedulePics();
     return (localSaved = true);
   } catch (e) {
     return (localSaved = false); // no room (or storage blocked)
@@ -245,7 +245,11 @@ function save() {
   dropUndo();
   // Not saved here: not marked as synced either, or after a reload the old copy would look
   // like a newer edit and go over the server's.
-  if (!persistLocal()) return toast("Couldn't save: this device is out of storage", false, 4000);
+  if (!persistLocal()) {
+    // (with pictures still to move to IndexedDB it's saved again once they have: no toast yet)
+    if (!picTimer) toast("Couldn't save: this device is out of storage", false, 4000);
+    return;
+  }
   markDirty();
   schedulePush();
 }

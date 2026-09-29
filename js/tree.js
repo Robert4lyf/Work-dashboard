@@ -166,6 +166,7 @@ function toast(msg, undo, ms) {
   t.classList.toggle('act', !!undo);
   t.classList.add('show');
   clearTimeout(tt);
+  if (!undo) undoSnap = null; // (a plain message replacing an Undo: that undo is over)
   tt = setTimeout(
     () => {
       t.classList.remove('show', 'act');

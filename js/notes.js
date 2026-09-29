@@ -85,7 +85,8 @@ const IMG_MAX = 1600, // longest side, in pixels
   // All of them together (characters, about 22 MB of pictures). They're kept in IndexedDB (see
   // js/pics.js), which has room for far more; this keeps what every device syncs and holds in
   // memory sensible.
-  IMG_TOTAL = 30e6;
+  IMG_TOTAL = 30e6,
+  IMG_TOTAL_LS = 3.5e6; // (without IndexedDB, pictures stay in localStorage: its room)
 const okImg = src =>
   typeof src === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src);
 let imgBusy = 0,
@@ -166,7 +167,7 @@ async function readImages(files) {
       r.bad = true;
       continue;
     }
-    if (used + src.length > IMG_TOTAL) {
+    if (used + src.length > (picDb ? IMG_TOTAL : IMG_TOTAL_LS)) {
       r.full = true;
       break;
     }
@@ -203,6 +204,7 @@ function deleteNoteImg(id) {
 // Pasting a picture into the notes, or into an article being written, adds it below (text pastes
 // as usual).
 document.addEventListener('paste', e => {
+  if (!window.appReady) return;
   const kb = view === 'knowledge' && kbEdit && e.target.closest && e.target.closest('#kbform');
   if ((view !== 'notes' && !kb) || !e.clipboardData) return;
   const files = [...(e.clipboardData.items || [])]
