@@ -167,13 +167,17 @@ function markDirty(now) {
       );
   recs.forEach((v, k) => {
     seen.add(k);
-    const h = hashOf(v);
+    const h = recHash(k, v);
     if (sync2.synced[k] === h) delete sync2.dirty[k];
     else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: at(k) };
   });
   for (const k in sync2.synced)
-    if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null))
+    if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null)) {
       sync2.dirty[k] = { h: null, at: at(k) };
+      // A repeat's copy for a day, deleted here: remembered, so the day's reset (which makes
+      // that same copy, with the same id) doesn't bring it back.
+      if (/^quest:.+-\d{4}-\d\d-\d\d$/.test(k)) (sync2.gone = sync2.gone || {})[k] = 1;
+    }
   // Added and removed again before it was ever sent: nothing to send.
   for (const k in sync2.dirty) if (!seen.has(k) && !(k in sync2.synced)) delete sync2.dirty[k];
   saveSyncState();

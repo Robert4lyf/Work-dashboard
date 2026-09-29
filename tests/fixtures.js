@@ -10,14 +10,28 @@ const test = base.test.extend({
       u => !u.href.startsWith('http://localhost'),
       r => r.abort(),
     );
+    // A reload waits, like opening, for the app to have started (it reads IndexedDB first).
+    const reload = page.reload.bind(page);
+    page.reload = async (...a) => {
+      const r = await reload(...a);
+      await page.waitForFunction(() => window.appReady === true);
+      return r;
+    };
     const app = {
       page,
       errors,
       open: async () => {
         await page.goto('/');
-        await page.waitForFunction(() => typeof window.renderAll === 'function');
+        await page.waitForFunction(() => window.appReady === true);
       },
-      state: () => page.evaluate(() => JSON.parse(localStorage.getItem('work-cockpit-v1'))),
+      // The saved copy, with the pictures' data (kept in IndexedDB: see js/pics.js) filled in.
+      state: () =>
+        page.evaluate(() => {
+          const s = JSON.parse(localStorage.getItem('work-cockpit-v1')),
+            m = new Map(allPics().map(p => [p.id, p.src]));
+          if (s) allPics(s).forEach(p => p.src === undefined && m.has(p.id) && (p.src = m.get(p.id)));
+          return s;
+        }),
       setState: fn =>
         page.evaluate(src => {
           const s = JSON.parse(localStorage.getItem('work-cockpit-v1'));

@@ -233,12 +233,52 @@ function kbEditor() {
     <div class="acts"><button class="btn green">Save</button><button class="btn" type="button" data-kbcancel="1">Cancel</button></div></form>`;
 }
 
+// An article being written is kept on this device when the app is left, and comes back if the
+// app was closed before it was saved (or cancelled).
+const KB_DRAFT = 'dashboard-kbdraft';
+function keepKbDraft() {
+  if (!kbEdit || !$('#kbform')) return;
+  const d = { ...kbEdit, title: $('#kbt').value, body: $('#kbb').value, cat: $('#kbc').value };
+  try {
+    localStorage.setItem(KB_DRAFT, JSON.stringify(d));
+  } catch (e) {
+    try {
+      localStorage.setItem(KB_DRAFT, JSON.stringify({ ...d, imgs: undefined })); // (no room: the text)
+    } catch (e2) {}
+  }
+}
+function clearKbDraft() {
+  try {
+    localStorage.removeItem(KB_DRAFT);
+  } catch (e) {}
+}
+function restoreKbDraft() {
+  let d = null;
+  try {
+    d = JSON.parse(localStorage.getItem(KB_DRAFT));
+  } catch (e) {}
+  if (!d || typeof d !== 'object') return false;
+  const okId = v => typeof v === 'string' && /^[\w-]{1,40}$/.test(v);
+  kbEdit = {
+    id: okId(d.id) ? d.id : undefined,
+    cat: okId(d.cat) ? d.cat : '',
+    title: String(d.title || ''),
+    body: String(d.body || ''),
+    imgs: Array.isArray(d.imgs)
+      ? d.imgs
+          .filter(m => m && okId(m.id) && okImg(m.src))
+          .map(m => ({ id: m.id, src: m.src, at: Number(m.at) || 0 }))
+      : undefined,
+  };
+  toast('Your unsaved article is back', false, 3000);
+  return true;
+}
 // Opens the categories above one, so it can be seen.
 function kbReveal(cat) {
   for (let c = kbCat(cat), n = 0; c && n < 50; c = kbCat(c.parent), n++) panels['kc-' + c.id] = true;
 }
 function kbAddCat(name, parent) {
-  name = name.trim().slice(0, 80);
+  name = cleanText(name.trim().slice(0, 80));
   if (!name) return;
   const c = { id: uid(), name, parent: parent || '' };
   S.kbcats.push(c);
@@ -251,7 +291,7 @@ function kbRename(id) {
   if (!c) return;
   const v = prompt('Rename category', c.name);
   if (!v || !v.trim()) return;
-  c.name = v.trim().slice(0, 80);
+  c.name = cleanText(v.trim().slice(0, 80));
   save();
   renderKnowledge();
 }
@@ -267,20 +307,21 @@ function kbDeleteCat(id) {
   });
 }
 function kbSave() {
-  const title = $('#kbt').value.trim(),
+  const title = cleanText($('#kbt').value.trim().slice(0, 200)),
     cat = $('#kbc').value,
-    body = $('#kbb').value.replace(/\s+$/, '');
+    body = cleanText($('#kbb').value.replace(/\s+$/, ''));
   if (!title) return;
   let a = kbEdit.id && S.kb.find(x => x.id === kbEdit.id);
   if (!a) S.kb.push((a = { id: uid() }));
   Object.assign(a, {
-    title: title.slice(0, 200),
+    title,
     cat,
     body,
     imgs: kbEdit.imgs || a.imgs || [],
     edited: Date.now(),
   });
   kbEdit = null;
+  clearKbDraft();
   kbArt = a.id;
   kbImgShown = null;
   kbReveal(cat);
@@ -304,7 +345,7 @@ function addFlow() {
   if (!name || !url) return;
   if (!FLOW_URL.test(url))
     return toast('That isn\'t a Run URL: it starts with "ms-powerautomate:/"', false, 4000);
-  S.flows.push({ id: uid(), name: name.slice(0, 60), url, last: 0 });
+  S.flows.push({ id: uid(), name: cleanText(name.slice(0, 60)), url, last: 0 });
   panels.kbflows = true; // (stays open for adding another)
   save();
   renderKnowledge();
@@ -388,6 +429,7 @@ function kbClick(d, b) {
   }
   if (d.kbcancel) {
     kbEdit = null;
+    clearKbDraft();
     renderKnowledge();
   }
   if (d.kbdel && arm(b, 'Delete?')) kbDelete(d.kbdel);

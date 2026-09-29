@@ -42,6 +42,13 @@ function saveNotes(v) {
   // Changed elsewhere and not yet chosen to replace them: keep both, the prompt is showing.
   if (notesChanged() && !notesOverride) return;
   notesOverride = false;
+  const c = cleanText(v);
+  if (c !== v) {
+    // (shown as it's kept, or it would look changed elsewhere once it comes back from the server)
+    const box = $('#notesin');
+    if (box && box.value === v) box.value = c;
+    v = c;
+  }
   if (v === S.notes) return (notesDirty = false);
   S.notes = notesBase = v;
   save();
@@ -75,9 +82,10 @@ function loadNotes() {
 /* pictures in the notes: pasted in (or added from a file), shrunk to a sensible size and synced
    like the text. Kept apart from it, below the box: a text box can't show them. */
 const IMG_MAX = 1600, // longest side, in pixels
-  // All of them together (characters). Everything is kept in the browser's local storage, which
-  // Chrome holds to about 5 million characters: this leaves room for the rest.
-  IMG_TOTAL = 3.5e6;
+  // All of them together (characters, about 22 MB of pictures). They're kept in IndexedDB (see
+  // js/pics.js), which has room for far more; this keeps what every device syncs and holds in
+  // memory sensible.
+  IMG_TOTAL = 30e6;
 const okImg = src =>
   typeof src === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src);
 let imgBusy = 0,

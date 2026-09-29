@@ -66,7 +66,12 @@ function go(v) {
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
-  if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  // (only when it's off screen: asking always makes the browser lay out the whole page first)
+  if (tab) {
+    const r = tab.getBoundingClientRect(),
+      s = $('#tabs').getBoundingClientRect();
+    if (r.left < s.left || r.right > s.right) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
   fadeTabs();
   window.scrollTo(0, 0);
 }
@@ -131,7 +136,7 @@ document.addEventListener('submit', e => {
     $('#projin').focus();
   }
   if (f.id === 'tagform') {
-    const v = $('#tagin').value.trim();
+    const v = cleanText($('#tagin').value.trim());
     if (!v) return;
     if (S.tags.some(t => t.name === v)) {
       toast('That tag already exists');
@@ -189,7 +194,7 @@ document.addEventListener('change', e => {
   if (el.id === 'devname') return renameDevice(el.value);
   if (el.dataset.flowname) {
     const f = S.flows.find(x => x.id === el.dataset.flowname),
-      v = el.value.trim().slice(0, 60);
+      v = cleanText(el.value.trim().slice(0, 60));
     if (f && v && v !== f.name) {
       f.name = v;
       save();
@@ -244,16 +249,20 @@ document.addEventListener('change', e => {
     renderAll();
     return;
   }
+  // A tag's or a project's name field is known by its place in the list; the one it showed is
+  // the one renamed (found by name: the list may have changed meanwhile, say on another device).
   if (el.dataset.projname !== undefined) {
-    const p = S.projects[+el.dataset.projname],
-      v = el.value.trim().slice(0, 40);
+    const at = S.projects[+el.dataset.projname],
+      p = at && at.name === el.defaultValue ? at : S.projects.find(x => x.name === el.defaultValue),
+      v = cleanText(el.value.trim().slice(0, 40));
     if (p && v) p.name = v;
     save();
     renderAll();
     return;
   }
   if (el.dataset.tagname !== undefined) {
-    renameTag(+el.dataset.tagname, el.value);
+    const i = S.tags.findIndex(t => t.name === el.defaultValue);
+    if (i >= 0) renameTag(i, el.value);
     save();
     renderAll();
     return;
@@ -357,6 +366,7 @@ document.addEventListener('click', e => {
   if (d.sart && !(kbEdit && !confirm('Leave the article you are writing? Changes not saved will be lost.'))) {
     kbArt = d.sart;
     kbEdit = null;
+    clearKbDraft();
     kbImgShown = null;
     go('knowledge');
     renderKnowledge();
@@ -763,7 +773,7 @@ document.addEventListener('click', e => {
     Object.assign(S, keep);
     if (imgs) S.noteImgs = imgs;
     // (pictures still waiting for their article: kept too, or they'd be deleted everywhere)
-    if (!Array.isArray(pending.kbimgLoose)) S.kbimgLoose = keptLoose;
+    S.kbimgLoose = [...S.kbimgLoose, ...keptLoose.filter(p => !S.kbimgLoose.some(q => q.id === p.id))];
     // A copy from before the Knowledge tab has none of it: what's here stays.
     ['kb', 'kbcats', 'flows'].forEach(k => {
       if (!Array.isArray(pending[k])) S[k] = kept[k];
@@ -917,10 +927,16 @@ document.addEventListener('keydown', e => {
 // Leaving (closing, switching app): notes typed in the last moment are saved now, not after
 // the typing pause.
 const saveNotesNow = () => notesDirty && $('#notesin') && saveNotes($('#notesin').value);
-window.addEventListener('pagehide', saveNotesNow);
+window.addEventListener('pagehide', () => {
+  if (!window.appReady) return;
+  saveNotesNow();
+  keepKbDraft();
+});
 document.addEventListener('visibilitychange', () => {
+  if (!window.appReady) return; // (not started yet: nothing to save or redraw)
   if (document.hidden) {
     saveNotesNow();
+    keepKbDraft();
     // (leaving the app doesn't take the keyboard off a field: a date picked just before is saved)
     const a = document.activeElement,
       wd = a && a.type === 'date' && a.closest('#waitd[data-waitid]');
@@ -957,20 +973,71 @@ setInterval(() => {
   renderHeader(); // and the next alarm
 }, 60000);
 
-load();
-// Signed in and online, the day's reset (and finishing a session that ended while the app was
-// closed) waits for the server's copy: see onAuthStateChange. Otherwise it happens here.
-const deferStart = !!sb && navigator.onLine;
-if (!deferStart) rollover();
-if (!deferStart && timerDue()) finishTimer(true);
-else renderAll();
-const heldAtStart = deferStart ? holdDue() : '';
-setTimeout(() => releaseHeld(heldAtStart), 20000); // (never held for long, whatever happens)
-go(view);
-receiveShare();
-receiveLaunch();
-setInterval(timerTick, 500);
-setInterval(alarmTick, 1000);
+// Start: the pictures kept in IndexedDB are read first (see js/pics.js), then the saved copy,
+// and only then does anything draw or sync.
+let deferStart = false,
+  heldAtStart = '';
+function start(pics) {
+  load(pics);
+  // Signed in and online, the day's reset (and finishing a session that ended while the app was
+  // closed) waits for the server's copy: see onAuthStateChange. Otherwise it happens here.
+  deferStart = !!sb && navigator.onLine;
+  if (!deferStart) rollover();
+  if (!deferStart && timerDue()) finishTimer(true);
+  else renderAll();
+  heldAtStart = deferStart ? holdDue() : '';
+  setTimeout(() => releaseHeld(heldAtStart), 20000); // (never held for long, whatever happens)
+  // An article left half-written when the app was closed (or Android closed it) comes back.
+  if (restoreKbDraft()) view = 'knowledge';
+  go(view);
+  receiveShare();
+  receiveLaunch();
+  setInterval(timerTick, 500);
+  setInterval(alarmTick, 1000);
+  listenAuth();
+  setTimeout(prunePics, 30000);
+  // (the app's data, pictures included, isn't cleared by the phone when space runs low)
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  window.appReady = true;
+}
+openPics().then(async db => {
+  picDb = db;
+  const pics = await readPics(db);
+  picStored = new Set(pics.keys());
+  start(pics);
+});
+// Android's back gesture: one history entry stands for "in the app". Going back runs the app's
+// own back step (close a picture, leave an article or a quest's page, back to Today...) and
+// puts the entry back; only from Today's list does it leave the app.
+function appBack() {
+  if (imgShown || kbImgShown) return (closeImgs(), true);
+  if (talk) return (closeTalk(), true);
+  if (zen && !focusLocked()) return (setZen(false), true);
+  if (view === 'knowledge' && kbEdit) {
+    if (!confirm('Leave the article you are writing? Changes not saved will be lost.')) return true;
+    kbEdit = null;
+    clearKbDraft();
+    renderKnowledge();
+    return true;
+  }
+  if (view === 'knowledge' && kbArt) {
+    kbArt = null;
+    renderKnowledge();
+    return true;
+  }
+  if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
+  if (view !== 'today') return (go('today'), true);
+  return false;
+}
+try {
+  history.replaceState({ app: 'root' }, '');
+  history.pushState({ app: 'in' }, '');
+} catch (e) {}
+window.addEventListener('popstate', () => {
+  if (!window.appReady) return;
+  if (appBack()) history.pushState({ app: 'in' }, '');
+  else history.back();
+});
 // Leaving the notes box saves straight away rather than after the typing pause.
 document.addEventListener('focusout', e => {
   const wd = e.target.type === 'date' && e.target.closest && e.target.closest('#waitd[data-waitid]');
@@ -992,7 +1059,8 @@ document.addEventListener('focusout', e => {
 document.addEventListener('mousedown', e => {
   if (e.target.id === 'notesload') e.preventDefault();
 });
-if (sb) {
+function listenAuth() {
+  if (!sb) return;
   sb.auth.onAuthStateChange((ev, s) => {
     session = s;
     renderSyncBadge();

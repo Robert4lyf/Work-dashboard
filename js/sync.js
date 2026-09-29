@@ -135,7 +135,7 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     // A repeat's copy for a day (id <template>-<date>) cleared by another device's reset:
     // remembered, so this device's look-back doesn't make it again.
     if (r.deleted && /^quest:.+-\d{4}-\d\d-\d\d$/.test(r.key)) (sync2.gone = sync2.gone || {})[r.key] = 1;
-    const h = r.deleted ? null : hashOf(r.data),
+    const h = r.deleted ? null : recHash(r.key, r.data),
       mine = sync2.dirty[r.key];
     if (mine && mine.at > Number(r.edited_at)) continue; // (not taken in: fetched again next time)
     (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
@@ -143,7 +143,7 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     delete sync2.dirty[r.key];
     if (h === null) delete sync2.synced[r.key];
     else sync2.synced[r.key] = h;
-    if (h === null ? recs.has(r.key) : hashOf(recs.get(r.key)) !== h) {
+    if (h === null ? recs.has(r.key) : recHash(r.key, recs.get(r.key)) !== h) {
       if (h === null) recs.delete(r.key);
       else recs.set(r.key, r.data);
       changed = true;
@@ -179,6 +179,8 @@ async function firstSync() {
       S.flows.length +
       S.noteImgs.length +
       S.alarms.length +
+      S.templates.length +
+      S.projects.length +
       (S.notes ? 1 : 0);
     const keep =
       n &&
@@ -349,6 +351,9 @@ async function sync() {
         persistLocal();
         // (nothing of the other account's left open: an article being written, a search...)
         kbEdit = kbArt = kbMoving = kbImgShown = imgShown = null;
+        notesDirty = false;
+        notesBase = null;
+        clearKbDraft();
         searchQ = kbQuery = '';
         syncStats = [];
         inBackground(renderAll);

@@ -992,3 +992,28 @@ test('deep hunt: text the database can’t store (NUL, half an emoji) doesn’t 
   expect((await a.state()).notes).toBe('ab  c');
   expect(a.errors).toEqual([]);
 });
+
+test('round 5: a repeat’s copy deleted just before the day’s reset stays deleted', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.templates = [{ id: 't', text: 'Daily', days: [0, 1, 2, 3, 4, 5, 6], monthDay: 0, children: [] }];
+    S.day = shift(today(), -1);
+    rollover();
+    save();
+  });
+  await a.sync();
+  const id = await a.page.evaluate(() => S.quests.find(q => q.tpl === 't').id);
+  // Deleted, with the day not yet reset here (as just after midnight).
+  await a.page.evaluate(id => {
+    S.quests = S.quests.filter(q => q.id !== id);
+    S.day = shift(today(), -1);
+    save();
+    rollover();
+    save();
+  }, id);
+  await a.sync();
+  expect((await a.state()).quests.some(q => q.id === id)).toBe(false);
+  expect(srv.rows.get('quest:' + id).deleted).toBe(true);
+  expect(a.errors).toEqual([]);
+});

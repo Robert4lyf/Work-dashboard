@@ -258,8 +258,11 @@ function setHTML(el, html) {
     Object.keys(typed).filter(id => el.querySelector('#' + CSS.escape(id) + '[data-typed]')),
   );
   // A field without an id (a tag's or a flow's name, say), found again by its data attributes.
+  // (only if it's still the same item's field: one found by its place in a list, say a tag's
+  // name, could now be another tag's, if one was removed elsewhere meanwhile)
   const typedSel =
-    !fid && fsel && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) ? a.value : null;
+      !fid && fsel && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) ? a.value : null,
+    typedWas = typedSel !== null ? a.defaultValue : '';
   const opt = $('#sopt') && $('#sopt').checked; // "Add as optional", ticked but not yet added
   el.innerHTML = html;
   if (opt && $('#sopt')) $('#sopt').checked = true;
@@ -269,7 +272,7 @@ function setHTML(el, html) {
     if (i && wasTyped.has(id)) i.dataset.typed = '1';
   }
   const f = fsel && el.querySelector(fsel);
-  if (f && typedSel !== null) {
+  if (f && typedSel !== null && f.defaultValue === typedWas) {
     f.value = typedSel;
     f.dataset.typed = '1';
   }
