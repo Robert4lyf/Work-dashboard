@@ -29,7 +29,9 @@ test('the back gesture from an article keeps the app open for the next one', asy
 
 test("an Inbox item under Today's waiting section opens the Inbox", async ({ app, page }) => {
   await app.setState(s => {
-    s.inbox = [{ id: 'i1', text: 'Budget figures', wait: { who: 'Sam', note: '', chase: '' }, at: Date.now() }];
+    s.inbox = [
+      { id: 'i1', text: 'Budget figures', wait: { who: 'Sam', note: '', chase: '' }, at: Date.now() },
+    ];
   });
   await app.go('today');
   await page.click('#waitsec > summary');
