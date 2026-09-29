@@ -27,6 +27,12 @@ function toRecords(s) {
   // Only once there are notes: a device that never had any mustn't send an empty copy that
   // could win over real notes from another device. (Clearing them deletes the record.)
   if (s.notes) m.set('meta:notes', { text: s.notes });
+  // An article's pictures are records of their own, so editing its text doesn't send them again.
+  (s.kb || []).forEach(a => {
+    const { imgs, ...rest } = a;
+    m.set('kb:' + a.id, rest);
+    (imgs || []).forEach(p => m.set('kbimg:' + p.id, { id: p.id, art: a.id, src: p.src, at: p.at }));
+  });
   m.set('meta:order', {
     quests: s.quests.map(x => x.id),
     inbox: s.inbox.map(x => x.id),
@@ -75,7 +81,11 @@ function fromRecords(m, day) {
     alarms: by.alarm || [],
     devices: by.device || [],
     kbcats: by.kbcat || [],
-    kb: by.kb || [],
+    // (pictures of their own if there are any; older copies kept them in the article)
+    kb: (by.kb || []).map(a => {
+      const own = (by.kbimg || []).filter(p => p.art === a.id).sort((x, y) => (x.at || 0) - (y.at || 0));
+      return own.length || !a.imgs ? { ...a, imgs: own.map(({ art, ...p }) => p) } : a;
+    }),
     flows: by.flow || [],
     noteImgs: by.noteimg || [],
     notes: (m.get('meta:notes') || {}).text || '',
@@ -128,7 +138,9 @@ function saveSyncState() {
 // device) are left alone, never deleted for being missing here.
 const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy'];
 const knownKey = k =>
-  k.slice(0, k.indexOf(':')) in LISTS || (k.startsWith('meta:') && META_KEYS.includes(k.slice(5)));
+  k.slice(0, k.indexOf(':')) in LISTS ||
+  k.startsWith('kbimg:') ||
+  (k.startsWith('meta:') && META_KEYS.includes(k.slice(5)));
 // `now`: when the change counts as made (the daily reset back-dates its changes to midnight).
 function markDirty(now = Date.now()) {
   const recs = toRecords(S),

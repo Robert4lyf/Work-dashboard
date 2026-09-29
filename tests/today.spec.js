@@ -153,3 +153,17 @@ test('the header stays to three lines: Focus sits beside Next up', async ({ app,
   await expect(page.locator('#hnow [data-zen]')).toHaveText('Focus');
   await expect(page.locator('#hstats button')).toHaveText(['0/1 done', '0m focus']);
 });
+
+test('a change redraws only the view on screen; another view is drawn when opened', async ({ app, page }) => {
+  await app.go('notes');
+  await page.evaluate(() => {
+    document.querySelector('#v-inbox').innerHTML = '<p id="stale">stale</p>';
+    S.inbox.push({ id: 'n1', text: 'New item' });
+    save();
+    renderAll();
+  });
+  await expect(page.locator('#stale')).toHaveCount(1);
+  await app.go('inbox');
+  await expect(page.locator('#stale')).toHaveCount(0);
+  await expect(page.locator('#v-inbox')).toContainText('New item');
+});

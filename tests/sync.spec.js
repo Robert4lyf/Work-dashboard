@@ -7,7 +7,12 @@ function fakeSupabase() {
   const query = table => {
     const q = { table, filters: {} };
     const api = {
-      select() {
+      select(cols) {
+        q.cols = cols;
+        return api;
+      },
+      in(k, vals) {
+        q.keys = vals;
         return api;
       },
       eq(k, v) {
@@ -35,15 +40,21 @@ function fakeSupabase() {
         return api;
       },
       maybeSingle: async () => ({ data: await window.srvState(), error: null }),
-      upsert: async (rows, opts) => {
-        if (table === 'cockpit_state') await window.srvSnapshot(rows);
-        else await window.srvUpsert(Array.isArray(rows) ? rows : [rows]);
-        return { error: null };
+      // (like the real client: awaited as is, or with .select() for the rows written)
+      upsert: (rows, opts) => {
+        const done =
+          table === 'cockpit_state'
+            ? window.srvSnapshot(rows).then(() => [])
+            : window.srvUpsert(Array.isArray(rows) ? rows : [rows]);
+        return {
+          select: async () => ({ data: await done, error: null }),
+          then: (a, b) => done.then(() => ({ error: null })).then(a, b),
+        };
       },
       then(res, rej) {
         if (table !== 'cockpit_items') return Promise.resolve({ data: [], error: null }).then(res, rej);
         return window
-          .srvRows(q.gt || 0, q.limit || 1000)
+          .srvRows(q.gt || 0, q.limit || 1000, q.cols || '', q.keys || null)
           .then(data => ({ data, error: null }))
           .then(res, rej);
       },
@@ -103,19 +114,33 @@ async function device(browser, srv, seed) {
     u => !u.href.startsWith('http://localhost'),
     r => r.abort(),
   );
-  await page.exposeFunction('srvRows', (gt, limit) =>
-    [...srv.rows.values()]
-      .filter(r => r.seq > gt)
+  // (what's asked for: by key or after a seq; without the data unless it's selected, and the
+  // data sent counted, to check what a sync downloads)
+  await page.exposeFunction('srvRows', (gt, limit, cols, keys) => {
+    const rows = [...srv.rows.values()]
+      .filter(r => (keys ? keys.includes(r.key) : r.seq > gt))
       .sort((a, b) => a.seq - b.seq)
-      .slice(0, limit),
-  );
+      .slice(0, limit);
+    if (cols && !cols.split(',').includes('data')) return rows.map(({ data, ...r }) => r);
+    srv.dataRead = (srv.dataRead || 0) + rows.filter(r => r.data).length;
+    srv.readKeys = [...(srv.readKeys || []), ...rows.filter(r => r.data).map(r => r.key)];
+    return rows;
+  });
   await page.exposeFunction('srvUpsert', rows => {
     srv.writes += rows.length;
-    rows.forEach(r => srv.rows.set(r.key, { ...r, data: jsonb(r.data), seq: ++srv.seq }));
+    const wrote = [];
+    rows.forEach(r => {
+      // (as the server's trigger does: an older edit arriving later is dropped)
+      const old = srv.rows.get(r.key);
+      if (old && r.edited_at < old.edited_at) return;
+      srv.rows.set(r.key, { ...r, data: jsonb(r.data), seq: ++srv.seq });
+      wrote.push({ key: r.key, seq: srv.seq });
+    });
     // Tell the other devices, like Supabase Realtime would.
     srv.devices
       .filter(d => d.page !== page)
       .forEach(d => d.page.evaluate(() => window.__live && window.__live()));
+    return wrote;
   });
   await page.exposeFunction('srvState', () => srv.state);
   await page.exposeFunction('srvRpc', name =>
@@ -433,4 +458,96 @@ test('a repeat finished and cleared on one device isn’t brought back by anothe
   await settle(a, b);
   const ids = (await b.state()).quests.map(q => q.id);
   expect(ids).not.toContain('tpl1-' + yday);
+});
+
+test('a sync downloads only what it hasn’t got: not its own writes, nor rows read before', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  // An article with two pictures, written on A.
+  const pic = 'data:image/png;base64,' + 'A'.repeat(4000);
+  await a.page.evaluate(pic => {
+    S.kbcats = [{ id: 'c', name: 'Processes', parent: '' }];
+    S.kb = [
+      {
+        id: 'art',
+        cat: 'c',
+        title: 'Guide',
+        body: 'Text',
+        edited: 1,
+        imgs: [
+          { id: 'p1', src: pic, at: 1 },
+          { id: 'p2', src: pic, at: 2 },
+        ],
+      },
+    ];
+    save();
+  }, pic);
+  await a.sync();
+  // Each picture is a row of its own; the article's row has none in it.
+  expect(srv.rows.get('kb:art').data.imgs).toBeUndefined();
+  expect(srv.rows.has('kbimg:p1') && srv.rows.has('kbimg:p2')).toBe(true);
+
+  // A doesn't download what it just sent; B downloads it once, then nothing more.
+  srv.dataRead = 0;
+  await a.sync();
+  expect(srv.dataRead).toBe(0);
+  await b.sync();
+  expect(srv.dataRead).toBeGreaterThan(0);
+  expect((await b.state()).kb[0].imgs.map(p => p.id)).toEqual(['p1', 'p2']);
+  await settle(a, b); // (B's first sync also registers it as a device, which A then reads)
+  srv.readKeys = [];
+  await settle(a, b);
+  expect(srv.readKeys).toEqual([]);
+
+  // Editing the article's text sends the article, not its pictures.
+  const before = new Set([...srv.rows.values()].map(r => r.key + r.seq));
+  await a.page.evaluate(() => {
+    S.kb[0].body = 'Text, edited';
+    save();
+  });
+  await a.sync();
+  const sent = [...srv.rows.values()].filter(r => !before.has(r.key + r.seq)).map(r => r.key);
+  expect(sent).toEqual(['kb:art']);
+  await b.sync();
+  const kb = (await b.state()).kb[0];
+  expect(kb.body).toBe('Text, edited');
+  expect(kb.imgs).toHaveLength(2);
+
+  // Removing a picture deletes its row; the other stays.
+  await a.page.evaluate(() => {
+    S.kb[0].imgs = S.kb[0].imgs.filter(p => p.id !== 'p1');
+    save();
+  });
+  await settle(a, b);
+  expect(srv.rows.get('kbimg:p1').deleted).toBe(true);
+  expect((await b.state()).kb[0].imgs.map(p => p.id)).toEqual(['p2']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('an article synced with its pictures inside it (the earlier way) keeps them, and moves them out', async ({
+  browser,
+}) => {
+  const srv = server();
+  srv.rows.set('kb:old', {
+    key: 'kb:old',
+    data: {
+      id: 'old',
+      cat: '',
+      title: 'Old',
+      body: '',
+      imgs: [{ id: 'q1', src: 'data:image/png;base64,AAAA' }],
+    },
+    deleted: false,
+    edited_at: 1,
+    seq: ++srv.seq,
+  });
+  const a = await device(browser, srv);
+  expect((await a.state()).kb[0].imgs.map(p => p.id)).toEqual(['q1']);
+  await a.sync();
+  expect(srv.rows.has('kbimg:q1')).toBe(true);
+  expect(srv.rows.get('kb:old').data.imgs).toBeUndefined();
+  expect(a.errors).toEqual([]);
 });

@@ -76,6 +76,7 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   await expect(step('Carried over')).toContainText('Old report 5 days'); // still stale, now kept
   await page.click('#reviewed');
   expect((await app.state()).reviewed).toBe('2026-09-25');
+  await app.go('today'); // (a tab is drawn when opened)
   await expect(page.locator('#v-today .attn [data-rsub="week"]')).toHaveCount(0);
   await expect(page.locator('nav #reviewDot')).toBeHidden();
 });

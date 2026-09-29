@@ -21,14 +21,18 @@ function fakeSupabase() {
       order: () => api,
       limit: () => api,
       maybeSingle: async () => ({ data: null, error: null }),
-      upsert: async rows => {
+      upsert: rows => {
         if (name === 'cockpit_notices')
           [].concat(rows).forEach(r => {
             const i = notices.findIndex(n => n.key === r.key);
             if (i >= 0) notices[i] = { ...notices[i], ...r };
             else notices.push({ sent_at: null, ...r });
           });
-        return { error: null };
+        const done = { error: null };
+        return {
+          select: async () => ({ data: [], error: null }),
+          then: (a, b) => Promise.resolve(done).then(a, b),
+        };
       },
       delete: () => {
         q.del = true;

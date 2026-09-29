@@ -1,21 +1,33 @@
 /* nav & events */
 let view = 'today';
+// Only what can be seen is redrawn: the header, the view that's showing (and whatever covers
+// it). Other views are drawn when they're opened (see go), so a change or a sync doesn't redraw
+// every tab each time.
 function renderAll() {
   renderHeader();
-  renderToday();
-  renderInbox();
-  renderFocus();
-  renderWaiting();
-  renderReview();
-  renderProjectsView();
-  renderLog();
-  renderAccount();
-  renderNotes();
-  renderKnowledge();
-  if (view === 'search') renderSearch();
+  renderView();
   syncRinging();
   renderZen();
   if (talk) renderTalk();
+}
+function renderView(v = view) {
+  if (v === 'review') {
+    renderReview();
+    if (reviewSub === 'projects') renderProjectsView();
+    if (reviewSub === 'log') renderLog();
+    return;
+  }
+  const r = {
+    today: renderToday,
+    inbox: renderInbox,
+    focus: renderFocus,
+    waiting: renderWaiting,
+    notes: renderNotes,
+    knowledge: renderKnowledge,
+    search: renderSearch,
+    account: renderAccount,
+  }[v];
+  if (r) r();
 }
 // Fade whichever edge of the tab strip has more tabs beyond it.
 function fadeTabs() {
@@ -51,7 +63,7 @@ function go(v) {
     'log',
     'account',
   ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
-  if (v === 'review') renderReview();
+  renderView(v); // (drawn now: while hidden it wasn't kept up to date)
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
   if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
