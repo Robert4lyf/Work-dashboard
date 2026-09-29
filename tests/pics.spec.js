@@ -124,7 +124,7 @@ test('an article left half-written when the app closes comes back', async ({ app
     renderAll();
   });
   await app.go('knowledge');
-  await page.click('#kc-p > summary');
+  await page.click('[data-kbcat="p"]');
   await page.click('[data-kbnew]');
   await page.fill('#kbt', 'Half');
   await page.fill('#kbb', 'written');

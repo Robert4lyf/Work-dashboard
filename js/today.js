@@ -43,7 +43,7 @@ function row(n, i, len, sib) {
     : xOpen === n.id
       ? `<span class="xchoice"><button class="chip" data-toinbox="${n.id}">Inbox</button><button class="chip del" data-delnow="${n.id}">Delete</button></span>`
       : `<button class="x" data-xopen="${n.id}" aria-label="Remove ${esc(n.text)}">×</button>`;
-  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}"${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
+  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder.
 function listHead(title, ns) {
@@ -255,30 +255,39 @@ function renderNode({ n, parents }) {
     top = !parents.length;
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
-  h += `</div><div class="node box"><h1>${esc(n.text)}</h1>${leftNote(n)}${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}${estPicker(n)}`;
+  // The facts: what's set on this quest, each a tap to change.
+  h += `</div><div class="node box facts"><h1>${esc(n.text)}</h1>${leftNote(n)}`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
       p = Math.round(frac(n) * 100),
       opt = n.children.length - req.length;
-    h += `<div>${set.filter(isDone).length} / ${set.length} complete (${p}%)${req.length && opt ? ' + ' + opt + ' optional' : ''}</div><div class="prog"><div style="width:${p}%"></div></div>`;
+    h += `<div class="prog"><div style="width:${p}%"></div></div><div class="hint" style="margin:6px 0 0">${set.filter(isDone).length} / ${set.length} complete${req.length && opt ? ' + ' + opt + ' optional' : ''}</div>`;
   }
   const m = spent(n),
     meta =
-      (n.opt ? '<span class="tag opt">Optional</span>' : '') + dueTag(n) + (m ? 'Focus time: ' + hm(m) : '');
-  if (meta) h += `<div style="margin-top:8px">${meta}</div>`;
-  h += '<div class="acts">';
-  if (!kids)
-    h += `<button class="btn ${d ? '' : 'green'}" data-toggle="${n.id}">${d ? 'Mark not done' : 'Mark done'}</button>`;
-  h += `${d ? '' : `<button class="btn blue" data-focuson="${n.id}">Focus on this</button>`}</div>`;
-  h += `<div class="links"><button class="linkbtn" data-savetpl="${n.id}">Save as template</button><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this quest</button></div>`;
+      (n.opt ? '<span class="tag opt">Optional</span>' : '') +
+      dueTag(n) +
+      (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
+      (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '');
+  if (meta) h += `<div class="factsrow">${meta}</div>`;
+  h += `${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}${estPicker(n)}`;
+  if (top) h += laterPicker('q', n.id);
+  h += waitPanel(n);
+  h += '</div>';
+  // The steps come first: they're what you work through.
+  h += listHead('Subquests', n.children);
+  h += list(n.children);
+  h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>
+    <label class="optbox" style="margin-top:-4px"><input type="checkbox" id="sopt">Add as optional</label>`;
+  // Everything else, folded away.
+  h += `<details id="mored" class="more"${panels.mored ? ' open' : ''}><summary>More: notes, deadline, repeat, move…</summary>`;
   h += `<details id="fdet"${(panels.fdet ?? !!n.notes) ? ' open' : ''}><summary>Notes and deadline</summary>
     <label class="f" for="fname">Name</label><input class="fld" id="fname" data-field="text" data-id="${n.id}" value="${esc(n.text)}" maxlength="120">
     <label class="f" for="fdue">Deadline</label><input class="fld" type="date" id="fdue" data-field="due" data-id="${n.id}" value="${n.due}">
     <label class="f" for="fnotes">Notes</label><textarea class="fld" id="fnotes" data-field="notes" data-id="${n.id}">${esc(n.notes)}</textarea>
     ${top ? '' : `<label class="optbox"><input type="checkbox" data-field="opt" data-id="${n.id}" ${n.opt ? 'checked' : ''}>Optional</label>`}
     </details>`;
-  h += waitPanel(n);
   if (top) {
     const t = tplFor(n),
       on = repeats(t),
@@ -291,12 +300,77 @@ function renderNode({ n, parents }) {
       <div class="days">${WEEK.map(i => `<button class="day" data-rday="${i}" data-id="${n.id}" aria-pressed="${days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0, 2)}</button>`).join('')}</div>
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${md === i + 1 ? ' selected' : ''}>${ord(i + 1)}${i + 1 > 28 ? ' (or last day)' : ''}</option>`).join('')}</select>
       </details>`;
-    h += laterPicker('q', n.id);
   }
-  h += '</div>';
-  h += listHead('Subquests', n.children);
-  h += list(n.children);
-  h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>
-    <label class="optbox" style="margin-top:-4px"><input type="checkbox" id="sopt">Add as optional</label>`;
+  h += `<div class="links"><button class="linkbtn" data-savetpl="${n.id}">Save as template</button><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this quest</button></div>`;
+  h += '</details>';
+  // The two things you do with a quest, always to hand.
+  h += '<div class="qfoot acts">';
+  if (!kids)
+    h += `<button class="btn ${d ? '' : 'green'}" data-toggle="${n.id}">${d ? 'Mark not done' : 'Mark done'}</button>`;
+  h += `${d ? '' : `<button class="btn blue" data-focuson="${n.id}">Focus on this</button>`}</div>`;
   setHTML($('#v-today'), h);
 }
+
+/* swipes on a phone, on Today's rows: left shows the row's choices (Inbox / Delete), right ticks a
+   step off. Touch only: with a mouse, rows are dragged to reorder (see board.js) and the × is there. */
+let qswipe = null,
+  qswipeClick = false;
+$('#v-today').addEventListener('pointerdown', e => {
+  qswipeClick = false;
+  if (e.pointerType === 'mouse' || reorder) return;
+  const el = e.target.closest('.row[data-qid]');
+  // (a swipe may start on the row's title or tick: those are buttons too)
+  if (!el || e.target.closest('button:not(.open):not(.check):not(.meter), input, select, textarea, form, a'))
+    return;
+  qswipe = {
+    el,
+    id: el.dataset.qid,
+    leaf: !!el.dataset.leaf,
+    x: e.clientX,
+    y: e.clientY,
+    dx: 0,
+    on: false,
+    pid: e.pointerId,
+  };
+});
+$('#v-today').addEventListener('pointermove', e => {
+  const s = qswipe;
+  if (!s || e.pointerId !== s.pid) return;
+  const dx = e.clientX - s.x,
+    dy = e.clientY - s.y;
+  if (!s.on) {
+    if (Math.abs(dy) > 12 || Math.abs(dy) > Math.abs(dx)) return (qswipe = null);
+    if (Math.abs(dx) < 12) return;
+    s.on = true;
+    s.el.classList.add('swiping');
+  }
+  s.dx = dx;
+  s.el.style.transform = `translateX(${dx}px)`;
+  s.el.dataset.swipe = dx < -SWIPE ? 'more' : dx > SWIPE && s.leaf ? 'done' : '';
+});
+function endQSwipe() {
+  const s = qswipe;
+  qswipe = null;
+  if (!s || !s.on) return;
+  s.el.classList.remove('swiping');
+  s.el.style.transform = '';
+  delete s.el.dataset.swipe;
+  if (s.dx < -SWIPE) {
+    xOpen = s.id;
+    renderToday();
+  } else if (s.dx > SWIPE && s.leaf) {
+    const b = s.el.querySelector('[data-toggle]');
+    if (b) b.click(); // (before the guard below: this click is meant)
+  }
+  qswipeClick = true; // (a tap the browser makes of the finger lifting isn't one)
+}
+document.addEventListener('pointerup', endQSwipe);
+document.addEventListener('pointercancel', endQSwipe);
+$('#v-today').addEventListener(
+  'click',
+  e => {
+    if (qswipeClick) e.stopPropagation();
+    qswipeClick = false;
+  },
+  true,
+);

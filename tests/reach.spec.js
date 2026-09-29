@@ -339,11 +339,13 @@ test('health check: says when the notification job is missing, or what the funct
     window.__notifyStatus = { cron: false, net: false };
   });
   await page.click('nav [data-v=account]');
+  await page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await page.click('#healthrun');
   const job = page.locator('.health .hrow2', { hasText: 'Notification job' });
   await expect(job).toHaveClass(/bad/);
   await expect(job).toContainText('enable pg_cron and pg_net');
   await page.evaluate(() => (window.__notifyStatus = { cron: true, net: true, active: true, status: 403 }));
+  await page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await page.click('#healthrun');
   await expect(job).toContainText('The function answered 403');
   await expect(job).toContainText("doesn't match the function's CRON_SECRET");
@@ -357,6 +359,7 @@ test('health check: says when the notification job is missing, or what the funct
         at: new Date().toISOString(),
       }),
   );
+  await page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await page.click('#healthrun');
   await expect(job).toHaveClass(/ok/);
   await expect(job).toContainText('Running');

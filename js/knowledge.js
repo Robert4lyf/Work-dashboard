@@ -4,6 +4,7 @@ let kbArt = null, // the article being read
   kbEdit = null, // the article being written: { id (none for a new one), cat }
   kbQuery = '', // what's typed in the search box
   kbMoving = null, // the category being moved (its "Move to" choice is showing)
+  kbCatOpen = null, // the category being looked at ('' or null: the top level; 'lost': the uncategorised)
   kbImgShown = null; // an article's picture shown full size
 const byName = (a, b) =>
   a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) || (a < b ? -1 : a > b ? 1 : 0);
@@ -142,33 +143,64 @@ function kbFlows() {
 // The notes (one scratchpad, synced), pinned at the top of Knowledge.
 function notesTile() {
   const first = (S.notes || '').split('\n').find(l => l.trim()) || '';
-  return `<button class="soonrow kbrow notestile" data-goto="notes"><span><b>Scratchpad</b><br><small class="hint">${first ? esc(first.slice(0, 80)) : 'Notes and pictures, synced to your other devices'}</small></span></button>`;
+  return `<button class="soonrow notestile" data-goto="notes"><span><b>Scratchpad</b><br><small class="hint">${first ? esc(first.slice(0, 80)) : 'Notes and pictures, synced to your other devices'}</small></span></button>`;
 }
 function kbIndex() {
   let h =
     notesTile() +
     `<h2 class="kbhead">Knowledge</h2><input class="fld" type="search" id="kbq" placeholder="Search articles" aria-label="Search articles" autocomplete="off" value="${esc(kbQuery)}"><div id="kbres">${kbResults()}</div>`;
   h += `<div id="kbtree"${kbQuery.trim() ? ' hidden' : ''}>`;
-  const top = kbKids('');
-  h += top.length
-    ? top.map(kbCatTree).join('')
-    : '<p class="hint">No categories yet. Add one below, then add articles to it.</p>';
-  const lost = kbLost();
-  if (lost.length)
-    h += `<details id="kc-lost" class="kcat"${panels['kc-lost'] ? ' open' : ''}><summary>Uncategorised <small>${lost.length}</small></summary><div class="kbody">${lost.map(kbRow).join('')}</div></details>`;
+  const c = kbCatOpen && kbCatOpen !== 'lost' && kbCat(kbCatOpen);
+  if (!c && kbCatOpen !== 'lost') kbCatOpen = null;
+  h += kbCatOpen === 'lost' ? kbLostView() : c ? kbCategory(c) : kbTop();
+  return h + '</div>';
+}
+// The top level: one tile per category (with how much is filed under it).
+function kbTop() {
+  const top = kbKids(''),
+    lost = kbLost();
+  let h = top.length
+    ? `<div class="tiles">${top.map(kbTile).join('')}${lost.length ? `<button class="tile lost" data-kbcat="lost"><b>Uncategorised</b> <small>${lost.length}</small></button>` : ''}</div>`
+    : '<p class="hint">No categories yet. Add one below, then add articles to it: step-by-step guides, who looks after what, links to tools.</p>';
   h +=
-    '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form></div>';
+    '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form>';
   return h;
 }
-const kbRow = a => `<button class="soonrow kbrow" data-kbart="${a.id}"><span>${esc(a.title)}</span></button>`;
-function kbCatTree(c) {
-  const kids = kbKids(c.id),
-    arts = kbArts(c.id),
-    id = 'kc-' + c.id;
-  return `<details id="${id}" class="kcat"${panels[id] ? ' open' : ''}><summary>${esc(c.name)} <small>${kbCount(c.id)}</small></summary><div class="kbody">
-    ${kids.map(kbCatTree).join('')}${arts.map(kbRow).join('')}${!kids.length && !arts.length ? '<p class="hint kbempty">Empty.</p>' : ''}
-    ${kbMoving === c.id ? kbMovePanel(c) : ''}<div class="links"><button class="linkbtn" data-kbnew="${c.id}">+ Article</button><button class="linkbtn" data-kbsub="${c.id}">+ Sub-category</button><button class="linkbtn" data-kbren="${c.id}">Rename</button><button class="linkbtn" data-kbmove="${c.id}">Move</button><button class="dellink" data-kbdelcat="${c.id}">Delete</button></div></div></details>`;
+const kbTile = c =>
+  `<button class="tile" data-kbcat="${c.id}"><b>${esc(c.name)}</b> <small>${kbCount(c.id)}</small></button>`;
+// Inside a category: where it sits, its sub-categories as tiles, its articles, and what can be done to it.
+function kbCategory(c) {
+  const trail = kbTrail(c.id),
+    ids = kbTrailIds(c.id),
+    kids = kbKids(c.id),
+    arts = kbArts(c.id);
+  let h = `<div class="kbcrumbs crumbs"><button data-kbcat="">&lsaquo; Knowledge</button>${trail
+    .slice(0, -1)
+    .map((t, i) => `<span>/</span><button data-kbcat="${ids[i]}">${esc(t)}</button>`)
+    .join('')}</div><h2 class="kbcatname">${esc(c.name)}</h2>`;
+  if (kids.length) h += `<div class="tiles">${kids.map(kbTile).join('')}</div>`;
+  h += arts.length
+    ? `<div class="list box">${arts.map(kbRow).join('')}</div>`
+    : `<p class="hint kbempty">${kids.length ? 'No articles here yet.' : 'Empty. Add the first article, or a sub-category.'}</p>`;
+  h += `${kbMoving === c.id ? kbMovePanel(c) : ''}<div class="links"><button class="linkbtn" data-kbnew="${c.id}">+ Article</button><button class="linkbtn" data-kbsub="${c.id}">+ Sub-category</button><button class="linkbtn" data-kbren="${c.id}">Rename</button><button class="linkbtn" data-kbmove="${c.id}">Move</button><button class="dellink" data-kbdelcat="${c.id}">Delete</button></div>`;
+  return h;
 }
+// The lost articles (their category went), as a category of their own.
+function kbLostView() {
+  const lost = kbLost();
+  return `<div class="kbcrumbs crumbs"><button data-kbcat="">&lsaquo; Knowledge</button></div><h2 class="kbcatname">Uncategorised</h2>${
+    lost.length
+      ? `<div class="list box">${lost.map(kbRow).join('')}</div>`
+      : '<p class="hint">Nothing here.</p>'
+  }`;
+}
+// The ids of a category and those above it, top down.
+function kbTrailIds(id) {
+  const t = [];
+  for (let c = kbCat(id), n = 0; c && n < 50; c = kbCat(c.parent), n++) t.unshift(c.id);
+  return t;
+}
+const kbRow = a => `<button class="soonrow kbrow" data-kbart="${a.id}"><span>${esc(a.title)}</span></button>`;
 // Where a category can go: the top level, or into any category that isn't itself or inside it.
 function kbMovePanel(c) {
   const inside = new Set(kbCatIds(c.id));
@@ -279,9 +311,27 @@ function restoreKbDraft() {
   toast('Your unsaved article is back', false, 3000);
   return true;
 }
-// Opens the categories above one, so it can be seen.
+// An article being written is left only on purpose (a sheet asks, in place of confirm()).
+function leaveEditor(then) {
+  if (!kbEdit) return then();
+  sheet(
+    {
+      title: 'Leave this article?',
+      text: 'Changes not saved will be lost.',
+      ok: 'Leave',
+      danger: true,
+      cancel: 'Stay',
+    },
+    () => {
+      kbEdit = null;
+      clearKbDraft();
+      then();
+    },
+  );
+}
+// Shows the category something was just filed in.
 function kbReveal(cat) {
-  for (let c = kbCat(cat), n = 0; c && n < 50; c = kbCat(c.parent), n++) panels['kc-' + c.id] = true;
+  kbCatOpen = kbCat(cat) ? cat : null;
 }
 function kbAddCat(name, parent) {
   name = cleanText(name.trim().slice(0, 80));
@@ -295,11 +345,12 @@ function kbAddCat(name, parent) {
 function kbRename(id) {
   const c = kbCat(id);
   if (!c) return;
-  const v = prompt('Rename category', c.name);
-  if (!v || !v.trim()) return;
-  c.name = cleanText(v.trim().slice(0, 80));
-  save();
-  renderKnowledge();
+  sheet({ title: 'Rename category', label: 'Name', value: c.name, ok: 'Rename' }, v => {
+    if (!v) return;
+    c.name = cleanText(v.slice(0, 80));
+    save();
+    renderKnowledge();
+  });
 }
 function kbDeleteCat(id) {
   const c = kbCat(id);
@@ -308,6 +359,7 @@ function kbDeleteCat(id) {
   withUndo('Deleted ' + c.name, () => {
     S.kbcats = S.kbcats.filter(x => !ids.has(x.id));
     S.kb = S.kb.filter(a => !ids.has(a.cat));
+    kbCatOpen = c.parent || null;
     save();
     renderKnowledge();
   });
@@ -407,6 +459,12 @@ function kbSearch(v) {
   $('#kbtree').hidden = !!v.trim();
 }
 function kbClick(d, b) {
+  if (d.kbcat !== undefined) {
+    kbCatOpen = d.kbcat || null;
+    kbMoving = null;
+    renderKnowledge();
+    window.scrollTo(0, 0);
+  }
   if (d.kbart) {
     kbArt = d.kbart;
     kbImgShown = null;
@@ -414,6 +472,8 @@ function kbClick(d, b) {
     window.scrollTo(0, 0);
   }
   if (d.kbback) {
+    const a = S.kb.find(x => x.id === kbArt);
+    if (a) kbCatOpen = kbCat(a.cat) ? a.cat : kbLost().includes(a) ? 'lost' : null;
     kbArt = null;
     renderKnowledge();
   }
@@ -440,8 +500,13 @@ function kbClick(d, b) {
   }
   if (d.kbdel && arm(b, 'Delete?')) kbDelete(d.kbdel);
   if (d.kbsub) {
-    const v = prompt('New sub-category in ' + ((kbCat(d.kbsub) || {}).name || ''));
-    if (v) kbAddCat(v, d.kbsub);
+    const parent = d.kbsub;
+    sheet(
+      { title: 'New sub-category in ' + ((kbCat(parent) || {}).name || ''), label: 'Name', ok: 'Add' },
+      v => {
+        if (v) kbAddCat(v, parent);
+      },
+    );
   }
   if (d.kbren) kbRename(d.kbren);
   if (d.kbmove) {

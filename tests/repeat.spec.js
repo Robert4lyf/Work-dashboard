@@ -14,6 +14,7 @@ test('repeat panel: presets, weekdays, monthly and off', async ({ app, page }) =
   await app.addQuest('Weekly report');
   await app.openQuest('Weekly report');
   await app.addSub('Gather numbers');
+  await page.click('#mored > summary');
   await page.click('#rptd summary');
   await page.click('[data-rday="1"]');
   let s = await app.state();
@@ -35,6 +36,7 @@ test('missed repeat days are caught up once, with fresh subquests', async ({ app
   await app.addQuest('Weekly report');
   await app.openQuest('Weekly report');
   await app.addSub('Gather numbers');
+  await page.click('#mored > summary');
   await page.click('#rptd summary');
   await page.click('[data-rday="1"]');
   await page.click('[aria-label="Mark done: Gather numbers"]');
@@ -51,6 +53,7 @@ test('missed repeat days are caught up once, with fresh subquests', async ({ app
 test('monthly on the 31st falls on the last day of short months', async ({ app, page }) => {
   await app.addQuest('Invoices');
   await app.openQuest('Invoices');
+  await page.click('#mored > summary');
   await page.click('#rptd summary');
   await page.selectOption('#fmonth', '31');
   await app.setState(s => {

@@ -4,50 +4,48 @@ test.beforeEach(async ({ app }) => {
   await app.open();
 });
 
-test('categories and sub-categories hold articles, sorted A to Z and collapsible', async ({ app, page }) => {
+test('categories are tiles, sub-categories inside them, articles A to Z', async ({ app, page }) => {
   await app.go('knowledge');
   const v = page.locator('#v-knowledge');
   for (const name of ['Processes', 'Contacts', 'Tools']) {
     await page.fill('#kbcatin', name);
     await page.press('#kbcatin', 'Enter');
   }
-  await expect(v.locator('#kbtree > .kcat > summary')).toHaveText(['Contacts 0', 'Processes 0', 'Tools 0']);
+  await expect(v.locator('#kbtree .tile')).toHaveText(['Contacts 0', 'Processes 0', 'Tools 0']);
 
-  // A sub-category, named in the prompt.
-  // Closed to begin with.
-  await expect(v.locator('#kbtree [data-kbsub]').first()).toBeHidden();
-  await v.locator('#kbtree > .kcat', { hasText: 'Processes' }).locator('> summary').click();
-  page.once('dialog', d => d.accept('Day care commissioning'));
-  await v.locator('.kcat', { hasText: 'Processes' }).locator('[data-kbsub]').first().click();
-  const sub = v.locator('.kcat .kcat', { hasText: 'Day care commissioning' });
+  // Open a category; a sub-category, named in a sheet (not a browser pop-up).
+  await v.locator('.tile', { hasText: 'Processes' }).click();
+  await expect(v.locator('.kbcatname')).toHaveText('Processes');
+  await v.locator('[data-kbsub]').click();
+  await page.fill('#sheetin', 'Day care commissioning');
+  await page.click('#sheetok');
+  const sub = v.locator('.tile', { hasText: 'Day care commissioning' });
   await expect(sub).toBeVisible();
 
   // Two articles in it, added out of order: listed A to Z.
-  await sub.locator('> summary').click();
+  await sub.click();
   for (const [title, body] of [
     ['Weekly returns', 'Send by Friday.'],
     ['Article 1', 'Step 1: open https://example.com/tool.\nStep 2: done'],
   ]) {
-    await sub.locator('[data-kbnew]').first().click();
+    await v.locator('[data-kbnew]').click();
     await page.fill('#kbt', title);
     await page.fill('#kbb', body);
     await page.click('#kbform .btn.green');
     await expect(v.locator('.kbtitle')).toHaveText(title);
     await page.click('[data-kbback]');
   }
-  // Sub-category is still open after saving (its parents were revealed).
-  await expect(sub.locator('.kbrow')).toHaveText(['Article 1', 'Weekly returns']);
-  await expect(v.locator('.kcat', { hasText: 'Processes' }).first().locator('> summary')).toHaveText(
-    'Processes 2',
-  );
-
-  // Collapsing hides its contents.
-  await v.locator('.kcat', { hasText: 'Processes' }).first().locator('> summary').click();
-  await expect(sub).toBeHidden();
-  await v.locator('.kcat', { hasText: 'Processes' }).first().locator('> summary').click();
+  // Back from an article lands in its category.
+  await expect(v.locator('.kbcatname')).toHaveText('Day care commissioning');
+  await expect(v.locator('.kbrow')).toHaveText(['Article 1', 'Weekly returns']);
+  await expect(v.locator('.kbcrumbs')).toContainText('Processes');
+  await v.locator('.kbcrumbs button', { hasText: 'Knowledge' }).click();
+  await expect(v.locator('#kbtree .tile', { hasText: 'Processes' })).toHaveText('Processes 2');
 
   // Reading one: the text as written, with its link clickable and its place shown.
-  await sub.locator('.kbrow', { hasText: 'Article 1' }).click();
+  await v.locator('.tile', { hasText: 'Processes' }).click();
+  await sub.click();
+  await v.locator('.kbrow', { hasText: 'Article 1' }).click();
   await expect(v.locator('.kbtrail')).toHaveText('Processes › Day care commissioning');
   await expect(v.locator('.kbtext a')).toHaveAttribute('href', 'https://example.com/tool');
   await expect(v.locator('.kbtext')).toContainText('Step 2: done');
@@ -72,16 +70,26 @@ test('categories and sub-categories hold articles, sorted A to Z and collapsible
   await page.fill('#kbq', '');
   await expect(v.locator('#kbtree')).toBeVisible();
 
+  // Renaming, in a sheet; Escape closes it without renaming.
+  await v.locator('.kbcrumbs button', { hasText: 'Knowledge' }).click();
+  await v.locator('.tile', { hasText: 'Tools' }).click();
+  await v.locator('[data-kbren]').click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sheet')).toHaveCount(0);
+  await v.locator('[data-kbren]').click();
+  await page.fill('#sheetin', 'Systems');
+  await page.keyboard.press('Enter');
+  await expect(v.locator('.kbcatname')).toHaveText('Systems');
+
   // Deleting a category takes what's in it (after a second tap), and can be undone.
-  const del = v
-    .locator('.kcat', { hasText: 'Processes' })
-    .first()
-    .locator('> .kbody > .links [data-kbdelcat]');
+  await v.locator('.kbcrumbs button', { hasText: 'Knowledge' }).click();
+  await v.locator('.tile', { hasText: 'Processes' }).click();
+  const del = v.locator('[data-kbdelcat]');
   await del.click();
   await expect(del).toHaveText('Delete it and 1 article?');
   await del.click();
+  await expect(v.locator('#kbtree .tile')).toHaveText(['Contacts 1', 'Systems 0']);
   expect((await app.state()).kb.map(a => a.title)).toEqual(['Who manages day care']);
-  expect((await app.state()).kbcats.map(c => c.name).sort()).toEqual(['Contacts', 'Tools']);
   await page.click('#undo');
   expect((await app.state()).kbcats).toHaveLength(4);
 });
@@ -144,7 +152,7 @@ test('synced knowledge rows are cleaned: bad links dropped, orphans shown, loops
   const s = await app.state();
   expect(s.flows.map(f => f.name)).toEqual(['Good']);
   expect(s.kbcats.some(c => !c.parent)).toBe(true);
-  await expect(page.locator('#kc-lost > summary')).toHaveText('Uncategorised 1');
+  await expect(page.locator('[data-kbcat="lost"]')).toHaveText('Uncategorised 1');
   // They sync as records of their own.
   const back = await page.evaluate(() => fromRecords(toRecords(S), S.day));
   expect(back.flows.map(f => f.id)).toEqual(['f3']);
@@ -156,7 +164,7 @@ test('an article being written survives a background redraw', async ({ app, page
   await app.go('knowledge');
   await page.fill('#kbcatin', 'Processes');
   await page.press('#kbcatin', 'Enter');
-  await page.click('#kbtree .kcat > summary');
+  await page.click('#kbtree [data-kbcat]');
   await page.click('[data-kbnew]');
   await page.fill('#kbt', 'Draft');
   await page.fill('#kbb', 'Half written');
@@ -180,18 +188,20 @@ test('a category can be moved into another, or back to the top level, but not in
     renderAll();
   });
   await app.go('knowledge');
-  await page.click('#kc-d > summary');
-  await page.click('#kc-d > .kbody > .links [data-kbmove]');
+  await page.click('[data-kbcat="d"]');
+  await page.click('[data-kbmove]');
   // Not into itself or its own sub-category.
   const opts = await page.$$eval('#kbmv option', o => o.map(x => x.textContent));
   expect(opts).toEqual(['Top level', 'Processes']);
   await page.selectOption('#kbmv', { label: 'Processes' });
   await page.click('[data-kbmvgo]');
   expect((await app.state()).kbcats.find(c => c.id === 'd').parent).toBe('p');
-  await expect(page.locator('#kc-p #kc-d #kc-x')).toHaveCount(1);
-  await expect(page.locator('#kc-d > summary')).toBeVisible();
+  // Shown where it went: inside Processes, with its own sub-category still inside it.
+  await expect(page.locator('.kbcrumbs')).toContainText('Processes');
+  await expect(page.locator('.kbcatname')).toHaveText('Day care');
+  await expect(page.locator('[data-kbcat="x"]')).toBeVisible();
   await expect(page.locator('#toast')).toContainText('Moved to Processes');
-  await page.click('#kc-d > .kbody > .links [data-kbmove]');
+  await page.click('[data-kbmove]');
   await page.selectOption('#kbmv', { label: 'Top level' });
   await page.click('[data-kbmvgo]');
   expect((await app.state()).kbcats.find(c => c.id === 'd').parent).toBe('');
@@ -207,7 +217,7 @@ test('articles can have pictures: pasted or added while writing, kept only on Sa
     renderAll();
   });
   await app.go('knowledge');
-  await page.click('#kc-p > summary');
+  await page.click('[data-kbcat="p"]');
   await page.click('[data-kbnew]');
   await page.fill('#kbt', 'Guide');
   await page.fill('#kbb', 'Typed text');
@@ -284,7 +294,7 @@ test('bug fixes: editor keeps typed text through redraws; limits; links; overlay
     renderAll();
   });
   await app.go('knowledge');
-  await page.click('#kc-p > summary');
+  await page.click('[data-kbcat="p"]');
   await page.click('[data-kbnew]');
   await page.fill('#kbt', 'Draft title');
   await page.fill('#kbb', 'Draft body');
@@ -372,7 +382,7 @@ test('review round 3: a background redraw leaves an article being written alone'
     renderAll();
   });
   await app.go('knowledge');
-  await page.click('#kc-p > summary');
+  await page.click('[data-kbcat="p"]');
   await page.click('[data-kbnew]');
   await page.fill('#kbb', 'x\n'.repeat(200));
   const same = await page.evaluate(() => {
