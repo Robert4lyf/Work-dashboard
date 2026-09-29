@@ -117,6 +117,12 @@ async function device(browser, srv, seed) {
   // (what's asked for: by key or after a seq; without the data unless it's selected, and the
   // data sent counted, to check what a sync downloads)
   await page.exposeFunction('srvRows', (gt, limit, cols, keys) => {
+    // (a test can have other writes land between a sync's list and its fetch)
+    if (keys && srv.onFetch) {
+      const f = srv.onFetch;
+      srv.onFetch = null;
+      f();
+    }
     const rows = [...srv.rows.values()]
       .filter(r => (keys ? keys.includes(r.key) : r.seq > gt))
       .sort((a, b) => a.seq - b.seq)
@@ -487,7 +493,7 @@ test('a sync downloads only what it hasn’t got: not its own writes, nor rows r
   }, pic);
   await a.sync();
   // Each picture is a row of its own; the article's row has none in it.
-  expect(srv.rows.get('kb:art').data.imgs).toBeUndefined();
+  expect(srv.rows.get('kb:art').data.imgs).toEqual([]);
   expect(srv.rows.has('kbimg:p1') && srv.rows.has('kbimg:p2')).toBe(true);
 
   // A doesn't download what it just sent; B downloads it once, then nothing more.
@@ -548,6 +554,157 @@ test('an article synced with its pictures inside it (the earlier way) keeps them
   expect((await a.state()).kb[0].imgs.map(p => p.id)).toEqual(['q1']);
   await a.sync();
   expect(srv.rows.has('kbimg:q1')).toBe(true);
-  expect(srv.rows.get('kb:old').data.imgs).toBeUndefined();
+  expect(srv.rows.get('kb:old').data.imgs).toEqual([]);
   expect(a.errors).toEqual([]);
+});
+
+test('rows written between a sync’s list and its fetch are not skipped', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  await a.add('First');
+  await settle(a, b);
+  await a.add('Second');
+  await a.sync();
+  // While B fetches the new rows, many other writes land (another device's big batch), one of
+  // them rewriting a row B is fetching.
+  srv.onFetch = () => {
+    for (let i = 0; i < 300; i++)
+      srv.rows.set('inbox:x' + i, {
+        key: 'inbox:x' + i,
+        data: { id: 'x' + i, text: 'Batch ' + i },
+        deleted: false,
+        edited_at: Date.now(),
+        seq: ++srv.seq,
+      });
+    const q = [...srv.rows.values()].find(r => r.key.startsWith('quest:') && r.data.text === 'Second');
+    srv.rows.set(q.key, {
+      ...q,
+      data: { ...q.data, text: 'Second, edited' },
+      edited_at: Date.now(),
+      seq: ++srv.seq,
+    });
+  };
+  await b.sync();
+  await b.sync();
+  const s = await b.state();
+  expect(s.inbox.filter(i => i.text.startsWith('Batch '))).toHaveLength(300);
+  expect(texts(s)).toEqual(['First', 'Second, edited']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('articles keep an empty picture list in their row, so devices from before don’t rewrite them', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kb = [
+      {
+        id: 'art',
+        cat: '',
+        title: 'Guide',
+        body: '',
+        edited: 1,
+        imgs: [{ id: 'p', src: 'data:image/png;base64,AAAA', at: 1 }],
+      },
+    ];
+    save();
+  });
+  await a.sync();
+  expect(srv.rows.get('kb:art').data.imgs).toEqual([]);
+  // A device from before reads it as it would its own (normalized, with imgs: []): no change.
+  const same = await a.page.evaluate(() => {
+    const row = toRecords(S).get('kb:art');
+    return hashOf(row) === hashOf({ ...row, imgs: [] });
+  });
+  expect(same).toBe(true);
+  expect(a.errors).toEqual([]);
+});
+
+test('once pictures are rows of their own, pictures still inside an older copy of an article are ignored', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kb = [
+      { id: 'art', cat: '', title: 'Guide', body: '', edited: 1, imgs: [] },
+      {
+        id: 'b',
+        cat: '',
+        title: 'Other',
+        body: '',
+        edited: 1,
+        imgs: [{ id: 'keep', src: 'data:image/png;base64,AAAA', at: 1 }],
+      },
+    ];
+    save();
+  });
+  await a.sync();
+  // An older device, which still keeps pictures inside the article, sends one back (a picture
+  // removed here since).
+  srv.rows.set('kb:art', {
+    key: 'kb:art',
+    data: {
+      id: 'art',
+      cat: '',
+      title: 'Guide',
+      body: 'edited there',
+      edited: 2,
+      imgs: [{ id: 'gone', src: 'data:image/png;base64,AAAA' }],
+    },
+    deleted: false,
+    edited_at: Date.now() + 1000,
+    seq: ++srv.seq,
+  });
+  await a.sync();
+  const s = await a.state();
+  expect(s.kb.find(x => x.id === 'art').body).toBe('edited there');
+  expect(s.kb.find(x => x.id === 'art').imgs).toEqual([]);
+  expect(s.kb.find(x => x.id === 'b').imgs.map(p => p.id)).toEqual(['keep']);
+  expect(srv.rows.has('kbimg:gone')).toBe(false);
+  expect(a.errors).toEqual([]);
+});
+
+test('a device updated from before picture rows fetches the ones it passed over', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kb = [
+      {
+        id: 'art',
+        cat: '',
+        title: 'Guide',
+        body: '',
+        edited: 1,
+        imgs: [{ id: 'p', src: 'data:image/png;base64,AAAA', at: 1 }],
+      },
+    ];
+    save();
+  });
+  await a.sync();
+  // B is like an older version: it has passed the picture row by (cursor beyond it, well past
+  // the re-read window) without taking it in.
+  for (let i = 0; i < 300; i++)
+    srv.rows.set('inbox:y' + i, {
+      key: 'inbox:y' + i,
+      data: { id: 'y' + i, text: 'y' },
+      deleted: false,
+      edited_at: 1,
+      seq: ++srv.seq,
+    });
+  await b.page.evaluate(seq => {
+    S.kb = [{ id: 'art', cat: '', title: 'Guide', body: '', edited: 1, imgs: [] }];
+    persistLocal();
+    sync2.cursor = seq;
+    delete sync2.kbimg;
+    sync2.at = {};
+    sync2.synced = {};
+    saveSyncState();
+  }, srv.seq);
+  await b.sync();
+  expect((await b.state()).kb[0].imgs.map(p => p.id)).toEqual(['p']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
 });

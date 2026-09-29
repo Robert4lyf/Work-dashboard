@@ -64,10 +64,18 @@ async function pullRows(since, cols = FULL) {
 // record, the seq of the version last read or sent from here). So the recent rows read again
 // in case of out-of-order writes, and this device's own writes, don't come back down in full:
 // with pictures among them, that was most of each sync.
+// (A device from before articles' pictures were rows of their own passed over those rows as a
+// kind it didn't know: the first pull after updating lists everything once, to fetch them.)
 async function pullChanges() {
-  const light = await pullRows(Math.max(0, sync2.cursor - OVERLAP), LIGHT),
+  const from = Math.max(0, sync2.cursor - OVERLAP),
+    catchUp = !sync2.kbimg,
+    light = await pullRows(catchUp ? 0 : from, LIGHT),
     at = sync2.at || (sync2.at = {}),
-    want = light.filter(r => knownKey(r.key) && at[r.key] !== Number(r.seq)).map(r => r.key),
+    seqOf = new Map(light.map(r => [r.key, Number(r.seq)])),
+    want = light
+      .filter(r => knownKey(r.key) && at[r.key] !== Number(r.seq))
+      .filter(r => Number(r.seq) > from || r.key.startsWith('kbimg:'))
+      .map(r => r.key),
     full = [];
   for (let i = 0; i < want.length; i += 100) {
     const { data, error } = await sb
@@ -77,8 +85,14 @@ async function pullChanges() {
     if (error) throw error;
     full.push(...data);
   }
-  full.sort((a, b) => a.seq - b.seq);
-  applyRows(full, false);
+  // Only the versions listed: a row written again since then (a newer seq, past the end of the
+  // list) waits for the next pull, which lists it along with anything written around it.
+  // Taking it now would move the cursor past rows that were never listed.
+  applyRows(
+    full.filter(r => seqOf.get(r.key) === Number(r.seq)).sort((a, b) => a.seq - b.seq),
+    false,
+  );
+  sync2.kbimg = 1;
   light.forEach(r => {
     sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
     (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
@@ -254,6 +268,7 @@ async function sync() {
       sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0 };
       await firstSync();
       sync2.user = session.user.id;
+      sync2.kbimg = 1; // (a first sync reads every row)
       saveSyncState();
     } else await pullChanges();
     // The day's reset, now that the server's copy is in (applyRows ran it if anything came).

@@ -28,9 +28,11 @@ function toRecords(s) {
   // could win over real notes from another device. (Clearing them deletes the record.)
   if (s.notes) m.set('meta:notes', { text: s.notes });
   // An article's pictures are records of their own, so editing its text doesn't send them again.
+  // (The article keeps an empty list in their place: that's how a device from before this reads
+  // it, so the two don't keep rewriting it back and forth.)
   (s.kb || []).forEach(a => {
     const { imgs, ...rest } = a;
-    m.set('kb:' + a.id, rest);
+    m.set('kb:' + a.id, { ...rest, imgs: [] });
     (imgs || []).forEach(p => m.set('kbimg:' + p.id, { id: p.id, art: a.id, src: p.src, at: p.at }));
   });
   m.set('meta:order', {
@@ -81,10 +83,12 @@ function fromRecords(m, day) {
     alarms: by.alarm || [],
     devices: by.device || [],
     kbcats: by.kbcat || [],
-    // (pictures of their own if there are any; older copies kept them in the article)
+    // Pictures of their own. Older copies kept them in the article: those count only until the
+    // account has any pictures of their own (after that, an older device still sending them
+    // mustn't bring back one that was removed).
     kb: (by.kb || []).map(a => {
       const own = (by.kbimg || []).filter(p => p.art === a.id).sort((x, y) => (x.at || 0) - (y.at || 0));
-      return own.length || !a.imgs ? { ...a, imgs: own.map(({ art, ...p }) => p) } : a;
+      return (by.kbimg || []).length || !a.imgs ? { ...a, imgs: own.map(({ art, ...p }) => p) } : a;
     }),
     flows: by.flow || [],
     noteImgs: by.noteimg || [],
