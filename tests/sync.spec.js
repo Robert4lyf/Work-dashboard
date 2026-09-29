@@ -193,6 +193,14 @@ async function device(browser, srv, seed, opts = {}) {
     }, opts.clockBehind);
   if (seed) await page.addInitScript(s => localStorage.setItem('work-cockpit-v1', s), JSON.stringify(seed));
   await page.addInitScript(fakeSupabase);
+  // (a reload waits for writes to the store, then for the app to have started)
+  const reload = page.reload.bind(page);
+  page.reload = async (...a) => {
+    await page.evaluate(() => (window.storeDone ? storeDone() : null)).catch(() => {});
+    const r = await reload(...a);
+    await page.waitForFunction(() => window.appReady === true);
+    return r;
+  };
   await page.goto('/');
   await expect(page.locator('#syncBtn')).toHaveText('Synced');
   const d = {

@@ -1,7 +1,8 @@
-/* pictures (the notes' and the articles'), kept in IndexedDB. The main saved copy (localStorage,
-   small and rewritten on every save) leaves out each picture's data once it's safely here; the
-   app loads them from here before it starts. IndexedDB has room for far more than localStorage,
-   and a save no longer rewrites every picture. */
+/* the app's store: IndexedDB, with room for far more than localStorage. Pictures (the notes' and
+   the articles') are kept one by one ('pics'), so a save doesn't rewrite them; the saved copy of
+   everything else and the sync bookkeeping are kept together ('kv', written in one transaction so
+   the two always agree). The app reads it all before it starts. Without IndexedDB (an old or odd
+   browser) everything stays in localStorage, as it was. */
 const PIC_DB = 'dashboard-pics';
 let picDb = null,
   picStored = new Set(), // ids of pictures whose data is safely in IndexedDB
@@ -17,8 +18,12 @@ function allPics(s = S) {
 function openPics() {
   return new Promise(ok => {
     try {
-      const r = indexedDB.open(PIC_DB, 1);
-      r.onupgradeneeded = () => r.result.createObjectStore('pics');
+      const r = indexedDB.open(PIC_DB, 2);
+      r.onupgradeneeded = () => {
+        const db = r.result;
+        if (!db.objectStoreNames.contains('pics')) db.createObjectStore('pics');
+        if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+      };
       r.onsuccess = () => ok(r.result);
       r.onerror = r.onblocked = () => ok(null);
     } catch (e) {
@@ -44,6 +49,55 @@ function readPics(db) {
       ok(out);
     }
   });
+}
+// The saved copy and the sync bookkeeping, as JSON strings (null: not there).
+function readKV(db) {
+  return new Promise(ok => {
+    const out = { state: null, sync: null };
+    if (!db) return ok(out);
+    try {
+      const st = db.transaction('kv').objectStore('kv'),
+        a = st.get('state'),
+        b = st.get('sync');
+      a.onsuccess = () => (out.state = typeof a.result === 'string' ? a.result : null);
+      b.onsuccess = () => (out.sync = typeof b.result === 'string' ? b.result : null);
+      st.transaction.oncomplete = () => ok(out);
+      st.transaction.onerror = st.transaction.onabort = () => ok(out);
+    } catch (e) {
+      ok(out);
+    }
+  });
+}
+// Writes (a save, the sync bookkeeping) go one after another; storeDone() waits for them all.
+let storeTail = Promise.resolve(),
+  storeWarned = false;
+function writeKV(entries) {
+  const done = new Promise(ok => {
+    if (!picDb) return ok(false);
+    try {
+      const tx = picDb.transaction('kv', 'readwrite'),
+        st = tx.objectStore('kv');
+      for (const k in entries) st.put(entries[k], k);
+      tx.oncomplete = () => ok(true);
+      tx.onerror = tx.onabort = () => {
+        localSaved = false;
+        if (!storeWarned) toast("Couldn't save: this device is out of storage", false, 4000);
+        storeWarned = true;
+        ok(false);
+      };
+    } catch (e) {
+      localSaved = false;
+      ok(false);
+    }
+  });
+  storeTail = storeTail.then(() => done);
+  return done;
+}
+const storeDone = () => storeTail;
+// The saved copy as stored (for checks): from IndexedDB, else localStorage.
+async function readSaved() {
+  if (picDb) return JSON.parse((await readKV(picDb)).state || 'null');
+  return JSON.parse(localStorage.getItem(KEY) || 'null');
 }
 // Fills in the data of pictures the saved copy left out. One whose data is missing (site data
 // partly cleared, say) is left for the server to send again: it's forgotten as synced (so it
@@ -74,11 +128,14 @@ function stateJSON() {
     return k === 'src' && typeof v === 'string' && this && picStored.has(this.id) ? undefined : v;
   });
 }
-// Pictures not yet in IndexedDB go there (soon after a save); ones no longer in the state go.
+// Pictures not yet in IndexedDB go there, straight after a save (soon after: several saves in a
+// row store once). The saved copy in localStorage then no longer needs their data: with many of
+// them (a new device's first sync, say) it can't hold it, so that copy is written again once
+// they're stored, and the save is then done in full (see save) if it couldn't be before.
 function schedulePics() {
   if (!picDb || picTimer) return;
   if (allPics().every(p => picStored.has(p.id))) return;
-  picTimer = setTimeout(storePics, 300);
+  picTimer = setTimeout(storePics, 0);
 }
 function storePics() {
   picTimer = null;
@@ -91,8 +148,11 @@ function storePics() {
     want.forEach(p => st.put(p.src, p.id));
     tx.oncomplete = () => {
       want.forEach(p => picStored.add(p.id));
-      persistLocal(); // (now without their data)
+      if (localSaved)
+        persistLocal(); // (now without their data)
+      else save(); // (couldn't be saved with it: now it can, in full)
     };
+    tx.onerror = tx.onabort = () => {}; // (no room there either: they stay in the saved copy)
   } catch (e) {}
 }
 // Pictures deleted (and past any undo) are removed from IndexedDB; run now and then.
