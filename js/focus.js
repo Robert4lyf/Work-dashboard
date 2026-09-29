@@ -80,7 +80,7 @@ function renderZen() {
     r = zenTarget(),
     leaf = r && !r.n.children.length && !r.n.done;
   let h = focusLocked()
-    ? '<p class="zx hint">Pause to leave single-task mode</p><div class="zbody">'
+    ? '<div class="zbody">'
     : '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
   if (!r) h += '<p class="zt">Nothing left to do.</p>';
   else {

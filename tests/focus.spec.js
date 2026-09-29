@@ -81,7 +81,7 @@ test('a running session holds you in single-task mode until you pause', async ({
   await expect(page.locator('nav')).toBeHidden();
   // No way out while it runs: no Exit, and Esc and tab shortcuts do nothing.
   await expect(page.locator('#zenexit')).toHaveCount(0);
-  await expect(page.locator('#v-zen .zx')).toHaveText('Pause to leave single-task mode');
+  await expect(page.locator('#v-zen .zx')).toHaveCount(0);
   for (const k of ['Escape', 't', 'l']) await page.keyboard.press(k);
   await expect(page.locator('#v-zen')).toBeVisible();
   // Pausing unlocks it; leaving keeps the (paused) timer.
