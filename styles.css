@@ -1741,3 +1741,62 @@ textarea.fld.kbbody {
   min-height: 40vh;
   line-height: 1.5;
 }
+/* pictures in the notes */
+#noteimgs {
+  margin-top: 18px;
+}
+.nimgs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.nimg {
+  position: relative;
+}
+.nimgopen {
+  display: block;
+  width: 100%;
+  padding: 0;
+  background: var(--panel);
+  border: 3px solid var(--edge);
+  cursor: zoom-in;
+}
+.nimgopen img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+.nimg .x {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--panel);
+  border: 2px solid var(--edge);
+  padding: 0 6px 2px;
+}
+.nimgfull {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.nimgclose {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: zoom-out;
+  max-width: 100%;
+  max-height: 100%;
+}
+.nimgclose img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 32px);
+  object-fit: contain;
+}

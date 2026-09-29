@@ -18,6 +18,7 @@ const LISTS = {
   kbcat: ['kbcats', x => x.id],
   kb: ['kb', x => x.id],
   flow: ['flows', x => x.id],
+  noteimg: ['noteImgs', x => x.id],
 };
 function toRecords(s) {
   const m = new Map();
@@ -76,6 +77,7 @@ function fromRecords(m, day) {
     kbcats: by.kbcat || [],
     kb: by.kb || [],
     flows: by.flow || [],
+    noteImgs: by.noteimg || [],
     notes: (m.get('meta:notes') || {}).text || '',
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),
