@@ -105,7 +105,7 @@ function server() {
 }
 // Service workers are blocked: the app's worker would fetch and cache the real Supabase library,
 // which bypasses page.route and would replace the fake after a reload.
-async function device(browser, srv, seed) {
+async function device(browser, srv, seed, opts = {}) {
   const ctx = await browser.newContext({ serviceWorkers: 'block' });
   const page = await ctx.newPage();
   const errors = [];
@@ -185,6 +185,12 @@ async function device(browser, srv, seed) {
     srv.state = { data: row.data, edited_at: row.edited_at };
     srv.snapshots++;
   });
+  if (opts.dialogs) page.on('dialog', d => (srv.asked = [...(srv.asked || []), d.message()]) && d.accept());
+  if (opts.clockBehind)
+    await page.addInitScript(ms => {
+      const real = Date.now;
+      Date.now = () => real() - ms;
+    }, opts.clockBehind);
   if (seed) await page.addInitScript(s => localStorage.setItem('work-cockpit-v1', s), JSON.stringify(seed));
   await page.addInitScript(fakeSupabase);
   await page.goto('/');
@@ -707,4 +713,307 @@ test('a device updated from before picture rows fetches the ones it passed over'
   await b.sync();
   expect((await b.state()).kb[0].imgs.map(p => p.id)).toEqual(['p']);
   for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('Settings shows how long the last sync took and what it moved', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Report');
+  await a.sync();
+  await a.sync();
+  await a.page.click('nav [data-v=account]');
+  const line = a.page.locator('#syncstats');
+  await expect(line).toContainText(
+    /Last sync: \d+ ms, [\d.]+ K?B down \(\d+ items? fetched\), [\d.]+ K?B up \(\d+ items? sent\)\./,
+  );
+  await expect(line).toContainText(/Last \d+: \d+ ms on average, slowest \d+ ms/);
+  expect(a.errors).toEqual([]);
+});
+
+test('review round 3: pictures survive an article rewritten mid-sync; first sync records what it read', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  // B's first sync read everything: its next sync fetches nothing, and the first one counted
+  // what it fetched.
+  const first = await b.page.evaluate(() => syncStats[0]);
+  expect(first.got).toBeGreaterThan(0);
+  srv.readKeys = [];
+  await b.sync();
+  expect(srv.readKeys).toEqual([]);
+
+  await a.page.evaluate(() => {
+    S.kb = [
+      {
+        id: 'art',
+        cat: '',
+        title: 'Guide',
+        body: '',
+        edited: 1,
+        imgs: [{ id: 'p1', src: 'data:image/png;base64,AAAA', at: 1 }],
+      },
+    ];
+    save();
+  });
+  await a.sync();
+  // While B fetches, the article is rewritten (its row gets a newer seq than B listed).
+  srv.onFetch = () => {
+    const r = srv.rows.get('kb:art');
+    srv.rows.set('kb:art', {
+      ...r,
+      data: { ...r.data, body: 'edited' },
+      edited_at: Date.now(),
+      seq: ++srv.seq,
+    });
+  };
+  await b.sync();
+  await settle(a, b);
+  expect(srv.rows.get('kbimg:p1').deleted).toBe(false);
+  for (const d of [a, b]) expect((await d.state()).kb[0].imgs.map(p => p.id)).toEqual(['p1']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('review round 3: a picture whose article hasn’t arrived is kept, not deleted', async ({ browser }) => {
+  const srv = server();
+  srv.rows.set('kbimg:lone', {
+    key: 'kbimg:lone',
+    data: { id: 'lone', art: 'later', src: 'data:image/png;base64,AAAA', at: 1 },
+    deleted: false,
+    edited_at: 1,
+    seq: ++srv.seq,
+  });
+  const a = await device(browser, srv);
+  await a.sync();
+  await a.sync();
+  expect(srv.rows.get('kbimg:lone').deleted).toBe(false);
+  // Its article arrives: the picture joins it.
+  srv.rows.set('kb:later', {
+    key: 'kb:later',
+    data: { id: 'later', cat: '', title: 'Later', body: '', edited: 1, imgs: [] },
+    deleted: false,
+    edited_at: 2,
+    seq: ++srv.seq,
+  });
+  await a.sync();
+  expect((await a.state()).kb[0].imgs.map(p => p.id)).toEqual(['lone']);
+  expect(a.errors).toEqual([]);
+});
+
+test('review round 3: an update from before Knowledge fetches the older Knowledge rows it passed over', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kbcats = [{ id: 'c', name: 'Processes', parent: '' }];
+    S.kb = [{ id: 'art', cat: 'c', title: 'Guide', body: '', edited: 1, imgs: [] }];
+    S.noteImgs = [{ id: 'n', src: 'data:image/png;base64,AAAA', at: 1 }];
+    save();
+  });
+  await a.sync();
+  for (let i = 0; i < 300; i++)
+    srv.rows.set('inbox:y' + i, {
+      key: 'inbox:y' + i,
+      data: { id: 'y' + i, text: 'y' },
+      deleted: false,
+      edited_at: 1,
+      seq: ++srv.seq,
+    });
+  const b = await device(browser, srv);
+  // B is like a device from before: past those rows, without them.
+  await b.page.evaluate(seq => {
+    S.kb = [];
+    S.kbcats = [];
+    S.noteImgs = [];
+    persistLocal();
+    sync2.cursor = seq;
+    delete sync2.kbimg;
+    sync2.at = {};
+    for (const k in sync2.synced) if (/^(kb|kbcat|noteimg):/.test(k)) delete sync2.synced[k];
+    saveSyncState();
+  }, srv.seq);
+  await b.sync();
+  const s = await b.state();
+  expect([s.kbcats.length, s.kb.length, s.noteImgs.length]).toEqual([1, 1, 1]);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('review round 3: a remote edit passed over for a newer one here is fetched again if that one is undone', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  await a.add('Orig');
+  await settle(a, b);
+  // A edits and sends; B edits later (newer) but can't send.
+  await a.page.evaluate(() => {
+    S.quests[0].text = 'A-edit';
+    save();
+  });
+  await a.sync();
+  const was = await b.page.evaluate(() => {
+    const was = S.quests[0].text;
+    S.quests[0].text = 'B-edit';
+    save();
+    return was;
+  });
+  srv.failFor = b.page;
+  await b.page.evaluate(async () => {
+    const real = pushDirty;
+    window.pushDirty = async () => {
+      throw new Error('offline');
+    };
+    await sync();
+    window.pushDirty = real;
+  });
+  // B puts it back as it was: nothing of its own to send, and A's edit is taken in.
+  await b.page.evaluate(was => {
+    S.quests[0].text = was;
+    save();
+  }, was);
+  await settle(a, b);
+  expect(texts(await a.state())).toEqual(texts(await b.state()));
+});
+
+test('review round 3: something added and removed before a sync is never sent', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.inbox.push({ id: 'zz', text: 'x' });
+    save();
+    S.inbox = S.inbox.filter(i => i.id !== 'zz');
+    save();
+  });
+  await a.sync();
+  expect(srv.rows.has('inbox:zz')).toBe(false);
+  expect(a.errors).toEqual([]);
+});
+
+test('deep hunt: a device whose clock is behind still gets its edits in, and never stays apart', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv, null, { clockBehind: 5000 });
+  await a.add('A text');
+  await settle(a, b);
+  // B's edit to A's version counts as after it, though B's clock says earlier.
+  await b.page.evaluate(() => {
+    S.quests[0].text = 'B text';
+    save();
+  });
+  await settle(a, b);
+  expect(texts(await a.state())).toEqual(['B text']);
+  expect(texts(await b.state())).toEqual(['B text']);
+  // And an edit the server turns away as older is replaced by the server's, not kept apart.
+  await a.page.evaluate(() => {
+    S.quests[0].text = 'A again';
+    save();
+  });
+  await a.sync();
+  await b.page.evaluate(() => {
+    S.quests[0].text = 'B stale';
+    markDirty(1); // (as if made long ago)
+  });
+  await b.page.evaluate(async () => {
+    await pushDirty();
+  });
+  await settle(a, b);
+  expect(texts(await b.state())).toEqual(texts(await a.state()));
+  expect(await b.page.evaluate(() => Object.keys(sync2.dirty))).toEqual([]);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('deep hunt: the day’s reset keeps a quest another device finished today', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  await a.add('One');
+  await a.add('Two');
+  await settle(a, b);
+  await b.page.evaluate(() => {
+    S.day = shift(today(), -1);
+    persistLocal();
+  });
+  await a.page.evaluate(() => {
+    const b = snapshot();
+    S.quests.find(q => q.text === 'One').done = true;
+    settle(b);
+  });
+  await a.sync();
+  await settle(a, b);
+  const sa = await a.state(),
+    sb = await b.state();
+  expect(texts(sb)).toEqual(texts(sa));
+  expect(texts(sb)).toContain('One');
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('deep hunt: signing in keeps a device’s own notes and Knowledge when asked to', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Account quest');
+  await a.sync();
+  const b = await device(
+    browser,
+    srv,
+    {
+      notes: 'my notes',
+      kbcats: [{ id: 'c', name: 'Mine', parent: '' }],
+      flows: [{ id: 'f', name: 'Flow', url: 'ms-powerautomate:/x' }],
+      quests: [],
+    },
+    { dialogs: true },
+  );
+  await settle(a, b);
+  expect(srv.asked && srv.asked[0]).toContain("Add this device's 3 items");
+  const s = await b.state();
+  expect(s.notes).toBe('my notes');
+  expect(s.kbcats.map(c => c.name)).toEqual(['Mine']);
+  expect(texts(s)).toEqual(['Account quest']);
+  expect((await a.state()).notes).toBe('my notes');
+});
+
+test('deep hunt: text the database can’t store (NUL, half an emoji) doesn’t block syncing', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.notes = 'a\u0000b ' + '😀'.slice(0, 1) + ' c';
+    save();
+  });
+  await a.sync();
+  expect(srv.rows.get('meta:notes').data.text).toBe('ab  c');
+  await a.sync();
+  expect((await a.state()).notes).toBe('ab  c');
+  expect(a.errors).toEqual([]);
+});
+
+test('round 5: a repeat’s copy deleted just before the day’s reset stays deleted', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.templates = [{ id: 't', text: 'Daily', days: [0, 1, 2, 3, 4, 5, 6], monthDay: 0, children: [] }];
+    S.day = shift(today(), -1);
+    rollover();
+    save();
+  });
+  await a.sync();
+  const id = await a.page.evaluate(() => S.quests.find(q => q.tpl === 't').id);
+  // Deleted, with the day not yet reset here (as just after midnight).
+  await a.page.evaluate(id => {
+    S.quests = S.quests.filter(q => q.id !== id);
+    S.day = shift(today(), -1);
+    save();
+    rollover();
+    save();
+  }, id);
+  await a.sync();
+  expect((await a.state()).quests.some(q => q.id === id)).toBe(false);
+  expect(srv.rows.get('quest:' + id).deleted).toBe(true);
+  expect(a.errors).toEqual([]);
 });

@@ -42,6 +42,17 @@ function schedulePush() {
 
 /* sync v2: one row per record in cockpit_items (see js/records.js and supabase-setup.sql) */
 const OVERLAP = 200; // re-read a few recent rows in case a write committed out of order
+// How long each sync took and how much it moved (shown in Settings). Sizes are the JSON sent or
+// received, a close guide to what goes over the network.
+let tally = null,
+  syncStats = []; // the last few, newest last
+const sizeOf = v => {
+  try {
+    return JSON.stringify(v).length;
+  } catch (e) {
+    return 0;
+  }
+};
 const FULL = 'key,data,deleted,edited_at,seq',
   LIGHT = 'key,deleted,edited_at,seq'; // (no data: just enough to tell what's new)
 async function pullRows(since, cols = FULL) {
@@ -55,6 +66,10 @@ async function pullRows(since, cols = FULL) {
       .limit(1000);
     if (error) throw error;
     rows.push(...data);
+    if (tally) {
+      tally.down += sizeOf(data);
+      if (cols === FULL) tally.got += data.length;
+    }
     if (data.length < 1000) return rows;
     since = data[data.length - 1].seq;
   }
@@ -71,10 +86,11 @@ async function pullChanges() {
     catchUp = !sync2.kbimg,
     light = await pullRows(catchUp ? 0 : from, LIGHT),
     at = sync2.at || (sync2.at = {}),
-    seqOf = new Map(light.map(r => [r.key, Number(r.seq)])),
+    // (in the catch-up, older rows only if this device never took them in: those of kinds it
+    // didn't know then)
     want = light
       .filter(r => knownKey(r.key) && at[r.key] !== Number(r.seq))
-      .filter(r => Number(r.seq) > from || r.key.startsWith('kbimg:'))
+      .filter(r => Number(r.seq) > from || (!r.deleted && !(r.key in sync2.synced)))
       .map(r => r.key),
     full = [];
   for (let i = 0; i < want.length; i += 100) {
@@ -84,42 +100,50 @@ async function pullChanges() {
       .in('key', want.slice(i, i + 100));
     if (error) throw error;
     full.push(...data);
+    if (tally) {
+      tally.down += sizeOf(data);
+      tally.got += data.length;
+    }
   }
-  // Only the versions listed: a row written again since then (a newer seq, past the end of the
-  // list) waits for the next pull, which lists it along with anything written around it.
-  // Taking it now would move the cursor past rows that were never listed.
+  // A row written again since it was listed comes back newer than listed: it's taken as it is
+  // now (so an article and its pictures arrive together), but the cursor moves only as far as
+  // the list went, or rows written around it that were never listed would be passed over.
   applyRows(
-    full.filter(r => seqOf.get(r.key) === Number(r.seq)).sort((a, b) => a.seq - b.seq),
+    full.sort((a, b) => a.seq - b.seq),
     false,
+    null,
+    true,
   );
   sync2.kbimg = 1;
   light.forEach(r => {
     sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
-    (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
     sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0);
   });
   saveSyncState();
 }
 // Take in rows from the server. A record changed here and not yet sent keeps the local version
 // only if its edit is newer than the server's.
-function applyRows(rows, firstSync, keep) {
+// `holdCursor`: the caller moves the cursor (see pullChanges).
+function applyRows(rows, firstSync, keep, holdCursor) {
   const recs = firstSync ? keep || new Map() : toRecords(S);
   let changed = firstSync;
   for (const r of rows) {
-    sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
+    if (!holdCursor) sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
     sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0); // (newest change anywhere)
     // A kind from a newer version: nothing here to change (and not a reason to reload).
     if (!knownKey(r.key)) continue;
     // A repeat's copy for a day (id <template>-<date>) cleared by another device's reset:
     // remembered, so this device's look-back doesn't make it again.
     if (r.deleted && /^quest:.+-\d{4}-\d\d-\d\d$/.test(r.key)) (sync2.gone = sync2.gone || {})[r.key] = 1;
-    const h = r.deleted ? null : hashOf(r.data),
+    const h = r.deleted ? null : recHash(r.key, r.data),
       mine = sync2.dirty[r.key];
-    if (mine && mine.at > Number(r.edited_at)) continue;
+    if (mine && mine.at > Number(r.edited_at)) continue; // (not taken in: fetched again next time)
+    (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
+    (sync2.et = sync2.et || {})[r.key] = Number(r.edited_at) || 0; // (and when it was made)
     delete sync2.dirty[r.key];
     if (h === null) delete sync2.synced[r.key];
     else sync2.synced[r.key] = h;
-    if (h === null ? recs.has(r.key) : hashOf(recs.get(r.key)) !== h) {
+    if (h === null ? recs.has(r.key) : recHash(r.key, recs.get(r.key)) !== h) {
       if (h === null) recs.delete(r.key);
       else recs.set(r.key, r.data);
       changed = true;
@@ -145,7 +169,19 @@ async function firstSync() {
   if (rows.length) {
     // This device already has things of its own: they can join the account's, or go.
     // (asked only when signing in; a sync that starts on its own keeps them, which is safe)
-    const n = S.quests.length + S.inbox.length + S.later.length;
+    // (everything of its own counts, not just quests: notes, Knowledge, pictures, alarms...)
+    const n =
+      S.quests.length +
+      S.inbox.length +
+      S.later.length +
+      S.kb.length +
+      S.kbcats.length +
+      S.flows.length +
+      S.noteImgs.length +
+      S.alarms.length +
+      S.templates.length +
+      S.projects.length +
+      (S.notes ? 1 : 0);
     const keep =
       n &&
       (!askMerge ||
@@ -181,33 +217,78 @@ async function pushDirty() {
       batch = keys
         .slice(i, i + 500)
         .map(k => ({ k, d: sync2.dirty[k] }))
-        .filter(x => x.d);
+        .filter(x => {
+          if (!x.d) return false;
+          if (x.d.h === null || recs.has(x.k)) return true;
+          delete sync2.dirty[x.k]; // (added and removed again before it was ever sent)
+          return false;
+        });
     if (!batch.length) continue;
+    const rows = batch.map(({ k, d }) => ({
+      user_id: uid_,
+      key: k,
+      kind: k.slice(0, k.indexOf(':')),
+      data: d.h === null ? null : recs.get(k),
+      deleted: d.h === null,
+      edited_at: d.at,
+    }));
+    if (tally) {
+      tally.up += sizeOf(rows);
+      tally.sent += rows.length;
+    }
+    const sent = rows.map(clean);
     const { data: wrote, error } = await sb
       .from('cockpit_items')
-      .upsert(
-        batch.map(({ k, d }) => ({
-          user_id: uid_,
-          key: k,
-          kind: k.slice(0, k.indexOf(':')),
-          data: d.h === null ? null : recs.get(k),
-          deleted: d.h === null,
-          edited_at: d.at,
-        })),
-        { onConflict: 'user_id,key' },
-      )
+      .upsert(sent, { onConflict: 'user_id,key' })
       .select('key,seq');
     if (error) throw error;
     // The versions just written are this device's own: never read back down (see pullChanges).
+    // A row the server kept its own newer version of (see cockpit_items_stamp) isn't among
+    // them: this device takes that version instead, now, rather than counting its own as sent.
+    const took = Array.isArray(wrote) ? new Set(wrote.map(r => r.key)) : null,
+      lost = [];
     (wrote || []).forEach(r => ((sync2.at = sync2.at || {})[r.key] = Number(r.seq)));
+    // (one stored cleaned is read back, so this device has it as stored)
+    sent.forEach((r, j) => r !== rows[j] && delete sync2.at[r.key]);
     batch.forEach(({ k, d }) => {
+      // Only clear it if it wasn't edited again while sending.
+      const again = sync2.dirty[k] !== d;
+      if (took && !took.has(k)) {
+        lost.push(k);
+        delete sync2.at[k];
+        if (!again) delete sync2.dirty[k];
+        return;
+      }
       if (d.h === null) delete sync2.synced[k];
       else sync2.synced[k] = d.h;
-      // Only clear it if it wasn't edited again while sending.
-      if (sync2.dirty[k] === d) delete sync2.dirty[k];
+      (sync2.et = sync2.et || {})[k] = d.at;
+      if (!again) delete sync2.dirty[k];
     });
     saveSyncState();
+    for (let j = 0; j < lost.length; j += 100) {
+      const { data, error: e2 } = await sb
+        .from('cockpit_items')
+        .select(FULL)
+        .in('key', lost.slice(j, j + 100));
+      if (e2) throw e2;
+      applyRows(
+        data.sort((a, b) => a.seq - b.seq),
+        false,
+        null,
+        true,
+      );
+    }
   }
+}
+// The database can't store a NUL character, or half of a character that takes two (an emoji
+// cut in two, say): a row holding one would fail the whole batch, every sync. They're dropped
+// from what's sent (and this device then takes in the row as stored).
+function clean(row) {
+  if (row.data == null) return row;
+  // (JSON writes both as \uXXXX escapes; an escaped backslash before one is left alone)
+  const j = JSON.stringify(row.data),
+    c = j.replace(/(?<!\\)((?:\\\\)*)\\u(?:0000|d[89a-f][0-9a-f]{2})/gi, '$1');
+  return c === j ? row : { ...row, data: JSON.parse(c) };
 }
 // A few times a day, keep a whole-state copy in cockpit_state; its history trigger is what
 // Settings > Previous versions lists.
@@ -216,7 +297,12 @@ async function saveSnapshot() {
   const { error } = await sb.from('cockpit_state').upsert({
     user_id: session.user.id,
     // (pictures are big: kept in their own rows only)
-    data: { ...S, noteImgs: undefined, kb: S.kb.map(a => ({ ...a, imgs: undefined })) },
+    data: {
+      ...S,
+      noteImgs: undefined,
+      kbimgLoose: undefined,
+      kb: S.kb.map(a => ({ ...a, imgs: undefined })),
+    },
     edited_at: Date.now(),
     updated_at: new Date().toISOString(),
   });
@@ -246,6 +332,8 @@ async function sync() {
     return;
   }
   syncing = true;
+  const t0 = performance.now();
+  tally = { down: 0, up: 0, got: 0, sent: 0 };
   setSync('syncing');
   try {
     if (sync2.user !== session.user.id) {
@@ -261,6 +349,13 @@ async function sync() {
         dropUndo();
         norm(null);
         persistLocal();
+        // (nothing of the other account's left open: an article being written, a search...)
+        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = null;
+        notesDirty = false;
+        notesBase = null;
+        clearKbDraft();
+        searchQ = kbQuery = '';
+        syncStats = [];
         inBackground(renderAll);
       }
       // New device, or a different account: start from the server's copy.
@@ -280,6 +375,7 @@ async function sync() {
     await saveSnapshot();
     await syncNotices();
     lastSync = Date.now();
+    syncStats = [...syncStats, { ...tally, ms: Math.round(performance.now() - t0), at: lastSync }].slice(-10);
     askMerge = false; // (only the sync straight after a sign-in may ask)
     setSync('ok');
     // After the first sync, so a new device never writes before it has the server's copy.
@@ -369,6 +465,21 @@ function syncLine() {
         '.'
     : 'Not synced yet.';
 }
+const fmtSize = n =>
+  n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+const secs = ms => (ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(1) + ' s');
+// The last sync's time and traffic, and the last few together (this session only).
+function syncStatsLine() {
+  const s = syncStats[syncStats.length - 1];
+  if (!s) return '';
+  let h = `Last sync: ${secs(s.ms)}, ${fmtSize(s.down)} down (${plural(s.got, 'item')} fetched), ${fmtSize(s.up)} up (${plural(s.sent, 'item')} sent).`;
+  if (syncStats.length > 1) {
+    const avg = Math.round(syncStats.reduce((t, x) => t + x.ms, 0) / syncStats.length),
+      slow = Math.max(...syncStats.map(x => x.ms));
+    h += ` Last ${syncStats.length}: ${secs(avg)} on average, slowest ${secs(slow)}, ${fmtSize(syncStats.reduce((t, x) => t + x.down, 0))} down in all.`;
+  }
+  return `<p class="hint" id="syncstats" style="margin:6px 0 0">${h}</p>`;
+}
 let versions = null; // null: not loaded, 'loading', 'none' (table missing), or rows
 async function loadHistory() {
   versions = 'loading';
@@ -435,7 +546,7 @@ function renderAccount() {
   } else if (!session) {
     h += `<form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg ? `<p class="msg">${esc(authMsg)}</p>` : ''}`;
   } else {
-    h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p><div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}${renderCapture()}${renderNotifySettings()}`;
+    h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p>${syncStatsLine()}<div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}${renderCapture()}${renderNotifySettings()}`;
   }
   h += renderHealth();
   if (pending)

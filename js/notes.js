@@ -25,6 +25,9 @@ function renderNotes() {
     }
     return;
   }
+  // Already showing these notes (and no prompt about others): nothing to redraw. (A redraw would
+  // also rebuild the pictures, which are large.)
+  if (cur && cur.value === (S.notes || '') && !$('#notesload')) return;
   notesBase = S.notes || '';
   setHTML(
     $('#v-notes'),
@@ -38,11 +41,18 @@ function saveNotes(v) {
   if (!notesDirty) return; // nothing typed: never overwrite notes that changed elsewhere
   // Changed elsewhere and not yet chosen to replace them: keep both, the prompt is showing.
   if (notesChanged() && !notesOverride) return;
-  notesDirty = false;
   notesOverride = false;
-  if (v === S.notes) return;
+  const c = cleanText(v);
+  if (c !== v) {
+    // (shown as it's kept, or it would look changed elsewhere once it comes back from the server)
+    const box = $('#notesin');
+    if (box && box.value === v) box.value = c;
+    v = c;
+  }
+  if (v === S.notes) return (notesDirty = false);
   S.notes = notesBase = v;
   save();
+  notesDirty = !localSaved; // (not saved on this device: still to do, and not "Saved")
 }
 function typedNotes(v) {
   clearTimeout(notesTimer);
@@ -55,6 +65,7 @@ function typedNotes(v) {
   notesTimer = setTimeout(() => {
     saveNotes(v);
     if (st && !notesDirty) st.textContent = 'Saved';
+    else if (st && !localSaved) st.textContent = 'Not saved: this device is out of storage';
   }, 600);
 }
 function loadNotes() {
@@ -71,9 +82,10 @@ function loadNotes() {
 /* pictures in the notes: pasted in (or added from a file), shrunk to a sensible size and synced
    like the text. Kept apart from it, below the box: a text box can't show them. */
 const IMG_MAX = 1600, // longest side, in pixels
-  // All of them together (characters). Everything is kept in the browser's local storage, which
-  // Chrome holds to about 5 million characters: this leaves room for the rest.
-  IMG_TOTAL = 3.5e6;
+  // All of them together (characters, about 22 MB of pictures). They're kept in IndexedDB (see
+  // js/pics.js), which has room for far more; this keeps what every device syncs and holds in
+  // memory sensible.
+  IMG_TOTAL = 30e6;
 const okImg = src =>
   typeof src === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src);
 let imgBusy = 0,
@@ -81,7 +93,11 @@ let imgBusy = 0,
 function renderNoteImgs() {
   const el = $('#noteimgs');
   if (!el) return;
-  const imgs = S.noteImgs;
+  const imgs = S.noteImgs,
+    // (pictures make this big: it's left alone when none of it changed, as while typing notes)
+    key = [imgs.map(m => m.id).join(), imgBusy, imgShown].join('|');
+  if (el.dataset.shown === key) return;
+  el.dataset.shown = key;
   let h = `<div class="sechead"><h2>Pictures</h2><button class="btn sm" id="nimgadd">Add picture</button></div><input type="file" id="nimgfile" accept="image/*" multiple hidden aria-hidden="true">`;
   h += imgs.length
     ? `<div class="nimgs">${imgs

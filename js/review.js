@@ -1,8 +1,7 @@
 /* the Review tab: the weekly review, plus Projects and History as sub-pages */
 let reviewSub = 'week'; // 'week', 'projects' or 'log'
-// Friday to Sunday, if the week hasn't been reviewed yet (a review counts for 5 days).
-const reviewDue = () =>
-  [5, 6, 0].includes(new Date().getDay()) && (!S.reviewed || daysBetween(S.reviewed, today()) >= 5);
+// Friday to Sunday, if this week (Monday on) hasn't been reviewed yet.
+const reviewDue = () => [5, 6, 0].includes(new Date().getDay()) && (!S.reviewed || S.reviewed < weekStart());
 function renderReview() {
   const tab = (k, l) =>
     `<button class="chip" data-rsub="${k}" aria-pressed="${reviewSub === k}">${l}</button>`;

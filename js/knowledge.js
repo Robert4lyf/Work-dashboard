@@ -45,8 +45,9 @@ function normKnowledge() {
     body: okText(a.body, KB_BODY),
     edited: typeof a.edited === 'number' ? a.edited : 0,
     imgs: (Array.isArray(a.imgs) ? a.imgs : [])
+      // (no cap here: two devices adding at once can go past it, and dropping the extras here
+      // would delete them everywhere; the editor stops adding past KB_IMGS)
       .filter(m => ok(m) && okImg(m.src))
-      .slice(0, KB_IMGS)
       .map((m, i) => ({ id: m.id, src: m.src, at: Number(m.at) || i + 1 })),
   }));
   S.flows = (Array.isArray(S.flows) ? S.flows : [])
@@ -102,8 +103,11 @@ function kbLinkify(s) {
 }
 
 function renderKnowledge() {
-  // What's typed in the editor is the draft: a redraw (a tick elsewhere, undo, a sync) shows it,
-  // not the saved article.
+  // A background redraw (a sync, coming back to the app) leaves an article being written alone:
+  // redrawing it would lose the scroll position, and on a phone break a word being typed.
+  if (background && kbEdit && $('#kbform')) return;
+  // What's typed in the editor is the draft: a redraw (a tick elsewhere, undo) shows it, not the
+  // saved article.
   if (kbEdit && $('#kbform')) {
     kbEdit.title = $('#kbt').value;
     kbEdit.body = $('#kbb').value;
@@ -138,18 +142,16 @@ function kbFlows() {
 }
 function kbIndex() {
   let h = `<h2 class="kbhead">Knowledge</h2><input class="fld" type="search" id="kbq" placeholder="Search articles" aria-label="Search articles" autocomplete="off" value="${esc(kbQuery)}"><div id="kbres">${kbResults()}</div>`;
-  {
-    h += `<div id="kbtree"${kbQuery.trim() ? ' hidden' : ''}>`;
-    const top = kbKids('');
-    h += top.length
-      ? top.map(kbCatTree).join('')
-      : '<p class="hint">No categories yet. Add one below, then add articles to it.</p>';
-    const lost = kbLost();
-    if (lost.length)
-      h += `<details id="kc-lost" class="kcat"${panels['kc-lost'] ? ' open' : ''}><summary>Uncategorised <small>${lost.length}</small></summary><div class="kbody">${lost.map(kbRow).join('')}</div></details>`;
-    h +=
-      '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form></div>';
-  }
+  h += `<div id="kbtree"${kbQuery.trim() ? ' hidden' : ''}>`;
+  const top = kbKids('');
+  h += top.length
+    ? top.map(kbCatTree).join('')
+    : '<p class="hint">No categories yet. Add one below, then add articles to it.</p>';
+  const lost = kbLost();
+  if (lost.length)
+    h += `<details id="kc-lost" class="kcat"${panels['kc-lost'] ? ' open' : ''}><summary>Uncategorised <small>${lost.length}</small></summary><div class="kbody">${lost.map(kbRow).join('')}</div></details>`;
+  h +=
+    '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form></div>';
   return h;
 }
 const kbRow = a => `<button class="soonrow kbrow" data-kbart="${a.id}"><span>${esc(a.title)}</span></button>`;
@@ -231,12 +233,52 @@ function kbEditor() {
     <div class="acts"><button class="btn green">Save</button><button class="btn" type="button" data-kbcancel="1">Cancel</button></div></form>`;
 }
 
+// An article being written is kept on this device when the app is left, and comes back if the
+// app was closed before it was saved (or cancelled).
+const KB_DRAFT = 'dashboard-kbdraft';
+function keepKbDraft() {
+  if (!kbEdit || !$('#kbform')) return;
+  const d = { ...kbEdit, title: $('#kbt').value, body: $('#kbb').value, cat: $('#kbc').value };
+  try {
+    localStorage.setItem(KB_DRAFT, JSON.stringify(d));
+  } catch (e) {
+    try {
+      localStorage.setItem(KB_DRAFT, JSON.stringify({ ...d, imgs: undefined })); // (no room: the text)
+    } catch (e2) {}
+  }
+}
+function clearKbDraft() {
+  try {
+    localStorage.removeItem(KB_DRAFT);
+  } catch (e) {}
+}
+function restoreKbDraft() {
+  let d = null;
+  try {
+    d = JSON.parse(localStorage.getItem(KB_DRAFT));
+  } catch (e) {}
+  if (!d || typeof d !== 'object') return false;
+  const okId = v => typeof v === 'string' && /^[\w-]{1,40}$/.test(v);
+  kbEdit = {
+    id: okId(d.id) ? d.id : undefined,
+    cat: okId(d.cat) ? d.cat : '',
+    title: String(d.title || ''),
+    body: String(d.body || ''),
+    imgs: Array.isArray(d.imgs)
+      ? d.imgs
+          .filter(m => m && okId(m.id) && okImg(m.src))
+          .map(m => ({ id: m.id, src: m.src, at: Number(m.at) || 0 }))
+      : undefined,
+  };
+  toast('Your unsaved article is back', false, 3000);
+  return true;
+}
 // Opens the categories above one, so it can be seen.
 function kbReveal(cat) {
   for (let c = kbCat(cat), n = 0; c && n < 50; c = kbCat(c.parent), n++) panels['kc-' + c.id] = true;
 }
 function kbAddCat(name, parent) {
-  name = name.trim().slice(0, 80);
+  name = cleanText(name.trim().slice(0, 80));
   if (!name) return;
   const c = { id: uid(), name, parent: parent || '' };
   S.kbcats.push(c);
@@ -249,7 +291,7 @@ function kbRename(id) {
   if (!c) return;
   const v = prompt('Rename category', c.name);
   if (!v || !v.trim()) return;
-  c.name = v.trim().slice(0, 80);
+  c.name = cleanText(v.trim().slice(0, 80));
   save();
   renderKnowledge();
 }
@@ -265,20 +307,21 @@ function kbDeleteCat(id) {
   });
 }
 function kbSave() {
-  const title = $('#kbt').value.trim(),
+  const title = cleanText($('#kbt').value.trim().slice(0, 200)),
     cat = $('#kbc').value,
-    body = $('#kbb').value.replace(/\s+$/, '');
+    body = cleanText($('#kbb').value.replace(/\s+$/, ''));
   if (!title) return;
   let a = kbEdit.id && S.kb.find(x => x.id === kbEdit.id);
   if (!a) S.kb.push((a = { id: uid() }));
   Object.assign(a, {
-    title: title.slice(0, 200),
+    title,
     cat,
     body,
     imgs: kbEdit.imgs || a.imgs || [],
     edited: Date.now(),
   });
   kbEdit = null;
+  clearKbDraft();
   kbArt = a.id;
   kbImgShown = null;
   kbReveal(cat);
@@ -302,7 +345,7 @@ function addFlow() {
   if (!name || !url) return;
   if (!FLOW_URL.test(url))
     return toast('That isn\'t a Run URL: it starts with "ms-powerautomate:/"', false, 4000);
-  S.flows.push({ id: uid(), name: name.slice(0, 60), url, last: 0 });
+  S.flows.push({ id: uid(), name: cleanText(name.slice(0, 60)), url, last: 0 });
   panels.kbflows = true; // (stays open for adding another)
   save();
   renderKnowledge();
@@ -327,8 +370,9 @@ async function kbAddImages(files) {
   if (!kbEdit) return;
   const room = KB_IMGS - kbEdit.imgs.length;
   if (room <= 0) return toast(`An article can have up to ${KB_IMGS} pictures`, false, 3000);
-  const r = await readImages([...files].slice(0, room));
-  if (!kbEdit) return; // (closed meanwhile)
+  const ed = kbEdit,
+    r = await readImages([...files].slice(0, room));
+  if (kbEdit !== ed) return; // (closed meanwhile, or another article opened)
   const t = Date.now();
   kbEdit.imgs.push(
     ...r.srcs.slice(0, KB_IMGS - kbEdit.imgs.length).map((src, i) => ({ id: uid(), src, at: t + i })),
@@ -385,6 +429,7 @@ function kbClick(d, b) {
   }
   if (d.kbcancel) {
     kbEdit = null;
+    clearKbDraft();
     renderKnowledge();
   }
   if (d.kbdel && arm(b, 'Delete?')) kbDelete(d.kbdel);

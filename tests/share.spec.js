@@ -12,6 +12,7 @@ test('a shared link lands in the inbox once, and the URL is cleaned up', async (
 test('long shared text keeps the full text in the notes', async ({ app, page }) => {
   const long = 'x'.repeat(300);
   await page.goto('/index.html?text=' + long);
+  await page.waitForFunction(() => window.appReady === true);
   const it = (await app.state()).inbox[0];
   expect(it.text).toHaveLength(200);
   expect(it.node.notes).toBe(long);

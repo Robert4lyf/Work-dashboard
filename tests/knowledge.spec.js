@@ -358,3 +358,54 @@ test('bug fixes: restoring a copy from before Knowledge keeps it; odd synced row
   expect(sn[0]).toContain('<mark>foo</mark>');
   expect(sn[1]).toContain('<mark>foo bar</mark>');
 });
+
+test('review round 3: a background redraw leaves an article being written alone', async ({ app, page }) => {
+  await page.evaluate(() => {
+    S.kbcats = [{ id: 'p', name: 'Processes', parent: '' }];
+    save();
+    renderAll();
+  });
+  await app.go('knowledge');
+  await page.click('#kc-p > summary');
+  await page.click('[data-kbnew]');
+  await page.fill('#kbb', 'x\n'.repeat(200));
+  const same = await page.evaluate(() => {
+    const box = document.querySelector('#kbb');
+    box.scrollTop = 2000;
+    inBackground(renderAll);
+    return document.querySelector('#kbb') === box && box.scrollTop > 0;
+  });
+  expect(same).toBe(true);
+});
+
+test('deep hunt: a long flow name wraps; synced articles past 30 pictures keep them all', async ({
+  app,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => {
+    S.flows = [{ id: 'f', name: 'x'.repeat(60), url: 'ms-powerautomate:/x' }];
+    save();
+  });
+  await app.go('knowledge');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const n = await page.evaluate(() => {
+    norm({
+      kb: [
+        {
+          id: 'a',
+          cat: '',
+          title: 't',
+          body: '',
+          imgs: Array.from({ length: 35 }, (_, i) => ({
+            id: 'p' + i,
+            src: 'data:image/png;base64,AAAA',
+            at: i + 1,
+          })),
+        },
+      ],
+    });
+    return S.kb[0].imgs.length;
+  });
+  expect(n).toBe(35);
+});

@@ -134,6 +134,13 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await page.keyboard.type('10152026');
   await page.press('#wdue', 'Tab');
   expect((await app.state()).quests[0].wait.due).toBe('2026-10-15');
+  // A date picked (the field keeping the keyboard, as on Android) survives a redraw before it's
+  // left, and is then saved.
+  await page.fill('#wdue', '2026-10-05');
+  await page.evaluate(() => inBackground(renderToday));
+  await expect(page.locator('#wdue')).toHaveValue('2026-10-05');
+  await page.press('#wdue', 'Tab');
+  expect((await app.state()).quests[0].wait.due).toBe('2026-10-05');
   await page.fill('#wdue', '2026-09-23');
   await page.press('#wdue', 'Tab');
   // Once waiting there's no Save: each changed detail is saved straight away.

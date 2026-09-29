@@ -35,6 +35,8 @@ function toRecords(s) {
     m.set('kb:' + a.id, { ...rest, imgs: [] });
     (imgs || []).forEach(p => m.set('kbimg:' + p.id, { id: p.id, art: a.id, src: p.src, at: p.at }));
   });
+  // Pictures whose article isn't here (yet): kept as they are, or they'd be deleted everywhere.
+  (s.kbimgLoose || []).forEach(p => m.has('kbimg:' + p.id) || m.set('kbimg:' + p.id, p));
   m.set('meta:order', {
     quests: s.quests.map(x => x.id),
     inbox: s.inbox.map(x => x.id),
@@ -90,6 +92,7 @@ function fromRecords(m, day) {
       const own = (by.kbimg || []).filter(p => p.art === a.id).sort((x, y) => (x.at || 0) - (y.at || 0));
       return (by.kbimg || []).length || !a.imgs ? { ...a, imgs: own.map(({ art, ...p }) => p) } : a;
     }),
+    kbimgLoose: (by.kbimg || []).filter(p => !(by.kb || []).some(a => a.id === p.art)),
     flows: by.flow || [],
     noteImgs: by.noteimg || [],
     notes: (m.get('meta:notes') || {}).text || '',
@@ -146,20 +149,36 @@ const knownKey = k =>
   k.startsWith('kbimg:') ||
   (k.startsWith('meta:') && META_KEYS.includes(k.slice(5)));
 // `now`: when the change counts as made (the daily reset back-dates its changes to midnight).
-function markDirty(now = Date.now()) {
-  const recs = toRecords(S),
+function markDirty(now) {
+  const back = now !== undefined,
+    recs = toRecords(S),
     seen = new Set(),
     // A record already waiting to be sent keeps its time if later: back-dating the daily reset
     // mustn't make an edit made just before it (in the minute after midnight) count as older.
-    at = k => Math.max(now, (sync2.dirty[k] && sync2.dirty[k].at) || 0);
+    // And an edit counts as made after the version it was made to (by the time that version
+    // says it was made): a device whose clock is behind another's would otherwise have its
+    // edits to that one's changes turned away by the server as older. (Not the daily reset: its
+    // changes are meant to give way to a real edit.)
+    at = k =>
+      Math.max(
+        back ? now : Date.now(),
+        (sync2.dirty[k] && sync2.dirty[k].at) || 0,
+        back ? 0 : ((sync2.et && sync2.et[k]) || 0) + 1,
+      );
   recs.forEach((v, k) => {
     seen.add(k);
-    const h = hashOf(v);
+    const h = recHash(k, v);
     if (sync2.synced[k] === h) delete sync2.dirty[k];
     else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: at(k) };
   });
   for (const k in sync2.synced)
-    if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null))
+    if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null)) {
       sync2.dirty[k] = { h: null, at: at(k) };
+      // A repeat's copy for a day, deleted here: remembered, so the day's reset (which makes
+      // that same copy, with the same id) doesn't bring it back.
+      if (/^quest:.+-\d{4}-\d\d-\d\d$/.test(k)) (sync2.gone = sync2.gone || {})[k] = 1;
+    }
+  // Added and removed again before it was ever sent: nothing to send.
+  for (const k in sync2.dirty) if (!seen.has(k) && !(k in sync2.synced)) delete sync2.dirty[k];
   saveSyncState();
 }

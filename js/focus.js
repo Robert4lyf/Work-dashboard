@@ -311,7 +311,7 @@ function eachTagged(fn) {
 }
 function renameTag(i, v) {
   const old = S.tags[i].name;
-  v = v.trim();
+  v = cleanText(v.trim());
   if (!v || v === old) return;
   if (S.tags.some(t => t.name === v)) {
     toast('That tag already exists');

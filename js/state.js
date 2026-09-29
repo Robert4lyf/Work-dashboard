@@ -35,6 +35,12 @@ const dayLabel = ds => {
   return WD[new Date(y, m - 1, d).getDay()] + ' ' + d + ' ' + MON[m - 1];
 };
 
+// Text as stored: without characters the database can't hold (NUL, or half of a character that
+// takes two, as when an emoji is cut in two).
+const cleanText = s =>
+  String(s)
+    .replace(/\u0000/g, '')
+    .replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '');
 let S;
 // Ids go into the page inside attributes: characters that could break out of one (only ever
 // in a crafted backup or synced row) are dropped.
@@ -50,7 +56,7 @@ function fix(n) {
   if (n.start) n.start = cleanDay(n.start);
   if (n.wait) n.wait.due = cleanDay(n.wait.due);
   if (n.since) n.since = cleanDay(n.since);
-  n.tag = n.tag || '';
+  n.tag = cleanText(n.tag || ''); // (a tag's name is part of its record's key: see LISTS)
   n.project = n.project || '';
   n.opt = !!n.opt;
   n.notes = n.notes || '';
@@ -86,6 +92,7 @@ function norm(s) {
       kb: [],
       flows: [],
       noteImgs: [],
+      kbimgLoose: [],
     },
     s || {},
   );
@@ -98,11 +105,20 @@ function norm(s) {
     device: okId({ id: a.device }) ? a.device : '',
   }));
   S.devices = S.devices.filter(okId);
+  // Finished items go into lists as they are: each needs its trail (the steps above it).
+  if (!Array.isArray(S.log)) S.log = [];
+  S.log = S.log
+    .filter(x => x && typeof x === 'object')
+    .map(x => (Array.isArray(x.trail) ? x : { ...x, trail: [] }));
   normKnowledge();
   S.noteImgs = (Array.isArray(S.noteImgs) ? S.noteImgs : [])
     .filter(m => okId(m) && okImg(m.src))
     .map(m => ({ id: m.id, src: m.src, at: Number(m.at) || 0 }))
     .sort((a, b) => a.at - b.at);
+  // Pictures that arrived before their article (see fromRecords): only sound ones.
+  S.kbimgLoose = (Array.isArray(S.kbimgLoose) ? S.kbimgLoose : [])
+    .filter(p => okId(p) && okImg(p.src) && typeof p.art === 'string')
+    .map(p => ({ id: p.id, art: p.art, src: p.src, at: Number(p.at) || 0 }));
   // Preferences go into the page too (and a bad value would crash Today): only sound ones.
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;
@@ -137,6 +153,7 @@ function norm(s) {
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
   // Colours go into style attributes: only the palette's, or a plain hex colour.
   S.tags.forEach(t => {
+    t.name = cleanText(t.name || '');
     if (!PALETTE.includes(t.color) && !/^#[0-9a-f]{3,8}$/i.test(t.color)) t.color = '#C2C3C7';
   });
   // Focus totals per day are worked out from the sessions. Older days whose sessions are gone
@@ -190,11 +207,13 @@ function addDaily(d, tag, mins) {
   const o = (S.daily[d] = S.daily[d] || {});
   o[tag] = (o[tag] || 0) + mins;
 }
-function load() {
+// `pics`: the pictures kept in IndexedDB (see js/pics.js), to fill in what the saved copy left out.
+function load(pics = new Map()) {
   let s = null;
   try {
     s = JSON.parse(localStorage.getItem(KEY));
   } catch (e) {}
+  if (s) fillPics(s, pics);
   // The saved copy is gone (or unreadable) but the sync bookkeeping isn't: forget that too, so
   // the next sync starts from the server's copy rather than deleting everything it can't see.
   if (!s && typeof sync2 !== 'undefined' && sync2.user) {
@@ -206,7 +225,8 @@ function load() {
 let localSaved = true; // whether the last local save worked (see saveSyncState)
 function persistLocal() {
   try {
-    localStorage.setItem(KEY, JSON.stringify(S));
+    localStorage.setItem(KEY, stateJSON());
+    schedulePics();
     return (localSaved = true);
   } catch (e) {
     return (localSaved = false); // no room (or storage blocked)
@@ -251,8 +271,10 @@ let authSeen = false;
 const startedAt = Date.now();
 function rollover() {
   if (S.day === today()) return;
+  dropUndo(); // (an undo from yesterday would bring back yesterday, and its reset again)
   const last = S.day;
-  S.quests = S.quests.filter(q => !isDone(q));
+  // (not one finished today on another device, whose reset came first: it's done today)
+  S.quests = S.quests.filter(q => !isDone(q) || S.log.some(x => x.id === q.id && x.d === today()));
   S.day = today();
   // A repeat that fell on a day the app wasn't opened still turns up (looking back up to a month).
   let d = last < shift(today(), -30) ? shift(today(), -30) : shift(last, 1);

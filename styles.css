@@ -1711,6 +1711,12 @@ body.talking #v-zen {
 .flows .btn {
   display: inline-block;
   text-decoration: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.flow {
+  min-width: 0;
+  max-width: 100%;
 }
 .kbhint {
   margin-top: 12px;
@@ -1853,4 +1859,29 @@ div.srow {
 .flow small {
   color: var(--muted);
   font-size: 13px;
+}
+.kbtitle {
+  font-family: inherit;
+  font-size: 22px;
+  line-height: 1.3;
+  margin: 2px 0 10px;
+}
+/* comfortable tap targets on a phone */
+summary {
+  padding: 8px 0;
+}
+.x {
+  min-width: 40px;
+  min-height: 40px;
+}
+.hsearch,
+.syncbtn {
+  min-height: 36px;
+  padding: 6px 0;
+}
+.chip {
+  min-height: 36px;
+}
+.node b {
+  overflow-wrap: anywhere;
 }
