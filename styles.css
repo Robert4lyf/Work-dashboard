@@ -1711,6 +1711,12 @@ body.talking #v-zen {
 .flows .btn {
   display: inline-block;
   text-decoration: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.flow {
+  min-width: 0;
+  max-width: 100%;
 }
 .kbhint {
   margin-top: 12px;

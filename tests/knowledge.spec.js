@@ -377,3 +377,35 @@ test('review round 3: a background redraw leaves an article being written alone'
   });
   expect(same).toBe(true);
 });
+
+test('deep hunt: a long flow name wraps; synced articles past 30 pictures keep them all', async ({
+  app,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => {
+    S.flows = [{ id: 'f', name: 'x'.repeat(60), url: 'ms-powerautomate:/x' }];
+    save();
+  });
+  await app.go('knowledge');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const n = await page.evaluate(() => {
+    norm({
+      kb: [
+        {
+          id: 'a',
+          cat: '',
+          title: 't',
+          body: '',
+          imgs: Array.from({ length: 35 }, (_, i) => ({
+            id: 'p' + i,
+            src: 'data:image/png;base64,AAAA',
+            at: i + 1,
+          })),
+        },
+      ],
+    });
+    return S.kb[0].imgs.length;
+  });
+  expect(n).toBe(35);
+});

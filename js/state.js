@@ -99,6 +99,11 @@ function norm(s) {
     device: okId({ id: a.device }) ? a.device : '',
   }));
   S.devices = S.devices.filter(okId);
+  // Finished items go into lists as they are: each needs its trail (the steps above it).
+  if (!Array.isArray(S.log)) S.log = [];
+  S.log = S.log
+    .filter(x => x && typeof x === 'object')
+    .map(x => (Array.isArray(x.trail) ? x : { ...x, trail: [] }));
   normKnowledge();
   S.noteImgs = (Array.isArray(S.noteImgs) ? S.noteImgs : [])
     .filter(m => okId(m) && okImg(m.src))
@@ -257,7 +262,8 @@ const startedAt = Date.now();
 function rollover() {
   if (S.day === today()) return;
   const last = S.day;
-  S.quests = S.quests.filter(q => !isDone(q));
+  // (not one finished today on another device, whose reset came first: it's done today)
+  S.quests = S.quests.filter(q => !isDone(q) || S.log.some(x => x.id === q.id && x.d === today()));
   S.day = today();
   // A repeat that fell on a day the app wasn't opened still turns up (looking back up to a month).
   let d = last < shift(today(), -30) ? shift(today(), -30) : shift(last, 1);

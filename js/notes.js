@@ -25,6 +25,9 @@ function renderNotes() {
     }
     return;
   }
+  // Already showing these notes (and no prompt about others): nothing to redraw. (A redraw would
+  // also rebuild the pictures, which are large.)
+  if (cur && cur.value === (S.notes || '') && !$('#notesload')) return;
   notesBase = S.notes || '';
   setHTML(
     $('#v-notes'),
@@ -38,11 +41,11 @@ function saveNotes(v) {
   if (!notesDirty) return; // nothing typed: never overwrite notes that changed elsewhere
   // Changed elsewhere and not yet chosen to replace them: keep both, the prompt is showing.
   if (notesChanged() && !notesOverride) return;
-  notesDirty = false;
   notesOverride = false;
-  if (v === S.notes) return;
+  if (v === S.notes) return (notesDirty = false);
   S.notes = notesBase = v;
   save();
+  notesDirty = !localSaved; // (not saved on this device: still to do, and not "Saved")
 }
 function typedNotes(v) {
   clearTimeout(notesTimer);
@@ -55,6 +58,7 @@ function typedNotes(v) {
   notesTimer = setTimeout(() => {
     saveNotes(v);
     if (st && !notesDirty) st.textContent = 'Saved';
+    else if (st && !localSaved) st.textContent = 'Not saved: this device is out of storage';
   }, 600);
 }
 function loadNotes() {
@@ -81,7 +85,11 @@ let imgBusy = 0,
 function renderNoteImgs() {
   const el = $('#noteimgs');
   if (!el) return;
-  const imgs = S.noteImgs;
+  const imgs = S.noteImgs,
+    // (pictures make this big: it's left alone when none of it changed, as while typing notes)
+    key = [imgs.map(m => m.id).join(), imgBusy, imgShown].join('|');
+  if (el.dataset.shown === key) return;
+  el.dataset.shown = key;
   let h = `<div class="sechead"><h2>Pictures</h2><button class="btn sm" id="nimgadd">Add picture</button></div><input type="file" id="nimgfile" accept="image/*" multiple hidden aria-hidden="true">`;
   h += imgs.length
     ? `<div class="nimgs">${imgs

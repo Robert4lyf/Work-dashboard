@@ -309,6 +309,15 @@ document.addEventListener('change', e => {
     settle(b);
   }
 });
+// Escape (or the clear button) empties a search box without an input event: its results go too.
+document.addEventListener(
+  'search',
+  e => {
+    if (e.target.id === 'sq') typedSearch(e.target.value);
+    if (e.target.id === 'kbq') kbSearch(e.target.value);
+  },
+  true,
+);
 document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
@@ -742,6 +751,7 @@ document.addEventListener('click', e => {
         (Array.isArray(pending.kb) ? pending.kb : []).filter(a => a && Array.isArray(a.imgs)).map(a => a.id),
       ),
       kept = { kb: S.kb, kbcats: S.kbcats, flows: S.flows },
+      keptLoose = S.kbimgLoose,
       was = JSON.stringify(S);
     try {
       norm(pending);
@@ -752,6 +762,8 @@ document.addEventListener('click', e => {
     }
     Object.assign(S, keep);
     if (imgs) S.noteImgs = imgs;
+    // (pictures still waiting for their article: kept too, or they'd be deleted everywhere)
+    if (!Array.isArray(pending.kbimgLoose)) S.kbimgLoose = keptLoose;
     // A copy from before the Knowledge tab has none of it: what's here stays.
     ['kb', 'kbcats', 'flows'].forEach(k => {
       if (!Array.isArray(pending[k])) S[k] = kept[k];

@@ -105,7 +105,7 @@ function server() {
 }
 // Service workers are blocked: the app's worker would fetch and cache the real Supabase library,
 // which bypasses page.route and would replace the fake after a reload.
-async function device(browser, srv, seed) {
+async function device(browser, srv, seed, opts = {}) {
   const ctx = await browser.newContext({ serviceWorkers: 'block' });
   const page = await ctx.newPage();
   const errors = [];
@@ -185,6 +185,12 @@ async function device(browser, srv, seed) {
     srv.state = { data: row.data, edited_at: row.edited_at };
     srv.snapshots++;
   });
+  if (opts.dialogs) page.on('dialog', d => (srv.asked = [...(srv.asked || []), d.message()]) && d.accept());
+  if (opts.clockBehind)
+    await page.addInitScript(ms => {
+      const real = Date.now;
+      Date.now = () => real() - ms;
+    }, opts.clockBehind);
   if (seed) await page.addInitScript(s => localStorage.setItem('work-cockpit-v1', s), JSON.stringify(seed));
   await page.addInitScript(fakeSupabase);
   await page.goto('/');
@@ -883,5 +889,106 @@ test('review round 3: something added and removed before a sync is never sent', 
   });
   await a.sync();
   expect(srv.rows.has('inbox:zz')).toBe(false);
+  expect(a.errors).toEqual([]);
+});
+
+test('deep hunt: a device whose clock is behind still gets its edits in, and never stays apart', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv, null, { clockBehind: 5000 });
+  await a.add('A text');
+  await settle(a, b);
+  // B's edit to A's version counts as after it, though B's clock says earlier.
+  await b.page.evaluate(() => {
+    S.quests[0].text = 'B text';
+    save();
+  });
+  await settle(a, b);
+  expect(texts(await a.state())).toEqual(['B text']);
+  expect(texts(await b.state())).toEqual(['B text']);
+  // And an edit the server turns away as older is replaced by the server's, not kept apart.
+  await a.page.evaluate(() => {
+    S.quests[0].text = 'A again';
+    save();
+  });
+  await a.sync();
+  await b.page.evaluate(() => {
+    S.quests[0].text = 'B stale';
+    markDirty(1); // (as if made long ago)
+  });
+  await b.page.evaluate(async () => {
+    await pushDirty();
+  });
+  await settle(a, b);
+  expect(texts(await b.state())).toEqual(texts(await a.state()));
+  expect(await b.page.evaluate(() => Object.keys(sync2.dirty))).toEqual([]);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('deep hunt: the day’s reset keeps a quest another device finished today', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  await a.add('One');
+  await a.add('Two');
+  await settle(a, b);
+  await b.page.evaluate(() => {
+    S.day = shift(today(), -1);
+    persistLocal();
+  });
+  await a.page.evaluate(() => {
+    const b = snapshot();
+    S.quests.find(q => q.text === 'One').done = true;
+    settle(b);
+  });
+  await a.sync();
+  await settle(a, b);
+  const sa = await a.state(),
+    sb = await b.state();
+  expect(texts(sb)).toEqual(texts(sa));
+  expect(texts(sb)).toContain('One');
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('deep hunt: signing in keeps a device’s own notes and Knowledge when asked to', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Account quest');
+  await a.sync();
+  const b = await device(
+    browser,
+    srv,
+    {
+      notes: 'my notes',
+      kbcats: [{ id: 'c', name: 'Mine', parent: '' }],
+      flows: [{ id: 'f', name: 'Flow', url: 'ms-powerautomate:/x' }],
+      quests: [],
+    },
+    { dialogs: true },
+  );
+  await settle(a, b);
+  expect(srv.asked && srv.asked[0]).toContain("Add this device's 3 items");
+  const s = await b.state();
+  expect(s.notes).toBe('my notes');
+  expect(s.kbcats.map(c => c.name)).toEqual(['Mine']);
+  expect(texts(s)).toEqual(['Account quest']);
+  expect((await a.state()).notes).toBe('my notes');
+});
+
+test('deep hunt: text the database can’t store (NUL, half an emoji) doesn’t block syncing', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.notes = 'a\u0000b ' + '😀'.slice(0, 1) + ' c';
+    save();
+  });
+  await a.sync();
+  expect(srv.rows.get('meta:notes').data.text).toBe('ab  c');
+  await a.sync();
+  expect((await a.state()).notes).toBe('ab  c');
   expect(a.errors).toEqual([]);
 });

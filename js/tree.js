@@ -219,7 +219,8 @@ function inBackground(fn) {
 function focusSel(a) {
   if (!a || a === document.body) return '';
   if (a.id) return '#' + CSS.escape(a.id);
-  const ds = [...a.attributes].filter(x => x.name.startsWith('data-'));
+  // (not data-typed: the redrawn field won't have it yet)
+  const ds = [...a.attributes].filter(x => x.name.startsWith('data-') && x.name !== 'data-typed');
   return ds.length ? a.tagName + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
 }
 function setHTML(el, html) {
@@ -252,14 +253,26 @@ function setHTML(el, html) {
   if (fid && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) typed[fid] = a.value;
   // And any typed into but not yet saved (the waiting panel's, saved together by its button).
   el.querySelectorAll('[data-typed][id]').forEach(i => (typed[i.id] = i.value));
+  // (kept as typed after this redraw too, not only this one)
+  const wasTyped = new Set(
+    Object.keys(typed).filter(id => el.querySelector('#' + CSS.escape(id) + '[data-typed]')),
+  );
+  // A field without an id (a tag's or a flow's name, say), found again by its data attributes.
+  const typedSel =
+    !fid && fsel && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) ? a.value : null;
   const opt = $('#sopt') && $('#sopt').checked; // "Add as optional", ticked but not yet added
   el.innerHTML = html;
   if (opt && $('#sopt')) $('#sopt').checked = true;
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i) i.value = typed[id];
+    if (i && wasTyped.has(id)) i.dataset.typed = '1';
   }
   const f = fsel && el.querySelector(fsel);
+  if (f && typedSel !== null) {
+    f.value = typedSel;
+    f.dataset.typed = '1';
+  }
   if (f) {
     f.focus({ preventScroll: true });
     if (sel)

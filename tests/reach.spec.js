@@ -30,7 +30,10 @@ function fakeSupabase() {
           });
         const done = { error: null };
         return {
-          select: async () => ({ data: [], error: null }),
+          select: async () => ({
+            data: [].concat(rows).map((r, i) => ({ key: r.key, seq: i + 1 })),
+            error: null,
+          }),
           then: (a, b) => Promise.resolve(done).then(a, b),
         };
       },

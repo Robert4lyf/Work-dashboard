@@ -167,3 +167,60 @@ test('a change redraws only the view on screen; another view is drawn when opene
   await expect(page.locator('#stale')).toHaveCount(0);
   await expect(page.locator('#v-inbox')).toContainText('New item');
 });
+
+test('deep hunt: typing survives background redraws, in fields with or without an id', async ({
+  app,
+  page,
+}) => {
+  // A tag's name (no id): still focused, still as typed, after two redraws.
+  await app.go('account');
+  const tag = page.locator('[data-tagname="1"]');
+  await tag.fill('Meetings XY');
+  for (let i = 0; i < 2; i++) await page.evaluate(() => inBackground(renderAll));
+  await expect(page.locator('[data-tagname="1"]')).toHaveValue('Meetings XY');
+  await expect(page.locator('[data-tagname="1"]')).toBeFocused();
+
+  // The waiting panel's fields before it's set (kept until "Set waiting"): after two redraws too.
+  await page.evaluate(() => {
+    S.quests = [fix({ id: 'q', text: 'Quest one' })];
+    save();
+  });
+  await app.go('today');
+  await app.openQuest('Quest one');
+  if (!(await page.locator('#wwho').isVisible())) await page.click('#waitd summary');
+  await page.fill('#wwho', 'Pat');
+  await page.fill('#wnote', 'the report');
+  await page.locator('#wnote').blur();
+  for (let i = 0; i < 2; i++) await page.evaluate(() => inBackground(renderAll));
+  await expect(page.locator('#wwho')).toHaveValue('Pat');
+  await expect(page.locator('#wnote')).toHaveValue('the report');
+});
+
+test('deep hunt: clearing a search box clears its results; notes pictures aren’t redrawn while typing', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.inbox = [{ id: 'i', text: 'Budget idea' }];
+    S.noteImgs = [{ id: 'm', src: 'data:image/png;base64,iVBORw0KGgo=', at: 1 }];
+    save();
+  });
+  await page.click('#searchBtn');
+  await page.fill('#sq', 'budget');
+  await expect(page.locator('#sres .srow')).toHaveCount(1);
+  await page.evaluate(() => {
+    const i = document.querySelector('#sq');
+    i.value = '';
+    i.dispatchEvent(new Event('search'));
+  });
+  await expect(page.locator('#sres')).toHaveText('Type to search everything.');
+
+  await app.go('notes');
+  const same = await page.evaluate(() => {
+    const img = document.querySelector('#noteimgs img');
+    inBackground(renderAll);
+    renderAll();
+    return document.querySelector('#noteimgs img') === img;
+  });
+  expect(same).toBe(true);
+});

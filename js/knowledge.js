@@ -45,8 +45,9 @@ function normKnowledge() {
     body: okText(a.body, KB_BODY),
     edited: typeof a.edited === 'number' ? a.edited : 0,
     imgs: (Array.isArray(a.imgs) ? a.imgs : [])
+      // (no cap here: two devices adding at once can go past it, and dropping the extras here
+      // would delete them everywhere; the editor stops adding past KB_IMGS)
       .filter(m => ok(m) && okImg(m.src))
-      .slice(0, KB_IMGS)
       .map((m, i) => ({ id: m.id, src: m.src, at: Number(m.at) || i + 1 })),
   }));
   S.flows = (Array.isArray(S.flows) ? S.flows : [])
@@ -141,18 +142,16 @@ function kbFlows() {
 }
 function kbIndex() {
   let h = `<h2 class="kbhead">Knowledge</h2><input class="fld" type="search" id="kbq" placeholder="Search articles" aria-label="Search articles" autocomplete="off" value="${esc(kbQuery)}"><div id="kbres">${kbResults()}</div>`;
-  {
-    h += `<div id="kbtree"${kbQuery.trim() ? ' hidden' : ''}>`;
-    const top = kbKids('');
-    h += top.length
-      ? top.map(kbCatTree).join('')
-      : '<p class="hint">No categories yet. Add one below, then add articles to it.</p>';
-    const lost = kbLost();
-    if (lost.length)
-      h += `<details id="kc-lost" class="kcat"${panels['kc-lost'] ? ' open' : ''}><summary>Uncategorised <small>${lost.length}</small></summary><div class="kbody">${lost.map(kbRow).join('')}</div></details>`;
-    h +=
-      '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form></div>';
-  }
+  h += `<div id="kbtree"${kbQuery.trim() ? ' hidden' : ''}>`;
+  const top = kbKids('');
+  h += top.length
+    ? top.map(kbCatTree).join('')
+    : '<p class="hint">No categories yet. Add one below, then add articles to it.</p>';
+  const lost = kbLost();
+  if (lost.length)
+    h += `<details id="kc-lost" class="kcat"${panels['kc-lost'] ? ' open' : ''}><summary>Uncategorised <small>${lost.length}</small></summary><div class="kbody">${lost.map(kbRow).join('')}</div></details>`;
+  h +=
+    '<form class="addrow kbadd" id="kbcatform"><input id="kbcatin" maxlength="80" placeholder="New category" aria-label="New category" autocomplete="off"><button class="btn">Add</button></form></div>';
   return h;
 }
 const kbRow = a => `<button class="soonrow kbrow" data-kbart="${a.id}"><span>${esc(a.title)}</span></button>`;
@@ -330,8 +329,9 @@ async function kbAddImages(files) {
   if (!kbEdit) return;
   const room = KB_IMGS - kbEdit.imgs.length;
   if (room <= 0) return toast(`An article can have up to ${KB_IMGS} pictures`, false, 3000);
-  const r = await readImages([...files].slice(0, room));
-  if (!kbEdit) return; // (closed meanwhile)
+  const ed = kbEdit,
+    r = await readImages([...files].slice(0, room));
+  if (kbEdit !== ed) return; // (closed meanwhile, or another article opened)
   const t = Date.now();
   kbEdit.imgs.push(
     ...r.srcs.slice(0, KB_IMGS - kbEdit.imgs.length).map((src, i) => ({ id: uid(), src, at: t + i })),

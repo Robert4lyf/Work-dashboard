@@ -16,6 +16,7 @@ function moveToInbox(id) {
   })(r.n);
   const it = { id: uid(), text: r.n.text, node: r.n, tag: r.n.tag, project: r.n.project };
   if (r.n.wait) it.wait = r.n.wait; // still waiting (and chased) from the Inbox
+  delete r.n.wait; // (the item's are the ones that count)
   S.inbox.unshift(it);
   settle(bf);
   toast('Moved to inbox');

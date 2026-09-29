@@ -139,6 +139,7 @@ function applyRows(rows, firstSync, keep, holdCursor) {
       mine = sync2.dirty[r.key];
     if (mine && mine.at > Number(r.edited_at)) continue; // (not taken in: fetched again next time)
     (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
+    (sync2.et = sync2.et || {})[r.key] = Number(r.edited_at) || 0; // (and when it was made)
     delete sync2.dirty[r.key];
     if (h === null) delete sync2.synced[r.key];
     else sync2.synced[r.key] = h;
@@ -168,7 +169,17 @@ async function firstSync() {
   if (rows.length) {
     // This device already has things of its own: they can join the account's, or go.
     // (asked only when signing in; a sync that starts on its own keeps them, which is safe)
-    const n = S.quests.length + S.inbox.length + S.later.length;
+    // (everything of its own counts, not just quests: notes, Knowledge, pictures, alarms...)
+    const n =
+      S.quests.length +
+      S.inbox.length +
+      S.later.length +
+      S.kb.length +
+      S.kbcats.length +
+      S.flows.length +
+      S.noteImgs.length +
+      S.alarms.length +
+      (S.notes ? 1 : 0);
     const keep =
       n &&
       (!askMerge ||
@@ -223,21 +234,59 @@ async function pushDirty() {
       tally.up += sizeOf(rows);
       tally.sent += rows.length;
     }
+    const sent = rows.map(clean);
     const { data: wrote, error } = await sb
       .from('cockpit_items')
-      .upsert(rows, { onConflict: 'user_id,key' })
+      .upsert(sent, { onConflict: 'user_id,key' })
       .select('key,seq');
     if (error) throw error;
     // The versions just written are this device's own: never read back down (see pullChanges).
+    // A row the server kept its own newer version of (see cockpit_items_stamp) isn't among
+    // them: this device takes that version instead, now, rather than counting its own as sent.
+    const took = Array.isArray(wrote) ? new Set(wrote.map(r => r.key)) : null,
+      lost = [];
     (wrote || []).forEach(r => ((sync2.at = sync2.at || {})[r.key] = Number(r.seq)));
+    // (one stored cleaned is read back, so this device has it as stored)
+    sent.forEach((r, j) => r !== rows[j] && delete sync2.at[r.key]);
     batch.forEach(({ k, d }) => {
+      // Only clear it if it wasn't edited again while sending.
+      const again = sync2.dirty[k] !== d;
+      if (took && !took.has(k)) {
+        lost.push(k);
+        delete sync2.at[k];
+        if (!again) delete sync2.dirty[k];
+        return;
+      }
       if (d.h === null) delete sync2.synced[k];
       else sync2.synced[k] = d.h;
-      // Only clear it if it wasn't edited again while sending.
-      if (sync2.dirty[k] === d) delete sync2.dirty[k];
+      (sync2.et = sync2.et || {})[k] = d.at;
+      if (!again) delete sync2.dirty[k];
     });
     saveSyncState();
+    for (let j = 0; j < lost.length; j += 100) {
+      const { data, error: e2 } = await sb
+        .from('cockpit_items')
+        .select(FULL)
+        .in('key', lost.slice(j, j + 100));
+      if (e2) throw e2;
+      applyRows(
+        data.sort((a, b) => a.seq - b.seq),
+        false,
+        null,
+        true,
+      );
+    }
   }
+}
+// The database can't store a NUL character, or half of a character that takes two (an emoji
+// cut in two, say): a row holding one would fail the whole batch, every sync. They're dropped
+// from what's sent (and this device then takes in the row as stored).
+function clean(row) {
+  if (row.data == null) return row;
+  // (JSON writes both as \uXXXX escapes; an escaped backslash before one is left alone)
+  const j = JSON.stringify(row.data),
+    c = j.replace(/(?<!\\)((?:\\\\)*)\\u(?:0000|d[89a-f][0-9a-f]{2})/gi, '$1');
+  return c === j ? row : { ...row, data: JSON.parse(c) };
 }
 // A few times a day, keep a whole-state copy in cockpit_state; its history trigger is what
 // Settings > Previous versions lists.
@@ -298,6 +347,10 @@ async function sync() {
         dropUndo();
         norm(null);
         persistLocal();
+        // (nothing of the other account's left open: an article being written, a search...)
+        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = null;
+        searchQ = kbQuery = '';
+        syncStats = [];
         inBackground(renderAll);
       }
       // New device, or a different account: start from the server's copy.

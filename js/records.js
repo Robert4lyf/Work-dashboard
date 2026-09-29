@@ -149,12 +149,22 @@ const knownKey = k =>
   k.startsWith('kbimg:') ||
   (k.startsWith('meta:') && META_KEYS.includes(k.slice(5)));
 // `now`: when the change counts as made (the daily reset back-dates its changes to midnight).
-function markDirty(now = Date.now()) {
-  const recs = toRecords(S),
+function markDirty(now) {
+  const back = now !== undefined,
+    recs = toRecords(S),
     seen = new Set(),
     // A record already waiting to be sent keeps its time if later: back-dating the daily reset
     // mustn't make an edit made just before it (in the minute after midnight) count as older.
-    at = k => Math.max(now, (sync2.dirty[k] && sync2.dirty[k].at) || 0);
+    // And an edit counts as made after the version it was made to (by the time that version
+    // says it was made): a device whose clock is behind another's would otherwise have its
+    // edits to that one's changes turned away by the server as older. (Not the daily reset: its
+    // changes are meant to give way to a real edit.)
+    at = k =>
+      Math.max(
+        back ? now : Date.now(),
+        (sync2.dirty[k] && sync2.dirty[k].at) || 0,
+        back ? 0 : ((sync2.et && sync2.et[k]) || 0) + 1,
+      );
   recs.forEach((v, k) => {
     seen.add(k);
     const h = hashOf(v);
