@@ -1512,6 +1512,14 @@ nav .badge[hidden] {
   padding: 12px 14px;
   margin-bottom: 22px;
 }
+#waddd {
+  margin: 0 0 16px;
+  border-top: 0;
+  padding-top: 0;
+}
+#waddd .pform {
+  margin: 10px 0 6px;
+}
 .pform .chips {
   margin: 0;
 }

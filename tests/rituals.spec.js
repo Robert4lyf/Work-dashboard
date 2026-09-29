@@ -144,6 +144,9 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await expect(v.locator('.row')).toContainText('Chase today');
 
   // Add from the Waiting tab: it lands in the Inbox, already waiting, and is listed here.
+  // The add box starts closed: the tab opens on the list.
+  await expect(page.locator('#wwhat')).toBeHidden();
+  await page.click('#waddd > summary');
   await page.fill('#wwhat', 'Signed contract');
   await page.fill('#wfrom', 'Legal');
   await page.press('#wwhat', 'Enter');
