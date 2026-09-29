@@ -62,6 +62,17 @@ test('a pasted picture is added below the notes, shrunk, and can be viewed and d
   expect((await app.state()).noteImgs).toEqual([]);
   await page.click('#undo');
   expect((await app.state()).noteImgs).toHaveLength(1);
+
+  // A clearly labelled Delete under each picture, and in the full-size view too.
+  await expect(page.locator('.nimg [data-delnimg]')).toHaveText('Delete');
+  await expect(page.locator('.nimg [data-delnimg]')).toBeVisible();
+  await page.click('[data-nimg]');
+  const del = page.locator('.nimgfull [data-delnimg]');
+  await expect(del).toBeVisible();
+  await del.click();
+  await del.click();
+  await expect(page.locator('.nimgfull')).toHaveCount(0);
+  expect((await app.state()).noteImgs).toEqual([]);
 });
 
 test('copied text that comes with a picture of itself pastes as text', async ({ app, page }) => {
