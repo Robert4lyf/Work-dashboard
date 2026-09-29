@@ -10,20 +10,30 @@ function renderReview() {
   if (reviewSub === 'week') h += renderWeek();
   setHTML($('#v-review'), h);
 }
+// This calendar week, Monday to Sunday: its first day.
+function weekStart() {
+  const [y, m, d] = today().split('-').map(Number);
+  return shift(today(), -((new Date(y, m - 1, d).getDay() + 6) % 7));
+}
+function weekFocus() {
+  const since = weekStart();
+  let focus = 0;
+  for (const d in S.daily) if (d >= since) for (const t in S.daily[d]) focus += S.daily[d][t];
+  return focus;
+}
 function weekDone() {
-  const since = shift(today(), -6);
+  const since = weekStart();
   return S.log.filter(x => x.d >= since);
 }
 // The weekly review: one page, top to bottom, each step saying "all clear" when there's nothing to do.
 function renderWeek() {
-  const since = shift(today(), -6),
+  const [y, m, d] = weekStart().split('-').map(Number),
     done = weekDone(),
-    ints = S.interrupts.filter(x => x.t > Date.now() - 7 * 864e5).length;
-  let focus = 0;
-  for (const d in S.daily) if (d >= since) for (const t in S.daily[d]) focus += S.daily[d][t];
+    focus = weekFocus(),
+    ints = S.interrupts.filter(x => x.t >= new Date(y, m - 1, d).getTime()).length;
   const step = (title, body, n) =>
     `<div class="wstep box"><h2>${title}${n ? ` <small>${n}</small>` : ''}</h2>${body || '<p class="hint wclear">All clear.</p>'}</div>`;
-  let h = `<p class="hint wsum">Last 7 days: <b>${done.length}</b> done · <b>${hm(focus)}</b> focus · <b>${ints}</b> interruption${ints === 1 ? '' : 's'}${S.reviewed ? ` · last reviewed ${dayLabel(S.reviewed)}` : ''}</p>`;
+  let h = `<p class="hint wsum">This week (from ${dayLabel(weekStart())}): <b>${done.length}</b> done · <b>${hm(focus)}</b> focus · <b>${ints}</b> interruption${ints === 1 ? '' : 's'}${S.reviewed ? ` · last reviewed ${dayLabel(S.reviewed)}` : ''}</p>`;
 
   // 1. Empty the Inbox.
   h += step(
@@ -83,11 +93,8 @@ function renderWeek() {
 function weekText() {
   const by = {};
   weekDone().forEach(x => (by[projectName(x.p) || 'Other'] = by[projectName(x.p) || 'Other'] || []).push(x));
-  const since = shift(today(), -6);
-  let focus = 0;
-  for (const d in S.daily) if (d >= since) for (const t in S.daily[d]) focus += S.daily[d][t];
   return (
-    `Week to ${niceDate(today())}: ${weekDone().length} done, ${hm(focus)} focus\n\n` +
+    `Week of ${niceDate(weekStart())}: ${weekDone().length} done, ${hm(weekFocus())} focus\n\n` +
     Object.keys(by)
       .sort((a, b) => (a === 'Other') - (b === 'Other') || a.localeCompare(b))
       .map(k => k + '\n' + by[k].map(x => '- ' + [...x.trail, x.text].join(' / ')).join('\n'))

@@ -43,6 +43,8 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
     s.quests[1].wait = { who: 'Sam', note: '', due: '2026-09-25', since: '2026-09-24' };
     s.quests[2].done = true;
     s.log.push({ id: s.quests[2].id, d: '2026-09-25', text: 'Ship sitemap', trail: [], p: 'w' });
+    // Last Saturday: within 7 days, but last week.
+    s.log.push({ id: 'old', d: '2026-09-19', text: 'Last week thing', trail: [], p: '' });
     s.projects = [
       { id: 'w', name: 'Website', done: false },
       { id: 'h', name: 'Hiring', done: false },
@@ -64,8 +66,10 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   await expect(step('Projects with nothing open')).not.toContainText('Website');
   await expect(step('Coming up')).toContainText('All clear.');
   await expect(step('Done this week')).toContainText('Ship sitemap');
+  await expect(step('Done this week')).not.toContainText('Last week thing');
+  await expect(v.locator('.wsum')).toContainText('This week (from Mon 21 Sep)');
   expect(await page.evaluate(() => weekText())).toBe(
-    'Week to 25 Sep: 1 done, 0m focus\n\nWebsite\n- Ship sitemap',
+    'Week of 21 Sep: 1 done, 0m focus\n\nWebsite\n- Ship sitemap',
   );
   // Decisions work from here too.
   await step('Carried over').locator('[data-keep]').click();
