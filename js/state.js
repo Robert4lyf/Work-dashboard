@@ -85,6 +85,7 @@ function norm(s) {
       kbcats: [],
       kb: [],
       flows: [],
+      noteImgs: [],
     },
     s || {},
   );
@@ -98,6 +99,10 @@ function norm(s) {
   }));
   S.devices = S.devices.filter(okId);
   normKnowledge();
+  S.noteImgs = (Array.isArray(S.noteImgs) ? S.noteImgs : [])
+    .filter(m => okId(m) && okImg(m.src))
+    .map(m => ({ id: m.id, src: m.src, at: Number(m.at) || 0 }))
+    .sort((a, b) => a.at - b.at);
   // Preferences go into the page too (and a bad value would crash Today): only sound ones.
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;

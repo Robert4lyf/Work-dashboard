@@ -177,6 +177,11 @@ document.addEventListener('change', e => {
     }
     return;
   }
+  if (el.id === 'nimgfile') {
+    addNoteImages(el.files || []);
+    el.value = '';
+    return;
+  }
   if (el.id === 'imp') {
     if (el.files && el.files[0]) importFile(el.files[0]);
     el.value = '';
@@ -662,6 +667,16 @@ document.addEventListener('click', e => {
   }
   if (d.waitsave) saveWaitPanel(d.waitsave);
   kbClick(d, b);
+  if (b.id === 'nimgadd') $('#nimgfile').click();
+  if (d.nimg) {
+    imgShown = d.nimg;
+    renderNoteImgs();
+  }
+  if (d.nimgclose) {
+    imgShown = null;
+    renderNoteImgs();
+  }
+  if (d.delnimg && arm(b, 'Delete?')) deleteNoteImg(d.delnimg);
   if (d.waitclear) {
     setWaiting(d.waitclear, null);
     toast('Back on your list');
@@ -685,7 +700,9 @@ document.addEventListener('click', e => {
   if (b.id === 'doRestore') {
     // What's current across devices isn't taken from the backup: the notification keys (an old
     // copy would break every device's notifications), the device list and any running session.
+    // Nor the notes' pictures when it has none of its own (a previous version leaves them out).
     const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
+      imgs = Array.isArray(pending.noteImgs) ? null : S.noteImgs,
       was = JSON.stringify(S);
     try {
       norm(pending);
@@ -695,6 +712,7 @@ document.addEventListener('click', e => {
       return toast("That backup couldn't be read", false, 3000);
     }
     Object.assign(S, keep);
+    if (imgs) S.noteImgs = imgs;
     rollover(); // (it may be from another day)
     pending = null;
     path = [];
