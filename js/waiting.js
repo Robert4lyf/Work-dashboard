@@ -57,12 +57,22 @@ function whoList() {
   return `<datalist id="wholist">${people.map(w => `<option value="${esc(w)}">`).join('')}</datalist>`;
 }
 // The waiting panel's fields, as they are now.
-function saveWaitPanel(id) {
-  setWaiting(id, {
-    who: $('#wwho').value.trim(),
-    note: $('#wnote').value.trim(),
-    due: $('#wdue').value || '',
-  });
+// `quiet`: a detail changed on a quest already waiting. Saved without redrawing the panel, which
+// would take the field out from under a tap or Tab that's moving on (only its heading and the
+// badges change, in place).
+function saveWaitPanel(id, quiet) {
+  const w = { who: $('#wwho').value.trim(), note: $('#wnote').value.trim(), due: $('#wdue').value || '' };
+  if (!quiet) return setWaiting(id, w);
+  const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };
+  if (!r.n || !r.n.wait) return;
+  const was = r.n.wait;
+  if (was.who === w.who && was.note === w.note && (was.due || '') === w.due) return;
+  r.n.wait = { ...was, ...w };
+  save();
+  const sum = $('#waitd > summary');
+  if (sum) sum.textContent = 'Waiting' + (w.who ? ' on ' + w.who : '');
+  renderHeader();
+  inBackground(renderWaiting);
 }
 function setWaiting(id, w) {
   const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };

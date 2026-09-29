@@ -21,28 +21,41 @@ function typedSearch(v) {
   searchQ = v;
   $('#sres').innerHTML = searchResults();
 }
-// A few words either side of the match, for text that's longer than a line.
+// The typed words, matched in any case and across any run of spaces or line breaks.
+const searchRe = q =>
+  new RegExp(
+    q
+      .split(' ')
+      .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('\\s+'),
+    'i',
+  );
+// A few words either side of the match, for text that's longer than a line. Found in the text as
+// written (not a lower-cased copy, which can differ in length), so what's marked is what matched.
 function snippet(text, q) {
-  const i = text.toLowerCase().indexOf(q);
-  if (i < 0) return '';
-  const from = Math.max(0, i - 40),
-    to = Math.min(text.length, i + q.length + 60),
-    part = text.slice(from, to).replace(/\s+/g, ' ');
-  const j = part.toLowerCase().indexOf(q);
+  text = String(text || '');
+  const m = searchRe(q).exec(text);
+  if (!m) return esc(text.slice(0, 100).replace(/\s+/g, ' '));
+  const from = Math.max(0, m.index - 40),
+    to = Math.min(text.length, m.index + m[0].length + 60),
+    flat = t => esc(t.replace(/\s+/g, ' '));
   return (
     (from ? '…' : '') +
-    esc(part.slice(0, j)) +
+    flat(text.slice(from, m.index)) +
     '<mark>' +
-    esc(part.slice(j, j + q.length)) +
+    flat(m[0]) +
     '</mark>' +
-    esc(part.slice(j + q.length)) +
+    flat(text.slice(m.index + m[0].length, to)) +
     (to < text.length ? '…' : '')
   );
 }
 function searchResults() {
-  const q = searchQ.trim().toLowerCase();
+  const q = searchQ.trim().replace(/\s+/g, ' ');
   if (!q) return '<p class="hint">Type to search everything.</p>';
-  const has = s => (s || '').toLowerCase().includes(q),
+  // (anything, as synced rows may hold a number where text belongs)
+  const re = searchRe(q),
+    has = s => s != null && re.test(String(s)),
+    day = d => (cleanDay(d) ? dayLabel(d) : ''),
     groups = [],
     row = (attrs, title, sub) =>
       `<button class="soonrow srow" ${attrs}><span>${esc(title)}${sub ? `<br><small class="hint">${sub}</small>` : ''}</span></button>`,
@@ -70,9 +83,7 @@ function searchResults() {
   group('Today', qs);
   group(
     'Upcoming',
-    S.later
-      .filter(n => has(n.text) || has(n.notes))
-      .map(n => row('data-goupd="1"', n.text, dayLabel(n.start))),
+    S.later.filter(n => has(n.text) || has(n.notes)).map(n => row('data-goupd="1"', n.text, day(n.start))),
   );
   group(
     'Inbox',
@@ -85,7 +96,7 @@ function searchResults() {
   // Notes: each matching line.
   group(
     'Notes',
-    (S.notes || '')
+    String(S.notes || '')
       .split('\n')
       .filter(l => has(l))
       .map(l => `<button class="soonrow srow" data-goto="notes"><span>${snippet(l, q)}</span></button>`),
@@ -118,12 +129,12 @@ function searchResults() {
   group(
     'Done',
     S.log
-      .filter(x => has(x.text) || (x.trail || []).some(has))
+      .filter(x => has(x.text) || (Array.isArray(x.trail) && x.trail.some(has)))
       .slice()
       .reverse()
       .map(
         x =>
-          `<div class="soonrow srow"><span>${esc(x.text)}<br><small class="hint">${[(x.trail || []).length ? esc(x.trail.join(' / ')) : '', 'done ' + dayLabel(x.d)].filter(Boolean).join(' · ')}</small></span></div>`,
+          `<div class="soonrow srow"><span>${esc(x.text)}<br><small class="hint">${[Array.isArray(x.trail) && x.trail.length ? esc(x.trail.join(' / ')) : '', day(x.d) && 'done ' + day(x.d)].filter(Boolean).join(' · ')}</small></span></div>`,
       ),
   );
   if (!groups.length) return '<p class="hint">Nothing matches.</p>';

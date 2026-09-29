@@ -72,8 +72,8 @@ function loadNotes() {
    like the text. Kept apart from it, below the box: a text box can't show them. */
 const IMG_MAX = 1600, // longest side, in pixels
   // All of them together (characters). Everything is kept in the browser's local storage, which
-  // Safari holds to about 5 MB, counting two bytes a character.
-  IMG_TOTAL = 2.2e6;
+  // Chrome holds to about 5 million characters: this leaves room for the rest.
+  IMG_TOTAL = 3.5e6;
 const okImg = src =>
   typeof src === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src);
 let imgBusy = 0,

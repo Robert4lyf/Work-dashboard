@@ -87,7 +87,7 @@ function applyRows(rows, firstSync, keep) {
     norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt }));
     // The quest on screen went (in the rows, not through the day's reset or a chosen replace).
     const open = !firstSync && path.length && !find(path[path.length - 1]);
-    persistLocal();
+    if (!persistLocal()) toast("Couldn't save: this device is out of storage", false, 4000);
     rollover();
     markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
     inBackground(renderAll);

@@ -180,12 +180,14 @@ test('a category can be moved into another, or back to the top level, but not in
   const opts = await page.$$eval('#kbmv option', o => o.map(x => x.textContent));
   expect(opts).toEqual(['Top level', 'Processes']);
   await page.selectOption('#kbmv', { label: 'Processes' });
+  await page.click('[data-kbmvgo]');
   expect((await app.state()).kbcats.find(c => c.id === 'd').parent).toBe('p');
   await expect(page.locator('#kc-p #kc-d #kc-x')).toHaveCount(1);
   await expect(page.locator('#kc-d > summary')).toBeVisible();
   await expect(page.locator('#toast')).toContainText('Moved to Processes');
   await page.click('#kc-d > .kbody > .links [data-kbmove]');
   await page.selectOption('#kbmv', { label: 'Top level' });
+  await page.click('[data-kbmvgo]');
   expect((await app.state()).kbcats.find(c => c.id === 'd').parent).toBe('');
 });
 
@@ -263,4 +265,96 @@ test('a flow remembers when its button was last used', async ({ app, page }) => 
   });
   await expect(page.locator('.flow small')).toContainText('Last used Today');
   expect((await app.state()).flows[0].last).toBeGreaterThan(0);
+});
+
+test('bug fixes: editor keeps typed text through redraws; limits; links; overlays close', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.kbcats = [{ id: 'p', name: 'Processes', parent: '' }];
+    S.quests = [fix({ id: 'q', text: 'Something' })];
+    save();
+    renderAll();
+  });
+  await app.go('knowledge');
+  await page.click('#kc-p > summary');
+  await page.click('[data-kbnew]');
+  await page.fill('#kbt', 'Draft title');
+  await page.fill('#kbb', 'Draft body');
+  // A redraw after a tap elsewhere (here: ticking the header's next step) keeps the draft.
+  await page.click('header [data-toggle]');
+  await expect(page.locator('#kbt')).toHaveValue('Draft title');
+  await expect(page.locator('#kbb')).toHaveValue('Draft body');
+  await expect(page.locator('#kbb')).toHaveAttribute('maxlength', '50000');
+  await page.click('#kbform .btn.green');
+
+  // Links: brackets that belong to the link stay; an & stays part of it; a full stop after doesn't.
+  const html = await page.evaluate(() =>
+    kbLinkify('See https://en.wikipedia.org/wiki/Foo_(bar). Or (https://x.com/a?b=1&c=2), ok'),
+  );
+  expect(html).toContain('href="https://en.wikipedia.org/wiki/Foo_(bar)"');
+  expect(html).toContain('href="https://x.com/a?b=1&amp;c=2"');
+  expect(html).toContain('</a>), ok');
+
+  // A picture shown full size closes with Escape.
+  await page.evaluate(() => {
+    S.noteImgs = [{ id: 'm', src: 'data:image/png;base64,iVBORw0KGgo=', at: 1 }];
+    save();
+    renderAll();
+  });
+  await app.go('notes');
+  await page.click('[data-nimg]');
+  await expect(page.locator('.nimgfull')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.nimgfull')).toHaveCount(0);
+
+  // A flow time that can't be right isn't shown.
+  const last = await page.evaluate(() => {
+    norm({ flows: [{ id: 'f', name: 'x', url: 'ms-powerautomate:/a', last: 9e15 }] });
+    return S.flows[0].last;
+  });
+  expect(last).toBe(0);
+});
+
+test('bug fixes: restoring a copy from before Knowledge keeps it; odd synced rows do not break search', async ({
+  app,
+  page,
+}) => {
+  await page.evaluate(() => {
+    S.kbcats = [{ id: 'p', name: 'Processes', parent: '' }];
+    S.kb = [{ id: 'a', cat: 'p', title: 'Guide', body: '', imgs: [] }];
+    save();
+    const old = JSON.parse(JSON.stringify(S));
+    delete old.kb;
+    delete old.kbcats;
+    delete old.flows;
+    pending = old;
+    renderAccount();
+  });
+  await app.go('account');
+  await page.click('#doRestore');
+  const s = await app.state();
+  expect(s.kb.map(a => a.title)).toEqual(['Guide']);
+  expect(s.kbcats).toHaveLength(1);
+
+  const r = await page.evaluate(() => {
+    S.quests.push(fix({ id: 'n', text: 42 }));
+    S.later.push({ id: 'l', text: 'budget later', children: [] });
+    S.log.push({ id: 'x', text: 'budget', trail: 'oops' }, { id: 'y', text: 'budget two', trail: [] });
+    S.notes = 5;
+    searchQ = 'budget';
+    const a = searchResults();
+    searchQ = '42';
+    const b = searchResults();
+    return [a.includes('budget later'), b.includes('42')];
+  });
+  expect(r).toEqual([true, true]);
+  // Snippets mark what matched, whatever the case, spacing or characters around it.
+  const sn = await page.evaluate(() => [
+    snippet('İ'.repeat(60) + ' foo bar', 'foo'),
+    snippet('hello foo  bar world', 'foo bar'),
+  ]);
+  expect(sn[0]).toContain('<mark>foo</mark>');
+  expect(sn[1]).toContain('<mark>foo bar</mark>');
 });
