@@ -366,7 +366,7 @@ document.addEventListener('click', e => {
       if (view !== 'today') go('today');
     }
   }
-  if (d.v && b.closest('header, #v-waiting')) go(d.v);
+  if (d.v && b.closest('header, #v-waiting, #waitsec')) go(d.v);
   if (b.id === 'searchBtn') openSearch();
   if (d.sart)
     leaveEditor(() => {
@@ -904,6 +904,7 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') el.closest('#sheet') ? closeSheet() : el.blur();
     return;
   }
+  if ($('#sheet') && e.key !== 'Escape') return; // a sheet is up: its buttons only
   const k = e.key;
   if (talk) return k === 'Escape' && closeTalk();
   // During a running session only pause and help work (see focusLocked).
@@ -1061,7 +1062,7 @@ function appBack() {
     return true;
   }
   if (view === 'knowledge' && kbArt) {
-    kbClick({ kbback: '1' });
+    kbClick({ kbback: '1' }, {});
     return true;
   }
   if (view === 'knowledge' && kbCatOpen) {

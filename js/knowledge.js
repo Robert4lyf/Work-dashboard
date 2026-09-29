@@ -519,7 +519,7 @@ function kbClick(d, b) {
     kbMoving = null;
     renderKnowledge();
   }
-  if (b.id === 'kbimgadd') $('#kbimgfile').click();
+  if (b && b.id === 'kbimgadd') $('#kbimgfile').click();
   if (d.kbimgdel && kbEdit) {
     kbEdit.imgs = kbEdit.imgs.filter(m => m.id !== d.kbimgdel);
     kbRenderEditImgs();
