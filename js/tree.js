@@ -153,6 +153,50 @@ function setRepeat(n, fn) {
   renderAll();
 }
 
+/* a small panel at the bottom of the screen, for a one-line answer or a yes/no, in place of the
+   browser's own pop-ups. One at a time; Escape, the back gesture or the backdrop close it. */
+let sheetCb = null;
+function sheet({ title, label, value = '', ok = 'OK', cancel = 'Cancel', danger = false, text = '' }, cb) {
+  closeSheet();
+  sheetCb = cb;
+  const el = document.createElement('div');
+  el.id = 'sheet';
+  el.innerHTML = `<div class="sheetback" data-sheetclose="1"></div><form class="sheetbox box" id="sheetform" role="dialog" aria-modal="true" aria-labelledby="sheettitle"><h2 id="sheettitle">${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ''}${
+    label !== undefined
+      ? `<label class="f" for="sheetin">${esc(label)}</label><input class="fld" id="sheetin" maxlength="120" value="${esc(value)}" autocomplete="off">`
+      : ''
+  }<div class="acts"><button class="btn ${danger ? 'pink' : 'green'}" id="sheetok">${esc(ok)}</button><button class="btn" type="button" data-sheetclose="1">${esc(cancel)}</button></div></form>`;
+  document.body.appendChild(el);
+  const i = $('#sheetin');
+  if (i) {
+    i.focus();
+    i.select();
+  } else $('#sheetok').focus();
+}
+function closeSheet(answer) {
+  const el = $('#sheet'),
+    cb = sheetCb;
+  sheetCb = null;
+  if (el) el.remove();
+  if (cb && answer !== undefined) cb(answer);
+}
+document.addEventListener('submit', e => {
+  if (e.target.id !== 'sheetform') return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const i = $('#sheetin');
+  closeSheet(i ? i.value.trim() : true);
+});
+document.addEventListener(
+  'click',
+  e => {
+    if (e.target.closest && e.target.closest('[data-sheetclose]')) {
+      e.stopImmediatePropagation();
+      closeSheet();
+    }
+  },
+  true,
+);
 /* feedback */
 // XP is still counted (and synced) but no longer shown, so it can come back as a setting.
 function addXP(n) {
@@ -233,7 +277,10 @@ function setHTML(el, html) {
       sel = inside ? focusSel(a) : '';
     el.innerHTML = html;
     if (inside) {
-      const f = (sel && el.querySelector(sel)) || el;
+      let f = (sel && el.querySelector(sel)) || el;
+      // (the control may now be folded away, say a quest just ticked into "Done today": the
+      // keyboard stays in the view rather than falling to the top of the page)
+      if (f !== el && f.closest('details:not([open])')) f = el;
       if (f === el) el.tabIndex = -1;
       f.focus({ preventScroll: true });
     }

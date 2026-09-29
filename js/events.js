@@ -368,14 +368,13 @@ document.addEventListener('click', e => {
   }
   if (d.v && b.closest('header, #v-waiting')) go(d.v);
   if (b.id === 'searchBtn') openSearch();
-  if (d.sart && !(kbEdit && !confirm('Leave the article you are writing? Changes not saved will be lost.'))) {
-    kbArt = d.sart;
-    kbEdit = null;
-    clearKbDraft();
-    kbImgShown = null;
-    go('knowledge');
-    renderKnowledge();
-  }
+  if (d.sart)
+    leaveEditor(() => {
+      kbArt = d.sart;
+      kbImgShown = null;
+      go('knowledge');
+      renderKnowledge();
+    });
   if (d.goupd) {
     // An Upcoming item (from the Waiting tab): Today's list, with Upcoming open.
     path = [];
@@ -386,6 +385,12 @@ document.addEventListener('click', e => {
   }
   if (d.goto) {
     go(d.goto);
+    if (d.openadd) {
+      panels.waddd = true;
+      renderWaiting();
+      const w = $('#wwhat');
+      w && w.focus();
+    }
     const i = d.goto === 'inbox' && $('#iin');
     i && i.focus();
   }
@@ -557,7 +562,13 @@ document.addEventListener('click', e => {
     reviewSub = d.rsub;
     go(d.rsub === 'week' ? 'review' : d.rsub);
   }
+  if (d.rstep) {
+    reviewStep += +d.rstep;
+    renderReview();
+    window.scrollTo(0, 0);
+  }
   if (b.id === 'reviewed') {
+    reviewStep = 0;
     S.reviewed = today();
     save();
     renderAll();
@@ -890,7 +901,7 @@ document.addEventListener('keydown', e => {
   if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
   const el = e.target;
   if (el.closest && el.closest('input,textarea,select,[contenteditable]')) {
-    if (e.key === 'Escape') el.blur();
+    if (e.key === 'Escape') el.closest('#sheet') ? closeSheet() : el.blur();
     return;
   }
   const k = e.key;
@@ -924,7 +935,8 @@ document.addEventListener('keydown', e => {
   else if (k === 's') go('account');
   else if (k === 'z') setZen(!zen);
   else if (k === 'Escape') {
-    if (imgShown || kbImgShown) closeImgs();
+    if ($('#sheet')) closeSheet();
+    else if (imgShown || kbImgShown) closeImgs();
     else if (zen) setZen(false);
     else if (view === 'today' && path.length) openPath(path.slice(0, -1));
   }
@@ -1043,15 +1055,18 @@ function appBack() {
   if (imgShown || kbImgShown) return (closeImgs(), true);
   if (talk) return (closeTalk(), true);
   if (zen && !focusLocked()) return (setZen(false), true);
+  if ($('#sheet')) return (closeSheet(), true);
   if (view === 'knowledge' && kbEdit) {
-    if (!confirm('Leave the article you are writing? Changes not saved will be lost.')) return true;
-    kbEdit = null;
-    clearKbDraft();
-    renderKnowledge();
+    leaveEditor(renderKnowledge);
     return true;
   }
   if (view === 'knowledge' && kbArt) {
-    kbArt = null;
+    kbClick({ kbback: '1' });
+    return true;
+  }
+  if (view === 'knowledge' && kbCatOpen) {
+    const c = kbCatOpen !== 'lost' && kbCat(kbCatOpen);
+    kbCatOpen = (c && c.parent) || null;
     renderKnowledge();
     return true;
   }

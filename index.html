@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -28,7 +28,13 @@
   <body>
     <div class="wrap">
       <header>
-        <div class="now" id="hnow"></div>
+        <div class="now">
+          <div class="hnowin" id="hnow"></div>
+          <div class="hbtns">
+            <button class="hsearch" id="searchBtn" aria-label="Search"><svg viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 0h4v1H1zM0 1h1v4H0zM5 1h1v4H5zM1 5h4v1H1zM5 5h1v1H5zM6 6h1v1H6zM7 7h1v1H7z"/></svg></button>
+            <button class="syncbtn" id="syncBtn" aria-live="polite"><span class="sr">Sync off</span></button>
+          </div>
+        </div>
         <div
           class="hprog"
           role="progressbar"
@@ -39,13 +45,7 @@
         >
           <div id="hfill"></div>
         </div>
-        <div class="hfoot">
-          <div class="hstats" id="hstats"></div>
-          <div class="hbtns">
-            <button class="hsearch" id="searchBtn">Search</button>
-            <button class="syncbtn" id="syncBtn">Sync off</button>
-          </div>
-        </div>
+        <div class="hfoot"><div class="hstats" id="hstats"></div></div>
       </header>
 
       <section id="v-today"></section>
@@ -65,9 +65,7 @@
       <div class="tabs" id="tabs">
         <button data-v="today" aria-current="page">Today</button>
         <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
-        <button data-v="waiting">Waiting<span class="badge" id="waitBadge" hidden></span></button>
-        <button data-v="notes">Notes</button>
-        <button data-v="knowledge">Knowledge</button>
+        <button data-v="knowledge">Knowledge<span class="badge" id="waitBadge" hidden></span></button>
         <button data-v="review">
           Review<span class="dot" id="reviewDot" hidden role="img" aria-label="weekly review due"></span>
         </button>

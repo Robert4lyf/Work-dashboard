@@ -362,6 +362,7 @@ test('daily repeats created on two devices are not doubled', async ({ browser })
   const a = await device(browser, srv);
   await a.add('Standup');
   await a.page.click('.open >> text=Standup');
+  await a.page.click('#mored > summary');
   await a.page.click('#rptd summary');
   await a.page.click('[data-rpreset="daily"]');
   await a.page.click('[aria-label="Mark done: Standup"]');
@@ -383,6 +384,7 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   const srv = server();
   const a = await device(browser, srv);
   await a.page.click('nav [data-v=account]');
+  await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await a.page.click('#capnew');
   await expect(a.page.locator('.caprow code').nth(3)).toHaveText('tok123');
   await a.page.click('#captest');
@@ -400,6 +402,7 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   // The details survive a reload on this device, folded away until opened.
   await a.page.reload();
   await a.page.click('nav [data-v=account]');
+  await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await expect(a.page.locator('.caprow').first()).toBeHidden();
   await a.page.click('#capsetup summary');
   await expect(a.page.locator('.caprow code').nth(3)).toHaveText('tok123');
@@ -410,6 +413,7 @@ test('health check, signed in: sync, live updates and optional parts', async ({ 
   const srv = server();
   const a = await device(browser, srv);
   await a.page.click('nav [data-v=account]');
+  await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await a.page.click('#healthrun');
   const row = name => a.page.locator('.health .hrow2', { hasText: name });
   await expect(row('Signed in')).toHaveClass(/ok/);

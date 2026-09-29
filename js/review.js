@@ -1,5 +1,6 @@
 /* the Review tab: the weekly review, plus Projects and History as sub-pages */
-let reviewSub = 'week'; // 'week', 'projects' or 'log'
+let reviewSub = 'week', // 'week', 'projects' or 'log'
+  reviewStep = 0; // which step of the weekly review is showing
 // Friday to Sunday, if this week (Monday on) hasn't been reviewed yet.
 const reviewDue = () => [5, 6, 0].includes(new Date().getDay()) && (!S.reviewed || S.reviewed < weekStart());
 function renderReview() {
@@ -24,18 +25,17 @@ function weekDone() {
   const since = weekStart();
   return S.log.filter(x => x.d >= since);
 }
-// The weekly review: one page, top to bottom, each step saying "all clear" when there's nothing to do.
+// The weekly review, one step at a time: each says "all clear" when there's nothing to do.
 function renderWeek() {
   const [y, m, d] = weekStart().split('-').map(Number),
     done = weekDone(),
     focus = weekFocus(),
     ints = S.interrupts.filter(x => x.t >= new Date(y, m - 1, d).getTime()).length;
+  const steps = [];
   const step = (title, body, n) =>
-    `<div class="wstep box"><h2>${title}${n ? ` <small>${n}</small>` : ''}</h2>${body || '<p class="hint wclear">All clear.</p>'}</div>`;
-  let h = `<p class="hint wsum">This week (from ${dayLabel(weekStart())}): <b>${done.length}</b> done · <b>${hm(focus)}</b> focus · <b>${ints}</b> interruption${ints === 1 ? '' : 's'}${S.reviewed ? ` · last reviewed ${dayLabel(S.reviewed)}` : ''}</p>`;
-
+    steps.push({ title, body: body || '<p class="hint wclear">All clear.</p>', n });
   // 1. Empty the Inbox.
-  h += step(
+  step(
     'Inbox',
     S.inbox.length
       ? `<p>${S.inbox.length} item${S.inbox.length === 1 ? '' : 's'} to sort.</p><button class="btn sm" data-goto="inbox">Sort the Inbox</button>`
@@ -44,10 +44,10 @@ function renderWeek() {
   );
   // 2. Decide on anything that's been sitting on Today.
   const stale = S.quests.filter(q => !isDone(q) && !q.wait && ageOf(q) >= STALE);
-  h += step('Carried over', stale.length ? carriedRows(stale) : '', stale.length);
+  step('Carried over', stale.length ? carriedRows(stale) : '', stale.length);
   // 3. Chase what you're waiting on.
   const wait = waitingNodes();
-  h += step(
+  step(
     'Waiting',
     wait
       .map(
@@ -59,7 +59,7 @@ function renderWeek() {
   );
   // 4. Every active project should have something open.
   const idle = S.projects.filter(p => !p.done && !openInProject(p.id).length);
-  h += step(
+  step(
     'Projects with nothing open',
     idle
       .map(
@@ -71,7 +71,7 @@ function renderWeek() {
   );
   // 5. What's coming back next week.
   const soon = S.later.filter(n => n.start <= shift(today(), 7));
-  h += step(
+  step(
     'Coming up',
     soon
       .map(n => `<div class="crow"><p>${esc(n.text)} <small>${dayLabel(n.start)}</small></p></div>`)
@@ -79,14 +79,26 @@ function renderWeek() {
     soon.length,
   );
   // 6. What got done, ready to paste into an update.
-  h += step(
+  step(
     'Done this week',
     done.length
       ? `<ul class="wdone">${done.map(x => `<li>${esc([...x.trail, x.text].join(' / '))}</li>`).join('')}</ul><button class="btn sm" id="copyweek">Copy summary</button>`
       : '',
     done.length,
   );
-  return h + '<button class="btn green" id="reviewed" style="width:100%">Mark week reviewed</button>';
+  reviewStep = Math.max(0, Math.min(reviewStep, steps.length - 1));
+  const cur = steps[reviewStep],
+    last = reviewStep === steps.length - 1;
+  let h = `<p class="hint wsum">This week (from ${dayLabel(weekStart())}): <b>${done.length}</b> done · <b>${hm(focus)}</b> focus · <b>${ints}</b> interruption${ints === 1 ? '' : 's'}${S.reviewed ? ` · last reviewed ${dayLabel(S.reviewed)}` : ''}</p>`;
+  h += `<div class="wdots" aria-hidden="true">${steps.map((s, i) => `<span class="${i === reviewStep ? 'on' : ''}${s.n ? ' has' : ''}"></span>`).join('')}</div>`;
+  h += `<p class="hint wstepno">Step ${reviewStep + 1} of ${steps.length}</p>`;
+  h += `<div class="wstep box"><h2>${cur.title}${cur.n ? ` <small>${cur.n}</small>` : ''}</h2>${cur.body}</div>`;
+  h += `<div class="acts wnav">${reviewStep ? '<button class="btn" data-rstep="-1">Back</button>' : ''}${
+    last
+      ? '<button class="btn green" id="reviewed">Mark week reviewed</button>'
+      : `<button class="btn blue" data-rstep="1">${cur.n ? 'Next' : 'Next'}</button>`
+  }</div>`;
+  return h;
 }
 // A plain-text summary of the week, grouped by project.
 function weekText() {

@@ -91,9 +91,9 @@ test('a ringing alarm takes the keyboard: Dismiss is focused, shortcuts and the 
 test('the header keeps keyboard focus through its minute refresh; Delete arms on the first tap with a row menu open', async ({
   page,
 }) => {
-  await page.focus('#hstats button');
+  await page.focus('#hnow .go');
   await page.evaluate(() => renderHeader());
-  expect(await page.evaluate(() => document.activeElement.closest('#hstats') !== null)).toBe(true);
+  expect(await page.evaluate(() => document.activeElement.closest('#hnow') !== null)).toBe(true);
 
   await page.evaluate(() => {
     S.quests = [fix({ id: 'q1', text: 'Row' })];
@@ -235,20 +235,23 @@ test('round 5: the keyboard stays in the view after an action; Restore backup is
   page,
 }) => {
   await page.evaluate(() => {
-    S.quests = [fix({ id: 'k1', text: 'Keyboard one' }), fix({ id: 'k2', text: 'Keyboard two' })];
+    S.quests = [
+      fix({ id: 'k1', text: 'Keyboard one' }),
+      fix({ id: 'k2', text: 'Keyboard two' }),
+      fix({ id: 'k3', text: 'Keyboard three' }),
+    ];
     save();
     renderAll();
   });
   await page.focus('#v-today [aria-label="Mark done: Keyboard one"]');
   await page.keyboard.press('Space');
-  expect(await page.evaluate(() => document.activeElement.getAttribute('aria-label'))).toBe(
-    'Mark done: Keyboard one',
-  );
+  // (the quest folded into "Done today": the keyboard stays in the view)
+  expect(await page.evaluate(() => document.activeElement.closest('#v-today') !== null)).toBe(true);
   // The header's tick too: it moves on to the next quest, and keeps the keyboard.
   await page.focus('#hnow [data-toggle]');
   await page.keyboard.press('Space');
   expect(await page.evaluate(() => document.activeElement.closest('#hnow') !== null)).toBe(true);
-  await page.focus('[data-xopen="k2"]');
+  await page.focus('[data-xopen="k3"]');
   await page.keyboard.press('Enter');
   expect(await page.evaluate(() => document.activeElement.closest('#v-today') !== null)).toBe(true);
 

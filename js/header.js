@@ -34,7 +34,7 @@ function renderHeader() {
   $('#hprog').setAttribute('aria-valuenow', p);
   // One quiet line of stats; anything needing attention is on Today and in tab badges.
   const focus = Object.values(S.daily[today()] || {}).reduce((a, b) => a + b, 0);
-  let st = `<button data-v="today">${done}/${qs.length} done</button><button data-v="focus">${hm(focus)} focus</button>`;
+  let st = focus ? `<button data-v="focus">${hm(focus)} focus</button>` : '';
   const na = nextAlarm();
   if (na)
     st += `<button data-v="today" class="halarm">Alarm ${na.snooze ? hhmmOf(na.snooze) : na.time}</button>`;
@@ -42,10 +42,7 @@ function renderHeader() {
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;
   b.textContent = S.inbox.length;
-  const w = $('#waitBadge'),
-    ch = chaseDue();
-  w.hidden = !ch;
-  w.textContent = ch || '';
+  $('#waitBadge').hidden = true; // (the chase count is Today's chip now)
   $('#reviewDot').hidden = !reviewDue();
   renderSyncBadge();
 }

@@ -124,8 +124,8 @@ header {
   color: var(--head-ink);
   border: 3px solid var(--edge);
   box-shadow: 5px 5px 0 var(--edge);
-  padding: 12px 14px 10px;
-  margin-bottom: 20px;
+  padding: 8px 12px 6px;
+  margin-bottom: 16px;
 }
 .hrow {
   display: flex;
@@ -143,7 +143,7 @@ header {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 2px 0 12px;
+  margin: 0 0 6px;
   min-height: 34px;
 }
 .now .check {
@@ -177,8 +177,8 @@ header {
   font-size: 15px;
 }
 .hprog {
-  height: 8px;
-  border: 2px solid var(--edge);
+  height: 4px;
+  border: 0;
   background: var(--head-track);
 }
 .hprog div {
@@ -188,10 +188,46 @@ header {
 }
 .hfoot {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 4px;
+  min-height: 24px;
+}
+.hfoot:has(.hstats:empty) {
+  display: none;
+}
+.hnowin {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hnowin > .btn,
+.hnowin > .check,
+.hbtns > * {
+  flex: none; /* (never squeezed away by a long next step) */
+}
+.hbtns {
+  align-items: center;
+  gap: 8px;
+}
+.hsearch svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.syncbtn .sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.syncbtn::before {
+  width: 10px;
+  height: 10px;
 }
 .hstats {
   display: flex;
@@ -639,7 +675,9 @@ nav button[aria-current='page'] {
 .toast {
   position: fixed;
   left: 50%;
-  top: calc(16px + env(safe-area-inset-top, 0px));
+  /* just above the tab bar: clear of the header's controls (and under the thumb on a phone) */
+  bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100% - 32px);
   transform: translateX(-50%);
   background: var(--green);
   color: var(--on-accent);
@@ -768,13 +806,9 @@ nav button[aria-current='page'] {
   background: var(--wait);
   color: #fff;
 }
-/* waiting on someone else: a dark-orange bar and tint, so it reads as parked, not next */
-.row.waiting {
-  background: color-mix(in srgb, var(--wait) 12%, var(--panel));
-  box-shadow: inset 6px 0 0 var(--wait);
-}
+/* waiting on someone else: the tag says so; the row itself reads like any other (one signal) */
 .row.waiting .open > span {
-  color: var(--wait-ink);
+  color: var(--muted);
 }
 .projcard .addrow {
   margin: 10px 0 8px;
@@ -1884,4 +1918,174 @@ summary {
 }
 .node b {
   overflow-wrap: anywhere;
+}
+/* quick actions (flows) on Today; the notes tile on Knowledge; folded sections */
+.flows.chips {
+  margin: 0 0 14px;
+}
+.flows.chips .chip {
+  text-decoration: none;
+  color: inherit;
+}
+.notestile {
+  border: 3px solid var(--edge);
+  box-shadow: 4px 4px 0 var(--edge);
+  background: var(--panel);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+}
+.notestile:first-of-type {
+  border-top: 3px solid var(--edge);
+}
+#donesec > summary small,
+#waitsec > summary small {
+  color: var(--muted);
+  font-weight: 400;
+}
+#donesec .row .open > span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+/* the quest page: facts card, steps, then the rest folded away; actions always to hand */
+.facts .factsrow {
+  margin: 8px 0 2px;
+}
+.facts .prog {
+  margin-top: 10px;
+}
+details.more {
+  margin: 4px 0 18px;
+}
+details.more > summary {
+  color: var(--muted);
+}
+details.more > details {
+  margin-left: 6px;
+}
+.qfoot {
+  position: sticky;
+  bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  padding: 10px 0;
+  margin-top: 0;
+  border-top: 2px dashed var(--line);
+  z-index: 5;
+}
+.qfoot .btn {
+  flex: 1;
+}
+/* a sheet in place of the browser's pop-ups */
+#sheet .sheetback {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 60;
+}
+#sheet .sheetbox {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 14px 16px 16px;
+  z-index: 61;
+  max-width: 480px;
+  margin: 0 auto;
+}
+#sheet h2 {
+  margin-bottom: 4px;
+}
+#sheet .acts .btn {
+  flex: 1;
+}
+/* comfortable tap targets, everywhere */
+.linkbtn,
+.btn.sm,
+.crumbs button {
+  min-height: 40px;
+}
+.open {
+  min-height: 40px;
+}
+.check,
+.meter {
+  width: 40px;
+  height: 40px;
+}
+/* knowledge as tiles */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 10px 0 16px;
+}
+.tile {
+  text-align: left;
+  background: var(--panel);
+  border: 3px solid var(--edge);
+  box-shadow: 4px 4px 0 var(--edge);
+  padding: 14px 12px;
+  min-height: 64px;
+  cursor: pointer;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.tile b {
+  display: block;
+}
+.tile small {
+  color: var(--muted);
+}
+.tile.lost {
+  border-style: dashed;
+}
+.kbcatname {
+  font-family: inherit;
+  font-size: 22px;
+  margin: 4px 0 8px;
+}
+.kbcrumbs {
+  margin-bottom: 4px;
+}
+/* the weekly review, a step at a time */
+.wdots {
+  display: flex;
+  gap: 6px;
+  margin: 2px 0 6px;
+}
+.wdots span {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--edge);
+  background: var(--panel);
+}
+.wdots span.has {
+  background: var(--yellow);
+}
+.wdots span.on {
+  background: var(--edge);
+}
+.wstepno {
+  margin: 0 0 8px;
+}
+.wnav .btn {
+  flex: 1;
+}
+/* Today's rows: swipe hints, and a faint × for a mouse */
+.row.swiping {
+  transition: none;
+  position: relative;
+  z-index: 1;
+}
+.row[data-swipe='more'] {
+  background: color-mix(in srgb, var(--pink) 25%, var(--panel));
+}
+.row[data-swipe='done'] {
+  background: color-mix(in srgb, var(--green) 30%, var(--panel));
+}
+.row .x {
+  opacity: 0.45;
+}
+.row .x:hover,
+.row .x:focus-visible {
+  opacity: 1;
 }

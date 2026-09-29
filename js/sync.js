@@ -31,7 +31,8 @@ function badgeText() {
 function renderSyncBadge() {
   const b = $('#syncBtn');
   if (!b) return;
-  b.textContent = badgeText();
+  b.innerHTML = `<span class="sr">${badgeText()}</span>`; // (a dot; the words for screen readers)
+  b.title = badgeText();
   b.dataset.state = !sb || !session ? 'off' : syncStatus;
 }
 function schedulePush() {
@@ -546,9 +547,8 @@ function renderAccount() {
   } else if (!session) {
     h += `<form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg ? `<p class="msg">${esc(authMsg)}</p>` : ''}`;
   } else {
-    h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p>${syncStatsLine()}<div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}${renderCapture()}${renderNotifySettings()}`;
+    h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p>${syncStatsLine()}<div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}`;
   }
-  h += renderHealth();
   if (pending)
     h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'quest')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced (notification keys and device names are kept).</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
   const opt = (k, v, label) =>
@@ -568,6 +568,9 @@ function renderAccount() {
     '<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form>';
   h +=
     '<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
+  // Notifications, then the rarely-needed bits folded away.
+  if (sb && session) h += renderNotifySettings();
+  h += `<details id="advd" class="more"${panels.advd ? ' open' : ''}><summary>Advanced: capture link, health check</summary>${sb && session ? renderCapture() : ''}${renderHealth()}</details>`;
   setHTML($('#v-account'), h);
 }
 

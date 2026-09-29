@@ -9,6 +9,8 @@ test('completing a quest logs it, sinks it and moves Next up', async ({ app, pag
   expect(await app.order()).toEqual(['B', 'C', 'A']);
   await expect(page.locator('#hnow b')).toHaveText('B');
   expect((await app.state()).log.map(x => x.text)).toEqual(['A']);
+  // Finished quests fold away under "Done today"; open it to un-tick one.
+  await page.click('#donesec > summary');
   await page.click('[aria-label="Mark done: A"]');
   expect((await app.state()).log).toEqual([]);
   expect(await app.order()).toEqual(['B', 'C', 'A']);
@@ -78,7 +80,8 @@ test('tags are set on the quest and shown on its row', async ({ app, page }) => 
 test('overdue count shows at the top of Today', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
-  await page.click('.node details summary >> nth=0');
+  await page.click('#mored > summary');
+  await page.click('#fdet > summary');
   await page.fill('#fdue', '2000-01-01');
   await page.dispatchEvent('#fdue', 'change');
   await page.click('[data-crumb="-1"]');
@@ -148,10 +151,13 @@ test('estimates add up against free time until the end of the workday', async ({
   expect((await app.state()).dayEnd).toBe('18:00');
 });
 
-test('the header stays to three lines: Focus sits beside Next up', async ({ app, page }) => {
+test('the header is one line: the next step, Focus, Search and the sync dot', async ({ app, page }) => {
   await app.addQuest('Report');
   await expect(page.locator('#hnow [data-zen]')).toHaveText('Focus');
-  await expect(page.locator('#hstats button')).toHaveText(['0/1 done', '0m focus']);
+  await expect(page.locator('#hstats')).toBeEmpty(); // (no stats line until there's focus time or an alarm)
+  await expect(page.locator('#searchBtn')).toBeVisible();
+  const h = await page.locator('header').boundingBox();
+  expect(h.height).toBeLessThan(120);
 });
 
 test('a change redraws only the view on screen; another view is drawn when opened', async ({ app, page }) => {
@@ -223,4 +229,39 @@ test('deep hunt: clearing a search box clears its results; notes pictures arenâ€
     return document.querySelector('#noteimgs img') === img;
   });
   expect(same).toBe(true);
+});
+
+test('on a phone, a row swipes: left shows Inbox / Delete, right ticks a step off', async ({ app, page }) => {
+  await app.addQuest('Swipe me');
+  await app.addQuest('Keep me');
+  const row = page.locator('#v-today .row', { hasText: 'Swipe me' });
+  const swipe = async dx => {
+    const b = await row.boundingBox();
+    const x = b.x + b.width / 2,
+      y = b.y + b.height / 2;
+    await page.evaluate(
+      ({ x, y, dx }) => {
+        const el = document.elementFromPoint(x, y);
+        const ev = (type, cx) =>
+          el.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              clientX: cx,
+              clientY: y,
+              pointerId: 1,
+              pointerType: 'touch',
+            }),
+          );
+        ev('pointerdown', x);
+        for (let i = 1; i <= 6; i++) ev('pointermove', x + (dx * i) / 6);
+        ev('pointerup', x + dx);
+      },
+      { x, y, dx },
+    );
+  };
+  await swipe(-140);
+  await expect(row.locator('[data-toinbox]')).toBeVisible();
+  await expect(row.locator('[data-delnow]')).toBeVisible();
+  await swipe(140);
+  expect((await app.state()).quests.find(q => q.text === 'Swipe me').done).toBe(true);
 });

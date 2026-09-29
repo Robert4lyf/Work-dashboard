@@ -7,15 +7,13 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 25, 9, 0, 30));
 });
 
-test('seven tabs; History and Projects sit under Review; Focus opens from the header', async ({
+test('five tabs; History and Projects sit under Review; Focus opens from the header', async ({
   app,
   page,
 }) => {
   await expect(page.locator('nav [data-v]')).toHaveText([
     'Today',
     /^Inbox/,
-    'Waiting',
-    'Notes',
     'Knowledge',
     'Review',
     'Settings',
@@ -28,6 +26,11 @@ test('seven tabs; History and Projects sit under Review; Focus opens from the he
   await page.click('[data-rsub="projects"]');
   await expect(page.locator('#v-projects')).toBeVisible();
   await expect(page.locator('#v-log')).toBeHidden();
+  // (the header shows today's focus time once there is some; tapping it opens Focus)
+  await page.evaluate(() => {
+    S.daily[today()] = { Design: 25 };
+    renderHeader();
+  });
   await page.click('header [data-v=focus]');
   await expect(page.locator('#v-focus')).toBeVisible();
   await page.keyboard.press('l'); // history shortcut still works
@@ -58,22 +61,33 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   await expect(page.locator('nav #reviewDot')).toBeVisible();
   const v = page.locator('#v-review');
   await expect(v.locator('.wsum')).toContainText('1 done');
+  // One step at a time, Next through them.
   const step = t => v.locator('.wstep', { has: page.locator('h2', { hasText: t }) });
+  const next = () => page.click('[data-rstep="1"]');
+  await expect(v.locator('.wstepno')).toHaveText('Step 1 of 6');
   await expect(step('Inbox')).toContainText('1 item to sort');
+  await next();
   await expect(step('Carried over')).toContainText('Old report 5 days');
+  // Decisions work from here too.
+  await step('Carried over').locator('[data-keep]').click();
+  await expect(step('Carried over')).toContainText('Old report 5 days'); // still stale, now kept
+  await next();
   await expect(step('Waiting')).toContainText('Budget review from Sam');
+  await next();
   await expect(step('Projects with nothing open')).toContainText('Hiring');
   await expect(step('Projects with nothing open')).not.toContainText('Website');
+  await page.click('[data-rstep="-1"]');
+  await expect(step('Waiting')).toBeVisible();
+  await next();
+  await next();
   await expect(step('Coming up')).toContainText('All clear.');
+  await next();
   await expect(step('Done this week')).toContainText('Ship sitemap');
   await expect(step('Done this week')).not.toContainText('Last week thing');
   await expect(v.locator('.wsum')).toContainText('This week (from Mon 21 Sep)');
   expect(await page.evaluate(() => weekText())).toBe(
     'Week of 21 Sep: 1 done, 0m focus\n\nWebsite\n- Ship sitemap',
   );
-  // Decisions work from here too.
-  await step('Carried over').locator('[data-keep]').click();
-  await expect(step('Carried over')).toContainText('Old report 5 days'); // still stale, now kept
   await page.click('#reviewed');
   expect((await app.state()).reviewed).toBe('2026-09-25');
   await app.go('today'); // (a tab is drawn when opened)
@@ -121,6 +135,7 @@ test('inbox swipes: left sends to Today (undoable), right shows quick options', 
 
 test('health check, signed out: says what is and isn’t set up', async ({ app, page }) => {
   await app.go('account');
+  await page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await page.click('#healthrun');
   const rows = page.locator('.health .hrow2');
   await expect(rows.first()).toContainText('Supabase settings');

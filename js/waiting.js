@@ -83,38 +83,43 @@ function setWaiting(id, w) {
   save();
   renderAll();
 }
-function renderWaiting() {
-  const all = waitingNodes().sort((a, b) =>
+const waitingSorted = () =>
+  waitingNodes().sort((a, b) =>
     (a.n.wait.due || '9') < (b.n.wait.due || '9')
       ? -1
       : (a.n.wait.due || '9') > (b.n.wait.due || '9')
         ? 1
         : 0,
   );
+function renderWaiting() {
+  const all = waitingSorted();
   // The add box starts closed, so the tab opens on the list.
-  let h = `<h2>Waiting</h2><details id="waddd"${panels.waddd ? ' open' : ''}><summary>Add a waiting item</summary><form class="pform box" id="wform">
+  let h = `<button class="linkbtn" data-goto="today">&lsaquo; Today</button><h2>Waiting</h2><details id="waddd"${panels.waddd ? ' open' : ''}><summary>Add a waiting item</summary><form class="pform box" id="wform">
     <input class="fld" id="wwhat" maxlength="120" placeholder="What you're waiting for" aria-label="What" autocomplete="off">
     <div class="prow2"><input class="fld" id="wfrom" maxlength="60" placeholder="From whom" aria-label="From whom" list="wholist2" autocomplete="off"><input class="fld" type="date" id="wchase" aria-label="Chase on (optional)"></div>
     ${whoList().replace('wholist', 'wholist2')}<button class="btn">Add</button></form></details>`;
-  if (!all.length) h += '<div class="empty">Nothing to chase.</div>';
-  else {
-    h += '<div class="list box">';
-    all.forEach(({ n, trail, start, inbox }) => {
-      const w = n.wait,
-        meta = [
-          w.who ? 'from ' + esc(w.who) : '',
-          w.note ? esc(w.note) : '',
-          trail.length ? 'in ' + esc(trail.join(' / ')) : '',
-          start ? 'on Upcoming, ' + dayLabel(start) : '',
-          inbox ? 'in Inbox' : '',
-        ]
-          .filter(Boolean)
-          .join(' · ');
-      h += `<div class="row">${(n.children && n.children.length) || start || inbox ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open"${inbox ? ' data-v="inbox"' : start ? ' data-goupd="1"' : ` data-open="${n.id}"`}><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Got it</button></div>`;
-    });
-    h += '</div>';
-  }
+  h += waitingRows(all);
   setHTML($('#v-waiting'), h);
+}
+// The list of everything being waited on (the Waiting view, and Today's section).
+function waitingRows(all) {
+  if (!all.length)
+    return '<div class="empty">Nothing to chase. Waiting on someone for something? <button class="linkbtn" data-goto="waiting" data-openadd="1">Add it</button> and it\'s chased for you.</div>';
+  let h = '<div class="list box">';
+  all.forEach(({ n, trail, start, inbox }) => {
+    const w = n.wait,
+      meta = [
+        w.who ? 'from ' + esc(w.who) : '',
+        w.note ? esc(w.note) : '',
+        trail.length ? 'in ' + esc(trail.join(' / ')) : '',
+        start ? 'on Upcoming, ' + dayLabel(start) : '',
+        inbox ? 'in Inbox' : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+    h += `<div class="row">${(n.children && n.children.length) || start || inbox ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open"${inbox ? ' data-v="inbox"' : start ? ' data-goupd="1"' : ` data-open="${n.id}"`}><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Got it</button></div>`;
+  });
+  return h + '</div>';
 }
 // The add box on the Waiting tab: an Inbox item that is already waiting.
 function addWaiting() {
