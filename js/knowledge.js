@@ -47,7 +47,7 @@ function normKnowledge() {
     imgs: (Array.isArray(a.imgs) ? a.imgs : [])
       .filter(m => ok(m) && okImg(m.src))
       .slice(0, KB_IMGS)
-      .map(m => ({ id: m.id, src: m.src })),
+      .map((m, i) => ({ id: m.id, src: m.src, at: Number(m.at) || i + 1 })),
   }));
   S.flows = (Array.isArray(S.flows) ? S.flows : [])
     .filter(f => ok(f) && typeof f.url === 'string' && FLOW_URL.test(f.url))
@@ -329,7 +329,10 @@ async function kbAddImages(files) {
   if (room <= 0) return toast(`An article can have up to ${KB_IMGS} pictures`, false, 3000);
   const r = await readImages([...files].slice(0, room));
   if (!kbEdit) return; // (closed meanwhile)
-  kbEdit.imgs.push(...r.srcs.slice(0, KB_IMGS - kbEdit.imgs.length).map(src => ({ id: uid(), src })));
+  const t = Date.now();
+  kbEdit.imgs.push(
+    ...r.srcs.slice(0, KB_IMGS - kbEdit.imgs.length).map((src, i) => ({ id: uid(), src, at: t + i })),
+  );
   kbRenderEditImgs();
   imageToast(r);
 }

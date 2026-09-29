@@ -42,12 +42,14 @@ function schedulePush() {
 
 /* sync v2: one row per record in cockpit_items (see js/records.js and supabase-setup.sql) */
 const OVERLAP = 200; // re-read a few recent rows in case a write committed out of order
-async function pullRows(since) {
+const FULL = 'key,data,deleted,edited_at,seq',
+  LIGHT = 'key,deleted,edited_at,seq'; // (no data: just enough to tell what's new)
+async function pullRows(since, cols = FULL) {
   const rows = [];
   for (;;) {
     const { data, error } = await sb
       .from('cockpit_items')
-      .select('key,data,deleted,edited_at,seq')
+      .select(cols)
       .gt('seq', since)
       .order('seq')
       .limit(1000);
@@ -56,6 +58,47 @@ async function pullRows(since) {
     if (data.length < 1000) return rows;
     since = data[data.length - 1].seq;
   }
+}
+// What changed on the server since the last sync. The list comes first, without the data; the
+// data is then fetched only for rows this device hasn't got in that version (sync2.at holds, per
+// record, the seq of the version last read or sent from here). So the recent rows read again
+// in case of out-of-order writes, and this device's own writes, don't come back down in full:
+// with pictures among them, that was most of each sync.
+// (A device from before articles' pictures were rows of their own passed over those rows as a
+// kind it didn't know: the first pull after updating lists everything once, to fetch them.)
+async function pullChanges() {
+  const from = Math.max(0, sync2.cursor - OVERLAP),
+    catchUp = !sync2.kbimg,
+    light = await pullRows(catchUp ? 0 : from, LIGHT),
+    at = sync2.at || (sync2.at = {}),
+    seqOf = new Map(light.map(r => [r.key, Number(r.seq)])),
+    want = light
+      .filter(r => knownKey(r.key) && at[r.key] !== Number(r.seq))
+      .filter(r => Number(r.seq) > from || r.key.startsWith('kbimg:'))
+      .map(r => r.key),
+    full = [];
+  for (let i = 0; i < want.length; i += 100) {
+    const { data, error } = await sb
+      .from('cockpit_items')
+      .select(FULL)
+      .in('key', want.slice(i, i + 100));
+    if (error) throw error;
+    full.push(...data);
+  }
+  // Only the versions listed: a row written again since then (a newer seq, past the end of the
+  // list) waits for the next pull, which lists it along with anything written around it.
+  // Taking it now would move the cursor past rows that were never listed.
+  applyRows(
+    full.filter(r => seqOf.get(r.key) === Number(r.seq)).sort((a, b) => a.seq - b.seq),
+    false,
+  );
+  sync2.kbimg = 1;
+  light.forEach(r => {
+    sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
+    (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
+    sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0);
+  });
+  saveSyncState();
 }
 // Take in rows from the server. A record changed here and not yet sent keeps the local version
 // only if its edit is newer than the server's.
@@ -140,18 +183,23 @@ async function pushDirty() {
         .map(k => ({ k, d: sync2.dirty[k] }))
         .filter(x => x.d);
     if (!batch.length) continue;
-    const { error } = await sb.from('cockpit_items').upsert(
-      batch.map(({ k, d }) => ({
-        user_id: uid_,
-        key: k,
-        kind: k.slice(0, k.indexOf(':')),
-        data: d.h === null ? null : recs.get(k),
-        deleted: d.h === null,
-        edited_at: d.at,
-      })),
-      { onConflict: 'user_id,key' },
-    );
+    const { data: wrote, error } = await sb
+      .from('cockpit_items')
+      .upsert(
+        batch.map(({ k, d }) => ({
+          user_id: uid_,
+          key: k,
+          kind: k.slice(0, k.indexOf(':')),
+          data: d.h === null ? null : recs.get(k),
+          deleted: d.h === null,
+          edited_at: d.at,
+        })),
+        { onConflict: 'user_id,key' },
+      )
+      .select('key,seq');
     if (error) throw error;
+    // The versions just written are this device's own: never read back down (see pullChanges).
+    (wrote || []).forEach(r => ((sync2.at = sync2.at || {})[r.key] = Number(r.seq)));
     batch.forEach(({ k, d }) => {
       if (d.h === null) delete sync2.synced[k];
       else sync2.synced[k] = d.h;
@@ -220,8 +268,9 @@ async function sync() {
       sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0 };
       await firstSync();
       sync2.user = session.user.id;
+      sync2.kbimg = 1; // (a first sync reads every row)
       saveSyncState();
-    } else applyRows(await pullRows(Math.max(0, sync2.cursor - OVERLAP)), false);
+    } else await pullChanges();
     // The day's reset, now that the server's copy is in (applyRows ran it if anything came).
     if (S.day !== today()) {
       rollover();
