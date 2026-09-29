@@ -86,6 +86,7 @@ function norm(s) {
       kb: [],
       flows: [],
       noteImgs: [],
+      kbimgLoose: [],
     },
     s || {},
   );
@@ -103,6 +104,10 @@ function norm(s) {
     .filter(m => okId(m) && okImg(m.src))
     .map(m => ({ id: m.id, src: m.src, at: Number(m.at) || 0 }))
     .sort((a, b) => a.at - b.at);
+  // Pictures that arrived before their article (see fromRecords): only sound ones.
+  S.kbimgLoose = (Array.isArray(S.kbimgLoose) ? S.kbimgLoose : [])
+    .filter(p => okId(p) && okImg(p.src) && typeof p.art === 'string')
+    .map(p => ({ id: p.id, art: p.art, src: p.src, at: Number(p.at) || 0 }));
   // Preferences go into the page too (and a bad value would crash Today): only sound ones.
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;

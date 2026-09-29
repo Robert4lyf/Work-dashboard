@@ -358,3 +358,22 @@ test('bug fixes: restoring a copy from before Knowledge keeps it; odd synced row
   expect(sn[0]).toContain('<mark>foo</mark>');
   expect(sn[1]).toContain('<mark>foo bar</mark>');
 });
+
+test('review round 3: a background redraw leaves an article being written alone', async ({ app, page }) => {
+  await page.evaluate(() => {
+    S.kbcats = [{ id: 'p', name: 'Processes', parent: '' }];
+    save();
+    renderAll();
+  });
+  await app.go('knowledge');
+  await page.click('#kc-p > summary');
+  await page.click('[data-kbnew]');
+  await page.fill('#kbb', 'x\n'.repeat(200));
+  const same = await page.evaluate(() => {
+    const box = document.querySelector('#kbb');
+    box.scrollTop = 2000;
+    inBackground(renderAll);
+    return document.querySelector('#kbb') === box && box.scrollTop > 0;
+  });
+  expect(same).toBe(true);
+});

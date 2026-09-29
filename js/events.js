@@ -173,12 +173,13 @@ document.addEventListener('change', e => {
   // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
   // Nor an article being written: it's saved with its Save button.
   const waitd = el.closest('#waitd');
+  // Already waiting: a changed detail is saved straight away. A date still being entered (the
+  // field still has the keyboard, or the picker just closed on it) is saved once it's left,
+  // and until then a redraw keeps it as entered.
+  if (waitd && waitd.dataset.waitid && el.type === 'date' && document.activeElement === el) return;
   if (el.dataset && !el.dataset.atime && (!waitd || waitd.dataset.waitid) && !el.closest('#kbform'))
     delete el.dataset.typed;
-  // Already waiting: a changed detail is saved straight away. (A date being typed changes a
-  // part at a time: it's saved once the field is left.)
   if (waitd && waitd.dataset.waitid) {
-    if (el.type === 'date' && document.activeElement === el) return;
     return saveWaitPanel(waitd.dataset.waitid, true);
   }
   // Alarms: time, label and device; this device's name (Settings).
@@ -906,7 +907,13 @@ document.addEventListener('keydown', e => {
 const saveNotesNow = () => notesDirty && $('#notesin') && saveNotes($('#notesin').value);
 window.addEventListener('pagehide', saveNotesNow);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) saveNotesNow();
+  if (document.hidden) {
+    saveNotesNow();
+    // (leaving the app doesn't take the keyboard off a field: a date picked just before is saved)
+    const a = document.activeElement,
+      wd = a && a.type === 'date' && a.closest('#waitd[data-waitid]');
+    if (wd) saveWaitPanel(wd.dataset.waitid, true);
+  }
   if (!document.hidden) {
     const started = rolloverLocal(); // (a sync, when signed in)
     // A session another device already stopped mustn't be finished here too: hear from the

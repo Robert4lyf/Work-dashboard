@@ -723,3 +723,165 @@ test('Settings shows how long the last sync took and what it moved', async ({ br
   await expect(line).toContainText(/Last \d+: \d+ ms on average, slowest \d+ ms/);
   expect(a.errors).toEqual([]);
 });
+
+test('review round 3: pictures survive an article rewritten mid-sync; first sync records what it read', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  // B's first sync read everything: its next sync fetches nothing, and the first one counted
+  // what it fetched.
+  const first = await b.page.evaluate(() => syncStats[0]);
+  expect(first.got).toBeGreaterThan(0);
+  srv.readKeys = [];
+  await b.sync();
+  expect(srv.readKeys).toEqual([]);
+
+  await a.page.evaluate(() => {
+    S.kb = [
+      {
+        id: 'art',
+        cat: '',
+        title: 'Guide',
+        body: '',
+        edited: 1,
+        imgs: [{ id: 'p1', src: 'data:image/png;base64,AAAA', at: 1 }],
+      },
+    ];
+    save();
+  });
+  await a.sync();
+  // While B fetches, the article is rewritten (its row gets a newer seq than B listed).
+  srv.onFetch = () => {
+    const r = srv.rows.get('kb:art');
+    srv.rows.set('kb:art', {
+      ...r,
+      data: { ...r.data, body: 'edited' },
+      edited_at: Date.now(),
+      seq: ++srv.seq,
+    });
+  };
+  await b.sync();
+  await settle(a, b);
+  expect(srv.rows.get('kbimg:p1').deleted).toBe(false);
+  for (const d of [a, b]) expect((await d.state()).kb[0].imgs.map(p => p.id)).toEqual(['p1']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('review round 3: a picture whose article hasn’t arrived is kept, not deleted', async ({ browser }) => {
+  const srv = server();
+  srv.rows.set('kbimg:lone', {
+    key: 'kbimg:lone',
+    data: { id: 'lone', art: 'later', src: 'data:image/png;base64,AAAA', at: 1 },
+    deleted: false,
+    edited_at: 1,
+    seq: ++srv.seq,
+  });
+  const a = await device(browser, srv);
+  await a.sync();
+  await a.sync();
+  expect(srv.rows.get('kbimg:lone').deleted).toBe(false);
+  // Its article arrives: the picture joins it.
+  srv.rows.set('kb:later', {
+    key: 'kb:later',
+    data: { id: 'later', cat: '', title: 'Later', body: '', edited: 1, imgs: [] },
+    deleted: false,
+    edited_at: 2,
+    seq: ++srv.seq,
+  });
+  await a.sync();
+  expect((await a.state()).kb[0].imgs.map(p => p.id)).toEqual(['lone']);
+  expect(a.errors).toEqual([]);
+});
+
+test('review round 3: an update from before Knowledge fetches the older Knowledge rows it passed over', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kbcats = [{ id: 'c', name: 'Processes', parent: '' }];
+    S.kb = [{ id: 'art', cat: 'c', title: 'Guide', body: '', edited: 1, imgs: [] }];
+    S.noteImgs = [{ id: 'n', src: 'data:image/png;base64,AAAA', at: 1 }];
+    save();
+  });
+  await a.sync();
+  for (let i = 0; i < 300; i++)
+    srv.rows.set('inbox:y' + i, {
+      key: 'inbox:y' + i,
+      data: { id: 'y' + i, text: 'y' },
+      deleted: false,
+      edited_at: 1,
+      seq: ++srv.seq,
+    });
+  const b = await device(browser, srv);
+  // B is like a device from before: past those rows, without them.
+  await b.page.evaluate(seq => {
+    S.kb = [];
+    S.kbcats = [];
+    S.noteImgs = [];
+    persistLocal();
+    sync2.cursor = seq;
+    delete sync2.kbimg;
+    sync2.at = {};
+    for (const k in sync2.synced) if (/^(kb|kbcat|noteimg):/.test(k)) delete sync2.synced[k];
+    saveSyncState();
+  }, srv.seq);
+  await b.sync();
+  const s = await b.state();
+  expect([s.kbcats.length, s.kb.length, s.noteImgs.length]).toEqual([1, 1, 1]);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('review round 3: a remote edit passed over for a newer one here is fetched again if that one is undone', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  const b = await device(browser, srv);
+  await a.add('Orig');
+  await settle(a, b);
+  // A edits and sends; B edits later (newer) but can't send.
+  await a.page.evaluate(() => {
+    S.quests[0].text = 'A-edit';
+    save();
+  });
+  await a.sync();
+  const was = await b.page.evaluate(() => {
+    const was = S.quests[0].text;
+    S.quests[0].text = 'B-edit';
+    save();
+    return was;
+  });
+  srv.failFor = b.page;
+  await b.page.evaluate(async () => {
+    const real = pushDirty;
+    window.pushDirty = async () => {
+      throw new Error('offline');
+    };
+    await sync();
+    window.pushDirty = real;
+  });
+  // B puts it back as it was: nothing of its own to send, and A's edit is taken in.
+  await b.page.evaluate(was => {
+    S.quests[0].text = was;
+    save();
+  }, was);
+  await settle(a, b);
+  expect(texts(await a.state())).toEqual(texts(await b.state()));
+});
+
+test('review round 3: something added and removed before a sync is never sent', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.inbox.push({ id: 'zz', text: 'x' });
+    save();
+    S.inbox = S.inbox.filter(i => i.id !== 'zz');
+    save();
+  });
+  await a.sync();
+  expect(srv.rows.has('inbox:zz')).toBe(false);
+  expect(a.errors).toEqual([]);
+});

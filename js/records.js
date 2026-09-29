@@ -35,6 +35,8 @@ function toRecords(s) {
     m.set('kb:' + a.id, { ...rest, imgs: [] });
     (imgs || []).forEach(p => m.set('kbimg:' + p.id, { id: p.id, art: a.id, src: p.src, at: p.at }));
   });
+  // Pictures whose article isn't here (yet): kept as they are, or they'd be deleted everywhere.
+  (s.kbimgLoose || []).forEach(p => m.has('kbimg:' + p.id) || m.set('kbimg:' + p.id, p));
   m.set('meta:order', {
     quests: s.quests.map(x => x.id),
     inbox: s.inbox.map(x => x.id),
@@ -90,6 +92,7 @@ function fromRecords(m, day) {
       const own = (by.kbimg || []).filter(p => p.art === a.id).sort((x, y) => (x.at || 0) - (y.at || 0));
       return (by.kbimg || []).length || !a.imgs ? { ...a, imgs: own.map(({ art, ...p }) => p) } : a;
     }),
+    kbimgLoose: (by.kbimg || []).filter(p => !(by.kb || []).some(a => a.id === p.art)),
     flows: by.flow || [],
     noteImgs: by.noteimg || [],
     notes: (m.get('meta:notes') || {}).text || '',
@@ -161,5 +164,7 @@ function markDirty(now = Date.now()) {
   for (const k in sync2.synced)
     if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null))
       sync2.dirty[k] = { h: null, at: at(k) };
+  // Added and removed again before it was ever sent: nothing to send.
+  for (const k in sync2.dirty) if (!seen.has(k) && !(k in sync2.synced)) delete sync2.dirty[k];
   saveSyncState();
 }

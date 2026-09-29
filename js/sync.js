@@ -66,7 +66,10 @@ async function pullRows(since, cols = FULL) {
       .limit(1000);
     if (error) throw error;
     rows.push(...data);
-    if (tally) tally.down += sizeOf(data);
+    if (tally) {
+      tally.down += sizeOf(data);
+      if (cols === FULL) tally.got += data.length;
+    }
     if (data.length < 1000) return rows;
     since = data[data.length - 1].seq;
   }
@@ -83,10 +86,11 @@ async function pullChanges() {
     catchUp = !sync2.kbimg,
     light = await pullRows(catchUp ? 0 : from, LIGHT),
     at = sync2.at || (sync2.at = {}),
-    seqOf = new Map(light.map(r => [r.key, Number(r.seq)])),
+    // (in the catch-up, older rows only if this device never took them in: those of kinds it
+    // didn't know then)
     want = light
       .filter(r => knownKey(r.key) && at[r.key] !== Number(r.seq))
-      .filter(r => Number(r.seq) > from || r.key.startsWith('kbimg:'))
+      .filter(r => Number(r.seq) > from || (!r.deleted && !(r.key in sync2.synced)))
       .map(r => r.key),
     full = [];
   for (let i = 0; i < want.length; i += 100) {
@@ -101,28 +105,30 @@ async function pullChanges() {
       tally.got += data.length;
     }
   }
-  // Only the versions listed: a row written again since then (a newer seq, past the end of the
-  // list) waits for the next pull, which lists it along with anything written around it.
-  // Taking it now would move the cursor past rows that were never listed.
+  // A row written again since it was listed comes back newer than listed: it's taken as it is
+  // now (so an article and its pictures arrive together), but the cursor moves only as far as
+  // the list went, or rows written around it that were never listed would be passed over.
   applyRows(
-    full.filter(r => seqOf.get(r.key) === Number(r.seq)).sort((a, b) => a.seq - b.seq),
+    full.sort((a, b) => a.seq - b.seq),
     false,
+    null,
+    true,
   );
   sync2.kbimg = 1;
   light.forEach(r => {
     sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
-    (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
     sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0);
   });
   saveSyncState();
 }
 // Take in rows from the server. A record changed here and not yet sent keeps the local version
 // only if its edit is newer than the server's.
-function applyRows(rows, firstSync, keep) {
+// `holdCursor`: the caller moves the cursor (see pullChanges).
+function applyRows(rows, firstSync, keep, holdCursor) {
   const recs = firstSync ? keep || new Map() : toRecords(S);
   let changed = firstSync;
   for (const r of rows) {
-    sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
+    if (!holdCursor) sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
     sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0); // (newest change anywhere)
     // A kind from a newer version: nothing here to change (and not a reason to reload).
     if (!knownKey(r.key)) continue;
@@ -131,7 +137,8 @@ function applyRows(rows, firstSync, keep) {
     if (r.deleted && /^quest:.+-\d{4}-\d\d-\d\d$/.test(r.key)) (sync2.gone = sync2.gone || {})[r.key] = 1;
     const h = r.deleted ? null : hashOf(r.data),
       mine = sync2.dirty[r.key];
-    if (mine && mine.at > Number(r.edited_at)) continue;
+    if (mine && mine.at > Number(r.edited_at)) continue; // (not taken in: fetched again next time)
+    (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
     delete sync2.dirty[r.key];
     if (h === null) delete sync2.synced[r.key];
     else sync2.synced[r.key] = h;
@@ -197,7 +204,12 @@ async function pushDirty() {
       batch = keys
         .slice(i, i + 500)
         .map(k => ({ k, d: sync2.dirty[k] }))
-        .filter(x => x.d);
+        .filter(x => {
+          if (!x.d) return false;
+          if (x.d.h === null || recs.has(x.k)) return true;
+          delete sync2.dirty[x.k]; // (added and removed again before it was ever sent)
+          return false;
+        });
     if (!batch.length) continue;
     const rows = batch.map(({ k, d }) => ({
       user_id: uid_,
@@ -234,7 +246,12 @@ async function saveSnapshot() {
   const { error } = await sb.from('cockpit_state').upsert({
     user_id: session.user.id,
     // (pictures are big: kept in their own rows only)
-    data: { ...S, noteImgs: undefined, kb: S.kb.map(a => ({ ...a, imgs: undefined })) },
+    data: {
+      ...S,
+      noteImgs: undefined,
+      kbimgLoose: undefined,
+      kb: S.kb.map(a => ({ ...a, imgs: undefined })),
+    },
     edited_at: Date.now(),
     updated_at: new Date().toISOString(),
   });

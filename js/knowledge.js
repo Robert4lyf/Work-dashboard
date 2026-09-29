@@ -102,8 +102,11 @@ function kbLinkify(s) {
 }
 
 function renderKnowledge() {
-  // What's typed in the editor is the draft: a redraw (a tick elsewhere, undo, a sync) shows it,
-  // not the saved article.
+  // A background redraw (a sync, coming back to the app) leaves an article being written alone:
+  // redrawing it would lose the scroll position, and on a phone break a word being typed.
+  if (background && kbEdit && $('#kbform')) return;
+  // What's typed in the editor is the draft: a redraw (a tick elsewhere, undo) shows it, not the
+  // saved article.
   if (kbEdit && $('#kbform')) {
     kbEdit.title = $('#kbt').value;
     kbEdit.body = $('#kbb').value;
