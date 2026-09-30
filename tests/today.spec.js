@@ -210,38 +210,3 @@ test('deep hunt: clearing a search box clears its results; notes pictures arenâ€
   });
   expect(same).toBe(true);
 });
-
-test('on a phone, a row swipes: left shows Inbox / Delete, right ticks a step off', async ({ app, page }) => {
-  await app.addQuest('Swipe me');
-  await app.addQuest('Keep me');
-  const row = page.locator('#v-today .row', { hasText: 'Swipe me' });
-  const swipe = async dx => {
-    const b = await row.boundingBox();
-    const x = b.x + b.width / 2,
-      y = b.y + b.height / 2;
-    await page.evaluate(
-      ({ x, y, dx }) => {
-        const el = document.elementFromPoint(x, y);
-        const ev = (type, cx) =>
-          el.dispatchEvent(
-            new PointerEvent(type, {
-              bubbles: true,
-              clientX: cx,
-              clientY: y,
-              pointerId: 1,
-              pointerType: 'touch',
-            }),
-          );
-        ev('pointerdown', x);
-        for (let i = 1; i <= 6; i++) ev('pointermove', x + (dx * i) / 6);
-        ev('pointerup', x + dx);
-      },
-      { x, y, dx },
-    );
-  };
-  await swipe(-140);
-  await expect(row.locator('[data-toinbox]')).toBeVisible();
-  await expect(row.locator('[data-delnow]')).toBeVisible();
-  await swipe(140);
-  expect((await app.state()).quests.find(q => q.text === 'Swipe me').done).toBe(true);
-});

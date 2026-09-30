@@ -39,7 +39,7 @@ test('an opened inbox item: waiting, do later and subquests (which go to Today w
   const id = (await app.state()).inbox[0].id;
   await page.click(`[data-steps="${id}"]`);
   await expect(page.locator(`[data-iwait="${id}"]`)).toBeVisible();
-  await expect(page.locator(`[data-sched="${id}"]`)).toHaveCount(0); // (no Do later: a swipe right has it)
+  await expect(page.locator(`[data-sched="${id}"]`)).toHaveCount(0); // (no Do later)
   await expect(page.locator('#v-inbox [data-settag]')).toHaveCount(0);
   const sub = `[data-subfor="${id}"] input`;
   for (const t of ['Book room', 'Agenda']) {
@@ -70,7 +70,7 @@ test('mic is hidden where speech recognition is unavailable', async ({ browser }
   await page.close();
 });
 
-test('tapping an item’s title shows and hides its details; a swipe doesn’t', async ({ page }) => {
+test('tapping an item’s title shows and hides its details', async ({ page }) => {
   await page.fill('#iin', 'Book dentist');
   await page.press('#iin', 'Enter');
   const title = page.locator('#v-inbox .ititle');
@@ -79,14 +79,5 @@ test('tapping an item’s title shows and hides its details; a swipe doesn’t',
   await expect(title).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('#v-inbox [data-subfor]')).toBeVisible();
   await title.click();
-  await expect(title).toHaveAttribute('aria-expanded', 'false');
-  // A short swipe that springs back isn't a tap.
-  const box = await title.boundingBox(),
-    y = box.y + box.height / 2,
-    x = box.x + box.width / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  for (let i = 1; i <= 5; i++) await page.mouse.move(x + (40 * i) / 5, y);
-  await page.mouse.up();
   await expect(title).toHaveAttribute('aria-expanded', 'false');
 });

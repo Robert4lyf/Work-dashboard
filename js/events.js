@@ -478,17 +478,6 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'copyweek') copyText(weekText());
   if (b.id === 'healthrun') runHealth();
-  if (d.waiton) {
-    swiped = null;
-    expanded.add(d.waiton);
-    renderInbox();
-    const f = document.querySelector(`[data-iwait="${d.waiton}"]`);
-    f && f.focus();
-  }
-  if (d.unswipe) {
-    swiped = null;
-    renderInbox();
-  }
   if (d.steps) {
     if (expanded.has(d.steps)) expanded.delete(d.steps);
     else expanded.add(d.steps);
