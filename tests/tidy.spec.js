@@ -127,3 +127,35 @@ test('flattening keeps what a grouping step meant: optional, finished, deadline,
   expect(r.children.find(c => c.id === 'g1').due).toBe('2026-10-01');
   expect(r.children.map(c => c.id)).toEqual(['g1', 'n', 'n1']);
 });
+
+test("History's Done list puts subquests under their quest (also in the copied text)", async ({
+  app,
+  page,
+}) => {
+  await app.setState(s => {
+    const d = today();
+    s.log = [
+      { id: '1', d, text: 'Draft', trail: ['Report'], p: '' },
+      { id: '2', d, text: 'Email Sam', trail: [], p: '' },
+      { id: '3', d, text: 'Send', trail: ['Report'], p: '' },
+      { id: '4', d, text: 'Report', trail: [], p: '' },
+      { id: '5', d, text: 'Figures', trail: ['Budget'], p: '' },
+    ];
+  });
+  await app.go('log');
+  const top = page.locator('#v-log .logday > ul > li');
+  await expect(top).toHaveCount(3);
+  await expect(top.nth(0)).toHaveText(/^Report/);
+  await expect(top.nth(0).locator('li')).toHaveText(['Draft', 'Send']);
+  await expect(top.nth(1)).toHaveText('Email Sam');
+  await expect(top.nth(2)).toHaveClass('open'); // (Budget itself isn't finished)
+  await expect(top.nth(2).locator('li')).toHaveText(['Figures']);
+  expect(await page.evaluate(() => logText().split('\n').slice(1))).toEqual([
+    '- Report',
+    '  - Draft',
+    '  - Send',
+    '- Email Sam',
+    '- Budget',
+    '  - Figures',
+  ]);
+});

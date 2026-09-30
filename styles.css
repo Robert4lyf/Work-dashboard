@@ -1099,6 +1099,23 @@ textarea.fld {
 .logday li small {
   color: var(--muted);
 }
+/* steps sit under their quest; a quest not finished that day is just their heading */
+.logday > ul > li {
+  font-weight: 600;
+}
+.logday > ul > li.open {
+  color: var(--muted);
+}
+.logday li li {
+  font-weight: 400;
+  color: var(--ink);
+  margin: 2px 0;
+}
+.logday li ul {
+  margin: 2px 0 6px;
+  padding-left: 18px;
+  list-style: circle;
+}
 /* upcoming */
 .later {
   display: flex;
