@@ -46,12 +46,13 @@ function releaseHeld(id) {
   holdTimer = '';
   if (timerDue()) finishTimer(true);
 }
-function startTimer(q) {
+function startTimer(q, mins = S.mins) {
   const top = topOf(q);
   leftFor = null; // (the last session's "where did you leave it?" is past)
+  timeUp = null;
   askNotify();
   beep([440]);
-  S.timer = { id: uid(), end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
+  S.timer = { id: uid(), end: Date.now() + mins * 60000, tag: top ? top.tag : '', mins, q };
   save();
   zen = true; // a focus session opens in single-task mode
   renderAll();
@@ -93,7 +94,7 @@ function renderZen() {
       <div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button><button class="btn" data-plus5="1">+5 min</button></div>
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
-  } else if (r) {
+  } else if (r && !timeUpShown()) {
     h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${+S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
   }
   setHTML(el, h + '</div>'); // a background redraw keeps what's being typed
@@ -179,6 +180,7 @@ function finishTimer(silent) {
   const t = S.timer;
   S.timer = null;
   leftFor = t.q;
+  timeUp = { q: t.q }; // done, more time, or stop: asked (see afterPrompts)
   S.focusQ = null;
   logSession(t.tag, t.mins, t.end, t.q, t.id);
   addXP(20);
@@ -219,14 +221,26 @@ function stopAndSave(done) {
 }
 /* "where did I leave it?": after a session stops, one line for next time, shown on that step */
 let leftFor = null, // the step whose session just stopped
+  timeUp = null, // a session that ran out: { q }, until you say what next
   pauseAsk = null; // a pause waiting to be explained: { t, q }
 function leftNote(n) {
   return n && n.left
     ? `<div class="leftnote"><span>You left off:</span> ${esc(n.left.text)} <small>${dayLabel(n.left.d)}</small><button class="x" data-clearleft="${n.id}" aria-label="Clear note">×</button></div>`
     : '';
 }
+// Whether the time's-up question is showing (for the session's step, if it had one).
+function timeUpShown() {
+  if (!timeUp || S.timer) return false;
+  const r = timeUp.q && find(timeUp.q);
+  return !timeUp.q || !!(r && !isDone(r.n));
+}
 function afterPrompts() {
   let h = '';
+  if (timeUpShown()) {
+    const r = timeUp.q && find(timeUp.q),
+      leaf = r && !r.n.children.length;
+    return `<div class="ask box timeup" id="timeup"><p class="tuh">Time's up${r ? ': ' + esc(r.n.text) : ''}</p><div class="acts">${leaf ? '<button class="btn green" data-tu="done">Done</button>' : ''}<button class="btn blue" data-tu="5">+5 min</button><button class="btn blue" data-tu="15">+15 min</button></div><button type="button" class="linkbtn" data-tu="stop">Stop for now</button></div>`;
+  }
   const r = leftFor && find(leftFor);
   if (r && !isDone(r.n))
     h += `<form class="ask box" id="leftform"><label for="leftin">Where did you leave it?</label><div class="addrow"><input id="leftin" maxlength="160" placeholder="Next step, or what you were thinking" autocomplete="off"><button class="btn">Save</button></div><button type="button" class="linkbtn" id="leftskip">Skip</button></form>`;
@@ -244,6 +258,23 @@ function saveLeft(text) {
   if (r && text) r.n.left = { text, d: today() };
   save();
   renderAll();
+}
+// The answer to "time's up": tick the step off, carry on for a few more minutes, or stop (and
+// say where you left it).
+function answerTimeUp(a) {
+  const tu = timeUp;
+  if (!tu) return;
+  timeUp = null;
+  if (a === 'stop') return renderAll();
+  if (a === 'done') {
+    const r = tu.q && find(tu.q);
+    leftFor = null;
+    if (!r || r.n.children.length) return renderAll();
+    const bf = snapshot();
+    r.n.done = true;
+    return settle(bf);
+  }
+  startTimer(tu.q, +a);
 }
 /* pausing: one button. It asks what paused you; naming a cause logs an interruption,
    "Just a break" (or ignoring it) logs nothing. */

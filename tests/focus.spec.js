@@ -100,3 +100,43 @@ test('a running session holds you in single-task mode until you pause', async ({
   expect((await app.state()).timer).toBeNull();
   await expect(page.locator('#v-zen [data-zstart]')).toBeVisible();
 });
+
+test('when a session runs out, it asks: done, more time, or stop', async ({ app, page }) => {
+  await app.addQuest('Report');
+  await app.openQuest('Report');
+  await app.addSub('Draft');
+  await app.addSub('Send');
+  await app.go('focus');
+  await page.click('#start');
+  await page.clock.fastForward('25:01');
+  const tu = page.locator('#v-zen #timeup');
+  await expect(tu).toContainText("Time's up: Draft");
+  // Nothing ticked off on its own; the session is logged.
+  let s = await app.state();
+  expect(s.timer).toBeNull();
+  expect(s.quests[0].children[0].done).toBeFalsy();
+  expect(s.sessions.length).toBe(1);
+  await expect(page.locator('#v-zen [data-zstart]')).toHaveCount(0);
+
+  // More time: a new session on the same step.
+  await tu.locator('[data-tu="15"]').click();
+  s = await app.state();
+  expect(s.timer.mins).toBe(15);
+  expect(s.timer.q).toBe(s.quests[0].children[0].id);
+  await page.clock.fastForward('15:01');
+
+  // Done: ticked off.
+  await tu.locator('[data-tu="done"]').click();
+  s = await app.state();
+  const step = (st, text) => st.quests[0].children.find(c => c.text === text);
+  expect(step(s, 'Draft').done).toBe(true); // (done steps sink to the bottom)
+  expect(s.sessions.length).toBe(2);
+  await expect(page.locator('#timeup')).toHaveCount(0);
+
+  // Stop for now: asks where you left it, step left as it was.
+  await page.click('#v-zen [data-zstart]');
+  await page.clock.fastForward('25:01');
+  await page.locator('#timeup [data-tu="stop"]').click();
+  await expect(page.locator('#leftform')).toBeVisible();
+  expect(step(await app.state(), 'Send').done).toBeFalsy();
+});

@@ -1567,6 +1567,19 @@ nav .badge[hidden] {
   font-size: 15px;
   border-width: 2px;
 }
+.timeup .tuh {
+  margin: 0 0 4px;
+  font-weight: 700;
+}
+.timeup .acts {
+  margin-top: 8px;
+}
+.timeup .acts .btn {
+  flex: 1;
+  padding-left: 8px;
+  padding-right: 8px;
+  white-space: nowrap;
+}
 /* promises */
 .pform {
   display: grid;
