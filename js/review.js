@@ -89,15 +89,22 @@ function renderWeek() {
   return h;
 }
 // A plain-text summary of the week, grouped by quest (steps under their quest's title).
+// (A finished quest is its group's heading; one with no steps done this week goes under Other.)
 function weekText() {
   const by = {},
-    head = x => (x.trail.length ? x.trail[0] : 'Other');
-  weekDone().forEach(x => (by[head(x)] = by[head(x)] || []).push(x));
+    other = [],
+    done = weekDone();
+  done.forEach(x => x.trail.length && (by[x.trail[0]] = by[x.trail[0]] || []).push(x));
+  done.forEach(x => !x.trail.length && !by[x.text] && other.push(x));
+  const group = (k, xs) =>
+    k + '\n' + xs.map(x => '- ' + [...x.trail.slice(1), x.text].join(' / ')).join('\n');
   return (
-    `Week of ${niceDate(weekStart())}: ${weekDone().length} done, ${hm(weekFocus())} focus\n\n` +
-    Object.keys(by)
-      .sort((a, b) => (a === 'Other') - (b === 'Other') || a.localeCompare(b))
-      .map(k => k + '\n' + by[k].map(x => '- ' + [...x.trail.slice(1), x.text].join(' / ')).join('\n'))
-      .join('\n\n')
+    `Week of ${niceDate(weekStart())}: ${done.length} done, ${hm(weekFocus())} focus\n\n` +
+    [
+      ...Object.keys(by)
+        .sort((a, b) => a.localeCompare(b))
+        .map(k => group(k, by[k])),
+      ...(other.length ? [group('Other', other)] : []),
+    ].join('\n\n')
   );
 }

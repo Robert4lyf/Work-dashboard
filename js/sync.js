@@ -181,7 +181,6 @@ async function firstSync() {
       S.noteImgs.length +
       S.alarms.length +
       S.templates.length +
-      S.projects.length +
       (S.notes ? 1 : 0);
     const keep =
       n &&

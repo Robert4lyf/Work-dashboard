@@ -12,9 +12,22 @@ function openWaiting(ns, trail = [], out = []) {
 }
 function waitingNodes() {
   const out = openWaiting(S.quests);
-  S.later.forEach(n => n.wait && out.push({ n, trail: [], start: n.start }));
-  S.inbox.forEach(i => i.wait && out.push({ n: i, trail: [], inbox: true }));
+  // Upcoming quests and quests back in the Inbox: their waiting steps too.
+  S.later.forEach(n => openWaiting([n]).forEach(x => out.push({ ...x, start: n.start })));
+  S.inbox.forEach(i => {
+    if (i.wait) out.push({ n: i, trail: [], inbox: true });
+    if (i.node) openWaiting(i.node.children, [i.text]).forEach(x => out.push({ ...x, inbox: true }));
+  });
   return out;
+}
+// A step, quest or Inbox item by id, wherever it is (Today, Upcoming, or in the Inbox).
+function findWaitable(id) {
+  const it = S.inbox.find(x => x.id === id);
+  return (
+    find(id) ||
+    find(id, S.later) ||
+    find(id, S.inbox.map(i => i.node).filter(Boolean)) || { n: it, parents: [] }
+  );
 }
 const chaseDue = () => waitingNodes().filter(x => x.n.wait.due && x.n.wait.due <= today()).length;
 function chaseTag(w) {
@@ -65,7 +78,7 @@ function whoList() {
 function saveWaitPanel(id, quiet) {
   const w = { who: $('#wwho').value.trim(), note: $('#wnote').value.trim(), due: $('#wdue').value || '' };
   if (!quiet) return setWaiting(id, w);
-  const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };
+  const r = findWaitable(id);
   if (!r.n || !r.n.wait) return;
   const was = r.n.wait;
   if (was.who === w.who && was.note === w.note && (was.due || '') === w.due) return;
@@ -77,14 +90,17 @@ function saveWaitPanel(id, quiet) {
   inBackground(renderWaiting);
 }
 function setWaiting(id, w) {
-  const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };
+  const r = findWaitable(id);
   if (!r.n) return;
+  const bf = snapshot();
   if (w) r.n.wait = { since: (r.n.wait && r.n.wait.since) || today(), ...w };
   else delete r.n.wait;
-  // A quest (on Today or Upcoming, not an Inbox item) waits through a step: one is added.
-  if (w && !S.inbox.includes(r.n) && !(r.parents && r.parents.length) && waitToStep(r.n)) {
-    panels.waitd = false;
-    toast('Added a waiting subquest');
+  // A quest (not an Inbox item) waits through a step: one is added. One that was finished isn't
+  // any more (settle takes back its "done"), like adding any other step.
+  if (w && !S.inbox.includes(r.n) && !r.parents.length) {
+    r.n.done = false;
+    if (waitToStep(r.n)) toast('Added a waiting subquest');
+    settle(bf);
   }
   if (r.n.node) delete r.n.node.wait; // an Inbox item's own details are the ones that count
   save();

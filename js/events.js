@@ -137,7 +137,8 @@ document.addEventListener('submit', e => {
       v = f.querySelector('input').value.trim(),
       it = S.inbox.find(x => x.id === id);
     if (!v || !it) return;
-    it.node = it.node || inboxToNode(it);
+    // (its waiting details stay on the item until it goes to Today)
+    it.node = it.node || fix({ id: uid(), text: it.text, tag: it.tag || '', project: it.project || '' });
     it.node.children.push(fix({ id: uid(), text: v }));
     it.node.done = false;
     save();

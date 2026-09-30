@@ -142,7 +142,7 @@ function renderWaitingSection() {
 const EST = [15, 30, 60, 120];
 const hmShort = m => (m >= 60 && !(m % 60) ? m / 60 + 'h' : hm(m));
 function estLeft(n) {
-  if (isDone(n) || n.wait) return 0;
+  if (isDone(n) || n.wait || onlyWaiting(n)) return 0;
   const kids = n.children.reduce((a, c) => a + estLeft(c), 0);
   return kids || n.est || 0;
 }
