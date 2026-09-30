@@ -48,33 +48,11 @@ test('waiting steps on Upcoming quests and on quests back in the Inbox are liste
   expect(s.later[0].children[0].wait).toBeUndefined();
 });
 
-test('a waiting Inbox item given a subquest there still gets one waiting step on Today', async ({
-  app,
-  page,
-}) => {
-  await app.setState(s => (s.inbox = [{ id: 'ib1', text: 'Signed contract', wait: wait('Legal') }]));
-  await app.go('inbox');
-  await page.click('[data-steps="ib1"]');
-  await page.fill('[data-subfor="ib1"] input', 'Scan it');
-  await page.press('[data-subfor="ib1"] input', 'Enter');
-  expect((await app.state()).inbox[0].node.children.map(c => c.text)).toEqual(['Scan it']);
-  await page.click('#v-inbox [data-promote]');
-  const n = (await app.state()).quests[0];
-  expect(n.children.map(c => [c.text, !!c.wait])).toEqual([
-    ['Scan it', false],
-    ['Hear back', true],
-  ]);
-});
-
-test('a quest waiting through its only step plans no time; finished quests reopen properly', async ({
-  app,
-  page,
-}) => {
+test('finished quests set waiting reopen properly', async ({ app, page }) => {
   await app.setState(s => {
     s.quests = [q('a', 'Budget', [], { est: 60 }), q('b', 'Report', [q('b1', 'Draft')])];
   });
   await page.evaluate(() => setWaiting('a', { who: 'Sam', note: '', due: '' }));
-  expect(await page.evaluate(() => estLeft(find('a').n))).toBe(0);
 
   // Report is finished (logged), then set waiting: no longer done, and no longer logged.
   await page.evaluate(() => {

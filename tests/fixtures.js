@@ -50,6 +50,17 @@ const test = base.test.extend({
         await page.fill('#sin', text);
         await page.press('#sin', 'Enter');
       },
+      // A quest's tag (folded to the one it has) and its "More" (do later, repeat...).
+      setTag: async name => {
+        await page.evaluate(
+          () => document.querySelector('#tagd') && (document.querySelector('#tagd').open = true),
+        );
+        await page.click(`[data-settag="${name}"]`);
+      },
+      openMore: () =>
+        page.evaluate(
+          () => document.querySelector('#mored') && (document.querySelector('#mored').open = true),
+        ),
       openQuest: text => page.click(`#v-today .open >> text="${text}"`),
       order: () => page.$$eval('#v-today .row .open > span', x => x.map(e => e.textContent)),
       // Views without a tab (Focus, and History under Review) are opened directly.

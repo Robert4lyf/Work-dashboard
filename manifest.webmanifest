@@ -46,17 +46,6 @@
           "sizes": "192x192"
         }
       ]
-    },
-    {
-      "name": "Talk through my day",
-      "short_name": "Talk",
-      "url": "./index.html?talk=1",
-      "icons": [
-        {
-          "src": "icons/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
     }
   ]
 }

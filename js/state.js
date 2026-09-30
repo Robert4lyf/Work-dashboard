@@ -66,6 +66,21 @@ function waitToStep(q) {
   q.children.push(c);
   return c;
 }
+// A quest has steps; a step doesn't (before, steps could have steps of their own). Steps under a
+// step move up beside it, named with it ("Contract: Draft"); a step that only grouped them goes,
+// unless it was itself waiting. Ids and ticks are kept, so every device flattens the same way.
+function flatSteps(ns) {
+  const out = [];
+  (function w(list, pre) {
+    list.forEach(c => {
+      const name = pre ? pre + ': ' + c.text : c.text,
+        kids = c.children || [];
+      if (!kids.length || c.wait) out.push(Object.assign(c, { text: name, children: [] }));
+      w(kids, name);
+    });
+  })(ns || [], '');
+  return out;
+}
 function fix(n) {
   cleanId(n);
   n.children = (n.children || []).map(fix);
@@ -167,6 +182,12 @@ function norm(s) {
     });
   delete S.promises;
   [...S.quests, ...S.later].forEach(waitToStep);
+  [...S.quests, ...S.later, ...S.inbox.map(i => i.node).filter(Boolean), ...S.templates].forEach(
+    q =>
+      q.children &&
+      q.children.some(c => c.children && c.children.length) &&
+      (q.children = flatSteps(q.children)),
+  );
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
   // Colours go into style attributes: only the palette's, or a plain hex colour.
   S.tags.forEach(t => {

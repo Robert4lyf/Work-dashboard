@@ -76,13 +76,6 @@ function settle(before) {
     addXP(gain);
     if (gain > 0) beep([659, 988]);
   }
-  // (only on finishing the last one: deleting the rest isn't clearing the stage)
-  if (gain > 0 && S.quests.length && S.quests.every(isDone) && S.bonusDay !== today()) {
-    S.bonusDay = today();
-    addXP(50);
-    toast('Stage clear!');
-    beep([523, 659, 784, 1047, 784, 1047]);
-  }
   save();
   renderAll();
 }
@@ -311,9 +304,7 @@ function setHTML(el, html) {
   const typedSel =
       !fid && fsel && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) ? a.value : null,
     typedWas = typedSel !== null ? a.defaultValue : '';
-  const opt = $('#sopt') && $('#sopt').checked; // "Add as optional", ticked but not yet added
   el.innerHTML = html;
-  if (opt && $('#sopt')) $('#sopt').checked = true;
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i) i.value = typed[id];

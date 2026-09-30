@@ -7,78 +7,18 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 23, 9, 0, 30));
 });
 
-test('after stopping a session, a note on where you left off shows on that step', async ({ app, page }) => {
-  await app.addQuest('Report');
-  await app.go('focus');
-  await page.click('#start');
-  await page.clock.fastForward('10:00');
-  await page.click('#v-zen [data-stop="save"]');
-  await page.fill('#leftin', 'Halfway through section 2');
-  await page.press('#leftin', 'Enter');
-  let s = await app.state();
-  expect(s.quests[0].left).toEqual({ text: 'Halfway through section 2', d: '2026-09-23' });
-  // It shows in single-task mode, the Focus tab and the quest's page.
-  await expect(page.locator('#v-zen .leftnote')).toContainText('Halfway through section 2');
-  await page.click('#zenexit');
-  await expect(page.locator('#v-focus .leftnote')).toContainText('Halfway through section 2');
-  await app.go('today');
-  await app.openQuest('Report');
-  await expect(page.locator('#v-today .leftnote')).toContainText('Halfway through section 2');
-  await page.click('#v-today [data-clearleft]');
-  expect((await app.state()).quests[0].left).toBeUndefined();
-
-  // Skip leaves no note, and a session that ends on its own asks too (after "Stop for now").
-  await app.go('focus');
-  await page.click('#start');
-  await page.clock.fastForward('26:00');
-  await page.click('#timeup [data-tu="stop"]');
-  await expect(page.locator('#leftin')).toBeVisible();
-  await page.click('#leftskip');
-  await expect(page.locator('#leftin')).toHaveCount(0);
-  expect((await app.state()).quests[0].left).toBeUndefined();
-});
-
-test('one Pause button: naming a cause logs an interruption, a break logs nothing', async ({ app, page }) => {
-  await app.go('focus');
-  await page.click('#start');
-  await expect(page.locator('[data-interrupt]')).toHaveCount(0); // no separate button
-  const pause = () => page.click('#v-zen [data-pause]');
-  await pause();
-  await expect(page.locator('#whyform label')).toHaveText('What paused you?');
-  await page.fill('#whyin', 'Slack');
-  await page.press('#whyin', 'Enter');
-  await pause(); // resume
-  await page.clock.fastForward('05:00');
-  await pause();
-  await page.click('#v-zen [data-why="Slack"]'); // causes used before are one tap
-  await pause();
-  await pause();
-  await page.click('#whyskip'); // "Just a break"
-  await pause(); // resume
-  await pause();
-  await pause(); // paused and resumed without answering: nothing logged either
-  await expect(page.locator('#whyform')).toHaveCount(0);
-  const s = await app.state();
-  expect(s.interrupts.map(x => x.why)).toEqual(['Slack', 'Slack']);
-  expect(s.timer.left).toBeUndefined(); // running again
-  await pause();
-  await page.click('#whyskip');
-  await page.click('#zenexit');
-  await app.go('log');
-  await expect(page.locator('#v-log')).toContainText('Interruptions, last 7 days: 2');
-  await expect(page.locator('#v-log')).toContainText('Most often 09:00–10:00');
-  await expect(page.locator('#v-log .bar').first()).toContainText('Slack');
-});
-
 test('quests carried over for 3+ days ask for a decision each morning', async ({ app, page }) => {
   for (const t of ['Old report', 'Old email', 'Old call', 'Old idea', 'Fresh']) await app.addQuest(t);
   expect((await app.state()).quests.every(q => q.since === '2026-09-23')).toBe(true);
   await app.setState(s => s.quests.slice(0, 4).forEach(q => (q.since = '2026-09-19')));
   await page.reload();
+  // One folded line (the rows don't carry an age badge); open it to decide.
   const card = page.locator('#v-today .carried');
+  await expect(card.locator('summary')).toContainText('4 quests carried over');
+  await expect(page.locator('#v-today .row .tag.old')).toHaveCount(0);
+  await card.locator('summary').click();
   await expect(card.locator('.crow')).toHaveCount(4);
   await expect(card).toContainText('Old report 4 days');
-  await expect(page.locator('#v-today .row .tag.old').first()).toHaveText('4 days');
 
   await card.locator('[data-keep]').first().click(); // Keep: off the card until tomorrow
   await card.locator('.crow', { hasText: 'Old email' }).locator('[data-sched]').first().click();

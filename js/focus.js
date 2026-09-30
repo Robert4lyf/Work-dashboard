@@ -48,7 +48,6 @@ function releaseHeld(id) {
 }
 function startTimer(q, mins = S.mins) {
   const top = topOf(q);
-  leftFor = null; // (the last session's "where did you leave it?" is past)
   timeUp = null;
   askNotify();
   beep([440]);
@@ -63,11 +62,7 @@ function startTimer(q, mins = S.mins) {
 let zen = false;
 function zenTarget() {
   // Just after a session: its step (not the header's next one), while it asks about it.
-  const after = timeUpShown()
-      ? timeUp.q
-      : leftFor && find(leftFor) && !isDone(find(leftFor).n)
-        ? leftFor
-        : null,
+  const after = timeUpShown() ? timeUp.q : null,
     id = S.timer ? S.timer.q : after || (timeUpShown() ? null : focusTarget()),
     r = id && find(id);
   if (!r || S.timer || !r.n.children.length) return r;
@@ -92,7 +87,7 @@ function renderZen() {
   if (!r) h += timeUpShown() ? '' : '<p class="zt">Nothing left to do.</p>';
   else {
     const trail = r.parents.map(p => p.text).join(' / ');
-    h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>${leftNote(r.n)}`;
+    h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>`;
   }
   h += afterPrompts();
   if (t) {
@@ -109,7 +104,7 @@ function setZen(on) {
   if (!on && focusLocked()) return;
   zen = on;
   renderZen();
-  renderFocus(); // the note and interruption prompts show in whichever view is open
+  renderFocus(); // (the time's-up question shows in whichever view is open)
   window.scrollTo(0, 0);
 }
 
@@ -136,7 +131,7 @@ function renderFocus() {
       });
     })(S.quests, []);
     const top = topOf(cur);
-    h += `<label class="f" for="fq" style="margin-top:0">Working on ${top ? tagBadge(top.tag) : ''}</label><select class="fld" id="fq"><option value="none"${cur ? '' : ' selected'}>Nothing specific</option>${opts.map(([id, l]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>${cur ? leftNote(find(cur).n) : ''}`;
+    h += `<label class="f" for="fq" style="margin-top:0">Working on ${top ? tagBadge(top.tag) : ''}</label><select class="fld" id="fq"><option value="none"${cur ? '' : ' selected'}>Nothing specific</option>${opts.map(([id, l]) => `<option value="${id}"${id === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
     h += '<div class="chips" style="margin-top:14px">';
     [15, 25, 45].forEach(
       m => (h += `<button class="chip" data-mins="${m}" aria-pressed="${S.mins === m}">${m} min</button>`),
@@ -185,7 +180,6 @@ function logSession(tag, mins, t, q, tid) {
 function finishTimer(silent) {
   const t = S.timer;
   S.timer = null;
-  leftFor = t.q;
   timeUp = { q: t.q, id: t.id }; // done, more time, or stop: asked (see afterPrompts)
   zen = true; // (asked where it's seen: in single-task mode, reopened or not)
   S.focusQ = null;
@@ -216,7 +210,6 @@ function stopAndSave(done) {
     addXP(Math.max(1, Math.round((20 * m) / t.mins)));
   }
   const r = done && t.q && find(t.q);
-  if (!done) leftFor = t.q;
   if (r) {
     const bf = snapshot();
     r.n.done = true;
@@ -227,15 +220,7 @@ function stopAndSave(done) {
   }
   if (m < 1 && !r) toast('Under a minute, nothing saved');
 }
-/* "where did I leave it?": after a session stops, one line for next time, shown on that step */
-let leftFor = null, // the step whose session just stopped
-  timeUp = null, // a session that ran out: { q }, until you say what next
-  pauseAsk = null; // a pause waiting to be explained: { t, q }
-function leftNote(n) {
-  return n && n.left
-    ? `<div class="leftnote"><span>You left off:</span> ${esc(n.left.text)} <small>${dayLabel(n.left.d)}</small><button class="x" data-clearleft="${n.id}" aria-label="Clear note">×</button></div>`
-    : '';
-}
+let timeUp = null; // a session that ran out: { q, id }, until you say what next
 // Whether the time's-up question is showing (for the session's step, if it had one).
 function timeUpShown() {
   // Another session since (started here, synced in, or stopped since): the question is past.
@@ -245,32 +230,14 @@ function timeUpShown() {
   return !timeUp.q || !!(r && !isDone(r.n));
 }
 function afterPrompts() {
-  let h = '';
   if (timeUpShown()) {
     const r = timeUp.q && find(timeUp.q),
       leaf = r && !r.n.children.length;
     return `<div class="ask box timeup" id="timeup"><p class="tuh">Time's up${r ? ': ' + esc(r.n.text) : ''}</p><div class="acts">${leaf ? '<button class="btn green" data-tu="done">Done</button>' : ''}<button class="btn blue" data-tu="5">+5 min</button><button class="btn blue" data-tu="15">+15 min</button></div><button type="button" class="linkbtn" data-tu="stop">Stop for now</button></div>`;
   }
-  const r = leftFor && find(leftFor);
-  if (r && !isDone(r.n))
-    h += `<form class="ask box" id="leftform"><label for="leftin">Where did you leave it?</label><div class="addrow"><input id="leftin" maxlength="160" placeholder="Next step, or what you were thinking" autocomplete="off"><button class="btn">Save</button></div><button type="button" class="linkbtn" id="leftskip">Skip</button></form>`;
-  if (pauseAsk && S.timer && S.timer.left != null) {
-    const chips = recentWhys()
-      .map(w => `<button type="button" class="chip" data-why="${esc(w)}">${esc(w)}</button>`)
-      .join('');
-    h += `<form class="ask box" id="whyform"><label for="whyin">What paused you?</label><div class="chips"><button type="button" class="chip" id="whyskip">Just a break</button>${chips}</div><div class="addrow"><input id="whyin" maxlength="60" placeholder="Interrupted? A call, a message, someone…" autocomplete="off"><button class="btn">Save</button></div></form>`;
-  }
-  return h;
+  return '';
 }
-function saveLeft(text) {
-  const r = leftFor && find(leftFor);
-  leftFor = null;
-  if (r && text) r.n.left = { text, d: today() };
-  save();
-  renderAll();
-}
-// The answer to "time's up": tick the step off, carry on for a few more minutes, or stop (and
-// say where you left it).
+// The answer to "time's up": tick the step off, carry on for a few more minutes, or stop.
 function answerTimeUp(a) {
   const tu = timeUp;
   if (!tu) return;
@@ -278,7 +245,6 @@ function answerTimeUp(a) {
   if (a === 'stop') return renderAll();
   if (a === 'done') {
     const r = tu.q && find(tu.q);
-    leftFor = null;
     if (!r || r.n.children.length) return renderAll();
     const bf = snapshot();
     r.n.done = true;
@@ -286,8 +252,7 @@ function answerTimeUp(a) {
   }
   startTimer(tu.q, +a);
 }
-/* pausing: one button. It asks what paused you; naming a cause logs an interruption,
-   "Just a break" (or ignoring it) logs nothing. */
+/* pausing: one button */
 function togglePause() {
   const t = S.timer;
   if (!t || timerDue()) return; // (over: it's about to finish)
@@ -295,29 +260,12 @@ function togglePause() {
     t.end = Date.now() + t.left;
     delete t.left;
     delete t.pausedAt;
-    pauseAsk = null;
   } else {
     t.left = Math.max(0, t.end - Date.now());
     t.pausedAt = Date.now(); // stopped later, the minutes count for when they were done
-    pauseAsk = { t: Date.now(), q: t.q || null };
   }
   save();
   renderAll();
-}
-function saveWhy(why) {
-  const a = pauseAsk;
-  pauseAsk = null;
-  if (a && why) S.interrupts.push({ id: uid(), t: a.t, q: a.q, why });
-  save();
-  renderAll();
-}
-// Reasons used before, most frequent first.
-function recentWhys() {
-  const n = {};
-  S.interrupts.forEach(x => x.why && (n[x.why] = (n[x.why] || 0) + 1));
-  return Object.keys(n)
-    .sort((a, b) => n[b] - n[a])
-    .slice(0, 5);
 }
 function askNotify() {
   try {

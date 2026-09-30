@@ -8,7 +8,6 @@ function renderAll() {
   renderView();
   syncRinging();
   renderZen();
-  if (talk) renderTalk();
 }
 function renderView(v = view) {
   if (v === 'review') {
@@ -90,18 +89,14 @@ document.addEventListener('submit', e => {
     if (!v) return;
     const r = find(f.dataset.parent);
     if (!r) return;
-    const opt = $('#sopt').checked,
-      b = snapshot(),
+    const b = snapshot(),
       p = r.n;
-    p.children.push(fix({ id: uid(), text: v, opt }));
+    p.children.push(fix({ id: uid(), text: v }));
     p.done = false; // (it was finished before it had steps: with one to do, it isn't now)
     settle(b);
     $('#sin').focus();
-    if (opt) $('#sopt').checked = true;
   }
   if (f.id === 'authform') signIn();
-  if (f.id === 'leftform') saveLeft($('#leftin').value.trim());
-  if (f.id === 'whyform') saveWhy($('#whyin').value.trim());
   if (f.id === 'wform') addWaiting();
   if (f.id === 'kbform') kbSave();
   if (f.id === 'flowform') addFlow();
@@ -131,20 +126,6 @@ document.addEventListener('submit', e => {
     if (!n) return;
     $('#iin').focus();
     if (n > 1) toast('Added ' + n + ' items');
-  }
-  if (f.dataset.subfor) {
-    const id = f.dataset.subfor,
-      v = f.querySelector('input').value.trim(),
-      it = S.inbox.find(x => x.id === id);
-    if (!v || !it) return;
-    // (its waiting details stay on the item until it goes to Today)
-    it.node = it.node || fix({ id: uid(), text: it.text, tag: it.tag || '', project: it.project || '' });
-    it.node.children.push(fix({ id: uid(), text: v }));
-    it.node.done = false;
-    save();
-    renderAll();
-    const nf = document.querySelector(`[data-subfor="${id}"] input`);
-    nf && nf.focus();
   }
 });
 
@@ -207,12 +188,6 @@ document.addEventListener('change', e => {
       if (who) it.wait = { note: '', due: '', since: today(), ...it.wait, who };
       else delete it.wait;
     }
-    save();
-    renderAll();
-    return;
-  }
-  if (el.id === 'dayend') {
-    S.dayEnd = el.value || '17:30';
     save();
     renderAll();
     return;
@@ -324,6 +299,7 @@ document.addEventListener('click', e => {
   }
   if (d.v && b.closest('header, #v-waiting, #waitsec')) {
     if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open quest)
+    if (b.classList.contains('halarm')) alarmsOpen = true; // (the alarms, unfolded)
     go(d.v);
   }
   if (b.id === 'searchBtn') openSearch();
@@ -394,45 +370,6 @@ document.addEventListener('click', e => {
   if (b.id === 'reorder') {
     reorder = !reorder;
     renderToday();
-  }
-  if (d.savetpl) {
-    const r = find(d.savetpl);
-    if (!r) return;
-    const n = r.n,
-      t = Object.assign({ id: uid(), days: [], monthDay: 0 }, strip(n)),
-      i = S.templates.findIndex(x => x.text === n.text);
-    if (i >= 0) {
-      t.id = S.templates[i].id;
-      t.days = S.templates[i].days;
-      t.monthDay = S.templates[i].monthDay;
-      if (S.templates[i].auto) t.auto = true; // (a repeat's own template stays out of the list)
-      S.templates[i] = t;
-      toast('Template updated');
-    } else {
-      S.templates.push(t);
-      toast('Template saved');
-    }
-    save();
-    renderAll();
-  }
-  if (d.tpl) {
-    const t = S.templates.find(x => x.id === d.tpl);
-    if (!t) return;
-    if (S.quests.some(q => q.tpl === t.id)) return toast('Already on Today');
-    const bf = snapshot(),
-      q = inst(t);
-    q.tpl = t.id;
-    S.quests.push(q);
-    settle(bf);
-    toast('Added ' + t.text);
-  }
-  if (d.deltpl) {
-    if (!arm(b, 'Delete?')) return;
-    withUndo('Template deleted', () => {
-      S.templates = S.templates.filter(x => x.id !== d.deltpl);
-      save();
-      renderToday();
-    });
   }
   if (d.rep) {
     const t = S.templates.find(x => x.id === d.rep),
@@ -508,15 +445,6 @@ document.addEventListener('click', e => {
     go('focus');
   }
   if (d.promote) promoteInbox(d.promote);
-  if (d.est) {
-    const r = find(d.id);
-    if (r) {
-      if (r.n.est === +d.est) delete r.n.est;
-      else r.n.est = +d.est;
-      save();
-      renderAll();
-    }
-  }
   if (d.rsub) {
     reviewSub = d.rsub;
     go(d.rsub === 'week' ? 'review' : d.rsub);
@@ -550,17 +478,6 @@ document.addEventListener('click', e => {
     if (expanded.has(d.steps)) expanded.delete(d.steps);
     else expanded.add(d.steps);
     renderInbox();
-    const nf = document.querySelector(`[data-subfor="${d.steps}"] input`);
-    nf && nf.focus();
-  }
-  if (d.delsub) {
-    const it = S.inbox.find(x => x.id === d.delsub);
-    if (it && it.node)
-      withUndo('Removed', () => {
-        it.node.children = it.node.children.filter(k => k.id !== d.sub);
-        save();
-        renderInbox();
-      });
   }
   if (b.id === 'mic') toggleMic();
   if (d.clear) clearInbox(d.clear);
@@ -626,11 +543,6 @@ document.addEventListener('click', e => {
     setZen(true);
   }
   if (b.id === 'zenexit') setZen(false);
-  if (b.id === 'talkbtn') openTalk(true);
-  if (b.id === 'talkgo') talkSay(talkBrief());
-  if (b.id === 'talkmic') talkListen();
-  if (b.id === 'talkexit') closeTalk();
-  if (d.talkpref) setTalkPref(d.talkpref === 'on');
   if (b.id === 'plus5' || d.plus5) {
     const t = S.timer;
     if (!t || timerDue()) return;
@@ -649,16 +561,7 @@ document.addEventListener('click', e => {
     renderAll();
   }
   if (b.id === 'stopsave' || d.stop === 'save') stopAndSave(false);
-  if (d.why) saveWhy(d.why);
-  if (b.id === 'whyskip') saveWhy('');
-  if (b.id === 'leftskip') saveLeft('');
   if (d.tu) answerTimeUp(d.tu);
-  if (d.clearleft) {
-    const r = find(d.clearleft);
-    if (r) delete r.n.left;
-    save();
-    renderAll();
-  }
   if (d.keep) {
     const q = S.quests.find(x => x.id === d.keep);
     if (q) q.kept = today();
@@ -846,7 +749,6 @@ document.addEventListener('keydown', e => {
   }
   if ($('#sheet') && e.key !== 'Escape') return; // a sheet is up: its buttons only
   const k = e.key;
-  if (talk) return k === 'Escape' && closeTalk();
   // During a running session only pause and help work (see focusLocked).
   if (focusLocked() && k !== 'p' && k !== '?') return;
   // Single-task mode covers the page: only its own keys.
@@ -912,7 +814,6 @@ document.addEventListener('visibilitychange', () => {
     else inBackground(renderAll); // (keeps anything being typed)
     if (!started) sync();
     verifyPush();
-    talkWake();
   }
 });
 window.addEventListener('online', () => window.appReady && sync());
@@ -994,7 +895,6 @@ openPics().then(async db => {
 function appBack() {
   if (!$('#v-alarm').hidden) return true; // (an alarm is ringing: its buttons only)
   if (imgShown || kbImgShown) return (closeImgs(), true);
-  if (talk) return (closeTalk(), true);
   if (zen && !focusLocked()) return (setZen(false), true);
   if ($('#sheet')) return (closeSheet(), true);
   if (view === 'knowledge' && kbEdit) {

@@ -34,8 +34,6 @@ function row(n, i, len, sib) {
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
-    (!d && estLeft(n) ? `<span class="tag est">~${hmShort(estLeft(n))}</span>` : '') +
-    (!d && ageOf(n) >= STALE ? `<span class="tag old">${ageOf(n)} days</span>` : '') +
     (nx ? 'Next: ' + esc(nx.text) : '');
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
@@ -91,22 +89,12 @@ function renderToday() {
     );
     h += '</div>';
   }
-  h += listHead("Today's quests", qs) + planLine();
-  if (qs.length && qs.every(isDone))
-    h += '<div class="clear"><b>Stage clear!</b>Everything on today\'s list is done.</div>';
+  h += listHead("Today's quests", qs);
   h += list(qs, true);
-  const own = S.templates.filter(t => !t.auto);
-  if (own.length) {
-    h += '<div class="tpls"><span class="hint" style="margin:0">From a template:</span>';
-    own.forEach(
-      t =>
-        (h += `<span class="tchip"><button data-tpl="${t.id}"${S.quests.some(q => q.tpl === t.id) ? ' disabled title="Already on Today"' : ''}>${esc(t.text)} (${count(t)})</button><button class="tdel" data-deltpl="${t.id}" aria-label="Delete template ${esc(t.text)}">×</button></span>`),
-    );
-    h += '</div>';
-  }
-  if (S.templates.length) {
+  const reps = S.templates.filter(repeats); // (saved templates from before stay out of sight)
+  if (reps.length) {
     h += `<details id="repd" style="margin:-4px 0 18px"${panels.repd ? ' open' : ''}><summary>Repeating quests</summary>`;
-    S.templates.forEach(t => {
+    reps.forEach(t => {
       h += `<div class="rep"><span>${esc(t.text)}${t.monthDay ? ` <small class="hint">(also monthly on the ${ord(t.monthDay)})</small>` : ''}</span><div class="days">`;
       WEEK.forEach(
         i =>
@@ -137,33 +125,6 @@ function renderWaitingSection() {
   return `<details id="waitsec"${panels.waitsec ? ' open' : ''}><summary>Also waiting on others <small>${all.length}</small></summary>${waitingRows(all)}<button class="linkbtn" data-goto="waiting">Open Waiting</button></details>`;
 }
 
-/* estimates: optional minutes on a quest or step (n.est). A quest with estimated steps counts
-   what's left of them; waiting quests don't count (they're not your work right now). */
-const EST = [15, 30, 60, 120];
-const hmShort = m => (m >= 60 && !(m % 60) ? m / 60 + 'h' : hm(m));
-function estLeft(n) {
-  if (isDone(n) || n.wait || onlyWaiting(n)) return 0;
-  const kids = n.children.reduce((a, c) => a + estLeft(c), 0);
-  return kids || n.est || 0;
-}
-function estPicker(n) {
-  const kids = n.children.reduce((a, c) => a + estLeft(c), 0);
-  return `<div class="chips estpick"><span class="hint">Estimate</span>${EST.map(m => `<button class="chip" data-est="${m}" data-id="${n.id}" aria-pressed="${n.est === m}">${hmShort(m)}</button>`).join('')}${kids ? `<span class="hint">steps left: ${hmShort(kids)}</span>` : ''}</div>`;
-}
-// Free minutes from now to the end of the workday.
-function freeLeft(now = Date.now()) {
-  const [h, m] = (S.dayEnd || '17:30').split(':').map(Number),
-    d = new Date(now),
-    end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
-  return Math.max(0, Math.round((end - now) / 60000));
-}
-function planLine() {
-  const planned = S.quests.reduce((a, q) => a + estLeft(q), 0);
-  if (!planned) return '';
-  const free = freeLeft(),
-    over = planned > free;
-  return `<p class="plan${over ? ' over' : ''}">${hmShort(planned)} planned · ${hmShort(free)} free${over ? ' · more than fits: move something to Upcoming' : ''}</p>`;
-}
 // What needs attention, as one row of chips at the top of Today (kept out of the header).
 function renderAttention() {
   const t = today();
@@ -194,8 +155,11 @@ const onlyWaiting = q => q.children.length > 0 && !isDone(q) && !nextLeaf(q);
 const carried = () =>
   S.quests.filter(q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today());
 function renderCarried() {
+  // One line, folded: open it to decide on each (the weekly review asks too).
   const qs = carried();
-  return qs.length ? `<div class="carried box"><h2>Carried over</h2>${carriedRows(qs)}</div>` : '';
+  return qs.length
+    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'quest')} carried over <small>for a while: keep, move or drop</small></summary>${carriedRows(qs)}</details>`
+    : '';
 }
 // A carried-over quest with its decisions (also used by the weekly review).
 function carriedRows(qs) {
@@ -258,7 +222,7 @@ function renderNode({ n, parents }) {
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
   // The facts: what's set on this quest, each a tap to change.
-  h += `</div><div class="node box facts"><h1>${esc(n.text)}</h1>${leftNote(n)}`;
+  h += `</div><div class="node box facts"><h1>${esc(n.text)}</h1>`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
@@ -273,17 +237,20 @@ function renderNode({ n, parents }) {
       (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
       (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '');
   if (meta) h += `<div class="factsrow">${meta}</div>`;
-  h += `${top ? tagPicker('q', n.id, n.tag) : ''}${estPicker(n)}`;
-  if (top) h += laterPicker('q', n.id);
+  // Its tag, folded to the one it has (tap to change).
+  if (top)
+    h += `<details id="tagd" class="tagd"${panels.tagd ? ' open' : ''}><summary>Tag: ${n.tag ? tagBadge(n.tag) : '<span class="hint">none</span>'}</summary>${tagPicker('q', n.id, n.tag)}</details>`;
   h += waitPanel(n, top);
   h += '</div>';
-  // The steps come first: they're what you work through.
-  h += listHead('Subquests', n.children);
-  h += list(n.children);
-  h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>
-    <label class="optbox" style="margin-top:-4px"><input type="checkbox" id="sopt">Add as optional</label>`;
+  // The steps come first: they're what you work through. (A quest has steps; a step doesn't.)
+  if (top) {
+    h += listHead('Subquests', n.children);
+    h += list(n.children);
+    h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>`;
+  }
   // Everything else, folded away.
-  h += `<details id="mored" class="more"${panels.mored ? ' open' : ''}><summary>More: notes, deadline, repeat, move…</summary>`;
+  h += `<details id="mored" class="more"${panels.mored ? ' open' : ''}><summary>More: notes, deadline, ${top ? 'do later, repeat, ' : ''}move…</summary>`;
+  if (top) h += laterPicker('q', n.id);
   h += `<details id="fdet"${(panels.fdet ?? !!n.notes) ? ' open' : ''}><summary>Notes and deadline</summary>
     <label class="f" for="fname">Name</label><input class="fld" id="fname" data-field="text" data-id="${n.id}" value="${esc(n.text)}" maxlength="120">
     <label class="f" for="fdue">Deadline</label><input class="fld" type="date" id="fdue" data-field="due" data-id="${n.id}" value="${n.due}">
@@ -303,7 +270,7 @@ function renderNode({ n, parents }) {
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${md === i + 1 ? ' selected' : ''}>${ord(i + 1)}${i + 1 > 28 ? ' (or last day)' : ''}</option>`).join('')}</select>
       </details>`;
   }
-  h += `<div class="links"><button class="linkbtn" data-savetpl="${n.id}">Save as template</button><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this quest</button></div>`;
+  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this quest</button></div>`;
   h += '</details>';
   // The two things you do with a quest, always to hand.
   h += '<div class="qfoot acts">';
