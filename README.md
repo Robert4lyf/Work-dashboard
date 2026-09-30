@@ -134,6 +134,7 @@ Invoke-RestMethod -Method Post -Uri $url -Headers @{ apikey = $key } -ContentTyp
 
   Once a second device has signed in, choose which device rings (**Any device**, or one by name; name each device in **Settings > Appearance**). Alarms are for the current day: overnight they all switch off but stay listed, ready to edit or switch on again. Re-run `supabase-setup.sql` and redeploy `send-notices` so a device-specific alarm rings only on that device. After this update, reload the app on every device: a copy from before it still open somewhere doesn't know about notes and alarms and could remove them when it syncs.
 
+- **Inbox subquests:** tap an inbox item's title to open it, then add subquests to break it down before it goes to Today; they move with it.
 - **Inbox swipes (phone):** swipe an item left to send it to Today (with Undo); swipe right for quick options: Tomorrow, Next week, Waiting… or Clear.
 - **Weekly review:** Review > Week walks through the week one step at a time (Back and Next): empty the Inbox, decide on carried-over quests, chase what you're waiting on, what's coming up, and what you finished this calendar week, Monday to Sunday (with **Copy summary** for an update). From Friday until you tap **Mark week reviewed**, a **Weekly review** chip appears at the top of Today (and a dot on the Review tab).
 - **Health check:** Settings > Health check tests the setup against your Supabase project (sync table, live updates, notifications, offline) and says what to fix for anything that isn't working.

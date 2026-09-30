@@ -96,6 +96,20 @@ document.addEventListener('submit', e => {
     settle(b);
     $('#sin').focus();
   }
+  if (f.dataset.subfor) {
+    const id = f.dataset.subfor,
+      v = f.querySelector('input').value.trim(),
+      it = S.inbox.find(x => x.id === id);
+    if (!v || !it) return;
+    // (its waiting details stay on the item until it goes to Today)
+    it.node = it.node || fix({ id: uid(), text: it.text, tag: it.tag || '', project: it.project || '' });
+    it.node.children.push(fix({ id: uid(), text: v }));
+    it.node.done = false;
+    save();
+    renderAll();
+    const nf = document.querySelector(`[data-subfor="${id}"] input`);
+    nf && nf.focus();
+  }
   if (f.id === 'authform') signIn();
   if (f.id === 'wform') addWaiting();
   if (f.id === 'kbform') kbSave();
@@ -479,6 +493,15 @@ document.addEventListener('click', e => {
     if (expanded.has(d.steps)) expanded.delete(d.steps);
     else expanded.add(d.steps);
     renderInbox();
+  }
+  if (d.delsub) {
+    const it = S.inbox.find(x => x.id === d.delsub);
+    if (it && it.node)
+      withUndo('Removed', () => {
+        it.node.children = it.node.children.filter(k => k.id !== d.sub);
+        save();
+        renderInbox();
+      });
   }
   if (b.id === 'mic') toggleMic();
   if (d.clear) clearInbox(d.clear);

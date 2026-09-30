@@ -30,7 +30,7 @@ test('voice capture splits on "next item" in order', async ({ app, page }) => {
   ]);
 });
 
-test('an opened inbox item offers only waiting and do later (tags and steps are set on Today)', async ({
+test('an opened inbox item: waiting, do later and subquests (which go to Today with it)', async ({
   app,
   page,
 }) => {
@@ -41,7 +41,18 @@ test('an opened inbox item offers only waiting and do later (tags and steps are 
   await expect(page.locator(`[data-iwait="${id}"]`)).toBeVisible();
   await expect(page.locator(`[data-sched="${id}"]`)).toHaveCount(2);
   await expect(page.locator('#v-inbox [data-settag]')).toHaveCount(0);
-  await expect(page.locator('#v-inbox [data-subfor]')).toHaveCount(0);
+  const sub = `[data-subfor="${id}"] input`;
+  for (const t of ['Book room', 'Agenda']) {
+    await page.fill(sub, t);
+    await page.press(sub, 'Enter');
+  }
+  await expect(page.locator('#v-inbox .tag.opt')).toHaveText('2 subquests');
+  await page.click(`[data-delsub="${id}"] >> nth=0`);
+  await page.click('#undo');
+  await page.click(`[data-promote="${id}"]`);
+  const q = (await app.state()).quests[0];
+  expect(q.text).toBe('Plan offsite');
+  expect(q.children.map(c => c.text)).toEqual(['Book room', 'Agenda']);
 });
 
 test('mic is hidden where speech recognition is unavailable', async ({ browser }) => {
@@ -66,7 +77,7 @@ test('tapping an item’s title shows and hides its details; a swipe doesn’t',
   await expect(page.locator('#v-inbox .iacts .linkbtn')).toHaveCount(0); // no Details link
   await title.click();
   await expect(title).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#v-inbox [data-iwait]')).toBeVisible();
+  await expect(page.locator('#v-inbox [data-subfor]')).toBeVisible();
   await title.click();
   await expect(title).toHaveAttribute('aria-expanded', 'false');
   // A short swipe that springs back isn't a tap.
