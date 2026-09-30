@@ -715,6 +715,7 @@ document.addEventListener('click', e => {
   if (b.id === 'stop' || d.discard) {
     if (!arm(b, 'Tap again to discard')) return;
     S.timer = null;
+    timeUp = null;
     save();
     renderAll();
   }

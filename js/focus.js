@@ -62,7 +62,13 @@ function startTimer(q, mins = S.mins) {
 /* single-task mode: a full-screen view of just the current step and the timer */
 let zen = false;
 function zenTarget() {
-  const id = S.timer ? S.timer.q : focusTarget(),
+  // Just after a session: its step (not the header's next one), while it asks about it.
+  const after = timeUpShown()
+      ? timeUp.q
+      : leftFor && find(leftFor) && !isDone(find(leftFor).n)
+        ? leftFor
+        : null,
+    id = S.timer ? S.timer.q : after || (timeUpShown() ? null : focusTarget()),
     r = id && find(id);
   if (!r || S.timer || !r.n.children.length) return r;
   const leaf = nextLeaf(r.n);
@@ -83,7 +89,7 @@ function renderZen() {
   let h = focusLocked()
     ? '<div class="zbody">'
     : '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
-  if (!r) h += '<p class="zt">Nothing left to do.</p>';
+  if (!r) h += timeUpShown() ? '' : '<p class="zt">Nothing left to do.</p>';
   else {
     const trail = r.parents.map(p => p.text).join(' / ');
     h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>${leftNote(r.n)}`;
@@ -180,7 +186,8 @@ function finishTimer(silent) {
   const t = S.timer;
   S.timer = null;
   leftFor = t.q;
-  timeUp = { q: t.q }; // done, more time, or stop: asked (see afterPrompts)
+  timeUp = { q: t.q, id: t.id }; // done, more time, or stop: asked (see afterPrompts)
+  zen = true; // (asked where it's seen: in single-task mode, reopened or not)
   S.focusQ = null;
   logSession(t.tag, t.mins, t.end, t.q, t.id);
   addXP(20);
@@ -202,6 +209,7 @@ function stopAndSave(done) {
   if (!t) return;
   const m = Math.floor((t.mins * 60000 - remaining()) / 60000);
   S.timer = null;
+  timeUp = null;
   S.focusQ = null;
   if (m >= 1) {
     logSession(t.tag, m, t.left != null && t.pausedAt ? t.pausedAt : Date.now(), t.q, t.id);
@@ -230,6 +238,8 @@ function leftNote(n) {
 }
 // Whether the time's-up question is showing (for the session's step, if it had one).
 function timeUpShown() {
+  // Another session since (started here, synced in, or stopped since): the question is past.
+  if (timeUp && S.timer && S.timer.id !== timeUp.id) timeUp = null;
   if (!timeUp || S.timer) return false;
   const r = timeUp.q && find(timeUp.q);
   return !timeUp.q || !!(r && !isDone(r.n));

@@ -140,3 +140,38 @@ test('when a session runs out, it asks: done, more time, or stop', async ({ app,
   await expect(page.locator('#leftform')).toBeVisible();
   expect(step(await app.state(), 'Send').done).toBeFalsy();
 });
+
+test("time's up: the page shows the session's step, a later session clears it, and it shows after a reopen", async ({
+  app,
+  page,
+}) => {
+  await app.addQuest('Alpha');
+  await app.addQuest('Beta');
+  await app.go('focus');
+  const beta = (await app.state()).quests.find(q => q.text === 'Beta').id;
+  await page.selectOption('#fq', beta);
+  await page.click('#start');
+  await page.clock.fastForward('25:01');
+  // The step the session was on, not the header's next one.
+  await expect(page.locator('#v-zen .zt')).toHaveText('Beta');
+  await expect(page.locator('#timeup')).toContainText("Time's up: Beta");
+
+  // A session from elsewhere (synced in), then gone: the old question doesn't come back.
+  await page.evaluate(() => {
+    S.timer = { id: 'other', end: Date.now() + 60000, tag: '', mins: 1, q: null };
+    renderAll();
+    S.timer = null;
+    renderAll();
+  });
+  await expect(page.locator('#v-zen #timeup')).toHaveCount(0);
+
+  // Reopened after a session ran out: single-task mode asks.
+  await page.click('#v-zen [data-zstart]');
+  await page.evaluate(() => {
+    S.timer.end = Date.now() - 1000;
+    save();
+  });
+  await page.reload();
+  await expect(page.locator('#v-zen')).toBeVisible();
+  await expect(page.locator('#v-zen #timeup')).toBeVisible();
+});
