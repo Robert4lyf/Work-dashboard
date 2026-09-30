@@ -205,6 +205,13 @@ function norm(s) {
   S.later.forEach(q => flat('later', q, q));
   S.inbox.forEach(i => flat('inbox', i, i.node));
   S.templates.forEach(t => flat('template', t, t));
+  // Saved templates (a removed feature) go; only repeating quests' templates stay. Everywhere
+  // alike, so their removal is a conversion too (a repeat set up elsewhere meanwhile still wins).
+  S.templates = S.templates.filter(t => {
+    if (t.days.length || t.monthDay) return true;
+    conv('template', t, true);
+    return false;
+  });
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
   // Colours go into style attributes: only the palette's, or a plain hex colour.
   S.tags.forEach(t => {

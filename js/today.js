@@ -91,7 +91,7 @@ function renderToday() {
   }
   h += listHead("Today's quests", qs);
   h += list(qs, true);
-  const reps = S.templates.filter(repeats); // (saved templates from before stay out of sight)
+  const reps = S.templates.filter(repeats);
   if (reps.length) {
     h += `<details id="repd" style="margin:-4px 0 18px"${panels.repd ? ' open' : ''}><summary>Repeating quests</summary>`;
     reps.forEach(t => {
