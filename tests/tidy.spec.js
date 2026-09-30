@@ -188,3 +188,19 @@ test('a record only converted (flattened, or waiting moved to a step) is dated j
   expect(r.conv).toEqual({ q: 1001, w: 2001 });
   expect(r.edit).toBeGreaterThan(r.now - 60000);
 });
+
+test('old saved templates are removed; repeating quests keep theirs', async ({ app, page }) => {
+  await app.setState(s => {
+    s.templates = [
+      { id: 't1', text: 'Saved one', children: [], days: [], monthDay: 0 },
+      { id: 't2', text: 'Weekly', children: [], days: [1], monthDay: 0, auto: true },
+      { id: 't3', text: 'Monthly', children: [], days: [], monthDay: 15 },
+    ];
+  });
+  await page.reload();
+  const s = await app.state();
+  expect(s.templates.map(t => t.id)).toEqual(['t2', 't3']);
+  // (and its record goes from the synced copy too: a deletion, dated as a conversion)
+  const k = await page.evaluate(() => [...toRecords(S).keys()].filter(k => k.startsWith('template:')));
+  expect(k).toEqual(['template:t2', 'template:t3']);
+});
