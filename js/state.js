@@ -53,6 +53,8 @@ const cleanDay = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? 
 // Quests are titles; the waiting is on their subquests. A quest set waiting (before this, or on an
 // older copy of the app) gets a step of its own, named for what it's waiting for, that carries it.
 // The step's id comes from the quest's, so two devices converting the same quest make the same step.
+// Record keys changed by a conversion in norm, not by an edit: see markDirty.
+const converted = new Set();
 function waitToStep(q) {
   const w = q.wait;
   if (!w) return null;
@@ -192,13 +194,17 @@ function norm(s) {
       S.quests.push(q);
     });
   delete S.promises;
-  [...S.quests, ...S.later].forEach(waitToStep);
-  [...S.quests, ...S.later, ...S.inbox.map(i => i.node).filter(Boolean), ...S.templates].forEach(
-    q =>
-      q.children &&
-      q.children.some(c => c.children && c.children.length) &&
-      (q.children = flatSteps(q.children)),
-  );
+  // Records changed only by these conversions (see converted, in records.js): a real edit made
+  // elsewhere meanwhile must still win over them.
+  const conv = (k, q, done) => done && converted.add(k + ':' + q.id);
+  S.quests.forEach(q => conv('quest', q, waitToStep(q)));
+  S.later.forEach(q => conv('later', q, waitToStep(q)));
+  const nested = q => q && q.children && q.children.some(c => c.children && c.children.length),
+    flat = (k, rec, q) => nested(q) && ((q.children = flatSteps(q.children)), conv(k, rec, true));
+  S.quests.forEach(q => flat('quest', q, q));
+  S.later.forEach(q => flat('later', q, q));
+  S.inbox.forEach(i => flat('inbox', i, i.node));
+  S.templates.forEach(t => flat('template', t, t));
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
   // Colours go into style attributes: only the palette's, or a plain hex colour.
   S.tags.forEach(t => {

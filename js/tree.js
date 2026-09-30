@@ -233,8 +233,6 @@ const COMPOSE = [
   'projin',
   'aemail',
   'apass',
-  'leftin',
-  'whyin',
   'wwhat',
   'wfrom',
   'wchase',

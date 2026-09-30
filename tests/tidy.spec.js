@@ -159,3 +159,32 @@ test("History's Done list puts subquests under their quest (also in the copied t
     '  - Figures',
   ]);
 });
+
+test('a record only converted (flattened, or waiting moved to a step) is dated just after the version it converted', async ({
+  app,
+  page,
+}) => {
+  const r = await page.evaluate(() => {
+    const nested = {
+      id: 'q',
+      text: 'Contract',
+      children: [{ id: 'a', text: 'Draft', children: [{ id: 'a1', text: 'Outline', children: [] }] }],
+    };
+    const w = { id: 'w', text: 'Budget', children: [], wait: { who: 'Sam', note: '', due: '', since: '' } };
+    // As a device synced before this version has it: the old shapes, synced, from 1000 and 2000.
+    const s = JSON.parse(JSON.stringify(S));
+    s.quests = [nested, w];
+    sync2.et = { ...(sync2.et || {}), 'quest:q': 1000, 'quest:w': 2000 };
+    sync2.synced['quest:q'] = hashOf(nested);
+    sync2.synced['quest:w'] = hashOf(w);
+    norm(s); // (loaded: converted in memory)
+    markDirty(); // (the next save)
+    const conv = { q: sync2.dirty['quest:q'].at, w: sync2.dirty['quest:w'].at };
+    // A real edit afterwards is dated now.
+    S.quests[0].children[0].done = true;
+    markDirty();
+    return { conv, edit: sync2.dirty['quest:q'].at, now: Date.now() };
+  });
+  expect(r.conv).toEqual({ q: 1001, w: 2001 });
+  expect(r.edit).toBeGreaterThan(r.now - 60000);
+});

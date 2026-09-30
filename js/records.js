@@ -160,12 +160,16 @@ function markDirty(now) {
     // says it was made): a device whose clock is behind another's would otherwise have its
     // edits to that one's changes turned away by the server as older. (Not the daily reset: its
     // changes are meant to give way to a real edit.)
+    // A record only converted to the new shape counts as made just after the version it
+    // converted, so an edit made elsewhere meanwhile wins over it (it's then converted again).
     at = k =>
-      Math.max(
-        back ? now : Date.now(),
-        (sync2.dirty[k] && sync2.dirty[k].at) || 0,
-        back ? 0 : ((sync2.et && sync2.et[k]) || 0) + 1,
-      );
+      converted.has(k)
+        ? Math.max((sync2.dirty[k] && sync2.dirty[k].at) || 0, ((sync2.et && sync2.et[k]) || 0) + 1)
+        : Math.max(
+            back ? now : Date.now(),
+            (sync2.dirty[k] && sync2.dirty[k].at) || 0,
+            back ? 0 : ((sync2.et && sync2.et[k]) || 0) + 1,
+          );
   recs.forEach((v, k) => {
     seen.add(k);
     const h = recHash(k, v);
@@ -179,6 +183,7 @@ function markDirty(now) {
       // that same copy, with the same id) doesn't bring it back.
       if (/^quest:.+-\d{4}-\d\d-\d\d$/.test(k)) (sync2.gone = sync2.gone || {})[k] = 1;
     }
+  converted.clear(); // (from here on, changes to them are edits)
   // Added and removed again before it was ever sent: nothing to send.
   for (const k in sync2.dirty) if (!seen.has(k) && !(k in sync2.synced)) delete sync2.dirty[k];
   saveSyncState();
