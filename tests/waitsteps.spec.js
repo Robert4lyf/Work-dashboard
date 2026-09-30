@@ -104,3 +104,21 @@ test("a repeat's template leaves out waiting steps; the week summary heads group
     'Week of 21 Sep: 4 done, 0m focus\n\nReport\n- Draft\n- Draft / Leaf\n\nOther\n- Loose',
   );
 });
+
+test('a waiting Inbox item given a subquest there still gets one waiting step on Today', async ({
+  app,
+  page,
+}) => {
+  await app.setState(s => (s.inbox = [{ id: 'ib1', text: 'Signed contract', wait: wait('Legal') }]));
+  await app.go('inbox');
+  await page.click('[data-steps="ib1"]');
+  await page.fill('[data-subfor="ib1"] input', 'Scan it');
+  await page.press('[data-subfor="ib1"] input', 'Enter');
+  expect((await app.state()).inbox[0].node.children.map(c => c.text)).toEqual(['Scan it']);
+  await page.click('#v-inbox [data-promote]');
+  const n = (await app.state()).quests[0];
+  expect(n.children.map(c => [c.text, !!c.wait])).toEqual([
+    ['Scan it', false],
+    ['Hear back', true],
+  ]);
+});
