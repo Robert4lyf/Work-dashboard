@@ -49,7 +49,7 @@ function stepWaitBadge(n) {
   const ws = waitingSteps(n);
   if (!ws.length) return '';
   const who = [...new Set(ws.map(c => c.wait.who).filter(Boolean))];
-  return `<span class="tag wait">${ws.length > 1 ? ws.length + ' steps waiting' : 'Step waiting'}${who.length === 1 ? ' on ' + esc(who[0]) : ''}</span>`;
+  return `<span class="tag wait">${ws.length > 1 ? ws.length + ' waiting' : 'Waiting'}${who.length === 1 ? ' on ' + esc(who[0]) : ''}</span>`;
 }
 // On a quest's page: set it waiting, change the details (saved as each is changed), or stop waiting.
 // On a quest (top): adds a waiting subquest, named by "For what".
