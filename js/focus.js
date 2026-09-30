@@ -46,12 +46,13 @@ function releaseHeld(id) {
   holdTimer = '';
   if (timerDue()) finishTimer(true);
 }
-function startTimer(q) {
+function startTimer(q, mins = S.mins) {
   const top = topOf(q);
   leftFor = null; // (the last session's "where did you leave it?" is past)
+  timeUp = null;
   askNotify();
   beep([440]);
-  S.timer = { id: uid(), end: Date.now() + S.mins * 60000, tag: top ? top.tag : '', mins: S.mins, q };
+  S.timer = { id: uid(), end: Date.now() + mins * 60000, tag: top ? top.tag : '', mins, q };
   save();
   zen = true; // a focus session opens in single-task mode
   renderAll();
@@ -61,7 +62,13 @@ function startTimer(q) {
 /* single-task mode: a full-screen view of just the current step and the timer */
 let zen = false;
 function zenTarget() {
-  const id = S.timer ? S.timer.q : focusTarget(),
+  // Just after a session: its step (not the header's next one), while it asks about it.
+  const after = timeUpShown()
+      ? timeUp.q
+      : leftFor && find(leftFor) && !isDone(find(leftFor).n)
+        ? leftFor
+        : null,
+    id = S.timer ? S.timer.q : after || (timeUpShown() ? null : focusTarget()),
     r = id && find(id);
   if (!r || S.timer || !r.n.children.length) return r;
   const leaf = nextLeaf(r.n);
@@ -82,7 +89,7 @@ function renderZen() {
   let h = focusLocked()
     ? '<div class="zbody">'
     : '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
-  if (!r) h += '<p class="zt">Nothing left to do.</p>';
+  if (!r) h += timeUpShown() ? '' : '<p class="zt">Nothing left to do.</p>';
   else {
     const trail = r.parents.map(p => p.text).join(' / ');
     h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>${leftNote(r.n)}`;
@@ -93,7 +100,7 @@ function renderZen() {
       <div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button><button class="btn" data-plus5="1">+5 min</button></div>
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
-  } else if (r) {
+  } else if (r && !timeUpShown()) {
     h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${+S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
   }
   setHTML(el, h + '</div>'); // a background redraw keeps what's being typed
@@ -179,6 +186,8 @@ function finishTimer(silent) {
   const t = S.timer;
   S.timer = null;
   leftFor = t.q;
+  timeUp = { q: t.q, id: t.id }; // done, more time, or stop: asked (see afterPrompts)
+  zen = true; // (asked where it's seen: in single-task mode, reopened or not)
   S.focusQ = null;
   logSession(t.tag, t.mins, t.end, t.q, t.id);
   addXP(20);
@@ -200,6 +209,7 @@ function stopAndSave(done) {
   if (!t) return;
   const m = Math.floor((t.mins * 60000 - remaining()) / 60000);
   S.timer = null;
+  timeUp = null;
   S.focusQ = null;
   if (m >= 1) {
     logSession(t.tag, m, t.left != null && t.pausedAt ? t.pausedAt : Date.now(), t.q, t.id);
@@ -219,14 +229,28 @@ function stopAndSave(done) {
 }
 /* "where did I leave it?": after a session stops, one line for next time, shown on that step */
 let leftFor = null, // the step whose session just stopped
+  timeUp = null, // a session that ran out: { q }, until you say what next
   pauseAsk = null; // a pause waiting to be explained: { t, q }
 function leftNote(n) {
   return n && n.left
     ? `<div class="leftnote"><span>You left off:</span> ${esc(n.left.text)} <small>${dayLabel(n.left.d)}</small><button class="x" data-clearleft="${n.id}" aria-label="Clear note">×</button></div>`
     : '';
 }
+// Whether the time's-up question is showing (for the session's step, if it had one).
+function timeUpShown() {
+  // Another session since (started here, synced in, or stopped since): the question is past.
+  if (timeUp && S.timer && S.timer.id !== timeUp.id) timeUp = null;
+  if (!timeUp || S.timer) return false;
+  const r = timeUp.q && find(timeUp.q);
+  return !timeUp.q || !!(r && !isDone(r.n));
+}
 function afterPrompts() {
   let h = '';
+  if (timeUpShown()) {
+    const r = timeUp.q && find(timeUp.q),
+      leaf = r && !r.n.children.length;
+    return `<div class="ask box timeup" id="timeup"><p class="tuh">Time's up${r ? ': ' + esc(r.n.text) : ''}</p><div class="acts">${leaf ? '<button class="btn green" data-tu="done">Done</button>' : ''}<button class="btn blue" data-tu="5">+5 min</button><button class="btn blue" data-tu="15">+15 min</button></div><button type="button" class="linkbtn" data-tu="stop">Stop for now</button></div>`;
+  }
   const r = leftFor && find(leftFor);
   if (r && !isDone(r.n))
     h += `<form class="ask box" id="leftform"><label for="leftin">Where did you leave it?</label><div class="addrow"><input id="leftin" maxlength="160" placeholder="Next step, or what you were thinking" autocomplete="off"><button class="btn">Save</button></div><button type="button" class="linkbtn" id="leftskip">Skip</button></form>`;
@@ -244,6 +268,23 @@ function saveLeft(text) {
   if (r && text) r.n.left = { text, d: today() };
   save();
   renderAll();
+}
+// The answer to "time's up": tick the step off, carry on for a few more minutes, or stop (and
+// say where you left it).
+function answerTimeUp(a) {
+  const tu = timeUp;
+  if (!tu) return;
+  timeUp = null;
+  if (a === 'stop') return renderAll();
+  if (a === 'done') {
+    const r = tu.q && find(tu.q);
+    leftFor = null;
+    if (!r || r.n.children.length) return renderAll();
+    const bf = snapshot();
+    r.n.done = true;
+    return settle(bf);
+  }
+  startTimer(tu.q, +a);
 }
 /* pausing: one button. It asks what paused you; naming a cause logs an interruption,
    "Just a break" (or ignoring it) logs nothing. */

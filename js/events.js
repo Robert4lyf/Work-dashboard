@@ -715,6 +715,7 @@ document.addEventListener('click', e => {
   if (b.id === 'stop' || d.discard) {
     if (!arm(b, 'Tap again to discard')) return;
     S.timer = null;
+    timeUp = null;
     save();
     renderAll();
   }
@@ -722,6 +723,7 @@ document.addEventListener('click', e => {
   if (d.why) saveWhy(d.why);
   if (b.id === 'whyskip') saveWhy('');
   if (b.id === 'leftskip') saveLeft('');
+  if (d.tu) answerTimeUp(d.tu);
   if (d.clearleft) {
     const r = find(d.clearleft);
     if (r) delete r.n.left;

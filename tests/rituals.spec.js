@@ -27,10 +27,11 @@ test('after stopping a session, a note on where you left off shows on that step'
   await page.click('#v-today [data-clearleft]');
   expect((await app.state()).quests[0].left).toBeUndefined();
 
-  // Skip leaves no note, and a session that ends on its own asks too.
+  // Skip leaves no note, and a session that ends on its own asks too (after "Stop for now").
   await app.go('focus');
   await page.click('#start');
   await page.clock.fastForward('26:00');
+  await page.click('#timeup [data-tu="stop"]');
   await expect(page.locator('#leftin')).toBeVisible();
   await page.click('#leftskip');
   await expect(page.locator('#leftin')).toHaveCount(0);
