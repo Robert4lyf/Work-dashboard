@@ -39,7 +39,7 @@ test('waiting steps on Upcoming quests and on quests back in the Inbox are liste
   });
   // The Inbox item says so, and "Got it" works on either.
   await app.go('inbox');
-  await expect(page.locator('#v-inbox .tag.wait')).toHaveText('Step waiting on Sam');
+  await expect(page.locator('#v-inbox .tag.wait')).toHaveText('Waiting on Sam');
   await app.go('waiting');
   await v.locator('.row', { hasText: 'Figures' }).locator('[data-waitclear]').click();
   await v.locator('.row', { hasText: 'Signed copy' }).locator('[data-waitclear]').click();

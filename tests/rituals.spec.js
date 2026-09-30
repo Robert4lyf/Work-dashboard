@@ -97,7 +97,7 @@ test('waiting is on a subquest: set from the quest, shown on Today and the Waiti
   await page.fill('#wnote', '');
   await page.press('#wnote', 'Tab');
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Step waiting on Sam');
+  await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Waiting on Sam');
   // Waiting rows look different (dark orange); others don't.
   await expect(page.locator('#v-today .row.waiting')).toHaveCount(1);
   await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
@@ -233,7 +233,7 @@ test('a quest with a step waiting on someone shows as waiting too', async ({ app
   await page.reload();
   const row = page.locator('#v-today .row', { hasText: 'Budget' });
   await expect(row).toHaveClass(/waiting/);
-  await expect(row.locator('.tag.wait')).toHaveText('Step waiting on Sam');
+  await expect(row.locator('.tag.wait')).toHaveText('Waiting on Sam');
   // The rest of the quest carries on: Next up skips the waiting step.
   await expect(page.locator('#hnow')).toContainText('Write summary');
   // Once the step is back, the quest isn't waiting.
