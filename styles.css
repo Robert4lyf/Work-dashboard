@@ -152,6 +152,7 @@ header {
 .now .go {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
   background: none;
   border: 0;
   padding: 0;
@@ -160,8 +161,15 @@ header {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
-.now .go small {
+.now .go small,
+.now .go b {
   display: block;
+  /* one line each: the whole step is on its page, a tap away */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.now .go small {
   font-size: 14px;
   opacity: 0.8;
 }
@@ -204,8 +212,21 @@ header {
   align-items: center;
   gap: 10px;
 }
-.hnowin > .btn,
+/* Under the next step: what to do about it on the left, search and sync on the right. */
+.hbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+.hact {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
 .hnowin > .check,
+.hact > *,
 .hbtns > * {
   flex: none; /* (never squeezed away by a long next step) */
 }

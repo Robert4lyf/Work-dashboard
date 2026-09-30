@@ -12,21 +12,27 @@ function nextStep() {
   return null;
 }
 function renderHeader() {
-  let h;
+  // The next step on a line of its own; what you can do about it on the row below, with search
+  // and sync.
+  let h,
+    acts = '';
   if (S.timer && view !== 'focus') {
     const t = S.timer,
       paused = t.left != null;
-    h = `<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t))}</small></button><button class="btn ${paused ? 'green' : 'blue'}" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`;
+    h = `<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t))}</small></button>`;
+    acts = `<button class="btn sm ${paused ? 'green' : 'blue'}" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`;
   } else {
     const nx = nextStep();
-    if (nx)
-      h = `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button><button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
-    else
+    if (nx) {
+      h = `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>Next up${nx.n !== nx.q ? ' in ' + esc(nx.q.text) : ''}</small><b>${esc(nx.n.text)}</b></button>`;
+      acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
+    } else
       h = `<button class="go" data-v="today"><small>Next up</small><b>${S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
   }
   // Talk mode, if turned on for this device (Settings).
-  if (talkPref && talkable() && !S.timer) h += '<button class="btn sm zenbtn" id="talkbtn">Talk</button>';
+  if (talkPref && talkable() && !S.timer) acts += '<button class="btn sm zenbtn" id="talkbtn">Talk</button>';
   setIfChanged($('#hnow'), h); // unchanged: left alone, keeping keyboard focus
+  setIfChanged($('#hact'), acts);
   const qs = S.quests,
     done = qs.filter(isDone).length,
     p = qs.length ? Math.round((done / qs.length) * 100) : 0;
