@@ -13,11 +13,10 @@ function inboxToNode(it) {
   }
   return n;
 }
-// Inbox item to Today (the Today button, or a swipe left), with Undo.
+// Inbox item to Today (its Today button), with Undo.
 function promoteInbox(id) {
   const i = S.inbox.findIndex(x => x.id === id);
   if (i < 0) return;
-  swiped = null;
   withUndo('Moved to Today', () => {
     const bf = snapshot();
     S.quests.push(inboxToNode(S.inbox[i]));
@@ -25,7 +24,7 @@ function promoteInbox(id) {
     settle(bf);
   });
 }
-// Clear an inbox item (the Clear button or a swipe option), with Undo.
+// Clear an inbox item (its Clear button), with Undo.
 function clearInbox(id) {
   withUndo('Cleared', () => {
     S.inbox = S.inbox.filter(x => x.id !== id);
@@ -34,61 +33,6 @@ function clearInbox(id) {
     renderAll();
   });
 }
-/* swipes on a phone: left sends an item to Today (the tab to the left), right shows quick options */
-let swipe = null,
-  swiped = null, // the item showing its quick options
-  swipeClick = false; // a swipe just ended: the click that follows isn't a tap
-const SWIPE = 90;
-$('#v-inbox').addEventListener('pointerdown', e => {
-  const el = e.target.closest('.item[data-id]');
-  swipeClick = false;
-  // The title is a button (tap to expand) but still swipes.
-  if (!el || e.target.closest('button:not(.ititle), input, select, textarea, form, a')) return;
-  if (e.pointerType === 'mouse' && matchMedia('(min-width: 700px)').matches) return; // (a desktop drag isn't a swipe)
-  swipe = { el, id: el.dataset.id, x: e.clientX, y: e.clientY, dx: 0, on: false, pid: e.pointerId };
-});
-$('#v-inbox').addEventListener('pointermove', e => {
-  const s = swipe;
-  if (!s || e.pointerId !== s.pid) return;
-  const dx = e.clientX - s.x,
-    dy = e.clientY - s.y;
-  if (!s.on) {
-    if (Math.abs(dy) > 12 || Math.abs(dy) > Math.abs(dx)) return (swipe = null); // scrolling, not swiping
-    if (Math.abs(dx) < 12) return;
-    s.on = true;
-    s.el.classList.add('swiping');
-  }
-  s.dx = dx;
-  s.el.style.transform = `translateX(${dx}px)`;
-  s.el.parentElement.dataset.swipe = dx < 0 ? 'today' : 'more';
-  s.el.dataset.swipe = dx < -SWIPE ? 'today' : dx > SWIPE ? 'more' : '';
-});
-function endSwipe() {
-  const s = swipe;
-  swipe = null;
-  if (!s || !s.on) return;
-  swipeClick = true;
-  s.el.classList.remove('swiping');
-  s.el.style.transform = '';
-  delete s.el.dataset.swipe;
-  delete s.el.parentElement.dataset.swipe;
-  if (s.dx < -SWIPE) promoteInbox(s.id);
-  else if (s.dx > SWIPE) {
-    swiped = s.id;
-    renderInbox();
-  }
-}
-// On the document: a finger lifted outside the list (over the header, say) still ends the swipe.
-document.addEventListener('pointerup', endSwipe);
-$('#v-inbox').addEventListener(
-  'click',
-  e => {
-    if (swipeClick) e.stopPropagation();
-    swipeClick = false;
-  },
-  true,
-);
-document.addEventListener('pointercancel', endSwipe);
 function renderInbox() {
   let h = '<h2>Inbox</h2>';
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
@@ -102,9 +46,6 @@ function renderInbox() {
       open = expanded.has(it.id);
     h += `<div class="item" data-id="${it.id}"><p><button class="ititle" data-steps="${it.id}" aria-expanded="${open}">${esc(it.text)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button> ${tagBadge(it.tag)}${waitBadge(it)}${it.node ? stepWaitBadge(it.node) : ''}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
-      h +=
-        `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
-        laterPicker('i', it.id);
       // Its subquests, added here before it goes to Today (they move with it).
       if (kids.length) {
         h += '<ul class="subs">';
@@ -115,12 +56,10 @@ function renderInbox() {
         h += '</ul>';
       }
       h += `<form class="addrow" data-subfor="${it.id}"><input id="is-${it.id}" data-keep maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
+      // Then waiting.
+      h += `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">`;
     }
-    const chip = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
-    h +=
-      swiped === it.id
-        ? `<div class="iacts quick">${chip(`data-sched="${it.id}" data-kind="i" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${chip(`data-sched="${it.id}" data-kind="i" data-when="${nextMonday()}"`, 'Next week')}${chip(`data-waiton="${it.id}"`, 'Waiting…')}<button class="chip del" data-clear="${it.id}">Clear</button><button class="x" data-unswipe="1" aria-label="Close options">×</button></div></div>`
-        : `<div class="iacts"><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
+    h += `<div class="iacts"><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
   });
   if (S.inbox.length) h += '</div>';
   setHTML($('#v-inbox'), h);

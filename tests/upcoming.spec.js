@@ -56,18 +56,6 @@ test('Next Mon, date picker, reschedule, bring back and delete', async ({ app, p
   expect((await app.state()).later.map(n => n.text)).toEqual(['A']);
 });
 
-test('an inbox item can go straight to Upcoming', async ({ app, page }) => {
-  await app.go('inbox');
-  await page.fill('#iin', 'Book dentist');
-  await page.press('#iin', 'Enter');
-  const id = (await app.state()).inbox[0].id;
-  await page.click(`[data-steps="${id}"]`);
-  await page.click(`[data-sched="${id}"] >> text=Tomorrow`);
-  const s = await app.state();
-  expect(s.inbox).toEqual([]);
-  expect(s.later[0]).toMatchObject({ text: 'Book dentist', start: '2026-09-24' });
-});
-
 test('subquests cannot be scheduled on their own', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');

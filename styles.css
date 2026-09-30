@@ -704,9 +704,6 @@ nav button[aria-current='page'] {
   gap: 12px;
   padding: 10px 6px 10px 12px;
 }
-.row[data-qid] {
-  touch-action: pan-y; /* (a sideways swipe is the row's, not the page's) */
-}
 .list > * + * {
   border-top: 1.5px solid var(--line);
 }
@@ -1238,31 +1235,6 @@ body.zen nav {
 .xchoice .del {
   background: var(--pink);
   color: var(--on-accent);
-}
-/* inbox swipes: the whole item slides as a card over a coloured strip (green: Today, blue: options) */
-#v-inbox .list {
-  overflow: hidden;
-}
-.item {
-  position: relative;
-  background: var(--panel);
-  touch-action: pan-y;
-  transition: transform 0.15s;
-}
-.item.swiping {
-  transition: none;
-  z-index: 1;
-  outline: 2px solid var(--edge);
-}
-#v-inbox .list[data-swipe='today'] {
-  background: var(--green);
-}
-#v-inbox .list[data-swipe='more'] {
-  background: var(--blue);
-}
-.iacts.quick {
-  flex-wrap: wrap;
-  gap: 6px;
 }
 .iacts.quick .chip {
   padding: 3px 10px;
@@ -1916,26 +1888,9 @@ details.more > details {
 .wnav .btn {
   flex: 1;
 }
-/* Today's rows: swipe hints, and a faint × for a mouse */
-.row.swiping {
-  transition: none;
-  position: relative;
-  z-index: 1;
-}
-.row[data-swipe='more'] {
-  background: color-mix(in srgb, var(--pink) 25%, var(--panel));
-}
-.row[data-swipe='done'] {
-  background: color-mix(in srgb, var(--green) 30%, var(--panel));
-}
+/* Today's rows: a faint × (Inbox / Delete) */
 .row .x {
   opacity: 0.45;
-}
-/* On a phone the row swipes left for Inbox / Delete instead: no × taking up the row. */
-@media (pointer: coarse) {
-  .row .x {
-    display: none;
-  }
 }
 .row .x:hover,
 .row .x:focus-visible {
