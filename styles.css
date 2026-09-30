@@ -161,19 +161,21 @@ header {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
-.now .go small,
-.now .go b {
+/* The label on one line, the step on up to two: the whole step is on its page, a tap away. */
+.now .go small {
   display: block;
-  /* one line each: the whole step is on its page, a tap away */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.now .go small {
   font-size: 14px;
   opacity: 0.8;
 }
 .now .go b {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   font-weight: 600;
 }
 .now .clk {

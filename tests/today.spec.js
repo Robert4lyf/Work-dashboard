@@ -151,7 +151,7 @@ test('estimates add up against free time until the end of the workday', async ({
   expect((await app.state()).dayEnd).toBe('18:00');
 });
 
-test('the header: the next step on one line, then Focus, Search and the sync dot below', async ({
+test('the header: the next step on up to two lines, then Focus, Search and the sync dot below', async ({
   app,
   page,
 }) => {
@@ -159,11 +159,13 @@ test('the header: the next step on one line, then Focus, Search and the sync dot
   await expect(page.locator('#hact [data-zen]')).toHaveText('Focus');
   await expect(page.locator('#hstats')).toBeEmpty(); // (no stats line until there's focus time or an alarm)
   await expect(page.locator('#searchBtn')).toBeVisible();
-  // A long step stays on one line (cut short), with the buttons on the row under it.
+  // A long step wraps onto two lines at most (then cut short), with the buttons on the row under it.
   const title = await page.locator('#hnow .go b').boundingBox(),
     focus = await page.locator('#hact [data-zen]').boundingBox(),
     search = await page.locator('#searchBtn').boundingBox();
-  expect(title.height).toBeLessThan(30);
+  const line = await page.locator('#hnow .go b').evaluate(b => parseFloat(getComputedStyle(b).lineHeight));
+  expect(title.height).toBeGreaterThan(line * 1.5);
+  expect(title.height).toBeLessThan(line * 2.5);
   expect(focus.y).toBeGreaterThan(title.y + title.height - 1);
   expect(Math.abs(search.y + search.height / 2 - (focus.y + focus.height / 2))).toBeLessThan(6);
   const h = await page.locator('header').boundingBox();
