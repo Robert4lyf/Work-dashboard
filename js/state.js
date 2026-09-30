@@ -50,6 +50,22 @@ const cleanId = x => {
 };
 // Dates go into the page inside attributes too: only a real yyyy-mm-dd, else none.
 const cleanDay = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+// Quests are titles; the waiting is on their subquests. A quest set waiting (before this, or on an
+// older copy of the app) gets a step of its own, named for what it's waiting for, that carries it.
+// The step's id comes from the quest's, so two devices converting the same quest make the same step.
+function waitToStep(q) {
+  const w = q.wait;
+  if (!w) return null;
+  delete q.wait;
+  if (q.done && !q.children.length) return null; // (finished: nothing left to wait for)
+  let id = q.id + '-w',
+    i = 1;
+  while (q.children.some(c => c.id === id)) id = q.id + '-w' + ++i;
+  const c = fix({ id, text: w.note || 'Hear back' }); // (who from shows on its Waiting tag)
+  c.wait = { ...w, note: '' }; // (what for is now the step's name)
+  q.children.push(c);
+  return c;
+}
 function fix(n) {
   cleanId(n);
   n.children = (n.children || []).map(fix);
@@ -150,6 +166,7 @@ function norm(s) {
       S.quests.push(q);
     });
   delete S.promises;
+  [...S.quests, ...S.later].forEach(waitToStep);
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
   // Colours go into style attributes: only the palette's, or a plain hex colour.
   S.tags.forEach(t => {

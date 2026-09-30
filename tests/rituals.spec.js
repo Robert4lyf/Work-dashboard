@@ -101,32 +101,37 @@ test('quests carried over for 3+ days ask for a decision each morning', async ({
   await expect(card).toContainText('Old report 5 days');
 });
 
-test('a quest can wait on someone: shown on Today and the Waiting tab, not Next up', async ({
+test('waiting is on a subquest: set from the quest, shown on Today and the Waiting tab, not Next up', async ({
   app,
   page,
 }) => {
   await app.addQuest('Budget review');
   await app.addQuest('Write report');
   await app.openQuest('Budget review');
+  // On a quest, "Waiting on someone?" adds a subquest (named by "For what") that waits.
   await page.click('#waitd summary');
   await page.fill('#wwho', 'Sam');
   await page.fill('#wnote', 'Q3 figures');
   await page.fill('#wdue', '2026-09-23');
   await page.click('[data-waitsave]');
   let s = await app.state();
-  expect(s.quests[0].wait).toEqual({
-    who: 'Sam',
-    note: 'Q3 figures',
-    due: '2026-09-23',
-    since: '2026-09-23',
+  expect(s.quests[0].wait).toBeUndefined();
+  expect(s.quests[0].children).toHaveLength(1);
+  expect(s.quests[0].children[0]).toMatchObject({
+    text: 'Q3 figures',
+    wait: { who: 'Sam', note: '', due: '2026-09-23', since: '2026-09-23' },
   });
+  await expect(page.locator('#v-today .list .row')).toContainText('Q3 figures');
+  await expect(page.locator('#waitd summary')).toContainText('Add it as a subquest'); // (ready for another)
+  // The step's own page edits its waiting.
+  await page.click('#v-today .list .open >> text="Q3 figures"');
   await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam');
   // Once waiting there's no Save: each changed detail is saved straight away, and moving on
   // with Tab keeps the keyboard where it went.
   await page.fill('#wwho', 'Sam B');
   await page.press('#wwho', 'Tab');
   await expect(page.locator('#wnote')).toBeFocused();
-  expect((await app.state()).quests[0].wait.who).toBe('Sam B');
+  expect((await app.state()).quests[0].children[0].wait.who).toBe('Sam B');
   await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam B');
   await page.fill('#wwho', 'Sam');
   await page.press('#wwho', 'Tab');
@@ -134,25 +139,25 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await page.click('#wdue');
   await page.keyboard.type('10152026');
   await page.press('#wdue', 'Tab');
-  expect((await app.state()).quests[0].wait.due).toBe('2026-10-15');
+  expect((await app.state()).quests[0].children[0].wait.due).toBe('2026-10-15');
   // A date picked (the field keeping the keyboard, as on Android) survives a redraw before it's
   // left, and is then saved.
   await page.fill('#wdue', '2026-10-05');
   await page.evaluate(() => inBackground(renderToday));
   await expect(page.locator('#wdue')).toHaveValue('2026-10-05');
   await page.press('#wdue', 'Tab');
-  expect((await app.state()).quests[0].wait.due).toBe('2026-10-05');
+  expect((await app.state()).quests[0].children[0].wait.due).toBe('2026-10-05');
   await page.fill('#wdue', '2026-09-23');
   await page.press('#wdue', 'Tab');
   // Once waiting there's no Save: each changed detail is saved straight away.
   await expect(page.locator('[data-waitsave]')).toHaveCount(0);
   await page.fill('#wnote', 'Q3 and Q4 figures');
   await page.press('#wnote', 'Tab');
-  expect((await app.state()).quests[0].wait.note).toBe('Q3 and Q4 figures');
-  await page.fill('#wnote', 'Q3 figures');
+  expect((await app.state()).quests[0].children[0].wait.note).toBe('Q3 and Q4 figures');
+  await page.fill('#wnote', '');
   await page.press('#wnote', 'Tab');
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Waiting on Sam');
+  await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Step waiting on Sam');
   // Waiting rows look different (dark orange); others don't.
   await expect(page.locator('#v-today .row.waiting')).toHaveCount(1);
   await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
@@ -163,7 +168,8 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   await app.go('waiting');
   const v = page.locator('#v-waiting');
   await expect(v.locator('.row')).toHaveCount(1);
-  await expect(v.locator('.row')).toContainText('from Sam · Q3 figures');
+  await expect(v.locator('.row')).toContainText('Q3 figures');
+  await expect(v.locator('.row')).toContainText('from Sam · in Budget review');
   await expect(v.locator('.row')).toContainText('Chase today');
 
   // Add from the Waiting tab: it lands in the Inbox, already waiting, and is listed here.
@@ -177,23 +183,25 @@ test('a quest can wait on someone: shown on Today and the Waiting tab, not Next 
   expect(s.inbox[0]).toMatchObject({ text: 'Signed contract', wait: { who: 'Legal', due: '' } });
   await expect(v.locator('.row')).toHaveCount(2);
   await expect(v.locator('.row', { hasText: 'Signed contract' })).toContainText('from Legal · in Inbox');
-  // Moving it to Today keeps it waiting.
+  // Moving it to Today keeps it waiting, through a step of its own.
   await app.go('inbox');
   await expect(page.locator('#v-inbox .tag.wait')).toHaveText('Waiting on Legal');
   await page.click('#v-inbox [data-promote]');
   s = await app.state();
-  expect(s.quests.find(q => q.text === 'Signed contract').wait).toMatchObject({ who: 'Legal' });
+  const sc = s.quests.find(q => q.text === 'Signed contract');
+  expect(sc.wait).toBeUndefined();
+  expect(sc.children[0]).toMatchObject({ text: 'Hear back', wait: { who: 'Legal' } });
   await app.go('waiting');
 
   // "Got it" puts it back on the list as a normal quest.
   await v.locator('.row', { hasText: 'Budget review' }).locator('[data-waitclear]').click();
   s = await app.state();
-  expect(s.quests[0].wait).toBeUndefined();
-  await expect(page.locator('#hnow')).toContainText('Budget review');
+  expect(s.quests[0].children[0].wait).toBeUndefined();
+  await expect(page.locator('#hnow')).toContainText('Q3 figures');
   await expect(v.locator('.row')).toHaveCount(1);
-  // Ticking one off from the Waiting tab finishes the quest.
+  // Ticking one off from the Waiting tab finishes it (and its quest, its only step).
   await v.locator('[data-toggle]').click();
-  expect((await app.state()).quests.find(q => q.text === 'Signed contract').done).toBe(true);
+  expect((await app.state()).quests.find(q => q.text === 'Signed contract').children[0].done).toBe(true);
   await expect(v.locator('.empty')).toContainText('Nothing to chase');
 });
 
@@ -212,22 +220,33 @@ test('an inbox item can be marked waiting from its details', async ({ app, page 
   expect((await app.state()).inbox[0].wait).toBeUndefined();
 });
 
-test('a waiting quest gets a chase notification, and skips the carried-over card', async ({ app, page }) => {
+test('a quest set waiting before this waits through a step; it gets a chase notification, and skips the carried-over card', async ({
+  app,
+  page,
+}) => {
   await app.addQuest('Budget review');
   await app.setState(s => {
     s.quests[0].since = '2026-09-10';
     s.quests[0].wait = { who: 'Sam', note: '', due: '2026-09-25', since: '2026-09-10' };
   });
   await page.reload();
+  const s = await app.state();
+  expect(s.quests[0].wait).toBeUndefined();
+  expect(s.quests[0].children).toMatchObject([
+    { id: s.quests[0].id + '-w', text: 'Hear back', wait: { who: 'Sam', due: '2026-09-25' } },
+  ]);
   await expect(page.locator('#v-today .carried')).toHaveCount(0);
   const want = await page.evaluate(() => wantedNotices(new Date(2026, 8, 23, 9).getTime()));
   expect(want.find(n => n.key.startsWith('chase:'))).toMatchObject({
     title: 'Time to chase',
-    body: 'Budget review (Sam)',
+    body: 'Budget review / Hear back (Sam)',
   });
 });
 
-test('old promises become quests: waiting ones set waiting, "I owe" ones plain', async ({ app, page }) => {
+test('old promises become quests: waiting ones with a waiting step, "I owe" ones plain', async ({
+  app,
+  page,
+}) => {
   await page.evaluate(() => save());
   await app.setState(s => {
     s.promises = [
@@ -240,7 +259,11 @@ test('old promises become quests: waiting ones set waiting, "I owe" ones plain',
   const s = await app.state();
   expect(s.promises).toBeUndefined();
   expect(s.quests).toMatchObject([
-    { id: 'p-a', text: 'Budget figures', wait: { who: 'Sam', due: '2026-09-25' } },
+    {
+      id: 'p-a',
+      text: 'Budget figures',
+      children: [{ id: 'p-a-w', wait: { who: 'Sam', due: '2026-09-25' } }],
+    },
     { id: 'p-b', text: 'Send the deck (for Sarah)', due: '2026-09-24' },
   ]);
   expect(s.quests[1].wait).toBeUndefined();
@@ -249,14 +272,14 @@ test('old promises become quests: waiting ones set waiting, "I owe" ones plain',
 test('interruptions sync as their own rows; waiting travels with its quest', async ({ app, page }) => {
   const r = await page.evaluate(() => {
     S.interrupts.push({ id: 'i1', t: Date.now(), q: null, why: 'Call' });
-    S.quests.push(fix({ id: 'q1', text: 'x', wait: { who: 'Sam', note: '', due: '', since: '' } }));
+    S.quests.push(fix({ id: 'q1', text: 'x', children: [{ id: 's1', text: 'y', wait: { who: 'Sam' } }] }));
     const m = toRecords(S),
       back = fromRecords(m, S.day);
     return { keys: [...m.keys()].filter(k => /^(interrupt|promise):/.test(k)), back };
   });
   expect(r.keys).toEqual(['interrupt:i1']);
   expect(r.back.interrupts[0].why).toBe('Call');
-  expect(r.back.quests[0].wait.who).toBe('Sam');
+  expect(r.back.quests[0].children[0].wait.who).toBe('Sam');
 });
 
 test('a quest with a step waiting on someone shows as waiting too', async ({ app, page }) => {
@@ -281,7 +304,12 @@ test('a quest with a step waiting on someone shows as waiting too', async ({ app
 
 test('waiting quests sit at the bottom of Today, and return to their place', async ({ app, page }) => {
   for (const t of ['Budget', 'Report', 'Email']) await app.addQuest(t);
-  await app.setState(s => (s.quests[0].wait = { who: 'Sam', note: '', due: '', since: '2026-09-23' }));
+  await app.setState(
+    s =>
+      (s.quests[0].children = [
+        fix({ id: 'bw', text: 'Figures', wait: { who: 'Sam', note: '', due: '', since: '2026-09-23' } }),
+      ]),
+  );
   await page.reload();
   const rows = page.locator('#v-today .list .row .open > span');
   await expect(rows).toHaveText(['Report', 'Email', 'Budget']);
@@ -290,7 +318,7 @@ test('waiting quests sit at the bottom of Today, and return to their place', asy
   await page.click('#reorder');
   await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
   await page.click('#reorder');
-  await app.setState(s => delete s.quests[0].wait);
+  await app.setState(s => delete s.quests[0].children[0].wait);
   await page.reload();
   await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
 });

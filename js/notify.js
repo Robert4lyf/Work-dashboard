@@ -245,14 +245,14 @@ function wantedNotices(now = Date.now()) {
         body: n.text,
       });
   });
-  waitingNodes().forEach(({ n }) => {
+  waitingNodes().forEach(({ n, trail }) => {
     const w = n.wait;
     if (w.due && soon(at9(w.due)))
       out.push({
         key: 'chase:' + n.id + ':' + w.due,
         at: at9(w.due),
         title: 'Time to chase',
-        body: n.text + (w.who ? ' (' + w.who + ')' : ''),
+        body: [...trail, n.text].join(' / ') + (w.who ? ' (' + w.who + ')' : ''), // (the quest, and its step)
       });
   });
   return out.concat(alarmNotices(now));

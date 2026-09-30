@@ -1,13 +1,16 @@
 /* inbox */
 const expanded = new Set(); // inbox items showing their subquest editor
-// An inbox item as a quest, keeping its tag, project, waiting details and any subquests.
+// An inbox item as a quest, keeping its tag, waiting details (as a step) and any subquests.
 function inboxToNode(it) {
   const n = it.node || fix({ id: uid(), text: it.text });
   n.tag = it.tag || n.tag;
   n.project = it.project || n.project;
   // The item's waiting details are the ones that count ("Got it" in the Inbox clears only those).
-  if (it.wait) n.wait = it.wait;
-  else delete n.wait;
+  delete n.wait;
+  if (it.wait) {
+    n.wait = it.wait;
+    waitToStep(n); // (as a quest, the waiting is a step's)
+  }
   return n;
 }
 // Inbox item to Today (the Today button, or a swipe left), with Undo.
@@ -97,11 +100,10 @@ function renderInbox() {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item" data-id="${it.id}"><p><button class="ititle" data-steps="${it.id}" aria-expanded="${open}">${esc(it.text)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button> ${tagBadge(it.tag)}${projectBadge(it.project)}${waitBadge(it)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
+    h += `<div class="item" data-id="${it.id}"><p><button class="ititle" data-steps="${it.id}" aria-expanded="${open}">${esc(it.text)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button> ${tagBadge(it.tag)}${waitBadge(it)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
       h +=
         tagPicker('i', it.id, it.tag) +
-        projectPicker('i', it.id, it.project) +
         `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
         laterPicker('i', it.id);
       if (kids.length) {
