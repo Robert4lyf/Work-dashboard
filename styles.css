@@ -152,6 +152,7 @@ header {
 .now .go {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
   background: none;
   border: 0;
   padding: 0;
@@ -160,12 +161,21 @@ header {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
+/* The label on one line, the step on up to two: the whole step is on its page, a tap away. */
 .now .go small {
   display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 14px;
   opacity: 0.8;
 }
 .now .go b {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   font-weight: 600;
 }
 .now .clk {
@@ -204,8 +214,21 @@ header {
   align-items: center;
   gap: 10px;
 }
-.hnowin > .btn,
+/* Under the next step: what to do about it on the left, search and sync on the right. */
+.hbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+.hact {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
 .hnowin > .check,
+.hact > *,
 .hbtns > * {
   flex: none; /* (never squeezed away by a long next step) */
 }
