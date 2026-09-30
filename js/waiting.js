@@ -1,5 +1,6 @@
-/* waiting: a quest or step can wait on someone, n.wait = { who, note, due (when to chase), since }.
-   It stays on Today with a "Waiting" tag, but isn't "Next up"; the Waiting tab lists them all. */
+/* waiting: a subquest (or an Inbox item) can wait on someone, n.wait = { who, note, due (when to
+   chase), since }. A quest itself doesn't: it shows as waiting through its steps. Waiting steps
+   aren't "Next up"; the Waiting page lists them all. */
 // Open items waiting on someone among `ns` and their open steps, with the path to each.
 function openWaiting(ns, trail = [], out = []) {
   ns.forEach(n => {
@@ -11,9 +12,22 @@ function openWaiting(ns, trail = [], out = []) {
 }
 function waitingNodes() {
   const out = openWaiting(S.quests);
-  S.later.forEach(n => n.wait && out.push({ n, trail: [], start: n.start }));
-  S.inbox.forEach(i => i.wait && out.push({ n: i, trail: [], inbox: true }));
+  // Upcoming quests and quests back in the Inbox: their waiting steps too.
+  S.later.forEach(n => openWaiting([n]).forEach(x => out.push({ ...x, start: n.start })));
+  S.inbox.forEach(i => {
+    if (i.wait) out.push({ n: i, trail: [], inbox: true });
+    if (i.node) openWaiting(i.node.children, [i.text]).forEach(x => out.push({ ...x, inbox: true }));
+  });
   return out;
+}
+// A step, quest or Inbox item by id, wherever it is (Today, Upcoming, or in the Inbox).
+function findWaitable(id) {
+  const it = S.inbox.find(x => x.id === id);
+  return (
+    find(id) ||
+    find(id, S.later) ||
+    find(id, S.inbox.map(i => i.node).filter(Boolean)) || { n: it, parents: [] }
+  );
 }
 const chaseDue = () => waitingNodes().filter(x => x.n.wait.due && x.n.wait.due <= today()).length;
 function chaseTag(w) {
@@ -38,9 +52,10 @@ function stepWaitBadge(n) {
   return `<span class="tag wait">${ws.length > 1 ? ws.length + ' steps waiting' : 'Step waiting'}${who.length === 1 ? ' on ' + esc(who[0]) : ''}</span>`;
 }
 // On a quest's page: set it waiting, change the details (saved as each is changed), or stop waiting.
-function waitPanel(n) {
+// On a quest (top): adds a waiting subquest, named by "For what".
+function waitPanel(n, top) {
   const w = n.wait || {};
-  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}${n.wait ? ` data-held="1" data-waitid="${n.id}"` : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : 'Waiting on someone?'}</summary>
+  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}${n.wait ? ` data-held="1" data-waitid="${n.id}"` : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : top ? 'Waiting on someone? Add it as a subquest' : 'Waiting on someone?'}</summary>
     <label class="f" for="wwho">Who</label><input class="fld" id="wwho" maxlength="60" value="${esc(w.who || '')}" list="wholist" autocomplete="off">
     <label class="f" for="wnote">For what</label><input class="fld" id="wnote" maxlength="160" value="${esc(w.note || '')}" autocomplete="off">
     <label class="f" for="wdue">Chase on</label><input class="fld" type="date" id="wdue" value="${w.due || ''}">
@@ -63,7 +78,7 @@ function whoList() {
 function saveWaitPanel(id, quiet) {
   const w = { who: $('#wwho').value.trim(), note: $('#wnote').value.trim(), due: $('#wdue').value || '' };
   if (!quiet) return setWaiting(id, w);
-  const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };
+  const r = findWaitable(id);
   if (!r.n || !r.n.wait) return;
   const was = r.n.wait;
   if (was.who === w.who && was.note === w.note && (was.due || '') === w.due) return;
@@ -75,10 +90,18 @@ function saveWaitPanel(id, quiet) {
   inBackground(renderWaiting);
 }
 function setWaiting(id, w) {
-  const r = find(id) || { n: S.later.find(x => x.id === id) || S.inbox.find(x => x.id === id) };
+  const r = findWaitable(id);
   if (!r.n) return;
+  const bf = snapshot();
   if (w) r.n.wait = { since: (r.n.wait && r.n.wait.since) || today(), ...w };
   else delete r.n.wait;
+  // A quest (not an Inbox item) waits through a step: one is added. One that was finished isn't
+  // any more (settle takes back its "done"), like adding any other step.
+  if (w && !S.inbox.includes(r.n) && !r.parents.length) {
+    r.n.done = false;
+    if (waitToStep(r.n)) toast('Added a waiting subquest');
+    settle(bf);
+  }
   if (r.n.node) delete r.n.node.wait; // an Inbox item's own details are the ones that count
   save();
   renderAll();

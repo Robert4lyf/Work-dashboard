@@ -7,10 +7,7 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 25, 9, 0, 30));
 });
 
-test('five tabs; History and Projects sit under Review; Focus opens from the header', async ({
-  app,
-  page,
-}) => {
+test('five tabs; History sits under Review; Focus opens from the header', async ({ app, page }) => {
   await expect(page.locator('nav [data-v]')).toHaveText([
     'Today',
     /^Inbox/,
@@ -19,13 +16,10 @@ test('five tabs; History and Projects sit under Review; Focus opens from the hea
     'Settings',
   ]);
   await page.click('nav [data-v=review]');
-  await expect(page.locator('#v-review .rtabs button')).toHaveText(['Week', 'Projects', 'History']);
+  await expect(page.locator('#v-review .rtabs button')).toHaveText(['Week', 'History']);
   await page.click('[data-rsub="log"]');
   await expect(page.locator('#v-log')).toBeVisible();
   await expect(page.locator('nav [data-v=review]')).toHaveAttribute('aria-current', 'page');
-  await page.click('[data-rsub="projects"]');
-  await expect(page.locator('#v-projects')).toBeVisible();
-  await expect(page.locator('#v-log')).toBeHidden();
   // (the header shows today's focus time once there is some; tapping it opens Focus)
   await page.evaluate(() => {
     S.daily[today()] = { Design: 25 };
@@ -45,14 +39,9 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
     s.quests[0].since = '2026-09-20';
     s.quests[1].wait = { who: 'Sam', note: '', due: '2026-09-25', since: '2026-09-24' };
     s.quests[2].done = true;
-    s.log.push({ id: s.quests[2].id, d: '2026-09-25', text: 'Ship sitemap', trail: [], p: 'w' });
+    s.log.push({ id: s.quests[2].id, d: '2026-09-25', text: 'Ship sitemap', trail: ['Website'], p: '' });
     // Last Saturday: within 7 days, but last week.
     s.log.push({ id: 'old', d: '2026-09-19', text: 'Last week thing', trail: [], p: '' });
-    s.projects = [
-      { id: 'w', name: 'Website', done: false },
-      { id: 'h', name: 'Hiring', done: false },
-    ];
-    s.quests[1].project = 'w';
     s.inbox.push({ id: 'i1', text: 'Loose idea' });
   });
   await page.reload();
@@ -64,7 +53,7 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   // One step at a time, Next through them.
   const step = t => v.locator('.wstep', { has: page.locator('h2', { hasText: t }) });
   const next = () => page.click('[data-rstep="1"]');
-  await expect(v.locator('.wstepno')).toHaveText('Step 1 of 6');
+  await expect(v.locator('.wstepno')).toHaveText('Step 1 of 5');
   await expect(step('Inbox')).toContainText('1 item to sort');
   await next();
   await expect(step('Carried over')).toContainText('Old report 5 days');
@@ -72,13 +61,11 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   await step('Carried over').locator('[data-keep]').click();
   await expect(step('Carried over')).toContainText('Old report 5 days'); // still stale, now kept
   await next();
-  await expect(step('Waiting')).toContainText('Budget review from Sam');
+  // (a quest set waiting before this is waiting through a step of its own now)
+  await expect(step('Waiting')).toContainText('Budget review / Hear back from Sam');
   await next();
-  await expect(step('Projects with nothing open')).toContainText('Hiring');
-  await expect(step('Projects with nothing open')).not.toContainText('Website');
   await page.click('[data-rstep="-1"]');
   await expect(step('Waiting')).toBeVisible();
-  await next();
   await next();
   await expect(step('Coming up')).toContainText('All clear.');
   await next();

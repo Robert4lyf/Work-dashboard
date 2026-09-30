@@ -78,7 +78,10 @@ test('talk mode: reads the day, then takes spoken commands', async ({ app, page 
   expect((await app.state()).quests.find(q => q.text === 'Write report').done).toBe(true);
 
   await hear(page, 'Waiting on Sam');
-  expect((await app.state()).quests.find(q => q.text === 'Call Sam').wait).toMatchObject({ who: 'Sam' });
+  // (through a step of its own: quests wait through their steps)
+  expect((await app.state()).quests.find(q => q.text === 'Call Sam').children[0].wait).toMatchObject({
+    who: 'Sam',
+  });
   expect(await said(page)).toContain('Next up: Plan sprint.');
 
   await hear(page, 'Tomorrow');

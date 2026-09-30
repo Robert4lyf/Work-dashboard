@@ -109,7 +109,7 @@ const strip = n => ({
   project: n.project,
   opt: n.opt,
   notes: n.notes,
-  children: n.children.map(strip),
+  children: n.children.filter(c => !c.wait).map(strip), // (waiting is this time's, not every time's)
 });
 const inst = t =>
   fix({

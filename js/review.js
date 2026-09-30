@@ -1,12 +1,12 @@
-/* the Review tab: the weekly review, plus Projects and History as sub-pages */
-let reviewSub = 'week', // 'week', 'projects' or 'log'
+/* the Review tab: the weekly review, plus History as a sub-page */
+let reviewSub = 'week', // 'week' or 'log'
   reviewStep = 0; // which step of the weekly review is showing
 // Friday to Sunday, if this week (Monday on) hasn't been reviewed yet.
 const reviewDue = () => [5, 6, 0].includes(new Date().getDay()) && (!S.reviewed || S.reviewed < weekStart());
 function renderReview() {
   const tab = (k, l) =>
     `<button class="chip" data-rsub="${k}" aria-pressed="${reviewSub === k}">${l}</button>`;
-  let h = `<div class="chips rtabs">${tab('week', 'Week')}${tab('projects', 'Projects')}${tab('log', 'History')}</div>`;
+  let h = `<div class="chips rtabs">${tab('week', 'Week')}${tab('log', 'History')}</div>`;
   if (reviewSub === 'week') h += renderWeek();
   setHTML($('#v-review'), h);
 }
@@ -43,7 +43,7 @@ function renderWeek() {
     S.inbox.length,
   );
   // 2. Decide on anything that's been sitting on Today.
-  const stale = S.quests.filter(q => !isDone(q) && !q.wait && ageOf(q) >= STALE);
+  const stale = S.quests.filter(q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE);
   step('Carried over', stale.length ? carriedRows(stale) : '', stale.length);
   // 3. Chase what you're waiting on.
   const wait = waitingNodes();
@@ -51,25 +51,13 @@ function renderWeek() {
     'Waiting',
     wait
       .map(
-        ({ n }) =>
-          `<div class="crow"><p>${esc(n.text)}${n.wait.who ? ` <small>from ${esc(n.wait.who)}</small>` : ''} ${chaseTag(n.wait)}</p><div class="chips"><button class="chip" data-waitclear="${n.id}">Got it</button></div></div>`,
+        ({ n, trail }) =>
+          `<div class="crow"><p>${esc([...trail, n.text].join(' / '))}${n.wait.who ? ` <small>from ${esc(n.wait.who)}</small>` : ''} ${chaseTag(n.wait)}</p><div class="chips"><button class="chip" data-waitclear="${n.id}">Got it</button></div></div>`,
       )
       .join(''),
     wait.length,
   );
-  // 4. Every active project should have something open.
-  const idle = S.projects.filter(p => !p.done && !openInProject(p.id).length);
-  step(
-    'Projects with nothing open',
-    idle
-      .map(
-        p =>
-          `<div class="crow"><p>${esc(p.name)}</p><div class="chips"><button class="chip" data-rsub="projects">Add work</button><button class="chip" data-projdone="${p.id}">Finish</button></div></div>`,
-      )
-      .join(''),
-    idle.length,
-  );
-  // 5. What's coming back next week.
+  // 4. What's coming back next week.
   const soon = S.later.filter(n => n.start <= shift(today(), 7));
   step(
     'Coming up',
@@ -78,7 +66,7 @@ function renderWeek() {
       .join(''),
     soon.length,
   );
-  // 6. What got done, ready to paste into an update.
+  // 5. What got done, ready to paste into an update.
   step(
     'Done this week',
     done.length
@@ -100,15 +88,23 @@ function renderWeek() {
   }</div>`;
   return h;
 }
-// A plain-text summary of the week, grouped by project.
+// A plain-text summary of the week, grouped by quest (steps under their quest's title).
+// (A finished quest is its group's heading; one with no steps done this week goes under Other.)
 function weekText() {
-  const by = {};
-  weekDone().forEach(x => (by[projectName(x.p) || 'Other'] = by[projectName(x.p) || 'Other'] || []).push(x));
+  const by = {},
+    other = [],
+    done = weekDone();
+  done.forEach(x => x.trail.length && (by[x.trail[0]] = by[x.trail[0]] || []).push(x));
+  done.forEach(x => !x.trail.length && !by[x.text] && other.push(x));
+  const group = (k, xs) =>
+    k + '\n' + xs.map(x => '- ' + [...x.trail.slice(1), x.text].join(' / ')).join('\n');
   return (
-    `Week of ${niceDate(weekStart())}: ${weekDone().length} done, ${hm(weekFocus())} focus\n\n` +
-    Object.keys(by)
-      .sort((a, b) => (a === 'Other') - (b === 'Other') || a.localeCompare(b))
-      .map(k => k + '\n' + by[k].map(x => '- ' + [...x.trail, x.text].join(' / ')).join('\n'))
-      .join('\n\n')
+    `Week of ${niceDate(weekStart())}: ${done.length} done, ${hm(weekFocus())} focus\n\n` +
+    [
+      ...Object.keys(by)
+        .sort((a, b) => a.localeCompare(b))
+        .map(k => group(k, by[k])),
+      ...(other.length ? [group('Other', other)] : []),
+    ].join('\n\n')
   );
 }

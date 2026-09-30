@@ -31,7 +31,6 @@ function row(n, i, len, sib) {
     tagBadge(n.tag) +
     waitBadge(n) +
     stepWait +
-    projectBadge(n.project) +
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
@@ -143,7 +142,7 @@ function renderWaitingSection() {
 const EST = [15, 30, 60, 120];
 const hmShort = m => (m >= 60 && !(m % 60) ? m / 60 + 'h' : hm(m));
 function estLeft(n) {
-  if (isDone(n) || n.wait) return 0;
+  if (isDone(n) || n.wait || onlyWaiting(n)) return 0;
   const kids = n.children.reduce((a, c) => a + estLeft(c), 0);
   return kids || n.est || 0;
 }
@@ -190,7 +189,10 @@ function renderAttention() {
 /* carried over: quests on Today for STALE days or more get a decision each morning */
 const STALE = 3;
 const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
-const carried = () => S.quests.filter(q => !isDone(q) && !q.wait && ageOf(q) >= STALE && q.kept !== today());
+// (Not one only waiting on others: every step left is waiting.)
+const onlyWaiting = q => q.children.length > 0 && !isDone(q) && !nextLeaf(q);
+const carried = () =>
+  S.quests.filter(q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today());
 function renderCarried() {
   const qs = carried();
   return qs.length ? `<div class="carried box"><h2>Carried over</h2>${carriedRows(qs)}</div>` : '';
@@ -218,7 +220,7 @@ function renderUpcoming() {
   let h = `<details id="upd"${panels.upd ? ' open' : ''}><summary>Upcoming (${S.later.length})</summary>`;
   S.later.forEach(n => {
     const c = count(n);
-    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${projectBadge(n.project)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</div>
+    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</div>
       <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
       <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
   });
@@ -271,9 +273,9 @@ function renderNode({ n, parents }) {
       (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
       (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '');
   if (meta) h += `<div class="factsrow">${meta}</div>`;
-  h += `${top ? tagPicker('q', n.id, n.tag) + projectPicker('q', n.id, n.project) : ''}${estPicker(n)}`;
+  h += `${top ? tagPicker('q', n.id, n.tag) : ''}${estPicker(n)}`;
   if (top) h += laterPicker('q', n.id);
-  h += waitPanel(n);
+  h += waitPanel(n, top);
   h += '</div>';
   // The steps come first: they're what you work through.
   h += listHead('Subquests', n.children);

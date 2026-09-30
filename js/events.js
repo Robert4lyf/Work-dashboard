@@ -13,7 +13,6 @@ function renderAll() {
 function renderView(v = view) {
   if (v === 'review') {
     renderReview();
-    if (reviewSub === 'projects') renderProjectsView();
     if (reviewSub === 'log') renderLog();
     return;
   }
@@ -37,9 +36,9 @@ function fadeTabs() {
 }
 $('#tabs').addEventListener('scroll', fadeTabs, { passive: true });
 window.addEventListener('resize', fadeTabs);
-// History and Projects live under the Review tab; Focus has no tab (the header opens it).
+// History lives under the Review tab; Focus has no tab (the header opens it).
 function go(v) {
-  if (v === 'log' || v === 'projects') {
+  if (v === 'log') {
     reviewSub = v;
     v = 'review';
   }
@@ -50,19 +49,9 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  [
-    'today',
-    'inbox',
-    'waiting',
-    'notes',
-    'knowledge',
-    'search',
-    'review',
-    'projects',
-    'focus',
-    'log',
-    'account',
-  ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
+  ['today', 'inbox', 'waiting', 'notes', 'knowledge', 'search', 'review', 'focus', 'log', 'account'].forEach(
+    k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)),
+  );
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
@@ -121,22 +110,6 @@ document.addEventListener('submit', e => {
     $('#kbcatin').value = '';
     $('#kbcatin').focus();
   }
-  if (f.dataset.projadd) {
-    const inp = f.querySelector('input'),
-      v = inp.value.trim();
-    if (!v) return;
-    addToProject(f.dataset.projadd, v);
-    const n = $('#pa-' + f.dataset.projadd);
-    n && n.focus();
-  }
-  if (f.id === 'projform') {
-    const v = $('#projin').value.trim();
-    if (!v) return;
-    newProject(v);
-    save();
-    renderAll();
-    $('#projin').focus();
-  }
   if (f.id === 'tagform') {
     const v = cleanText($('#tagin').value.trim());
     if (!v) return;
@@ -164,7 +137,8 @@ document.addEventListener('submit', e => {
       v = f.querySelector('input').value.trim(),
       it = S.inbox.find(x => x.id === id);
     if (!v || !it) return;
-    it.node = it.node || inboxToNode(it);
+    // (its waiting details stay on the item until it goes to Today)
+    it.node = it.node || fix({ id: uid(), text: it.text, tag: it.tag || '', project: it.project || '' });
     it.node.children.push(fix({ id: uid(), text: v }));
     it.node.done = false;
     save();
@@ -226,10 +200,6 @@ document.addEventListener('change', e => {
     el.value = '';
     return;
   }
-  if (el.dataset.setproject) {
-    setProject(el.dataset.kind, el.dataset.setproject, el.value);
-    return;
-  }
   if (el.dataset.iwait) {
     const it = S.inbox.find(x => x.id === el.dataset.iwait),
       who = el.value.trim();
@@ -247,28 +217,8 @@ document.addEventListener('change', e => {
     renderAll();
     return;
   }
-  if (el.dataset.projpick) {
-    const r = el.value && find(el.value);
-    if (r) {
-      r.n.project = el.dataset.projpick;
-      const t = tplFor(r.n); // tomorrow's copy of a repeat too
-      if (t) t.project = el.dataset.projpick;
-    }
-    save();
-    renderAll();
-    return;
-  }
-  // A tag's or a project's name field is known by its place in the list; the one it showed is
+  // A tag's name field is known by its place in the list; the one it showed is
   // the one renamed (found by name: the list may have changed meanwhile, say on another device).
-  if (el.dataset.projname !== undefined) {
-    const at = S.projects[+el.dataset.projname],
-      p = at && at.name === el.defaultValue ? at : S.projects.find(x => x.name === el.defaultValue),
-      v = cleanText(el.value.trim().slice(0, 40));
-    if (p && v) p.name = v;
-    save();
-    renderAll();
-    return;
-  }
   if (el.dataset.tagname !== undefined) {
     const i = S.tags.findIndex(t => t.name === el.defaultValue);
     if (i >= 0) renameTag(i, el.value);
@@ -642,27 +592,6 @@ document.addEventListener('click', e => {
     go('account');
     const t = $('#tagsec');
     t && t.scrollIntoView();
-  }
-  if (d.projdone) {
-    const p = S.projects.find(x => x.id === d.projdone);
-    if (p) {
-      p.done = !p.done;
-      save();
-      renderAll();
-      toast(p.done ? 'Project finished' : 'Project reopened');
-    }
-  }
-  if (d.delproj) {
-    if (!arm(b, 'Delete?')) return;
-    withUndo('Project deleted', () => {
-      const id = S.projects[+d.delproj].id;
-      S.projects.splice(+d.delproj, 1);
-      eachTagged(n => {
-        if (n.project === id) n.project = '';
-      });
-      save();
-      renderAll();
-    });
   }
   if (d.deltag) {
     if (!arm(b, 'Delete?')) return;

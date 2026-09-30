@@ -165,13 +165,14 @@ test("time's up: the page shows the session's step, a later session clears it, a
   });
   await expect(page.locator('#v-zen #timeup')).toHaveCount(0);
 
-  // Reopened after a session ran out: single-task mode asks.
+  // Reopened after a session ran out (the app starts with single-task mode off, and finishes
+  // the session as it starts): single-task mode opens and asks.
   await page.click('#v-zen [data-zstart]');
   await page.evaluate(() => {
     S.timer.end = Date.now() - 1000;
-    save();
+    zen = false;
+    finishTimer(true);
   });
-  await page.reload();
   await expect(page.locator('#v-zen')).toBeVisible();
   await expect(page.locator('#v-zen #timeup')).toBeVisible();
 });
