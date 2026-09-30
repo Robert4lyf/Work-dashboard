@@ -168,7 +168,8 @@ test("time's up: the page shows the session's step, a later session clears it, a
   // Reopened after a session ran out: single-task mode asks.
   await page.click('#v-zen [data-zstart]');
   await page.evaluate(() => {
-    S.timer.end = Date.now() - 1000;
+    // (well in the past: the test's fake clock isn't relied on to carry across the reload)
+    S.timer.end = new Date(2026, 8, 1).getTime();
     save();
   });
   await page.reload();
