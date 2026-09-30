@@ -301,6 +301,7 @@ document.addEventListener('click', e => {
     if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open quest)
     if (b.classList.contains('halarm')) alarmsOpen = true; // (the alarms, unfolded)
     go(d.v);
+    if (b.classList.contains('halarm') && $('#alarmd')) $('#alarmd').scrollIntoView({ block: 'nearest' });
   }
   if (b.id === 'searchBtn') openSearch();
   if (d.sart)
@@ -760,7 +761,7 @@ document.addEventListener('keydown', e => {
     f.focus();
     return true;
   };
-  if (k === 'n' && view === 'today' && path.length) field('#sin');
+  if (k === 'n' && view === 'today' && path.length && $('#sin')) field('#sin');
   else if (k === 'n' || k === 'i') {
     go('inbox');
     field('#iin');

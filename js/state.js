@@ -67,18 +67,29 @@ function waitToStep(q) {
   return c;
 }
 // A quest has steps; a step doesn't (before, steps could have steps of their own). Steps under a
-// step move up beside it, named with it ("Contract: Draft"); a step that only grouped them goes,
-// unless it was itself waiting. Ids and ticks are kept, so every device flattens the same way.
+// step move up beside it, named with it ("Contract: Draft"); a step that only grouped them goes.
+// One with anything of its own (waiting, notes) stays, as a step, finished if its steps were.
+// An optional group's steps are optional, and they take its deadline if they have none. Ids and
+// ticks are kept, so every device flattens the same way.
+const doneOf = n => {
+  const k = n.children || [];
+  if (!k.length) return !!n.done;
+  const req = k.filter(c => !c.opt);
+  return (req.length ? req : k).every(doneOf);
+};
 function flatSteps(ns) {
   const out = [];
-  (function w(list, pre) {
+  (function w(list, pre, opt, due) {
     list.forEach(c => {
       const name = pre ? pre + ': ' + c.text : c.text,
-        kids = c.children || [];
-      if (!kids.length || c.wait) out.push(Object.assign(c, { text: name, children: [] }));
-      w(kids, name);
+        kids = c.children || [],
+        o = !!(c.opt || opt),
+        d = c.due || due || '';
+      if (!kids.length || c.wait || c.notes)
+        out.push(Object.assign(c, { text: name, children: [], opt: o, due: d, done: doneOf(c) }));
+      w(kids, name, o, d);
     });
-  })(ns || [], '');
+  })(ns || [], '', false, '');
   return out;
 }
 function fix(n) {

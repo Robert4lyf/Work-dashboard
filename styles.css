@@ -498,26 +498,6 @@ h2 {
   border-width: 2px;
   box-shadow: 2px 2px 0 var(--edge);
 }
-.item .subs {
-  list-style: none;
-  margin: 0 0 10px;
-  padding: 0;
-}
-.item .subs li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-top: 2px dashed var(--muted);
-  padding: 4px 0 4px 10px;
-  overflow-wrap: anywhere;
-}
-.item .subs li span {
-  flex: 1;
-}
-.item .subs .x {
-  font-size: 20px;
-  padding: 2px 8px;
-}
 .item .addrow {
   margin: 0 0 10px;
 }
@@ -1333,7 +1313,7 @@ body.zen nav {
   margin: 4px 0 0;
   font-size: 15px;
 }
-/* header focus button, attention strip, plan line, estimates */
+/* header focus button, attention strip */
 .now .zenbtn {
   flex: none;
   padding: 5px 10px;
@@ -1583,30 +1563,6 @@ body.ringing {
 }
 .ring .acts {
   justify-content: center;
-}
-.tbody {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 14px;
-}
-.tstate {
-  font-family: var(--display);
-  text-align: center;
-  color: var(--muted);
-  margin: 0;
-}
-.tstate.on {
-  color: var(--ink);
-}
-.tlog p {
-  margin: 0 0 10px;
-  overflow-wrap: anywhere;
-}
-.tlog p.me {
-  text-align: right;
-  color: var(--muted);
 }
 /* knowledge: flows, categories and articles */
 .flows {
@@ -1984,4 +1940,27 @@ details.more > details {
 }
 .tagd[open] > summary {
   margin-bottom: 8px;
+}
+/* a device in Settings, with its two-tap Forget */
+.tchip {
+  display: inline-flex;
+  border: 3px solid var(--edge);
+  background: var(--panel);
+  box-shadow: 3px 3px 0 var(--edge);
+}
+.tchip button {
+  background: none;
+  border: 0;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.tchip .tdel {
+  border-left: 2px solid var(--edge);
+  color: var(--muted);
+  padding: 6px 8px;
+}
+.tchip .tdel.armed {
+  background: var(--pink);
+  color: var(--on-accent);
+  font-weight: 600;
 }

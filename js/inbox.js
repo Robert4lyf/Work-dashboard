@@ -25,7 +25,7 @@ function promoteInbox(id) {
     settle(bf);
   });
 }
-// Clear an inbox item (the Clear button, a swipe option, or talk mode), with Undo.
+// Clear an inbox item (the Clear button or a swipe option), with Undo.
 function clearInbox(id) {
   withUndo('Cleared', () => {
     S.inbox = S.inbox.filter(x => x.id !== id);

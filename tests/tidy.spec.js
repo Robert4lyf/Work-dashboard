@@ -82,3 +82,48 @@ test('the header alarm opens the folded alarm list', async ({ app, page }) => {
   await page.click('header .halarm');
   await expect(page.locator('#alarmd')).toHaveAttribute('open', '');
 });
+
+test('flattening keeps what a grouping step meant: optional, finished, deadline, notes', async ({
+  app,
+  page,
+}) => {
+  await app.setState(s => {
+    s.quests = [
+      {
+        id: 'q',
+        text: 'Done quest',
+        children: [
+          {
+            id: 'a',
+            text: 'Extras',
+            opt: true,
+            children: [{ id: 'a1', text: 'Nice to have', children: [] }],
+          },
+          { id: 'b', text: 'Main', done: true, children: [] },
+          {
+            id: 'w',
+            text: 'Chase',
+            wait: { who: 'Sam' },
+            children: [{ id: 'w1', text: 'Got it', done: true, children: [] }],
+          },
+        ],
+      },
+      {
+        id: 'r',
+        text: 'Other',
+        children: [
+          { id: 'g', text: 'Group', due: '2026-10-01', children: [{ id: 'g1', text: 'Step', children: [] }] },
+          { id: 'n', text: 'Noted', notes: 'keep me', children: [{ id: 'n1', text: 'Inner', children: [] }] },
+        ],
+      },
+    ];
+  });
+  await page.reload();
+  const s = await app.state(),
+    [q, r] = s.quests;
+  expect(await page.evaluate(() => isDone(S.quests[0]))).toBe(true); // (still finished)
+  expect(q.children.find(c => c.id === 'a1').opt).toBe(true);
+  expect(q.children.find(c => c.id === 'w').done).toBe(true);
+  expect(r.children.find(c => c.id === 'g1').due).toBe('2026-10-01');
+  expect(r.children.map(c => c.id)).toEqual(['g1', 'n', 'n1']);
+});

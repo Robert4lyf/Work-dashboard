@@ -41,7 +41,9 @@ function renderWeek() {
     S.inbox.length,
   );
   // 2. Decide on anything that's been sitting on Today.
-  const stale = S.quests.filter(q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE);
+  const stale = S.quests.filter(
+    q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today(),
+  );
   step('Carried over', stale.length ? carriedRows(stale) : '', stale.length);
   // 3. Chase what you're waiting on.
   const wait = waitingNodes();
