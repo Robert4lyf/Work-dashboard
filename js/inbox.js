@@ -112,10 +112,8 @@ function renderInbox() {
         h += '</ul>';
       }
       h += `<form class="addrow" data-subfor="${it.id}"><input id="is-${it.id}" data-keep maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
-      // Then waiting, and do later.
-      h +=
-        `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
-        laterPicker('i', it.id);
+      // Then waiting. (Tomorrow and Next week are a swipe right away.)
+      h += `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">`;
     }
     const chip = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
     h +=

@@ -39,7 +39,7 @@ test('an opened inbox item: waiting, do later and subquests (which go to Today w
   const id = (await app.state()).inbox[0].id;
   await page.click(`[data-steps="${id}"]`);
   await expect(page.locator(`[data-iwait="${id}"]`)).toBeVisible();
-  await expect(page.locator(`[data-sched="${id}"]`)).toHaveCount(2);
+  await expect(page.locator(`[data-sched="${id}"]`)).toHaveCount(0); // (no Do later: a swipe right has it)
   await expect(page.locator('#v-inbox [data-settag]')).toHaveCount(0);
   const sub = `[data-subfor="${id}"] input`;
   for (const t of ['Book room', 'Agenda']) {
