@@ -10,7 +10,7 @@ test.beforeEach(async ({ app, page }) => {
 test('session defaults to Next up, takes its tag, and Done ticks it off', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
-  await page.click('[data-settag="Design"]');
+  await app.setTag('Design');
   await app.addSub('Draft');
   await app.addQuest('Email');
   await app.go('focus');
@@ -133,11 +133,11 @@ test('when a session runs out, it asks: done, more time, or stop', async ({ app,
   expect(s.sessions.length).toBe(2);
   await expect(page.locator('#timeup')).toHaveCount(0);
 
-  // Stop for now: asks where you left it, step left as it was.
+  // Stop for now: just stops, the step left as it was.
   await page.click('#v-zen [data-zstart]');
   await page.clock.fastForward('25:01');
   await page.locator('#timeup [data-tu="stop"]').click();
-  await expect(page.locator('#leftform')).toBeVisible();
+  await expect(page.locator('#timeup')).toHaveCount(0);
   expect(step(await app.state(), 'Send').done).toBeFalsy();
 });
 

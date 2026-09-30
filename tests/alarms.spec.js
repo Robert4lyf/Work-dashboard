@@ -61,7 +61,7 @@ test('a time already gone today can’t be switched on; several alarms can be se
   const b = await addAlarm(page, '14:15', 'Leave');
   await a.locator('[data-aon]').click();
   await b.locator('[data-aon]').click();
-  await expect(page.locator('#alarmd summary')).toContainText('(2 on)');
+  await expect(page.locator('#alarmd summary')).toContainText('(2 on · next 11:00)');
   // Listed by time.
   expect(await page.$$eval('.arow [data-atime]', xs => xs.map(x => x.value))).toEqual([
     '08:00',

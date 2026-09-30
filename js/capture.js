@@ -126,8 +126,7 @@ function receiveLaunch() {
   if (!q.has('capture') && !q.has('talk') && !q.has('focus')) return;
   history.replaceState(null, '', location.pathname);
   if (q.has('focus')) return;
-  if (q.has('talk') && talkable()) return openTalk(false);
-  go('inbox'); // (?talk where talking isn't possible: the capture box instead)
+  go('inbox'); // (?talk came from a removed shortcut: the capture box instead)
   const i = $('#iin');
   if (i) i.focus();
 }

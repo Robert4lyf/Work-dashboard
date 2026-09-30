@@ -232,25 +232,17 @@ function snoozeAlarm(id) {
   renderAll();
 }
 
-// The alarm list, on Today. alarmsOpen is set by tapping its heading (null: follow whether
-// any alarm is on).
-let alarmsOpen = null,
-  alarmsOnSeen = -1;
+// The alarm list, folded at the foot of Today (the header shows the next one): open while you're
+// setting them up (by tapping its heading, or adding one).
+let alarmsOpen = false;
 function toggleAlarmsList(det) {
   alarmsOpen = !det.open;
 }
 function renderAlarms() {
   const on = S.alarms.filter(alarmOn).length,
     devs = S.devices.length > 1 ? S.devices : [];
-  // Open while an alarm is on, unless folded by hand (until the number switched on changes).
-  if (on !== alarmsOnSeen) {
-    // One more switched on: show the list. One fewer: leave it as it is (not folding it under
-    // the finger that just switched an alarm off).
-    if (on > alarmsOnSeen) alarmsOpen = null;
-    else if (alarmsOpen === null) alarmsOpen = alarmsOnSeen > 0;
-    alarmsOnSeen = on;
-  }
-  let h = `<details id="alarmd" class="alarms"${(alarmsOpen ?? on > 0) ? ' open' : ''}><summary>Alarms${on ? ` <small>(${on} on)</small>` : ''}</summary>`;
+  const na = on && nextAlarm();
+  let h = `<details id="alarmd" class="alarms"${alarmsOpen ? ' open' : ''}><summary>Alarms${on ? ` <small>(${on} on${na ? ' · next ' + (na.snooze ? hhmmOf(na.snooze) : na.time) : ''})</small>` : ''}</summary>`;
   [...S.alarms]
     .sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0))
     .forEach(a => {

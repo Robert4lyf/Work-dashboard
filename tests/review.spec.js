@@ -59,7 +59,7 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   await expect(step('Carried over')).toContainText('Old report 5 days');
   // Decisions work from here too.
   await step('Carried over').locator('[data-keep]').click();
-  await expect(step('Carried over')).toContainText('Old report 5 days'); // still stale, now kept
+  await expect(step('Carried over')).toContainText('All clear.'); // kept: off the list until tomorrow
   await next();
   // (a quest set waiting before this is waiting through a step of its own now)
   await expect(step('Waiting')).toContainText('Budget review / Hear back from Sam');

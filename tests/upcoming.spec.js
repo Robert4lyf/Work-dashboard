@@ -14,8 +14,9 @@ test('a quest scheduled for Tomorrow leaves Today and comes back on the day', as
   await app.addQuest('Report');
   await app.addQuest('Email');
   await app.openQuest('Report');
-  await page.click('[data-settag="Design"]');
+  await app.setTag('Design');
   await app.addSub('Draft');
+  await app.openMore(); // (do later is under More)
   await page.click('[data-sched][data-kind="q"] >> text=Tomorrow');
   let s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Email']);
@@ -33,8 +34,10 @@ test('a quest scheduled for Tomorrow leaves Today and comes back on the day', as
 test('Next Mon, date picker, reschedule, bring back and delete', async ({ app, page }) => {
   for (const t of ['A', 'B', 'C']) await app.addQuest(t);
   await app.openQuest('A');
+  await app.openMore();
   await page.click('[data-sched] >> text=Next Mon');
   await app.openQuest('B');
+  await app.openMore();
   await page.fill('[data-schedpick]', '2026-10-10');
   let s = await app.state();
   expect(s.later.map(n => [n.text, n.start])).toEqual([
@@ -59,11 +62,10 @@ test('an inbox item can go straight to Upcoming', async ({ app, page }) => {
   await page.press('#iin', 'Enter');
   const id = (await app.state()).inbox[0].id;
   await page.click(`[data-steps="${id}"]`);
-  await page.click(`[data-settag="Admin"][data-id="${id}"]`);
   await page.click(`[data-sched="${id}"] >> text=Tomorrow`);
   const s = await app.state();
   expect(s.inbox).toEqual([]);
-  expect(s.later[0]).toMatchObject({ text: 'Book dentist', tag: 'Admin', start: '2026-09-24' });
+  expect(s.later[0]).toMatchObject({ text: 'Book dentist', start: '2026-09-24' });
 });
 
 test('subquests cannot be scheduled on their own', async ({ app, page }) => {

@@ -46,7 +46,7 @@
   font-size: 17px;
 }
 /* The pixel heading font is very wide, so its sizes are small; plain text needs larger ones. */
-:root[data-font='plain'] :is(.title, h2, .node h1, .clear b, .toast, .now .clk) {
+:root[data-font='plain'] :is(.title, h2, .node h1, .toast, .now .clk) {
   font-weight: 700;
   letter-spacing: 0;
 }
@@ -449,23 +449,6 @@ h2 {
 .addrow input::placeholder {
   color: var(--muted);
 }
-
-.clear {
-  background: var(--yellow);
-  color: var(--on-accent);
-  border: 3px solid var(--edge);
-  box-shadow: 4px 4px 0 var(--edge);
-  padding: 16px;
-  text-align: center;
-  margin-bottom: 18px;
-}
-.clear b {
-  display: block;
-  font-family: var(--display);
-  font-size: 15px;
-  margin-bottom: 8px;
-  animation: blink 1s steps(2) 3;
-}
 @keyframes blink {
   50% {
     opacity: 0;
@@ -514,26 +497,6 @@ h2 {
   font-size: 15px;
   border-width: 2px;
   box-shadow: 2px 2px 0 var(--edge);
-}
-.item .subs {
-  list-style: none;
-  margin: 0 0 10px;
-  padding: 0;
-}
-.item .subs li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-top: 2px dashed var(--muted);
-  padding: 4px 0 4px 10px;
-  overflow-wrap: anywhere;
-}
-.item .subs li span {
-  flex: 1;
-}
-.item .subs .x {
-  font-size: 20px;
-  padding: 2px 8px;
 }
 .item .addrow {
   margin: 0 0 10px;
@@ -1008,35 +971,6 @@ textarea.fld {
   flex: none;
   margin: 0;
 }
-.tpls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin: -2px 0 18px;
-}
-.tchip {
-  display: inline-flex;
-  border: 3px solid var(--edge);
-  background: var(--panel);
-  box-shadow: 3px 3px 0 var(--edge);
-}
-.tchip button {
-  background: none;
-  border: 0;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-.tchip .tdel {
-  border-left: 2px solid var(--edge);
-  color: var(--muted);
-  padding: 6px 8px;
-}
-.tchip .tdel.armed {
-  background: var(--pink);
-  color: var(--on-accent);
-  font-weight: 600;
-}
 .backup {
   display: flex;
   flex-wrap: wrap;
@@ -1164,6 +1098,23 @@ textarea.fld {
 }
 .logday li small {
   color: var(--muted);
+}
+/* steps sit under their quest; a quest not finished that day is just their heading */
+.logday > ul > li {
+  font-weight: 600;
+}
+.logday > ul > li.open {
+  color: var(--muted);
+}
+.logday li li {
+  font-weight: 400;
+  color: var(--ink);
+  margin: 2px 0;
+}
+.logday li ul {
+  margin: 2px 0 6px;
+  padding-left: 18px;
+  list-style: circle;
 }
 /* upcoming */
 .later {
@@ -1379,7 +1330,7 @@ body.zen nav {
   margin: 4px 0 0;
   font-size: 15px;
 }
-/* header focus button, attention strip, plan line, estimates */
+/* header focus button, attention strip */
 .now .zenbtn {
   flex: none;
   padding: 5px 10px;
@@ -1402,34 +1353,6 @@ body.zen nav {
   background: var(--orange);
   color: var(--on-accent);
 }
-.plan {
-  margin: -2px 0 8px;
-  font-size: 15px;
-  color: var(--muted);
-}
-.plan.over {
-  color: var(--wait-ink);
-  font-weight: 700;
-}
-.tag.est {
-  background: transparent;
-  color: var(--muted);
-  border-color: var(--muted);
-}
-.estpick {
-  align-items: center;
-  gap: 6px;
-  margin: 8px 0 12px;
-}
-.estpick .hint {
-  margin: 0;
-  font-size: 15px;
-}
-.estpick .chip {
-  padding: 3px 10px;
-  font-size: 15px;
-  border-width: 2px;
-}
 nav .dot {
   display: inline-block;
   width: 8px;
@@ -1445,8 +1368,20 @@ nav .badge[hidden] {
 }
 /* carried over */
 .carried {
-  padding: 12px 14px 6px;
-  margin-bottom: 22px;
+  padding: 10px 14px;
+  margin-bottom: 18px;
+}
+.carried > summary {
+  font-size: 16px;
+}
+.carried > summary small {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+}
+.carried[open] > summary {
+  margin-bottom: 4px;
 }
 .crow + .crow {
   border-top: 1.5px solid var(--line);
@@ -1467,36 +1402,6 @@ nav .badge[hidden] {
   padding: 3px 10px;
   font-size: 15px;
   border-width: 2px;
-}
-.tag.old {
-  background: transparent;
-  color: var(--muted);
-  border-style: dashed;
-}
-/* where you left off */
-.leftnote {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px 6px;
-  margin: 0 0 12px;
-  padding: 8px 4px 8px 12px;
-  border-left: 4px solid var(--yellow);
-  background: color-mix(in srgb, var(--yellow) 14%, transparent);
-  overflow-wrap: anywhere;
-  text-align: left;
-}
-.leftnote span {
-  font-weight: 700;
-}
-.leftnote small {
-  color: var(--muted);
-  font-size: 14px;
-}
-.leftnote .x {
-  margin-left: auto;
-  font-size: 18px;
-  padding: 0 6px;
 }
 .ask {
   padding: 12px 14px;
@@ -1675,52 +1580,6 @@ body.ringing {
 }
 .ring .acts {
   justify-content: center;
-}
-/* talk mode */
-body.talking .wrap,
-body.talking nav,
-body.talking #v-zen {
-  display: none;
-}
-#v-talk {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px calc(24px + env(safe-area-inset-bottom, 0px));
-  max-width: 720px;
-  margin: 0 auto;
-}
-#v-talk[hidden] {
-  display: none;
-}
-.tbody {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 14px;
-}
-.tstate {
-  font-family: var(--display);
-  text-align: center;
-  color: var(--muted);
-  margin: 0;
-}
-.tstate.on {
-  color: var(--ink);
-}
-#v-talk .big {
-  align-self: center;
-  padding: 14px 28px;
-}
-.tlog p {
-  margin: 0 0 10px;
-  overflow-wrap: anywhere;
-}
-.tlog p.me {
-  text-align: right;
-  color: var(--muted);
 }
 /* knowledge: flows, categories and articles */
 .flows {
@@ -2072,7 +1931,53 @@ details.more > details {
 .row .x {
   opacity: 0.45;
 }
+/* On a phone the row swipes left for Inbox / Delete instead: no × taking up the row. */
+@media (pointer: coarse) {
+  .row .x {
+    display: none;
+  }
+}
 .row .x:hover,
 .row .x:focus-visible {
   opacity: 1;
+}
+/* the focus time spent on a quest, on its page */
+.tag.est {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--muted);
+}
+/* a quest's tag, folded to the one it has */
+.tagd {
+  margin: 10px 0 0;
+}
+.tagd > summary {
+  font-size: 15px;
+  color: var(--muted);
+}
+.tagd[open] > summary {
+  margin-bottom: 8px;
+}
+/* a device in Settings, with its two-tap Forget */
+.tchip {
+  display: inline-flex;
+  border: 3px solid var(--edge);
+  background: var(--panel);
+  box-shadow: 3px 3px 0 var(--edge);
+}
+.tchip button {
+  background: none;
+  border: 0;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.tchip .tdel {
+  border-left: 2px solid var(--edge);
+  color: var(--muted);
+  padding: 6px 8px;
+}
+.tchip .tdel.armed {
+  background: var(--pink);
+  color: var(--on-accent);
+  font-weight: 600;
 }

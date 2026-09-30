@@ -71,7 +71,7 @@ test('× offers Inbox or Delete; delete can be undone', async ({ app, page }) =>
 test('tags are set on the quest and shown on its row', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
-  await page.click('[data-settag="Design"]');
+  await app.setTag('Design');
   expect((await app.state()).quests[0].tag).toBe('Design');
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#v-today .row .tag')).toHaveText('Design');
@@ -117,38 +117,6 @@ test('Today has no add box: new work comes in through the Inbox', async ({ app, 
   await app.openQuest('Plan offsite');
   await page.keyboard.press('n');
   await expect(page.locator('#sin')).toBeFocused();
-});
-
-test('estimates add up against free time until the end of the workday', async ({ app, page }) => {
-  await page.clock.setFixedTime(new Date(2026, 8, 23, 15, 0)); // 3pm
-  await app.addQuest('Write report');
-  await app.addQuest('Plan sprint');
-  await expect(page.locator('#v-today .plan')).toHaveCount(0); // nothing estimated yet
-  await app.openQuest('Write report');
-  await page.click('[data-est="120"]');
-  await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .row', { hasText: 'Write report' }).locator('.tag.est')).toHaveText(
-    '~2h',
-  );
-  // 3pm to the default 5:30pm end leaves 2h 30m.
-  await expect(page.locator('#v-today .plan')).toHaveText('2h planned · 2h 30m free');
-  await app.openQuest('Plan sprint');
-  await page.click('[data-est="60"]');
-  await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .plan')).toHaveClass(/over/);
-  await expect(page.locator('#v-today .plan')).toContainText('3h planned · 2h 30m free · more than fits');
-  // Tapping the same estimate again clears it; finished quests stop counting.
-  await app.openQuest('Plan sprint');
-  await page.click('[data-est="60"]');
-  expect((await app.state()).quests[1].est).toBeUndefined();
-  await page.click('[data-crumb="-1"]');
-  await page.click('[aria-label="Mark done: Write report"] >> nth=1');
-  await expect(page.locator('#v-today .plan')).toHaveCount(0);
-  // The workday end is a setting.
-  await app.go('account');
-  await page.fill('#dayend', '18:00');
-  await page.dispatchEvent('#dayend', 'change');
-  expect((await app.state()).dayEnd).toBe('18:00');
 });
 
 test('the header: the next step on up to two lines, then Focus, Search and the sync dot below', async ({

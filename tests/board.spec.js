@@ -49,7 +49,6 @@ test.describe('desktop', () => {
     await page.keyboard.press('t');
     await expect(page.locator('nav')).toBeHidden();
     await page.click('#v-zen [data-pause]');
-    await page.click('#whyskip');
     await page.click('#zenexit');
     await expect(page.locator('nav')).toBeVisible();
   });

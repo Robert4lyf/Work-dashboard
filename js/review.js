@@ -27,10 +27,8 @@ function weekDone() {
 }
 // The weekly review, one step at a time: each says "all clear" when there's nothing to do.
 function renderWeek() {
-  const [y, m, d] = weekStart().split('-').map(Number),
-    done = weekDone(),
-    focus = weekFocus(),
-    ints = S.interrupts.filter(x => x.t >= new Date(y, m - 1, d).getTime()).length;
+  const done = weekDone(),
+    focus = weekFocus();
   const steps = [];
   const step = (title, body, n) =>
     steps.push({ title, body: body || '<p class="hint wclear">All clear.</p>', n });
@@ -43,7 +41,9 @@ function renderWeek() {
     S.inbox.length,
   );
   // 2. Decide on anything that's been sitting on Today.
-  const stale = S.quests.filter(q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE);
+  const stale = S.quests.filter(
+    q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today(),
+  );
   step('Carried over', stale.length ? carriedRows(stale) : '', stale.length);
   // 3. Chase what you're waiting on.
   const wait = waitingNodes();
@@ -77,7 +77,7 @@ function renderWeek() {
   reviewStep = Math.max(0, Math.min(reviewStep, steps.length - 1));
   const cur = steps[reviewStep],
     last = reviewStep === steps.length - 1;
-  let h = `<p class="hint wsum">This week (from ${dayLabel(weekStart())}): <b>${done.length}</b> done · <b>${hm(focus)}</b> focus · <b>${ints}</b> interruption${ints === 1 ? '' : 's'}${S.reviewed ? ` · last reviewed ${dayLabel(S.reviewed)}` : ''}</p>`;
+  let h = `<p class="hint wsum">This week (from ${dayLabel(weekStart())}): <b>${done.length}</b> done · <b>${hm(focus)}</b> focus${S.reviewed ? ` · last reviewed ${dayLabel(S.reviewed)}` : ''}</p>`;
   h += `<div class="wdots" aria-hidden="true">${steps.map((s, i) => `<span class="${i === reviewStep ? 'on' : ''}${s.n ? ' has' : ''}"></span>`).join('')}</div>`;
   h += `<p class="hint wstepno">Step ${reviewStep + 1} of ${steps.length}</p>`;
   h += `<div class="wstep box"><h2>${cur.title}${cur.n ? ` <small>${cur.n}</small>` : ''}</h2>${cur.body}</div>`;

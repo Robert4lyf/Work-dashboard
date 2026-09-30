@@ -5,7 +5,7 @@ test.beforeEach(async ({ app }) => app.open());
 test('tag rename and delete update quests; delete can be undone', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
-  await page.click('[data-settag="Design"]');
+  await app.setTag('Design');
   await page.click('[data-edittags]');
   await expect(page.locator('#v-account')).toBeVisible();
   await page.fill('[data-tagname="0"]', 'UX');

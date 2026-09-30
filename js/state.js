@@ -53,6 +53,8 @@ const cleanDay = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? 
 // Quests are titles; the waiting is on their subquests. A quest set waiting (before this, or on an
 // older copy of the app) gets a step of its own, named for what it's waiting for, that carries it.
 // The step's id comes from the quest's, so two devices converting the same quest make the same step.
+// Record keys changed by a conversion in norm, not by an edit: see markDirty.
+const converted = new Set();
 function waitToStep(q) {
   const w = q.wait;
   if (!w) return null;
@@ -65,6 +67,32 @@ function waitToStep(q) {
   c.wait = { ...w, note: '' }; // (what for is now the step's name)
   q.children.push(c);
   return c;
+}
+// A quest has steps; a step doesn't (before, steps could have steps of their own). Steps under a
+// step move up beside it, named with it ("Contract: Draft"); a step that only grouped them goes.
+// One with anything of its own (waiting, notes) stays, as a step, finished if its steps were.
+// An optional group's steps are optional, and they take its deadline if they have none. Ids and
+// ticks are kept, so every device flattens the same way.
+const doneOf = n => {
+  const k = n.children || [];
+  if (!k.length) return !!n.done;
+  const req = k.filter(c => !c.opt);
+  return (req.length ? req : k).every(doneOf);
+};
+function flatSteps(ns) {
+  const out = [];
+  (function w(list, pre, opt, due) {
+    list.forEach(c => {
+      const name = pre ? pre + ': ' + c.text : c.text,
+        kids = c.children || [],
+        o = !!(c.opt || opt),
+        d = c.due || due || '';
+      if (!kids.length || c.wait || c.notes)
+        out.push(Object.assign(c, { text: name, children: [], opt: o, due: d, done: doneOf(c) }));
+      w(kids, name, o, d);
+    });
+  })(ns || [], '', false, '');
+  return out;
 }
 function fix(n) {
   cleanId(n);
@@ -166,7 +194,17 @@ function norm(s) {
       S.quests.push(q);
     });
   delete S.promises;
-  [...S.quests, ...S.later].forEach(waitToStep);
+  // Records changed only by these conversions (see converted, in records.js): a real edit made
+  // elsewhere meanwhile must still win over them.
+  const conv = (k, q, done) => done && converted.add(k + ':' + q.id);
+  S.quests.forEach(q => conv('quest', q, waitToStep(q)));
+  S.later.forEach(q => conv('later', q, waitToStep(q)));
+  const nested = q => q && q.children && q.children.some(c => c.children && c.children.length),
+    flat = (k, rec, q) => nested(q) && ((q.children = flatSteps(q.children)), conv(k, rec, true));
+  S.quests.forEach(q => flat('quest', q, q));
+  S.later.forEach(q => flat('later', q, q));
+  S.inbox.forEach(i => flat('inbox', i, i.node));
+  S.templates.forEach(t => flat('template', t, t));
   if (!Array.isArray(S.tags) || !S.tags.length) S.tags = TAGS.map(([name, color]) => ({ name, color }));
   // Colours go into style attributes: only the palette's, or a plain hex colour.
   S.tags.forEach(t => {

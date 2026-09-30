@@ -29,8 +29,6 @@ function renderHeader() {
     } else
       h = `<button class="go" data-v="today"><small>Next up</small><b>${S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
   }
-  // Talk mode, if turned on for this device (Settings).
-  if (talkPref && talkable() && !S.timer) acts += '<button class="btn sm zenbtn" id="talkbtn">Talk</button>';
   setIfChanged($('#hnow'), h); // unchanged: left alone, keeping keyboard focus
   setIfChanged($('#hact'), acts);
   const qs = S.quests,
