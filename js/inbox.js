@@ -102,9 +102,6 @@ function renderInbox() {
       open = expanded.has(it.id);
     h += `<div class="item" data-id="${it.id}"><p><button class="ititle" data-steps="${it.id}" aria-expanded="${open}">${esc(it.text)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button> ${tagBadge(it.tag)}${waitBadge(it)}${it.node ? stepWaitBadge(it.node) : ''}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
-      h +=
-        `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
-        laterPicker('i', it.id);
       // Its subquests, added here before it goes to Today (they move with it).
       if (kids.length) {
         h += '<ul class="subs">';
@@ -115,6 +112,10 @@ function renderInbox() {
         h += '</ul>';
       }
       h += `<form class="addrow" data-subfor="${it.id}"><input id="is-${it.id}" data-keep maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
+      // Then waiting, and do later.
+      h +=
+        `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">` +
+        laterPicker('i', it.id);
     }
     const chip = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
     h +=
