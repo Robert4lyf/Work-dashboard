@@ -1744,6 +1744,8 @@ summary {
 .flows.chips .chip {
   text-decoration: none;
   color: inherit;
+  max-width: 100%; /* (a long name wraps) */
+  overflow-wrap: anywhere;
 }
 .notestile {
   border: 3px solid var(--edge);

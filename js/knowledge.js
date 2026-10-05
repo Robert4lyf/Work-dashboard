@@ -126,8 +126,9 @@ function renderKnowledge() {
 }
 function kbFlows() {
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
+  // The buttons themselves, here as well as at the top of Today.
   let h = flows.length
-    ? ''
+    ? `<h2>Flows</h2>${quickActions()}`
     : '<h2>Flows</h2><p class="hint">Buttons on Today that run your Power Automate Desktop flows on this computer.</p>';
   h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage flows' : 'Add a flow'}</summary>`;
   flows.forEach(
@@ -137,7 +138,7 @@ function kbFlows() {
   h += `<form id="flowform"><label class="f" for="flowname">Button name</label><input class="fld" id="flowname" maxlength="60" autocomplete="off" required>
     <label class="f" for="flowurl">Run URL</label><input class="fld" id="flowurl" placeholder="ms-powerautomate:/console/flow/run?..." autocomplete="off" required>
     <div class="acts"><button class="btn">Add flow</button></div></form>
-    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run.</p></details>`;
+    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. Each flow gets a button here and at the top of Today. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run.</p></details>`;
   return h;
 }
 // The notes (one scratchpad, synced), pinned at the top of Knowledge.

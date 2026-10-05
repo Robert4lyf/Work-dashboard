@@ -110,7 +110,8 @@ test('flows: a button per flow opens its Run URL; only Run URLs are accepted', a
   await page.fill('#flowname', 'Archive emails');
   await page.fill('#flowurl', url + '4');
   await page.click('#flowform .btn');
-  // The buttons live on Today, as quick actions; managing them stays here.
+  // A button each here, above managing them, and on Today, as quick actions.
+  await expect(v.locator('.flows a')).toHaveText(['▶ Archive emails', '▶ Weekly report']);
   const flows = page.locator('#v-today .flows a');
   await app.go('today');
   await expect(flows).toHaveText(['▶ Archive emails', '▶ Weekly report']);
