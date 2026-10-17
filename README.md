@@ -117,7 +117,7 @@ A **Suggest steps (AI)** link on a quest's page asks Claude for a few next steps
 It only shows while you're signed in to sync, and needs a small Supabase function that holds the API key, so the key never reaches the app:
 
 1. At https://console.anthropic.com create an account (separate from a Claude subscription), add some credit, and create an API key. It uses the small, fast model (Claude Haiku 5.5): each suggestion costs a fraction of a penny.
-2. In Supabase, open **Edge Functions**, create a function named `suggest-steps`, and give it the two files from `supabase/functions/suggest-steps/` (`index.ts` and `core.mjs`). Leave **"Enforce JWT verification" on**: only signed-in users of your project get an answer. With the Supabase CLI: `supabase functions deploy suggest-steps`.
+2. In Supabase, open **Edge Functions**, choose **Deploy a new function > Via Editor**, name it `suggest-steps`, and paste in the whole of `supabase/functions/suggest-steps/index.ts` (it's the only file). Leave **"Enforce JWT verification" on**: only signed-in users of your project get an answer. With the Supabase CLI: `supabase functions deploy suggest-steps`.
 3. In **Edge Functions > Secrets**, add `ANTHROPIC_API_KEY` with the key from step 1. Never put the key in `config.js` or anywhere in this repository: it's public.
 
 If it says it couldn't get suggestions, the function's **Logs** in Supabase show why (a missing or wrong key, or no credit left).
