@@ -247,6 +247,7 @@ function renderNode({ n, parents }) {
     h += listHead('Subquests', n.children);
     h += list(n.children);
     h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>`;
+    h += suggestBox(n);
   }
   // Everything else, folded away.
   h += `<details id="mored" class="more"${panels.mored ? ' open' : ''}><summary>More: notes, deadline, ${top ? 'do later, repeat, ' : ''}move…</summary>`;
@@ -278,4 +279,88 @@ function renderNode({ n, parents }) {
     h += `<button class="btn ${d ? '' : 'green'}" data-toggle="${n.id}">${d ? 'Mark not done' : 'Mark done'}</button>`;
   h += `${d ? '' : `<button class="btn blue" data-focuson="${n.id}">Focus on this</button>`}</div>`;
   setHTML($('#v-today'), h);
+}
+
+/* Suggest steps (AI): the quest's name and its steps' names (nothing else) go to the
+   suggest-steps Supabase function, which asks Claude for a few next steps. They're offered as a
+   list to tick; only the ticked ones are added. Needs sync signed in (the function checks it). */
+let suggest = null; // { id, busy, items: [{ text, on }], error }
+const SUGGEST_OK = 'dashboard-suggest-ok'; // (this device was told what's sent, once)
+function suggestBox(n) {
+  if (!sb || !session) return '';
+  const s = suggest && suggest.id === n.id ? suggest : null;
+  if (!s) return `<button class="linkbtn suggestbtn" data-suggest="${n.id}">Suggest steps (AI)</button>`;
+  if (s.busy) return '<p class="hint suggestbusy">Getting suggestions…</p>';
+  let h = '<div class="suggest box">';
+  if (s.error) h += `<p class="hint">${esc(s.error)}</p>`;
+  else
+    h +=
+      '<p class="hint">Suggested steps: untick any you don\'t want.</p>' +
+      s.items
+        .map(
+          (x, i) =>
+            `<label class="optbox"><input type="checkbox" data-sugpick="${i}"${x.on ? ' checked' : ''}>${esc(x.text)}</label>`,
+        )
+        .join('');
+  h += `<div class="acts">${s.error ? '' : `<button class="btn sm green" data-sugadd="${n.id}">Add ticked</button>`}<button class="btn sm" data-sugclose="1">${s.error ? 'OK' : 'Cancel'}</button></div></div>`;
+  return h;
+}
+async function askSuggest(id) {
+  const r = find(id);
+  if (!r || !sb || !session) return;
+  let told = false;
+  try {
+    told = localStorage.getItem(SUGGEST_OK) === '1';
+  } catch (e) {}
+  if (!told)
+    return sheet(
+      {
+        title: 'Suggest steps with AI',
+        text: "This sends this quest's name and its steps' names, and nothing else, to Anthropic's Claude to suggest next steps. Only use it if your organisation allows this for work information.",
+        ok: 'Continue',
+      },
+      () => {
+        try {
+          localStorage.setItem(SUGGEST_OK, '1');
+        } catch (e) {}
+        askSuggest(id);
+      },
+    );
+  suggest = { id, busy: true, items: [] };
+  renderToday();
+  let next;
+  try {
+    const { data, error } = await sb.functions.invoke('suggest-steps', {
+      body: { quest: r.n.text, steps: r.n.children.map(c => c.text) },
+    });
+    if (error || !data || !Array.isArray(data.steps)) throw error || new Error('no steps');
+    const items = data.steps
+      .map(t => ({ text: cleanText(String(t)).slice(0, 120), on: true }))
+      .filter(x => x.text);
+    next = { id, items, error: items.length ? '' : 'No new steps to suggest for this one.' };
+  } catch (e) {
+    next = {
+      id,
+      items: [],
+      error: navigator.onLine
+        ? "Couldn't get suggestions. The suggest-steps function may not be set up yet (see the README)."
+        : 'Suggestions need a connection.',
+    };
+  }
+  if (!suggest || suggest.id !== id) return; // (closed, or another asked, meanwhile)
+  suggest = next;
+  renderToday();
+}
+function addSuggested(id) {
+  const r = find(id),
+    s = suggest;
+  suggest = null;
+  if (!r || !s || s.id !== id) return renderToday();
+  const picked = s.items.filter(x => x.on);
+  if (!picked.length) return renderToday();
+  const bf = snapshot();
+  picked.forEach(x => r.n.children.push(fix({ id: uid(), text: x.text })));
+  r.n.done = false;
+  settle(bf);
+  toast('Added ' + plural(picked.length, 'step'));
 }

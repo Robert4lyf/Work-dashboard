@@ -1744,6 +1744,8 @@ summary {
 .flows.chips .chip {
   text-decoration: none;
   color: inherit;
+  max-width: 100%; /* (a long name wraps) */
+  overflow-wrap: anywhere;
 }
 .notestile {
   border: 3px solid var(--edge);
@@ -1956,4 +1958,15 @@ details.more > details {
 .item .subs .x {
   font-size: 20px;
   padding: 2px 8px;
+}
+/* Suggest steps (AI) on a quest's page */
+.suggestbtn {
+  margin: 0 0 14px;
+}
+.suggest {
+  padding: 10px 14px;
+  margin: 0 0 18px;
+}
+.suggest .optbox {
+  margin: 6px 0;
 }
