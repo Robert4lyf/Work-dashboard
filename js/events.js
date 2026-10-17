@@ -195,6 +195,11 @@ document.addEventListener('change', e => {
     el.value = '';
     return;
   }
+  if (el.dataset.sugpick !== undefined) {
+    const x = suggest && suggest.items[+el.dataset.sugpick];
+    if (x) x.on = el.checked;
+    return;
+  }
   if (el.dataset.iwait) {
     const it = S.inbox.find(x => x.id === el.dataset.iwait),
       who = el.value.trim();
@@ -460,6 +465,12 @@ document.addEventListener('click', e => {
     go('focus');
   }
   if (d.promote) promoteInbox(d.promote);
+  if (d.suggest) askSuggest(d.suggest);
+  if (d.sugadd) addSuggested(d.sugadd);
+  if (d.sugclose) {
+    suggest = null;
+    renderToday();
+  }
   if (d.rsub) {
     reviewSub = d.rsub;
     go(d.rsub === 'week' ? 'review' : d.rsub);

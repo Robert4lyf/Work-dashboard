@@ -1959,3 +1959,14 @@ details.more > details {
   font-size: 20px;
   padding: 2px 8px;
 }
+/* Suggest steps (AI) on a quest's page */
+.suggestbtn {
+  margin: 0 0 14px;
+}
+.suggest {
+  padding: 10px 14px;
+  margin: 0 0 18px;
+}
+.suggest .optbox {
+  margin: 6px 0;
+}

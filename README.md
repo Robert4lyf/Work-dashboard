@@ -110,6 +110,18 @@ Invoke-RestMethod -Method Post -Uri $url -Headers @{ apikey = $key } -ContentTyp
 3. Wrap the main steps in **On block error** that runs `SendAlert` (or set a risky action's **On error** to run it).
 4. Run `SendAlert` once on its own to test. From a work PC, if it times out, the network is probably blocking `*.supabase.co`.
 
+## Suggest steps with AI (optional)
+
+A **Suggest steps (AI)** link on a quest's page asks Claude for a few next steps, offered as a list to tick; only the ticked ones are added. It sends the quest's name and its steps' names, and nothing else (no notes, other quests, or anything from Knowledge). The first time on each device it says so and asks before sending. Check your organisation allows this for work information before turning it on.
+
+It only shows while you're signed in to sync, and needs a small Supabase function that holds the API key, so the key never reaches the app:
+
+1. At https://console.anthropic.com create an account (separate from a Claude subscription), add some credit, and create an API key. It uses the small, fast model (Claude Haiku 5.5): each suggestion costs a fraction of a penny.
+2. In Supabase, open **Edge Functions**, create a function named `suggest-steps`, and give it the two files from `supabase/functions/suggest-steps/` (`index.ts` and `core.mjs`). Leave **"Enforce JWT verification" on**: only signed-in users of your project get an answer. With the Supabase CLI: `supabase functions deploy suggest-steps`.
+3. In **Edge Functions > Secrets**, add `ANTHROPIC_API_KEY` with the key from step 1. Never put the key in `config.js` or anywhere in this repository: it's public.
+
+If it says it couldn't get suggestions, the function's **Logs** in Supabase show why (a missing or wrong key, or no credit left).
+
 ## How sync behaves
 
 - Each quest, inbox item, focus session and so on is stored as its own row, so devices only exchange what changed. Changes save instantly on the device, sync about a second later, and reach your other open devices within a second or two (live updates).
