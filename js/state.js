@@ -205,6 +205,15 @@ function norm(s) {
   S.later.forEach(q => flat('later', q, q));
   S.inbox.forEach(i => flat('inbox', i, i.node));
   S.templates.forEach(t => flat('template', t, t));
+  // Before, ticking a quest's last step finished it. One finished that way (it's in the log) is
+  // marked finished, as finishing it now does; one never finished asks what's next.
+  S.quests.forEach(q =>
+    conv(
+      'quest',
+      q,
+      q.children.length && !q.done && stepsDone(q) && S.log.some(x => x.id === q.id) && (q.done = true),
+    ),
+  );
   // Saved templates (a removed feature) go; only repeating quests' templates stay. Everywhere
   // alike, so their removal is a conversion too (a repeat set up elsewhere meanwhile still wins).
   S.templates = S.templates.filter(t => {

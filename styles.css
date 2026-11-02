@@ -771,6 +771,10 @@ nav button[aria-current='page'] {
 .tag.now {
   background: var(--orange);
 }
+/* every step ticked, quest not finished: asking what's next */
+.tag.asknext {
+  background: var(--yellow);
+}
 .node {
   padding: 14px;
   margin-bottom: 22px;
@@ -1396,6 +1400,9 @@ nav .badge[hidden] {
   padding: 3px 10px;
   font-size: 15px;
   border-width: 2px;
+}
+.nextask p {
+  margin: 0;
 }
 .timeup .tuh {
   margin: 0 0 4px;
