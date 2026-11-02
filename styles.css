@@ -722,8 +722,86 @@ nav button[aria-current='page'] {
   font-size: 15px;
   margin-top: 2px;
 }
+/* Today as a board: lanes by stage, each a sideways-scrolling row of tiles */
+.viewsw {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  margin-right: 10px;
+}
+.viewsw .chip {
+  padding: 6px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+.viewsw .chip[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--bg);
+}
+.board {
+  margin-bottom: 18px;
+}
+.blane h3 {
+  font-family: var(--display);
+  font-size: 11px;
+  margin: 14px 0 8px;
+}
+.blane h3 small {
+  color: var(--muted);
+}
+.lanetiles {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: 2px 6px 10px 2px;
+}
+.qtile {
+  flex: 0 0 min(62%, 220px);
+  scroll-snap-align: start;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--panel);
+  border: 3px solid var(--edge);
+  box-shadow: 4px 4px 0 var(--edge);
+  padding: 8px;
+}
+.qtile .check {
+  flex: none;
+}
+.qtopen {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.qtopen > span {
+  display: block;
+  font-weight: 600;
+}
+.qtopen small {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  margin-top: 4px;
+}
+.qtopen .qtnext {
+  display: block;
+  margin-top: 2px;
+}
+.qtile.done .qtopen > span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
 /* a quest's summary on Today, under its name (two lines at most) */
-.open .qsum {
+:is(.open, .qtopen) .qsum {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
