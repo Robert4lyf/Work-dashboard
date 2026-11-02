@@ -122,6 +122,12 @@ It only shows while you're signed in to sync, and needs a small Supabase functio
 
 If it says it couldn't get suggestions, the function's **Logs** in Supabase show why (a missing or wrong key, or no credit left).
 
+### Summarise with AI
+
+The same function also writes summaries. On a quest's page, under its name, is an optional **Summary and updates** box that you write yourself; it shows under the quest's name on Today. **Summarise (AI)** beside it asks Claude for a short plain-English summary of what's been done, offered as a draft: you choose whether to use it instead of yours, add it below yours, or cancel. It sends the quest's name, its steps (which are ticked or waiting, and on whom) and its summary, and nothing else; the first time on each device it says so and asks before sending.
+
+If you set up the function before summaries were added, paste the updated `supabase/functions/suggest-steps/index.ts` over it once (**Edge Functions > suggest-steps > Code**, then **Deploy**). Until then, Summarise says it couldn't get a summary.
+
 ## How sync behaves
 
 - Each quest, inbox item, focus session and so on is stored as its own row, so devices only exchange what changed. Changes save instantly on the device, sync about a second later, and reach your other open devices within a second or two (live updates).

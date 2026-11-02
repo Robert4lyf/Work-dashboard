@@ -66,12 +66,13 @@ function searchResults() {
   (function w(ns, trail) {
     ns.forEach(n => {
       const wt = n.wait ? [n.wait.who, n.wait.note].join(' ') : '';
-      if (has(n.text) || has(n.notes) || has(wt)) {
+      if (has(n.text) || has(n.summary) || has(n.notes) || has(wt)) {
         const sub = [
           trail.length ? esc(trail.join(' / ')) : '',
           isDone(n) ? 'done' : '',
           n.wait ? 'waiting' + (n.wait.who ? ' on ' + esc(n.wait.who) : '') : '',
-          !has(n.text) && has(n.notes) ? snippet(n.notes, q) : '',
+          !has(n.text) && has(n.summary) ? snippet(n.summary, q) : '',
+          !has(n.text) && !has(n.summary) && has(n.notes) ? snippet(n.notes, q) : '',
         ]
           .filter(Boolean)
           .join(' · ');

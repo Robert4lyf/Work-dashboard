@@ -287,6 +287,15 @@ document.addEventListener('input', e => {
   if (el.id === 'notesin') return typedNotes(el.value);
   if (el.id === 'kbq') return kbSearch(el.value);
   if (el.id === 'sq') return typedSearch(el.value);
+  if (el.dataset.field === 'summary') {
+    const r = find(el.dataset.id);
+    if (!r) return;
+    const v = cleanText(el.value).slice(0, SUMMARY_MAX);
+    if (v.trim()) r.n.summary = v;
+    else delete r.n.summary;
+    save();
+    return;
+  }
   if (el.dataset.field !== 'notes') return;
   const r = find(el.dataset.id);
   if (r) {
@@ -475,6 +484,12 @@ document.addEventListener('click', e => {
   }
   if (d.promote) promoteInbox(d.promote);
   if (d.suggest) askSuggest(d.suggest);
+  if (d.sumai) askSummary(d.sumai);
+  if (d.sumuse) useSummary(d.sumuse);
+  if (d.sumclose) {
+    sumAI = null;
+    renderToday();
+  }
   if (d.sugadd) addSuggested(d.sugadd);
   if (d.sugclose) {
     suggest = null;
