@@ -58,6 +58,7 @@ test('finished quests set waiting reopen properly', async ({ app, page }) => {
   await page.evaluate(() => {
     const bf = snapshot();
     find('b1').n.done = true;
+    find('b').n.done = true; // (finished, as Finish quest does)
     settle(bf);
   });
   expect((await app.state()).log.map(x => x.text)).toContain('Report');

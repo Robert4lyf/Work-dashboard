@@ -117,6 +117,7 @@ test('flattening keeps what a grouping step meant: optional, finished, deadline,
         ],
       },
     ];
+    s.log = [{ id: 'q', d: today(), text: 'Done quest', trail: [] }]; // (finished: it was logged)
   });
   await page.reload();
   const s = await app.state(),

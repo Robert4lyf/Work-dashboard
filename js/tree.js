@@ -1,9 +1,17 @@
 /* tree helpers */
+// A quest with steps is finished when you say so (its own done), with every step that counts
+// ticked. Ticking its last step doesn't finish it: more steps often turn up, so it asks what's next.
+// (Except a repeating one: a checklist done the same way each time, finished by its last tick.)
 function isDone(n) {
   if (!n.children.length) return n.done;
+  return (!!n.done || repeats(tplFor(n))) && stepsDone(n);
+}
+function stepsDone(n) {
   const req = n.children.filter(c => !c.opt);
   return (req.length ? req : n.children).every(isDone);
 }
+// Every step ticked, but not finished: what's next (another step, or finish it)?
+const needsNext = n => n.children.length > 0 && stepsDone(n) && !isDone(n);
 function frac(n) {
   if (!n.children.length) return isDone(n) ? 1 : 0;
   const req = n.children.filter(c => !c.opt),
@@ -39,7 +47,14 @@ function snapshot() {
   const m = new Map();
   (function w(ns, trail) {
     ns.forEach(n => {
-      m.set(n.id, { done: isDone(n), top: !trail.length, text: n.text, trail, kids: n.children.length });
+      m.set(n.id, {
+        done: isDone(n),
+        ready: needsNext(n),
+        top: !trail.length,
+        text: n.text,
+        trail,
+        kids: n.children.length,
+      });
       w(n.children, [...trail, n.text]);
     });
   })(S.quests, []);
@@ -54,6 +69,14 @@ function sinkDone(ns) {
   ns.forEach(n => sinkDone(n.children));
 }
 function settle(before) {
+  // A finished quest with a step to do again (added, or un-ticked) isn't finished any more:
+  // ticking that step asks what's next, rather than finishing it again.
+  // One left asking what's next is marked so, so it isn't taken for one finished before this
+  // version (see norm).
+  [...S.quests, ...S.later].forEach(q => {
+    if (q.done && q.children.length && !stepsDone(q)) q.done = false;
+    if (needsNext(q)) q.asked = 1;
+  });
   sinkDone(S.quests);
   const after = snapshot();
   let gain = 0;
@@ -76,8 +99,49 @@ function settle(before) {
     addXP(gain);
     if (gain > 0) beep([659, 988]);
   }
+  // A quest's last step just ticked here (not one removed): ask what's next.
+  let ask = null;
+  after.forEach((v, id) => {
+    const b = before.get(id);
+    if (v.top && v.ready && b && !b.ready && !b.done && v.kids === b.kids) ask = ask || id;
+  });
   save();
   renderAll();
+  if (ask && S.quests.some(q => q.id === ask)) askNext(ask);
+}
+// The last step's ticked: add the next one, add a reminder to work it out, or finish the quest.
+// (Closed without an answer, the quest stays on Today asking, until you add a step or finish it.)
+function askNext(id) {
+  const r = find(id);
+  if (!r) return;
+  sheet(
+    {
+      title: "What's next?",
+      text: `Every step of "${r.n.text}" is ticked. It stays open until you finish it.`,
+      label: 'Next step',
+      ok: 'Add step',
+      cancel: 'Later',
+      extra: [
+        ['unsure', 'Not sure yet'],
+        ['finish', 'Finish quest', 'blue'],
+      ],
+    },
+    a => nextAnswer(id, a),
+  );
+}
+const UNSURE = 'Work out the next step';
+function nextAnswer(id, a) {
+  const r = find(id);
+  if (!r || !needsNext(r.n)) return; // (changed meanwhile, here or on another device)
+  const bf = snapshot();
+  if (a && a.pick === 'finish') r.n.done = true;
+  else {
+    const text = a && a.pick === 'unsure' ? UNSURE : typeof a === 'string' ? cleanText(a) : '';
+    if (!text) return;
+    r.n.children.push(fix({ id: uid(), text }));
+  }
+  settle(bf);
+  if (r.n.done) toast('Finished: ' + r.n.text);
 }
 const spent = n => {
   const set = new Set(ids(n));
@@ -130,6 +194,7 @@ function repLabel(t) {
 }
 // Change how a quest repeats. The repeat copies the quest as it is now, subquests included.
 function setRepeat(n, fn) {
+  const bf = snapshot(); // (a repeating quest with every step ticked is finished: see isDone)
   let t = tplFor(n) || S.templates.find(x => x.auto && x.text === n.text); // (never a saved one)
   if (!t) {
     t = { id: uid(), days: [], monthDay: 0, auto: true };
@@ -142,14 +207,17 @@ function setRepeat(n, fn) {
     S.templates = S.templates.filter(x => x !== t);
     delete n.tpl;
   }
-  save();
-  renderAll();
+  settle(bf);
 }
 
 /* a small panel at the bottom of the screen, for a one-line answer or a yes/no, in place of the
    browser's own pop-ups. One at a time; Escape, the back gesture or the backdrop close it. */
 let sheetCb = null;
-function sheet({ title, label, value = '', ok = 'OK', cancel = 'Cancel', danger = false, text = '' }, cb) {
+// extra: more answers, as [key, label, class] buttons (answering { pick: key }).
+function sheet(
+  { title, label, value = '', ok = 'OK', cancel = 'Cancel', danger = false, text = '', extra = [] },
+  cb,
+) {
   closeSheet();
   sheetCb = cb;
   const el = document.createElement('div');
@@ -158,7 +226,11 @@ function sheet({ title, label, value = '', ok = 'OK', cancel = 'Cancel', danger 
     label !== undefined
       ? `<label class="f" for="sheetin">${esc(label)}</label><input class="fld" id="sheetin" maxlength="120" value="${esc(value)}" autocomplete="off">`
       : ''
-  }<div class="acts"><button class="btn ${danger ? 'pink' : 'green'}" id="sheetok">${esc(ok)}</button><button class="btn" type="button" data-sheetclose="1">${esc(cancel)}</button></div></form>`;
+  }<div class="acts"><button class="btn ${danger ? 'pink' : 'green'}" id="sheetok">${esc(ok)}</button><button class="btn" type="button" data-sheetclose="1">${esc(cancel)}</button></div>${
+    extra.length
+      ? `<div class="acts">${extra.map(([k, l, c]) => `<button class="btn ${c || ''}" type="button" data-sheetans="${esc(k)}">${esc(l)}</button>`).join('')}</div>`
+      : ''
+  }</form>`;
   document.body.appendChild(el);
   const i = $('#sheetin');
   if (i) {
@@ -186,6 +258,11 @@ document.addEventListener(
     if (e.target.closest && e.target.closest('[data-sheetclose]')) {
       e.stopImmediatePropagation();
       closeSheet();
+    }
+    const ans = e.target.closest && e.target.closest('[data-sheetans]');
+    if (ans) {
+      e.stopImmediatePropagation();
+      closeSheet({ pick: ans.dataset.sheetans });
     }
   },
   true,

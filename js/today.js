@@ -34,7 +34,11 @@ function row(n, i, len, sib) {
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
-    (nx ? 'Next: ' + esc(nx.text) : '');
+    (nx
+      ? 'Next: ' + esc(nx.text)
+      : needsNext(n)
+        ? '<span class="tag asknext">All ticked: what\'s next?</span>'
+        : '');
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : xOpen === n.id
@@ -151,7 +155,7 @@ function renderAttention() {
 const STALE = 3;
 const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
 // (Not one only waiting on others: every step left is waiting.)
-const onlyWaiting = q => q.children.length > 0 && !isDone(q) && !nextLeaf(q);
+const onlyWaiting = q => q.children.length > 0 && !isDone(q) && !nextLeaf(q) && !needsNext(q);
 const carried = () =>
   S.quests.filter(q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today());
 function renderCarried() {
@@ -242,6 +246,9 @@ function renderNode({ n, parents }) {
     h += `<details id="tagd" class="tagd"${panels.tagd ? ' open' : ''}><summary>Tag: ${n.tag ? tagBadge(n.tag) : '<span class="hint">none</span>'}</summary>${tagPicker('q', n.id, n.tag)}</details>`;
   h += waitPanel(n, top);
   h += '</div>';
+  // Every step ticked: what's next? (Add it below, or finish the quest.)
+  if (top && needsNext(n))
+    h += `<div class="ask box nextask"><p><b>Every step is ticked.</b> What's next? Add it below, or finish the quest.</p><div class="acts"><button class="btn green" data-finish="${n.id}">Finish quest</button><button class="btn" data-unsure="${n.id}">Not sure yet</button></div></div>`;
   // The steps come first: they're what you work through. (A quest has steps; a step doesn't.)
   if (top) {
     h += listHead('Subquests', n.children);
@@ -277,6 +284,7 @@ function renderNode({ n, parents }) {
   h += '<div class="qfoot acts">';
   if (!kids)
     h += `<button class="btn ${d ? '' : 'green'}" data-toggle="${n.id}">${d ? 'Mark not done' : 'Mark done'}</button>`;
+  else if (top && d) h += `<button class="btn" data-reopen="${n.id}">Reopen quest</button>`;
   h += `${d ? '' : `<button class="btn blue" data-focuson="${n.id}">Focus on this</button>`}</div>`;
   setHTML($('#v-today'), h);
 }

@@ -358,6 +358,15 @@ document.addEventListener('click', e => {
     n.done = !n.done;
     settle(bf);
   }
+  if (d.finish) nextAnswer(d.finish, { pick: 'finish' });
+  if (d.unsure) nextAnswer(d.unsure, { pick: 'unsure' });
+  if (d.reopen) {
+    const r = find(d.reopen);
+    if (!r || !r.n.done) return;
+    const bf = snapshot();
+    r.n.done = false;
+    settle(bf);
+  }
   if (d.del) {
     const r = find(d.del);
     if (!r) return;
