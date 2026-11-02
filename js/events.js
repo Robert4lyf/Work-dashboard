@@ -567,6 +567,7 @@ document.addEventListener('click', e => {
   }
   if (b.id === 'start') startTimer(focusTarget());
   if (d.zstart) startTimer(d.zstart);
+  if (d.asknext) askNext(d.asknext);
   if (d.zen) {
     // Focus on what the header shows, not an older pick.
     if (d.q && !S.timer && S.focusQ !== d.q) {

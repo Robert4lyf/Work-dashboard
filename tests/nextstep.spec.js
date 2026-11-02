@@ -219,3 +219,23 @@ test('turning on a repeat for a quest with every step ticked finishes it properl
   expect(s.log.map(x => x.text)).not.toContain('Contract');
   expect(await page.evaluate(() => needsNext(S.quests[0]))).toBe(true);
 });
+
+test('single-task mode asks what\'s next for a quest with every step ticked, not "Nothing left to do"', async ({
+  app,
+  page,
+}) => {
+  await page.click('[data-crumb="-1"]');
+  await page.click('header [data-zen]');
+  await page.click('#v-zen [data-toggle]');
+  await page.click('#sheet button:has-text("Later")');
+  await expect(page.locator('#v-zen .zt')).toHaveText("Every step is ticked. What's next?");
+  await expect(page.locator('#v-zen .ztrail')).toHaveText('Contract');
+  await page.click('#v-zen [data-asknext]');
+  await page.fill('#sheetin', 'Send to legal');
+  await page.press('#sheetin', 'Enter');
+  await expect(page.locator('#v-zen .zt')).toHaveText('Send to legal');
+  // Finished: nothing left.
+  await page.click('#v-zen [data-toggle]');
+  await page.click('#sheet [data-sheetans="finish"]');
+  await expect(page.locator('#v-zen .zt')).toHaveText('Nothing left to do.');
+});

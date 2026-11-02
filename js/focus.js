@@ -84,7 +84,11 @@ function renderZen() {
   let h = focusLocked()
     ? '<div class="zbody">'
     : '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
-  if (!r) h += timeUpShown() ? '' : '<p class="zt">Nothing left to do.</p>';
+  // No step to do, but a quest with every step ticked: what's next for it?
+  const ask = !r && !timeUpShown() && S.quests.find(q => needsNext(q) && !q.wait);
+  if (ask)
+    h += `<p class="ztrail">${esc(ask.text)}</p><p class="zt">Every step is ticked. What's next?</p><div class="acts"><button class="btn green" data-asknext="${ask.id}">What's next?</button></div>`;
+  else if (!r) h += timeUpShown() ? '' : '<p class="zt">Nothing left to do.</p>';
   else {
     const trail = r.parents.map(p => p.text).join(' / ');
     h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>`;
@@ -96,7 +100,7 @@ function renderZen() {
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
   } else if (r && !timeUpShown()) {
-    h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${+S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}</div>`;
+    h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${+S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}${needsNext(r.n) ? `<button class="btn green" data-asknext="${r.n.id}">What's next?</button>` : ''}</div>`;
   }
   setHTML(el, h + '</div>'); // a background redraw keeps what's being typed
 }
