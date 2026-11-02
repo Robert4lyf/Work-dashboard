@@ -167,3 +167,55 @@ test('upgrading: a quest finished by its last tick before stays finished; others
   ]);
   await expect(sheet(page)).toHaveCount(0); // (asks on the list, not with a sheet)
 });
+
+test('a quest left asking stays open over reloads, after an earlier finish (via Inbox or Upcoming)', async ({
+  app,
+  page,
+}) => {
+  // Finished (logged), moved to the Inbox and back, then its step ticked again and left asking.
+  await page.click('[aria-label="Mark done: Draft"]');
+  await page.click('#sheet [data-sheetans="finish"]');
+  await page.evaluate(() => moveToInbox(S.quests[0].id));
+  await page.evaluate(() => {
+    const it = S.inbox[0];
+    S.inbox = [];
+    S.quests.push(it.node);
+    save();
+    renderAll();
+  });
+  await page.evaluate(() => {
+    const bf = snapshot();
+    S.quests[0].children[0].done = true;
+    settle(bf);
+  });
+  await page.click('#sheet button:has-text("Later")');
+  await page.reload();
+  expect(await page.evaluate(() => [isDone(S.quests[0]), needsNext(S.quests[0])])).toEqual([false, true]);
+  await setDay(page, 2026, 9, 24);
+  expect((await app.state()).quests.map(q => q.text)).toEqual(['Contract']);
+
+  // Reopened on a later day (its log entry is from the day it was finished): stays open.
+  await page.evaluate(() => nextAnswer(S.quests[0].id, { pick: 'finish' }));
+  await page.evaluate(() => {
+    S.log.find(x => x.id === S.quests[0].id).d = '2026-09-20';
+    save();
+  });
+  await page.evaluate(() => openPath([S.quests[0].id])); // (folded under Done today)
+  await page.click('[data-reopen]');
+  await page.reload();
+  expect(await page.evaluate(() => isDone(S.quests[0]))).toBe(false);
+});
+
+test('turning on a repeat for a quest with every step ticked finishes it properly', async ({ app, page }) => {
+  await page.click('[aria-label="Mark done: Draft"]');
+  await page.click('#sheet button:has-text("Later")');
+  await page.click('#mored > summary');
+  await page.click('#rptd summary');
+  await page.click('[data-rpreset="daily"]');
+  let s = await app.state();
+  expect(s.log.map(x => x.text)).toContain('Contract');
+  await page.click('[data-rpreset="off"]');
+  s = await app.state();
+  expect(s.log.map(x => x.text)).not.toContain('Contract');
+  expect(await page.evaluate(() => needsNext(S.quests[0]))).toBe(true);
+});

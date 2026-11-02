@@ -71,7 +71,12 @@ function sinkDone(ns) {
 function settle(before) {
   // A finished quest with a step to do again (added, or un-ticked) isn't finished any more:
   // ticking that step asks what's next, rather than finishing it again.
-  [...S.quests, ...S.later].forEach(q => q.done && q.children.length && !stepsDone(q) && (q.done = false));
+  // One left asking what's next is marked so, so it isn't taken for one finished before this
+  // version (see norm).
+  [...S.quests, ...S.later].forEach(q => {
+    if (q.done && q.children.length && !stepsDone(q)) q.done = false;
+    if (needsNext(q)) q.asked = 1;
+  });
   sinkDone(S.quests);
   const after = snapshot();
   let gain = 0;
@@ -189,6 +194,7 @@ function repLabel(t) {
 }
 // Change how a quest repeats. The repeat copies the quest as it is now, subquests included.
 function setRepeat(n, fn) {
+  const bf = snapshot(); // (a repeating quest with every step ticked is finished: see isDone)
   let t = tplFor(n) || S.templates.find(x => x.auto && x.text === n.text); // (never a saved one)
   if (!t) {
     t = { id: uid(), days: [], monthDay: 0, auto: true };
@@ -201,8 +207,7 @@ function setRepeat(n, fn) {
     S.templates = S.templates.filter(x => x !== t);
     delete n.tpl;
   }
-  save();
-  renderAll();
+  settle(bf);
 }
 
 /* a small panel at the bottom of the screen, for a one-line answer or a yes/no, in place of the
