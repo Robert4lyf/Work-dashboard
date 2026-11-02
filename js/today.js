@@ -6,6 +6,8 @@ let path = [],
 const panels = {}; // which <details> panels are expanded, so re-renders keep them open
 const tick =
   '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1D2B53" d="M5 1h1v1H5zM4 2h1v1H4zM3 3h1v1H3zM0 3h1v1H0zM1 4h1v1H1zM2 4h1v1H2z"/></svg>';
+const chevron =
+  '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 0h2v1H1zM2 1h2v1H2zM3 2h2v2H3zM2 4h2v1H2zM1 5h2v1H1z"/></svg>';
 function dueTag(n) {
   if (!n.due || isDone(n)) return '';
   const t = today(),
@@ -16,12 +18,10 @@ function row(n, i, len, sib) {
   const d = isDone(n),
     kids = n.children.length;
   let left;
-  if (kids) {
-    const req = n.children.filter(c => !c.opt),
-      set = req.length ? req : n.children,
-      p = Math.round(frac(n) * 100);
-    left = `<button class="meter" data-open="${n.id}" aria-label="${esc(n.text)}: ${p}% complete" style="background:linear-gradient(to top,var(--green) ${p}%,var(--meter-track) ${p}%)">${set.filter(isDone).length}/${set.length}</button>`;
-  } else {
+  // A quest with steps opens (its bar, below its name, shows how far it's got); one without is ticked.
+  if (kids)
+    left = `<button class="meter" data-open="${n.id}" aria-label="Open ${esc(n.text)}">${chevron}</button>`;
+  else {
     left = `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
   }
   const nx = kids && !d ? nextLeaf(n) : null,

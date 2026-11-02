@@ -11,7 +11,6 @@
   --blue: #29adff;
   --plum: #7e2553;
   --pink-ink: var(--plum); /* pink as text: readable on the light background */
-  --meter-track: #fff1e8; /* the unfilled part of a quest's meter: its dark text stays readable */
   color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   --on-accent: #1d2b53;
   --head-ink: #fff1e8;
@@ -767,11 +766,14 @@ nav button[aria-current='page'] {
   border: 3px solid var(--edge);
   display: grid;
   place-items: center;
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--on-accent);
+  background: var(--panel);
+  color: var(--ink);
   cursor: pointer;
   padding: 0;
+}
+.meter svg {
+  width: 14px;
+  height: 14px;
 }
 .tag {
   display: inline-block;
