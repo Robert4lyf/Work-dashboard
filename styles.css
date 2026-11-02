@@ -723,6 +723,39 @@ nav button[aria-current='page'] {
   font-size: 15px;
   margin-top: 2px;
 }
+/* a quest's steps on Today, a block each */
+.stepbar {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+}
+.stepbar i {
+  flex: 1;
+  min-width: 4px;
+  height: 12px;
+  border: 2px solid var(--edge);
+  background: var(--panel);
+}
+.stepbar .s-done {
+  background: var(--green);
+}
+.stepbar .s-next {
+  background: var(--yellow);
+}
+.stepbar .s-wait {
+  background: repeating-linear-gradient(45deg, var(--wait) 0 3px, var(--panel) 3px 6px);
+}
+.stepbar .s-ask {
+  border-style: dashed;
+}
+/* (lots of steps: thinner lines, so each block still shows its colour) */
+.stepbar.many {
+  gap: 1px;
+}
+.stepbar.many i {
+  min-width: 2px;
+  border-width: 1px;
+}
 .row.done .open > span {
   text-decoration: line-through;
   color: var(--muted);

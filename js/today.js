@@ -44,7 +44,29 @@ function row(n, i, len, sib) {
     : xOpen === n.id
       ? `<span class="xchoice"><button class="chip" data-toinbox="${n.id}">Inbox</button><button class="chip del" data-delnow="${n.id}">Delete</button></span>`
       : `<button class="x" data-xopen="${n.id}" aria-label="Remove ${esc(n.text)}">×</button>`;
-  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
+  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
+}
+// A quest's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
+// and any waiting marked. Every one ticked but the quest not finished: a last block asks what's next.
+function stepBar(n) {
+  const req = n.children.filter(c => !c.opt),
+    set = req.length ? req : n.children,
+    nx = nextLeaf(n),
+    done = set.filter(isDone),
+    open = set.filter(c => !isDone(c)),
+    waiting = open.filter(c => c.wait).length,
+    ask = needsNext(n) && !nx; // (an optional step still to do shows as Next instead)
+  const blocks = [
+    ...done.map(() => 's-done'),
+    ...open.map(c => (c === nx ? 's-next' : c.wait ? 's-wait' : '')),
+  ];
+  if (ask) blocks.push('s-ask');
+  const label =
+    `${done.length} of ${set.length} steps done` +
+    (waiting ? `, ${waiting} waiting` : '') +
+    (ask ? ", what's next?" : '');
+  // (a <b>, not a <span>: the quest's name is the row's span)
+  return `<b class="stepbar${blocks.length > 15 ? ' many' : ''}" role="img" aria-label="${label}">${blocks.map(b => `<i${b ? ` class="${b}"` : ''}></i>`).join('')}</b>`;
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder.
 function listHead(title, ns) {
