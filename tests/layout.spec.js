@@ -37,3 +37,11 @@ test('on a phone the tab strip scrolls, with a fade hinting at hidden tabs', asy
   await page.evaluate(() => fadeTabs());
   expect(await cls()).toBe('');
 });
+
+test('the page stays clear of the system bars (no viewport-fit=cover), so the tab bar keeps its height', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  expect(await page.getAttribute('meta[name=viewport]', 'content')).not.toContain('viewport-fit=cover');
+});

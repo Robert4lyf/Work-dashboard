@@ -2,7 +2,10 @@
 <html lang="en-GB">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Not viewport-fit=cover: with it, Android Chrome draws the page behind the system bars and
+         reports their height as a safe-area inset that changes as its address bar shows and hides,
+         so the tab bar (padded by it) grew at the top of the page and jumped while scrolling. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard</title>
     <meta name="description" content="Quests, inbox and focus timer." />
     <meta name="theme-color" content="#1D2B53" />

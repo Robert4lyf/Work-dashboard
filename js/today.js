@@ -68,9 +68,65 @@ function stepBar(n) {
   // (a <b>, not a <span>: the quest's name is the row's span)
   return `<b class="stepbar${blocks.length > 15 ? ' many' : ''}" role="img" aria-label="${label}">${blocks.map(b => `<i${b ? ` class="${b}"` : ''}></i>`).join('')}</b>`;
 }
-// A section title, with the Reorder switch beside it when the list has something to reorder.
-function listHead(title, ns) {
-  return `<div class="sechead"><h2>${title}</h2>${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
+// A section title, with the Reorder switch beside it when the list has something to reorder (and,
+// for Today's quests, the List / Board switch).
+function listHead(title, ns, views) {
+  const sw = views
+    ? `<span class="viewsw" role="group" aria-label="Show as">${['list', 'board'].map(v => `<button class="chip" data-tview="${v}" aria-pressed="${todayView === v}">${v === 'list' ? 'List' : 'Board'}</button>`).join('')}</span>`
+    : '';
+  return `<div class="sechead"><h2>${title}</h2>${sw}${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
+}
+/* Today as a board: a lane per stage, a tile per quest. The choice is this device's own. */
+const TVIEW = 'dashboard-today-view';
+let todayView = (() => {
+  try {
+    return localStorage.getItem(TVIEW) === 'board' ? 'board' : 'list';
+  } catch (e) {
+    return 'list';
+  }
+})();
+function setTodayView(v) {
+  todayView = v === 'board' ? 'board' : 'list';
+  reorder = false; // (the board has no Reorder: its lanes keep the list's order)
+  try {
+    localStorage.setItem(TVIEW, todayView);
+  } catch (e) {}
+  renderToday();
+}
+const LANES = [
+  ['doing', 'In progress'],
+  ['ask', "What's next?"],
+  ['todo', 'Not started'],
+  ['wait', 'Waiting'],
+  ['done', 'Done today'],
+];
+function laneOf(n) {
+  if (isDone(n)) return 'done';
+  if (n.children.length && needsNext(n) && !nextLeaf(n)) return 'ask';
+  if (showsWaiting(n)) return 'wait';
+  return n.children.some(isDone) ? 'doing' : 'todo';
+}
+function tile(n) {
+  const kids = n.children.length,
+    d = isDone(n),
+    nx = kids && !d ? nextLeaf(n) : null,
+    meta =
+      tagBadge(n.tag) +
+      (!d && !n.wait ? stepWaitBadge(n) : '') +
+      waitBadge(n) +
+      dueTag(n) +
+      (nx ? `<span class="qtnext">Next: ${esc(nx.text)}</span>` : '');
+  return `<div class="qtile${d ? ' done' : ''}" data-qid="${n.id}">${kids ? '' : `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`}<button class="qtopen" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? `<small>${meta}</small>` : ''}${kids ? stepBar(n) : ''}</button></div>`;
+}
+function board(ns) {
+  const by = {};
+  ns.forEach(n => (by[laneOf(n)] = by[laneOf(n)] || []).push(n));
+  return `<div class="board">${LANES.filter(([k]) => by[k])
+    .map(
+      ([k, name]) =>
+        `<section class="blane" data-lane="${k}" aria-label="${name}"><h3>${name} <small>${by[k].length}</small></h3><div class="lanetiles">${by[k].map(tile).join('')}</div></section>`,
+    )
+    .join('')}</div>`;
 }
 // One card, one row per quest. Waiting ones show below the rest (above finished ones); their
 // place in the real order is kept, so they move back up when the wait is over.
@@ -91,6 +147,18 @@ function list(ns, doneApart, steps) {
   return h;
 }
 function renderToday() {
+  // (each lane of the board keeps where it was scrolled to across a redraw)
+  const laneX = {};
+  $('#v-today')
+    .querySelectorAll('.blane')
+    .forEach(l => (laneX[l.dataset.lane] = l.querySelector('.lanetiles').scrollLeft));
+  drawToday();
+  for (const k in laneX) {
+    const l = $(`#v-today .blane[data-lane="${k}"] .lanetiles`);
+    if (l) l.scrollLeft = laneX[k];
+  }
+}
+function drawToday() {
   $('#v-today')
     .querySelectorAll('details[id]')
     // (the waiting panel is held open on a waiting quest: that isn't a choice to remember)
@@ -117,8 +185,9 @@ function renderToday() {
     );
     h += '</div>';
   }
-  h += listHead("Today's quests", qs);
-  h += list(qs, true);
+  const asBoard = todayView === 'board' && qs.length;
+  h += listHead("Today's quests", asBoard ? [] : qs, qs.length > 0);
+  h += asBoard ? board(qs) : list(qs, true);
   const reps = S.templates.filter(repeats);
   if (reps.length) {
     h += `<details id="repd" style="margin:-4px 0 18px"${panels.repd ? ' open' : ''}><summary>Repeating quests</summary>`;

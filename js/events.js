@@ -483,6 +483,7 @@ document.addEventListener('click', e => {
     go('focus');
   }
   if (d.promote) promoteInbox(d.promote);
+  if (d.tview) setTodayView(d.tview);
   if (d.suggest) askSuggest(d.suggest);
   if (d.sumai) askSummary(d.sumai);
   if (d.sumuse) useSummary(d.sumuse);
