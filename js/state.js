@@ -359,14 +359,17 @@ const startedAt = Date.now();
 function rollover() {
   if (S.day === today()) return;
   dropUndo(); // (an undo from yesterday would bring back yesterday, and its reset again)
-  const last = S.day;
   // (not one finished today on another device, whose reset came first: it's done today)
   S.quests = S.quests.filter(q => !isDone(q) || S.log.some(x => x.id === q.id && x.d === today()));
+  // A repeating quest is on Today only on the day it's for: one from an earlier day goes, finished
+  // or not (today's copy, made by another device's reset first, stays).
+  S.quests = S.quests.filter(q => !repeats(tplFor(q)) || q.id === q.tpl + '-' + today());
   S.day = today();
-  // A repeat that fell on a day the app wasn't opened still turns up (looking back up to a month).
-  let d = last < shift(today(), -30) ? shift(today(), -30) : shift(last, 1);
-  for (; d <= today(); d = shift(d, 1)) {
-    const [y, m, dd] = d.split('-').map(Number),
+  // Today's copies of repeating quests. (Days the app wasn't opened aren't caught up: their
+  // day has gone.)
+  {
+    const d = today(),
+      [y, m, dd] = d.split('-').map(Number),
       wd = new Date(y, m - 1, dd).getDay(),
       end = new Date(y, m, 0).getDate();
     S.templates.forEach(t => {
