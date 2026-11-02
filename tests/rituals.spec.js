@@ -262,3 +262,29 @@ test('waiting quests sit at the bottom of Today, and return to their place', asy
   await page.reload();
   await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
 });
+
+test("a quest's steps keep their order on its page, a waiting one too; only finished ones go last", async ({
+  app,
+  page,
+}) => {
+  await app.addQuest('Proposal');
+  await app.setState(
+    s =>
+      (s.quests[0].children = [
+        fix({
+          id: 'w',
+          text: 'Final proposal',
+          wait: { who: 'Emily', note: '', due: '', since: '2026-09-23' },
+        }),
+        fix({ id: 'r', text: 'Respond to Megan' }),
+        fix({ id: 'd', text: 'Kickoff', done: true }),
+      ]),
+  );
+  await page.reload();
+  await app.openQuest('Proposal');
+  const rows = page.locator('#v-today .list .row .open > span');
+  await expect(rows).toHaveText(['Final proposal', 'Respond to Megan', 'Kickoff']);
+  await page.click('#reorder');
+  await expect(rows).toHaveText(['Final proposal', 'Respond to Megan', 'Kickoff']);
+  // (Today's list still puts the waiting quest below the rest: see above.)
+});

@@ -74,9 +74,11 @@ function listHead(title, ns) {
 }
 // One card, one row per quest. Waiting ones show below the rest (above finished ones); their
 // place in the real order is kept, so they move back up when the wait is over.
-const listRank = n => (isDone(n) ? 2 : showsWaiting(n) ? 1 : 0);
-function list(ns, doneApart) {
-  const rank = new Map(ns.map(n => [n, listRank(n)])),
+// (A quest's steps keep their order, waiting or not: it's the order they're done in. Only
+// finished ones go last.)
+const listRank = (n, steps) => (isDone(n) ? 2 : !steps && showsWaiting(n) ? 1 : 0);
+function list(ns, doneApart, steps) {
+  const rank = new Map(ns.map(n => [n, listRank(n, steps)])),
     shown = reorder ? ns : [...ns].sort((a, b) => rank.get(a) - rank.get(b)),
     open = doneApart && !reorder ? shown.filter(n => !isDone(n)) : shown,
     done = doneApart && !reorder ? shown.filter(isDone) : [];
@@ -274,7 +276,7 @@ function renderNode({ n, parents }) {
   // The steps come first: they're what you work through. (A quest has steps; a step doesn't.)
   if (top) {
     h += listHead('Subquests', n.children);
-    h += list(n.children);
+    h += list(n.children, false, true);
     h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>`;
     h += suggestBox(n);
   }

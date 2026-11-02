@@ -33,9 +33,11 @@ function dropZone(target, y) {
   const other = find(rowEl.dataset.drag.slice(2)),
     me = find(id);
   // Reordering only within the same list, and (outside Reorder mode, where waiting and finished
-  // quests are shown lower down) within the same group, so a drop lands where it looks.
+  // quests, and finished steps, are shown lower down) within the same group, so a drop lands where
+  // it looks.
   if (!me || me.arr !== other.arr || me.n === other.n) return null;
-  if (!reorder && (dragRank ??= listRank(me.n)) !== listRank(other.n)) return null;
+  const steps = me.parents.length > 0;
+  if (!reorder && (dragRank ??= listRank(me.n, steps)) !== listRank(other.n, steps)) return null;
   const box = rowEl.getBoundingClientRect();
   return { id, rowEl, other, after: y > box.top + box.height / 2 };
 }
