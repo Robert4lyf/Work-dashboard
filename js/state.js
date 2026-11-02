@@ -1,4 +1,5 @@
 const KEY = 'work-cockpit-v1';
+const SUMMARY_MAX = 600;
 const TAGS = [
   ['Design', 'var(--pink)'],
   ['Meetings', 'var(--blue)'],
@@ -104,6 +105,10 @@ function fix(n) {
   n.project = n.project || '';
   n.opt = !!n.opt;
   n.notes = n.notes || '';
+  // A quest's summary: where it's at, shown under its name. (Only kept when there is one, so
+  // quests without one, and copies from before, stay as they were.)
+  if (n.summary && typeof n.summary === 'string') n.summary = cleanText(n.summary).slice(0, SUMMARY_MAX);
+  else delete n.summary;
   n.due = cleanDay(n.due);
   n.done = !!n.done;
   return n;

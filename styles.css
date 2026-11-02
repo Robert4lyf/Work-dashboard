@@ -722,6 +722,26 @@ nav button[aria-current='page'] {
   font-size: 15px;
   margin-top: 2px;
 }
+/* a quest's summary on Today, under its name (two lines at most) */
+.open .qsum {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-style: normal;
+  font-size: 15px;
+  color: var(--ink);
+  margin-top: 2px;
+  white-space: pre-line;
+}
+.facts .fsum {
+  min-height: 5.5em;
+  resize: vertical;
+}
+.sumdraft .sumtext {
+  margin: 4px 0 8px;
+  white-space: pre-line;
+}
 /* a quest's steps on Today, a block each */
 .stepbar {
   display: flex;

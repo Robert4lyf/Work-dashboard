@@ -44,7 +44,7 @@ function row(n, i, len, sib) {
     : xOpen === n.id
       ? `<span class="xchoice"><button class="chip" data-toinbox="${n.id}">Inbox</button><button class="chip del" data-delnow="${n.id}">Delete</button></span>`
       : `<button class="x" data-xopen="${n.id}" aria-label="Remove ${esc(n.text)}">×</button>`;
-  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
+  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
 }
 // A quest's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
 // and any waiting marked. Every one ticked but the quest not finished: a last block asks what's next.
@@ -251,6 +251,9 @@ function renderNode({ n, parents }) {
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
   // The facts: what's set on this quest, each a tap to change.
   h += `</div><div class="node box facts"><h1>${esc(n.text)}</h1>`;
+  // Its summary, under its name: where it's at, written by you (or drafted by Claude, on asking).
+  if (top)
+    h += `<label class="f" for="fsum">Summary and updates <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="4" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>${summaryBox(n)}`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
@@ -311,6 +314,84 @@ function renderNode({ n, parents }) {
   else if (top && d) h += `<button class="btn" data-reopen="${n.id}">Reopen quest</button>`;
   h += `${d ? '' : `<button class="btn blue" data-focuson="${n.id}">Focus on this</button>`}</div>`;
   setHTML($('#v-today'), h);
+}
+
+/* Summarise (AI): the quest's name, its steps (ticked, waiting and on whom) and its summary go
+   to the suggest-steps Supabase function, which asks Claude for a short plain-English summary of
+   what's been done. It's offered as a draft: the summary is yours unless you choose to use it. */
+let sumAI = null; // { id, busy, text, error }
+const SUMMARY_OK = 'dashboard-summary-ok'; // (this device was told what's sent, once)
+function summaryBox(n) {
+  if (!sb || !session) return '';
+  const s = sumAI && sumAI.id === n.id ? sumAI : null;
+  if (!s) return `<button class="linkbtn sumaibtn" data-sumai="${n.id}">Summarise (AI)</button>`;
+  if (s.busy) return '<p class="hint sumbusy">Writing a summary…</p>';
+  if (s.error)
+    return `<div class="suggest sumdraft"><p class="hint">${esc(s.error)}</p><div class="acts"><button class="btn sm" data-sumclose="1">OK</button></div></div>`;
+  return `<div class="suggest sumdraft"><p class="hint">Claude's summary:</p><p class="sumtext">${esc(s.text)}</p><div class="acts"><button class="btn sm green" data-sumuse="replace">${n.summary ? 'Replace mine' : 'Use this'}</button>${n.summary ? '<button class="btn sm" data-sumuse="add">Add to mine</button>' : ''}<button class="btn sm" data-sumclose="1">Cancel</button></div></div>`;
+}
+async function askSummary(id) {
+  const r = find(id);
+  if (!r || !sb || !session) return;
+  let told = false;
+  try {
+    told = localStorage.getItem(SUMMARY_OK) === '1';
+  } catch (e) {}
+  if (!told)
+    return sheet(
+      {
+        title: 'Summarise with AI',
+        text: "This sends this quest's name, its steps (which are ticked or waiting, and on whom) and its summary, and nothing else, to Anthropic's Claude to write a short summary. Only use it if your organisation allows this for work information.",
+        ok: 'Continue',
+      },
+      () => {
+        try {
+          localStorage.setItem(SUMMARY_OK, '1');
+        } catch (e) {}
+        askSummary(id);
+      },
+    );
+  sumAI = { id, busy: true };
+  renderToday();
+  let next;
+  try {
+    const { data, error } = await sb.functions.invoke('suggest-steps', {
+      body: {
+        mode: 'summary',
+        quest: r.n.text,
+        summary: r.n.summary || '',
+        steps: r.n.children.map(c => ({
+          text: c.text,
+          done: isDone(c),
+          waiting: !isDone(c) && c.wait ? c.wait.who || 'someone' : '',
+        })),
+      },
+    });
+    if (error || !data || typeof data.summary !== 'string') throw error || new Error('no summary');
+    const text = cleanText(data.summary.trim()).slice(0, SUMMARY_MAX);
+    next = text ? { id, text } : { id, error: 'Claude had nothing to add for this one.' };
+  } catch (e) {
+    next = {
+      id,
+      error: navigator.onLine
+        ? "Couldn't get a summary. The suggest-steps function may need updating (see the README)."
+        : 'A summary needs a connection.',
+    };
+  }
+  if (!sumAI || sumAI.id !== id) return; // (closed, or another asked, meanwhile)
+  sumAI = next;
+  renderToday();
+}
+function useSummary(how) {
+  const s = sumAI,
+    r = s && find(s.id);
+  sumAI = null;
+  if (r && s.text) {
+    const mine = r.n.summary || '';
+    r.n.summary = (how === 'add' && mine ? mine + '\n' + s.text : s.text).slice(0, SUMMARY_MAX);
+    save();
+  }
+  renderAll();
 }
 
 /* Suggest steps (AI): the quest's name and its steps' names (nothing else) go to the
