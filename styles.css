@@ -11,7 +11,6 @@
   --blue: #29adff;
   --plum: #7e2553;
   --pink-ink: var(--plum); /* pink as text: readable on the light background */
-  --meter-track: #fff1e8; /* the unfilled part of a quest's meter: its dark text stays readable */
   color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   --on-accent: #1d2b53;
   --head-ink: #fff1e8;
@@ -723,6 +722,39 @@ nav button[aria-current='page'] {
   font-size: 15px;
   margin-top: 2px;
 }
+/* a quest's steps on Today, a block each */
+.stepbar {
+  display: flex;
+  gap: 3px;
+  margin-top: 6px;
+}
+.stepbar i {
+  flex: 1;
+  min-width: 4px;
+  height: 12px;
+  border: 2px solid var(--edge);
+  background: var(--panel);
+}
+.stepbar .s-done {
+  background: var(--green);
+}
+.stepbar .s-next {
+  background: var(--yellow);
+}
+.stepbar .s-wait {
+  background: repeating-linear-gradient(45deg, var(--wait) 0 3px, var(--panel) 3px 6px);
+}
+.stepbar .s-ask {
+  border-style: dashed;
+}
+/* (lots of steps: thinner lines, so each block still shows its colour) */
+.stepbar.many {
+  gap: 1px;
+}
+.stepbar.many i {
+  min-width: 2px;
+  border-width: 1px;
+}
 .row.done .open > span {
   text-decoration: line-through;
   color: var(--muted);
@@ -734,11 +766,14 @@ nav button[aria-current='page'] {
   border: 3px solid var(--edge);
   display: grid;
   place-items: center;
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--on-accent);
+  background: var(--panel);
+  color: var(--ink);
   cursor: pointer;
   padding: 0;
+}
+.meter svg {
+  width: 14px;
+  height: 14px;
 }
 .tag {
   display: inline-block;

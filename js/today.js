@@ -6,6 +6,8 @@ let path = [],
 const panels = {}; // which <details> panels are expanded, so re-renders keep them open
 const tick =
   '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1D2B53" d="M5 1h1v1H5zM4 2h1v1H4zM3 3h1v1H3zM0 3h1v1H0zM1 4h1v1H1zM2 4h1v1H2z"/></svg>';
+const chevron =
+  '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 0h2v1H1zM2 1h2v1H2zM3 2h2v2H3zM2 4h2v1H2zM1 5h2v1H1z"/></svg>';
 function dueTag(n) {
   if (!n.due || isDone(n)) return '';
   const t = today(),
@@ -16,12 +18,10 @@ function row(n, i, len, sib) {
   const d = isDone(n),
     kids = n.children.length;
   let left;
-  if (kids) {
-    const req = n.children.filter(c => !c.opt),
-      set = req.length ? req : n.children,
-      p = Math.round(frac(n) * 100);
-    left = `<button class="meter" data-open="${n.id}" aria-label="${esc(n.text)}: ${p}% complete" style="background:linear-gradient(to top,var(--green) ${p}%,var(--meter-track) ${p}%)">${set.filter(isDone).length}/${set.length}</button>`;
-  } else {
+  // A quest with steps opens (its bar, below its name, shows how far it's got); one without is ticked.
+  if (kids)
+    left = `<button class="meter" data-open="${n.id}" aria-label="Open ${esc(n.text)}">${chevron}</button>`;
+  else {
     left = `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
   }
   const nx = kids && !d ? nextLeaf(n) : null,
@@ -44,7 +44,29 @@ function row(n, i, len, sib) {
     : xOpen === n.id
       ? `<span class="xchoice"><button class="chip" data-toinbox="${n.id}">Inbox</button><button class="chip del" data-delnow="${n.id}">Delete</button></span>`
       : `<button class="x" data-xopen="${n.id}" aria-label="Remove ${esc(n.text)}">×</button>`;
-  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`;
+  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
+}
+// A quest's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
+// and any waiting marked. Every one ticked but the quest not finished: a last block asks what's next.
+function stepBar(n) {
+  const req = n.children.filter(c => !c.opt),
+    set = req.length ? req : n.children,
+    nx = nextLeaf(n),
+    done = set.filter(isDone),
+    open = set.filter(c => !isDone(c)),
+    waiting = open.filter(c => c.wait).length,
+    ask = needsNext(n) && !nx; // (an optional step still to do shows as Next instead)
+  const blocks = [
+    ...done.map(() => 's-done'),
+    ...open.map(c => (c === nx ? 's-next' : c.wait ? 's-wait' : '')),
+  ];
+  if (ask) blocks.push('s-ask');
+  const label =
+    `${done.length} of ${set.length} steps done` +
+    (waiting ? `, ${waiting} waiting` : '') +
+    (ask ? ", what's next?" : '');
+  // (a <b>, not a <span>: the quest's name is the row's span)
+  return `<b class="stepbar${blocks.length > 15 ? ' many' : ''}" role="img" aria-label="${label}">${blocks.map(b => `<i${b ? ` class="${b}"` : ''}></i>`).join('')}</b>`;
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder.
 function listHead(title, ns) {
