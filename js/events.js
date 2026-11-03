@@ -352,6 +352,7 @@ document.addEventListener('click', e => {
   wfClick(d, b);
   ruleClick(d, b);
   forecastClick(d, b);
+  insightClick(d);
   if (d.open) {
     const r = find(d.open);
     if (r) {
