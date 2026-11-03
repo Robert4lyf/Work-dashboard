@@ -93,14 +93,22 @@ function renderZen() {
     const trail = r.parents.map(p => p.text).join(' / ');
     h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>`;
   }
+  // Where you left off on this quest (see resume.js), to pick up from.
+  const zq = r && (r.parents[0] || r.n);
+  if (zq && zq.resume && !isDone(zq))
+    h += `<p class="zplace"><small>Where you left off · ${esc(whenLabel(zq.resume.at))}</small>${zq.resume.note ? esc(zq.resume.note) : 'At: ' + esc((placeStep(zq) || {}).text || 'a step')}</p>`;
   h += afterPrompts();
+  // The session's quest (or the one shown): where "save my place" goes.
+  const pq = t ? t.q : r && !timeUpShown() ? r.n.id : null;
   if (t) {
     h += `<div class="zclock" id="zclock">${mmss(remaining())}</div>
       <div class="acts"><button class="btn ${t.left != null ? 'green' : 'blue'}" data-pause="1">${t.left != null ? 'Resume' : 'Pause'}</button><button class="btn" data-plus5="1">+5 min</button></div>
       <div class="acts"><button class="btn" data-stop="save">Stop and save</button>${leaf ? '<button class="btn green" data-stop="done">Done</button>' : ''}</div>
+      ${pq && find(pq) ? `<button class="linkbtn zplacebtn" data-saveplace="${pq}">${t.left != null ? 'Save my place' : 'Pause and save my place'}</button>` : ''}
       <button class="dellink" data-discard="1" style="align-self:center">Discard this session</button>`;
   } else if (r && !timeUpShown()) {
     h += `<div class="acts"><button class="btn blue" data-zstart="${r.n.id}">Start ${+S.mins} min</button>${leaf ? `<button class="btn green" data-toggle="${r.n.id}">Done</button>` : ''}${needsNext(r.n) ? `<button class="btn green" data-asknext="${r.n.id}">What's next?</button>` : ''}</div>`;
+    h += `<button class="linkbtn zplacebtn" data-saveplace="${r.n.id}">${zq.resume ? 'Update my saved place' : 'Save my place'}</button>`;
   }
   setHTML(el, h + '</div>'); // a background redraw keeps what's being typed
 }
@@ -122,7 +130,10 @@ function renderFocus() {
       leaf = q && !q.n.children.length && !q.n.done;
     h += `<div class="clock box" id="clock">${mmss(remaining())}<small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t)) || 'Focus'}</small></div>`;
     h += `<div class="acts" style="margin-top:0"><button class="btn ${paused ? 'green' : 'blue'}" data-pause="1" style="flex:1">${paused ? 'Resume' : 'Pause'}</button><button class="btn" id="plus5" style="flex:1">+5 min</button></div>`;
-    h += `<div class="acts"><button class="btn" id="stopsave" style="flex:1">Stop and save</button>${leaf ? '<button class="btn green" id="stopdone" style="flex:1">Done</button>' : ''}</div><button class="dellink" id="stop">Discard this session</button>`;
+    h += `<div class="acts"><button class="btn" id="stopsave" style="flex:1">Stop and save</button>${leaf ? '<button class="btn green" id="stopdone" style="flex:1">Done</button>' : ''}</div>`;
+    if (q)
+      h += `<button class="linkbtn" data-saveplace="${t.q}">${paused ? 'Save my place' : 'Pause and save my place'}</button>`;
+    h += '<button class="dellink" id="stop">Discard this session</button>';
   } else {
     const cur = focusTarget(),
       opts = [];

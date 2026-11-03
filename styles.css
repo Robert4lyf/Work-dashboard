@@ -2110,3 +2110,402 @@ details.more > details {
 .suggest .optbox {
   margin: 6px 0;
 }
+/* Release A: quick actions (a row's ⋯ and its sheet), the quest workspace, the top 3,
+   a saved place, resources, and inbox triage */
+.qmore {
+  flex: none;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-grid;
+  place-items: center;
+  background: none;
+  border: 0;
+  padding: 4px 8px;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.6;
+}
+.qmore svg {
+  width: 18px;
+  height: 5px;
+}
+.qmore:hover,
+.qmore:focus-visible {
+  opacity: 1;
+  color: var(--ink);
+}
+.qtile .qmore {
+  margin: -4px -4px 0 0;
+}
+.qfoot .btn.qmore {
+  flex: 0 0 48px;
+  opacity: 1;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 10px 0;
+}
+.qfoot .btn {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* the sheet as a list of actions (or a picker): one button per line, scrolling when long */
+#sheet .sheetbox {
+  max-height: calc(100vh - 24px - env(safe-area-inset-bottom, 0px));
+  max-height: calc(100dvh - 24px - env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.qahint {
+  margin: 0 0 6px;
+}
+.qalist {
+  display: flex;
+  flex-direction: column;
+  margin: 4px 0 0;
+}
+.qact {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  background: none;
+  border: 0;
+  border-top: 1.5px solid var(--line);
+  padding: 9px 4px;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.qalist > .qact:first-child,
+.t3prow:first-child .qact {
+  border-top: 0;
+}
+.qact small {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qact.go {
+  font-weight: 600;
+}
+.qact.del {
+  color: var(--pink-ink);
+}
+.qact[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.qact[aria-pressed='true'],
+.qact.on {
+  font-weight: 600;
+}
+#sheet .acts {
+  margin-top: 10px;
+}
+#sheet textarea.fld {
+  min-height: 72px;
+}
+/* the quest page: what's next, where you left off */
+.qnext {
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+.qnext small {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+}
+.place {
+  padding: 10px 14px 12px;
+  margin: 12px 0 0;
+  background: var(--bg);
+  box-shadow: none;
+}
+.placehead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+.placehead small {
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.placenote {
+  margin: 6px 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.placestep {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+.placeacts {
+  margin-top: 2px;
+}
+.placeacts .linkbtn {
+  font-size: 15px;
+  color: var(--muted);
+}
+.tag.place {
+  background: var(--panel);
+  color: var(--ink);
+  border-style: dashed;
+}
+.tag.done {
+  background: var(--green);
+}
+/* single-task mode: where you left off, and saving a place */
+.zplace {
+  margin: -14px 0 24px;
+  padding: 10px 14px;
+  border: 2px dashed var(--muted);
+  text-align: left;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  align-self: center;
+  width: 100%;
+  max-width: 460px;
+}
+.zplace small {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+.zplacebtn {
+  align-self: center;
+  margin-top: 6px;
+}
+#v-focus .linkbtn[data-saveplace] {
+  margin: 8px 0 0;
+}
+/* the top 3 on Today */
+.top3 {
+  padding: 10px 14px 6px;
+  margin-bottom: 18px;
+}
+.top3 .sechead {
+  margin-bottom: 2px;
+}
+.t3row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1.5px solid var(--line);
+}
+.t3row:first-child {
+  border-top: 0;
+}
+.t3n {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--edge);
+  background: var(--yellow);
+  color: var(--on-accent);
+  font-family: var(--display);
+  font-size: 11px;
+}
+.t3row.done .t3n {
+  background: var(--green);
+}
+.t3row.done .open > span {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.t3row .open small .tag {
+  margin-top: 2px;
+}
+.t3row .btn.sm,
+.t3row .tag {
+  flex: none;
+  margin: 0;
+}
+.t3row .btn.sm {
+  max-width: 40%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.top3empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 14px;
+  margin-bottom: 18px;
+}
+.top3empty .linkbtn {
+  color: var(--ink);
+}
+.t3pick {
+  display: flex;
+  flex-direction: column;
+}
+.t3prow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.t3prow .qact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.t3prow .qact .t3n {
+  background: var(--panel);
+}
+.t3prow .qact[aria-pressed='true'] .t3n {
+  background: var(--yellow);
+}
+.t3prow .qact:not([aria-pressed='true']) .t3n {
+  border-style: dashed;
+}
+.t3prow .mv {
+  width: 36px;
+  height: 36px;
+}
+/* resources on a quest's page */
+.resd {
+  margin: 0 0 18px;
+  padding-top: 8px;
+  border-top: 0;
+}
+.resd > summary small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.reslist {
+  margin: 4px 0 10px;
+}
+.resrow {
+  padding: 6px 6px 6px 12px;
+}
+.resrow .open {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.resrow .open small {
+  flex: none;
+  margin: 0;
+  min-width: 52px;
+}
+.resrow .open span {
+  overflow-wrap: anywhere;
+}
+.resrow .gone {
+  cursor: default;
+  color: var(--muted);
+}
+.reshint {
+  margin: 4px 0 8px;
+  font-size: 15px;
+}
+.resadd {
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.resadd .chip {
+  padding: 4px 10px;
+  font-size: 15px;
+  border-width: 2px;
+}
+/* inbox triage: one item, one decision */
+.tprog {
+  margin: -2px 0 12px;
+}
+.tcard {
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.ttitle {
+  margin: 0;
+  font-weight: 600;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.tmeta {
+  margin: 4px 0 0;
+}
+.tmeta:empty {
+  display: none;
+}
+.tnotes {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+.tnotes a {
+  color: var(--ink);
+}
+.tsubs {
+  margin: 10px 0 0;
+}
+.tsubs li {
+  gap: 8px;
+}
+.tpane {
+  padding: 4px 14px 12px;
+  margin-bottom: 14px;
+}
+.tpane .later {
+  margin: 10px 0 4px;
+}
+.tacts {
+  position: sticky;
+  bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  background: var(--bg);
+  padding: 10px 0;
+  border-top: 2px dashed var(--line);
+  z-index: 5;
+}
+.tacts .btn {
+  min-width: 0;
+  padding: 10px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tacts .btn[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--bg);
+}
+@media (max-width: 359px) {
+  .tacts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .t3row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+  }
+  .t3row .btn.sm,
+  .t3row .tag {
+    grid-column: 2;
+    justify-self: start;
+    max-width: none;
+  }
+}
+.tdone .btn {
+  flex: 1;
+}

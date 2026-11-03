@@ -1,5 +1,8 @@
 const KEY = 'work-cockpit-v1';
 const SUMMARY_MAX = 600;
+const RESUME_MAX = 400; // a saved place's note
+const LINKS_MAX = 20; // resources linked to a quest
+const TOP3_MAX = 3;
 const TAGS = [
   ['Design', 'var(--pink)'],
   ['Meetings', 'var(--blue)'],
@@ -51,6 +54,48 @@ const cleanId = x => {
 };
 // Dates go into the page inside attributes too: only a real yyyy-mm-dd, else none.
 const cleanDay = v => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : '');
+const okRef = v => typeof v === 'string' && /^[\w-]{1,40}$/.test(v);
+// A web link behind a tap: only http(s). A synced row or a backup mustn't be able to put a
+// javascript: (or any other) address behind one.
+const okUrl = v => typeof v === 'string' && v.length <= 2000 && /^https?:\/\/[^\s<>"'`\\]+$/i.test(v);
+// A quest's resources: Knowledge articles and flows by id (never copied, so a renamed article
+// stays linked and a deleted one is simply gone), web links by address. Only well-formed ones.
+function cleanLinks(ls) {
+  if (!Array.isArray(ls)) return [];
+  const out = [],
+    seen = new Set();
+  for (const l of ls) {
+    if (!l || typeof l !== 'object' || !okRef(l.id) || seen.has(l.id)) continue;
+    let x = null;
+    if ((l.kind === 'kb' || l.kind === 'flow') && okRef(l.ref)) x = { id: l.id, kind: l.kind, ref: l.ref };
+    else if (l.kind === 'url' && okUrl(l.url))
+      x = {
+        id: l.id,
+        kind: 'url',
+        url: l.url,
+        label: cleanText(typeof l.label === 'string' ? l.label : '')
+          .trim()
+          .slice(0, 80),
+      };
+    if (!x) continue;
+    seen.add(l.id);
+    out.push(x);
+    if (out.length >= LINKS_MAX) break;
+  }
+  return out;
+}
+// Where work on a quest stopped: a note (what was found, what to do next), when, and the step
+// it was on. One per quest; only kept while it says something.
+function cleanResume(r) {
+  if (!r || typeof r !== 'object') return null;
+  const note = cleanText(typeof r.note === 'string' ? r.note : '')
+      .trim()
+      .slice(0, RESUME_MAX),
+    at = Number(r.at),
+    step = okRef(r.step) ? r.step : '';
+  if ((!note && !step) || !Number.isFinite(at) || at <= 0) return null;
+  return { note, at, step };
+}
 // Quests are titles; the waiting is on their subquests. A quest set waiting (before this, or on an
 // older copy of the app) gets a step of its own, named for what it's waiting for, that carries it.
 // The step's id comes from the quest's, so two devices converting the same quest make the same step.
@@ -111,7 +156,23 @@ function fix(n) {
   else delete n.summary;
   n.due = cleanDay(n.due);
   n.done = !!n.done;
+  // Resources and a saved place: only kept when there are any, so quests without stay as they
+  // were (and copies from before this version read the same).
+  const links = cleanLinks(n.links);
+  if (links.length) n.links = links;
+  else delete n.links;
+  const rs = cleanResume(n.resume);
+  if (rs) n.resume = rs;
+  else delete n.resume;
   return n;
+}
+// Today's top 3: up to three of Today's quests, by id, for one calendar day. (Its own synced
+// record: see toRecords. Shown only on its day; the quests themselves aren't changed.)
+function cleanTop3(t) {
+  if (!t || typeof t !== 'object') return null;
+  const day = cleanDay(t.day),
+    ids = (Array.isArray(t.ids) ? t.ids : []).filter(okRef).filter((x, i, a) => a.indexOf(x) === i);
+  return day && ids.length ? { day, ids: ids.slice(0, TOP3_MAX) } : null;
 }
 function norm(s) {
   S = Object.assign(
@@ -171,9 +232,18 @@ function norm(s) {
   // Preferences go into the page too (and a bad value would crash Today): only sound ones.
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;
+  S.top3 = cleanTop3(S.top3);
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
-  S.inbox = S.inbox.map(i => (i.node ? Object.assign(cleanId(i), { node: fix(i.node) }) : cleanId(i)));
+  // (only objects, with a quest behind them only if that's an object too: a synced row or a
+  // backup could hold anything)
+  S.inbox = S.inbox
+    .filter(i => i && typeof i === 'object')
+    .map(i => {
+      if (i.node && typeof i.node === 'object') return Object.assign(cleanId(i), { node: fix(i.node) });
+      delete i.node;
+      return cleanId(i);
+    });
   // Waiting details on an Inbox item live on the item (older versions left them on its quest).
   S.inbox.forEach(i => {
     if (i.node && i.node.wait && !i.wait) i.wait = i.node.wait;
@@ -370,6 +440,9 @@ function rollover() {
   // or not (today's copy, made by another device's reset first, stays).
   S.quests = S.quests.filter(q => !repeats(tplFor(q)) || q.id === q.tpl + '-' + today());
   S.day = today();
+  // Yesterday's top 3 is over: today's is chosen afresh. (Back-dated to midnight like the rest
+  // of the reset, so a choice already made today on another device wins over this.)
+  if (S.top3 && S.top3.day !== today()) S.top3 = null;
   // Today's copies of repeating quests. (Days the app wasn't opened aren't caught up: their
   // day has gone.)
   {

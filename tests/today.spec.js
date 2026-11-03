@@ -44,25 +44,27 @@ test('subquests: next step, sinking, and header tick', async ({ app, page }) => 
   expect(await app.order()).toEqual(['Review', 'Draft']);
 });
 
-test('× offers Inbox or Delete; delete can be undone', async ({ app, page }) => {
+test('a row’s ⋯ offers Inbox or Delete among its actions; delete can be undone', async ({ app, page }) => {
   await app.addQuest('Email Bob');
   await app.addQuest('Plan trip');
   const row = page.locator('#v-today .row', { hasText: 'Email Bob' });
-  // Tapping elsewhere closes the choice without doing anything.
-  await row.locator('[aria-label="Remove Email Bob"]').click();
-  await expect(row.locator('.xchoice button')).toHaveText(['Inbox', 'Delete']);
-  await page.click('#v-today h2');
-  await expect(row.locator('.xchoice')).toHaveCount(0);
+  // Cancelling (or the backdrop) closes the sheet without doing anything.
+  await row.locator('[aria-label="Actions: Email Bob"]').click();
+  await expect(page.locator('#sheet .qact[data-toinbox]')).toHaveText('Move to Inbox');
+  await expect(page.locator('#sheet .qact[data-delnow]')).toContainText('Delete');
+  await page.click('#sheet .sheetback', { position: { x: 10, y: 10 } });
+  await expect(page.locator('#sheet')).toHaveCount(0);
   expect((await app.state()).quests).toHaveLength(2);
 
-  await row.locator('[aria-label="Remove Email Bob"]').click();
-  await row.locator('[data-delnow]').click();
+  await row.locator('[aria-label="Actions: Email Bob"]').click();
+  await page.click('#sheet [data-delnow]');
+  await expect(page.locator('#sheet')).toHaveCount(0);
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Plan trip']);
   await page.click('#undo');
   expect((await app.state()).quests).toHaveLength(2);
 
-  await page.locator('[aria-label="Remove Plan trip"]').click();
-  await page.locator('#v-today [data-toinbox]').click();
+  await page.locator('[aria-label="Actions: Plan trip"]').click();
+  await page.locator('#sheet [data-toinbox]').click();
   const s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Email Bob']);
   expect(s.inbox[0].text).toBe('Plan trip');

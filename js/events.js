@@ -41,6 +41,8 @@ function go(v) {
     reviewSub = v;
     v = 'review';
   }
+  // Leaving the Inbox leaves triage, except to write an article from an item (see triage.js).
+  if (triage && v !== 'inbox' && !(triage.ref && kbEdit && kbEdit.fromInbox)) triage = null;
   view = v;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
@@ -110,6 +112,8 @@ document.addEventListener('submit', e => {
     const nf = document.querySelector(`[data-subfor="${id}"] input`);
     nf && nf.focus();
   }
+  if (f.id === 'resurlform') submitLinkUrl(f.dataset.id);
+  if (f.id === 'twform') triageWaiting(f.dataset.id);
   if (f.id === 'authform') signIn();
   if (f.id === 'wform') addWaiting();
   if (f.id === 'kbform') kbSave();
@@ -287,6 +291,7 @@ document.addEventListener('input', e => {
   if (el.id === 'notesin') return typedNotes(el.value);
   if (el.id === 'kbq') return kbSearch(el.value);
   if (el.id === 'sq') return typedSearch(el.value);
+  if (el.id === 'resq') return resourceSearch(el.value, el.dataset.id);
   if (el.dataset.field === 'summary') {
     const r = find(el.dataset.id);
     if (!r) return;
@@ -309,15 +314,16 @@ document.addEventListener('click', e => {
   const sum = e.target.closest && e.target.closest('#alarmd > summary');
   if (sum) toggleAlarmsList(sum.parentElement);
   let b = e.target.closest('button');
-  // A tap anywhere else closes a row's Inbox/Delete choice.
-  if (xOpen && !(b && (b.dataset.xopen || b.dataset.toinbox || b.dataset.delnow))) {
-    xOpen = null;
-    // Redrawn once this tap has finished (a submit or a label's tick lands on the live page),
-    // and not over a "Delete?" waiting for its second tap.
-    setTimeout(() => !$('#v-today .armed') && inBackground(renderToday), 0);
-  }
   if (!b) return;
   const d = b.dataset;
+  // A quest's quick actions (its ⋯), from a row or tile on a list, or from its page.
+  if (d.qact) openQuestActions(d.qact, !b.closest('.qfoot'));
+  if (d.saveplace) savePlace(d.saveplace);
+  if (d.resume) resumeWork(d.resume);
+  if (d.clearplace) clearPlace(d.clearplace);
+  top3Click(d);
+  linkClick(d);
+  triageClick(d, b);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -336,6 +342,7 @@ document.addEventListener('click', e => {
     leaveEditor(() => {
       kbArt = d.sart;
       kbImgShown = null;
+      kbReturn = view === 'today' && path.length > 0; // (opened from a quest: back goes to it)
       go('knowledge');
       renderKnowledge();
     });
@@ -438,13 +445,8 @@ document.addEventListener('click', e => {
         if (k === 'off') t.monthDay = 0;
       });
   }
-  if (d.xopen) {
-    xOpen = xOpen === d.xopen ? null : d.xopen;
-    renderToday();
-  }
   if (d.delnow) {
     const r = find(d.delnow);
-    xOpen = null;
     if (r)
       withUndo('Deleted ' + r.n.text, () => {
         const bf = snapshot();
@@ -452,10 +454,7 @@ document.addEventListener('click', e => {
         settle(bf);
       });
   }
-  if (d.toinbox) {
-    xOpen = null;
-    moveToInbox(d.toinbox);
-  }
+  if (d.toinbox) moveToInbox(d.toinbox);
   if (d.sched) schedule(d.kind, d.sched, d.when);
   if (d.now) {
     const i = S.later.findIndex(x => x.id === d.now);
@@ -793,6 +792,17 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
   const el = e.target;
+  // A sheet is a dialog: Tab cycles through its own controls, not the page behind it.
+  if (e.key === 'Tab' && $('#sheet')) {
+    const f = [...$('#sheet').querySelectorAll('button:not([disabled]),input,textarea,select,a[href]')],
+      i = f.indexOf(document.activeElement);
+    if (!f.length) return;
+    if (e.shiftKey ? i <= 0 : i < 0 || i === f.length - 1) {
+      e.preventDefault();
+      f[e.shiftKey ? f.length - 1 : 0].focus();
+    }
+    return;
+  }
   if (el.closest && el.closest('input,textarea,select,[contenteditable]')) {
     if (e.key === 'Escape') el.closest('#sheet') ? closeSheet() : el.blur();
     return;
@@ -962,6 +972,7 @@ function appBack() {
     return true;
   }
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
+  if (view === 'inbox' && triage) return (exitTriage(), true);
   if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view !== 'today') return (go('today'), true);
   return false;
