@@ -191,6 +191,7 @@ const strip = n => ({
   opt: n.opt,
   notes: n.notes,
   ...(n.links ? { links: n.links } : {}),
+  ...(n.est ? { est: n.est } : {}),
   children: n.children.filter(c => !c.wait).map(strip), // (waiting is this time's, not every time's)
 });
 const inst = t =>
@@ -230,6 +231,7 @@ function setRepeat(n, fn) {
   n.tpl = t.id;
   Object.assign(t, strip(n));
   if (!n.links) delete t.links; // (assigning can't take a key away)
+  if (!n.est) delete t.est;
   fn(t);
   if (t.auto && !repeats(t)) {
     S.templates = S.templates.filter(x => x !== t);

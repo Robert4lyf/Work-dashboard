@@ -335,8 +335,8 @@ function readRuleForm() {
   r.name = v('#rlname') ?? r.name;
   const onK = v('#rlon'),
     doK = v('#rldo');
-  if (onK && onK !== r.on.k) r.on = { k: onK, ...(r.on.days ? { days: r.on.days } : {}) };
-  if (doK && doK !== r.do.k) r.do = { k: doK, text: r.do.text || '' };
+  if (onK && onK !== r.on.k) r.on = { ...r.on, k: onK }; // (details kept: cleanRule keeps what fits)
+  if (doK && doK !== r.do.k) r.do = { ...r.do, k: doK };
   if ($('#rlmatch')) r.on.match = v('#rlmatch');
   if ($('#rltop')) r.on.top = $('#rltop').checked;
   if ($('#rlflow')) r.on.flow = v('#rlflow');

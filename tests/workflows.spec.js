@@ -200,10 +200,9 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   expect((await run(page)).status).toBe('paused');
   expect((await run(page)).cur).toBe('s2');
   await page.click('[data-wfact="resume"]');
-  // (the result arrived while paused: the execution is done, so the stage asks you to confirm)
-  await expect(page.locator('[data-wfact="confirmflow"][data-ok="yes"]')).toBeVisible();
-  await page.click('[data-wfact="confirmflow"][data-ok="yes"]');
+  // (the result arrived while paused: applied on resume, so the stage is done)
   await expect(stage(page)).toHaveText('Check');
+  expect((await run(page)).st.s2).toMatchObject({ o: 'done', exec: r.live.exec });
   await page.click('[data-wfact="fail"]');
   await page.fill('#sheetin', 'Wrong period');
   await page.click('#sheetok');
@@ -396,7 +395,7 @@ test('deep links open the list and a run (opening never moves a run on); junk is
     1,
   ]);
   await cold('#/workflows');
-  await expect(page.locator('#v-knowledge h2.kbhead', { hasText: 'Workflows' })).toBeVisible();
+  await expect(page.locator('#v-knowledge h2.wfhead')).toBeVisible();
   await cold('#/wrun/nope');
   await expect.poll(() => page.locator('#toast').textContent()).toContain("workflow run isn't here");
   await cold('#/wrun');

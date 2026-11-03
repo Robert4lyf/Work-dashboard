@@ -227,7 +227,7 @@ function markDirty(now) {
       sync2.dirty[k] = { h: null, at: at(k) };
       // A repeat's copy for a day, deleted here: remembered, so the day's reset (which makes
       // that same copy, with the same id) doesn't bring it back.
-      if (/^quest:.+-\d{4}-\d\d-\d\d$/.test(k)) (sync2.gone = sync2.gone || {})[k] = 1;
+      if (/^(quest|wrun):.+-\d{4}-\d\d-\d\d$/.test(k)) (sync2.gone = sync2.gone || {})[k] = 1;
     }
   converted.clear(); // (from here on, changes to them are edits)
   // Added and removed again before it was ever sent: nothing to send.

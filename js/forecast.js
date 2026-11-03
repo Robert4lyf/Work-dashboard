@@ -137,11 +137,8 @@ function allocate(span = forecastSpan) {
     it.chunks = [];
     let left = it.min,
       d = at[it.from] ?? 0;
-    const last = it.fixed
-      ? d
-      : it.due && at[it.due] !== undefined && at[it.due] >= d
-        ? at[it.due]
-        : days.length - 1;
+    const dueIn = it.due && at[it.due] !== undefined && at[it.due] >= d,
+      last = it.fixed ? d : dueIn ? at[it.due] : days.length - 1;
     if (it.fixed) {
       days[d].load += left;
       days[d].items.push({ ...it, take: left });
@@ -157,8 +154,13 @@ function allocate(span = forecastSpan) {
       it.chunks.push([days[d].d, take]);
       left -= take;
     }
+    if (left > 0 && !dueIn) {
+      // No room before the end of the view, and not due within it: the rest is beyond the view.
+      it.beyond = left;
+      return;
+    }
     if (left > 0) {
-      // No room by its due date (or the horizon): it lands there anyway, as an overrun.
+      // No room by its due date: it lands there anyway, as an overrun.
       days[last].load += left;
       days[last].over += left;
       days[last].items.push({ ...it, take: left, over: true });
@@ -200,9 +202,12 @@ function recommendations(f) {
     } else rec.text += " What doesn't fit repeats that day or was already scheduled.";
     out.push(rec);
   });
-  f.items
-    .filter(x => x.over && !f.days.some(d => d.over && d.items.some(y => y.id === x.id && y.over)))
-    .forEach(x => out.push({ k: 'over', text: `${x.text} doesn't fit before it's due.` }));
+  const beyond = f.items.filter(x => x.beyond);
+  if (beyond.length)
+    out.push({
+      k: 'none',
+      text: `${beyond.map(x => `${x.text} (${hm(x.beyond)})`).join(', ')} ${beyond.length === 1 ? 'extends' : 'extend'} past the ${plural(f.days.length, 'day')} in view: no room for ${beyond.length === 1 ? 'it' : 'them'} before then.`,
+    });
   if (f.none.length)
     out.push({
       k: 'none',
@@ -218,7 +223,7 @@ function recommendations(f) {
 }
 // How estimates have compared with the focus time on finished quests (last 30 days).
 function estimateAccuracy(days = 30) {
-  const cut = shift(today(), -days),
+  const cut = shift(today(), -(days - 1)),
     rows = S.log.filter(l => l.d >= cut && l.est > 0 && Number.isFinite(l.m));
   if (!rows.length) return { n: 0 };
   const ratios = rows.map(l => l.m / l.est).sort((a, b) => a - b),
@@ -226,7 +231,7 @@ function estimateAccuracy(days = 30) {
     within = rows.filter(l => Math.abs(l.m - l.est) <= l.est * 0.25).length,
     est = rows.reduce((a, l) => a + l.est, 0),
     m = rows.reduce((a, l) => a + l.m, 0);
-  return { n: rows.length, median, within, est, m };
+  return { n: rows.length, median, within, est, m, days };
 }
 function accuracyText(a) {
   if (!a.n)
@@ -237,7 +242,7 @@ function accuracyText(a) {
       : a.median < 0.75
         ? 'Estimates tend to run high.'
         : 'Estimates are about right.';
-  return `Over the last 30 days, ${plural(a.n, 'finished quest')} with an estimate took ${hm(a.m)} of focus time against ${hm(a.est)} estimated; the typical quest took ${a.median.toFixed(1)}× its estimate, and ${a.within} of ${a.n} came within a quarter of it. ${word} (Focus time is what the timer measured; work done without the timer isn't counted.)`;
+  return `Over the last ${a.days} days, ${plural(a.n, 'finished quest')} with an estimate took ${hm(a.m)} of focus time against ${hm(a.est)} estimated; the typical quest took ${a.median.toFixed(1)}× its estimate, and ${a.within} of ${a.n} came within a quarter of it. ${word} (Focus time is what the timer measured; work done without the timer isn't counted.)`;
 }
 /* the Review tab's Forecast page */
 function renderForecast() {
@@ -347,5 +352,10 @@ function capChange(el) {
   S.cap = [...capacity()];
   S.cap[wd] = Math.max(0, Math.min(960, v));
   save();
+  // (the redraw rebuilds the fields: the one the keyboard moved to gets it back)
+  const next =
+    document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.cap : null;
   renderReview();
+  const back = next !== null && next !== undefined && $(`[data-cap="${next}"]`);
+  if (back) back.focus({ preventScroll: true });
 }

@@ -129,7 +129,7 @@ function opsProgress() {
     .forEach(r =>
       rows.push({
         text: r.name,
-        sub: WRUN_WORD[r.status] + (runStage(r) ? ' · ' + runStage(r).title : ''),
+        sub: runWord(r) + (runStage(r) ? ' · ' + runStage(r).title : ''),
         wfopen: r.id,
       }),
     );
@@ -252,13 +252,11 @@ function opsRow(r) {
           ? `data-wgo="${r.waiting}"`
           : r.runopen
             ? `data-runopen="${r.runopen}"`
-            : r.resume
-              ? `data-resume="${r.resume}"`
-              : r.goto
-                ? `data-goto="${r.goto}"`
-                : r.rsub
-                  ? `data-rsub="${r.rsub}"`
-                  : '';
+            : r.goto
+              ? `data-goto="${r.goto}"`
+              : r.rsub
+                ? `data-rsub="${r.rsub}"`
+                : '';
   const inner = `<span>${esc(r.text)}</span><small>${esc(r.sub)}</small>`;
   return `<div class="row oprow ${r.k || ''}${r.over ? ' over' : ''}">${attrs ? `<button class="open" ${attrs}>${inner}</button>` : `<div class="open">${inner}</div>`}</div>`;
 }
@@ -353,7 +351,7 @@ function routineSheet(kind) {
       [`Workflows under way: ${open}`, 'data-goto="ops"', ''],
       [`Tomorrow: ${hm(f.days[1].load)} planned of ${hm(f.days[1].cap)}`, 'data-rsub="forecast"', ''],
       [`Copy today's summary (${plural(done, 'quest')} finished)`, 'data-opscopy="1"', ''],
-      S.timer ? ['A session is running: stop it from Focus', 'data-v="focus"', ''] : null,
+      S.timer ? ['A session is running: stop it from Focus', 'data-goto="focus"', ''] : null,
     ];
   }
   popSheet(
@@ -451,7 +449,7 @@ function opsClick(d, b) {
     S.pins = cleanPins(S.pins);
     save();
     renderOps();
-    b.remove();
+    openPinPicker();
     return toast('Pinned');
   }
   if (d.pinedit) {

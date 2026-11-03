@@ -80,6 +80,10 @@ function rekeyFollows(from, to) {
   S.follows.forEach(f => {
     if (f.n === from) f.n = to;
   });
+  // A workflow's waiting stage waiting through that item now waits through the step.
+  (S.wruns || []).forEach(r => {
+    if (r.live && r.live.wait === from) r.live.wait = to;
+  });
 }
 const FOLLOW_LABEL = {
   start: 'Asked',

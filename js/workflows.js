@@ -40,6 +40,16 @@ const WRUN_WORD = {
   failed: 'Failed',
   cancelled: 'Cancelled',
 };
+// The word for a run's state as it stands now: a flow attempt with no word for a day, or a
+// result folded in, is yours again, whatever was stored.
+function runWord(r) {
+  if (r.status === 'awaiting_automation') {
+    const x = r.live.exec && S.execs.find(e => e.id === r.live.exec);
+    if (!x || EXEC_TERMINAL.includes(x.status) || execStale(x)) return WRUN_WORD.awaiting_user;
+  }
+  if (r.status === 'waiting' && !stageWaitNode(r)) return WRUN_WORD.awaiting_user;
+  return WRUN_WORD[r.status];
+}
 const WRUN_FINAL = ['succeeded', 'failed', 'cancelled'], // not under way
   WRUN_OVER = ['succeeded', 'cancelled']; // over for good (a failed run can still be retried)
 const WF_STAGES_MAX = 30,
@@ -123,6 +133,12 @@ function cleanRun(r) {
     if (Array.isArray(r.live.checks)) live.checks = r.live.checks.map(Boolean).slice(0, 12);
     if (Number.isFinite(+r.live.tries)) live.tries = +r.live.tries;
     if (Number.isFinite(+r.live.launched)) live.launched = +r.live.launched;
+    if (
+      r.live.pending &&
+      typeof r.live.pending === 'object' &&
+      /^exec_(succeeded|failed|cancelled)$/.test(r.live.pending.k)
+    )
+      live.pending = { k: r.live.pending.k, msg: txt(r.live.pending.msg, 300) };
   }
   return {
     id: r.id,
@@ -151,6 +167,29 @@ function normWorkflows() {
   S.workflows = (Array.isArray(S.workflows) ? S.workflows : []).map(cleanWorkflow).filter(Boolean);
   S.wruns = (Array.isArray(S.wruns) ? S.wruns : []).map(cleanRun).filter(Boolean);
   pruneRuns2();
+  reconcileRuns();
+}
+// A flow stage whose attempt already has a result in the records (the report folded on another
+// device, and the execution's row synced here first): the stage moves on from the record, as it
+// would have from the report. The same records give the same run on every device.
+function reconcileRuns() {
+  S.wruns.forEach(r => {
+    const s = runStage(r),
+      x = s && s.type === 'flow' && r.live.exec && S.execs.find(e => e.id === r.live.exec);
+    if (!x || !EXEC_TERMINAL.includes(x.status) || WRUN_FINAL.includes(r.status) || r.status === 'paused')
+      return;
+    if (r.status === 'ready') return;
+    if (x.status === 'succeeded') {
+      if (completeStage(r, s.id, { note: x.msg ? 'Flow: ' + x.msg : '' }) === '') emitRun(r);
+    } else {
+      failStage(
+        r,
+        s.id,
+        (x.status === 'cancelled' ? 'Flow cancelled' : 'Flow failed') + (x.msg ? ': ' + x.msg : ''),
+      );
+      emitRun(r);
+    }
+  });
 }
 // Finished runs older than WRUNS_DAYS go, and all but the newest WRUNS_KEEP finished ones;
 // unfinished runs stay (an open failure is never erased in silence).
@@ -186,8 +225,8 @@ function settleRun(r) {
     r.status =
       x && !EXEC_TERMINAL.includes(x.status) && !execStale(x) ? 'awaiting_automation' : 'awaiting_user';
   } else if (s.type === 'wait') {
-    const w = r.live.wait && findWaitable(r.live.wait);
-    r.status = w && w.n && w.n.wait ? 'waiting' : 'awaiting_user';
+    const w = stageWaitNode(r);
+    r.status = w ? 'waiting' : 'awaiting_user';
   } else r.status = 'awaiting_user';
 }
 // A run from a definition: its own copy of the stages. `id` names a recurrence's run the same
@@ -248,14 +287,19 @@ function completeStage(r, sid, { o = 'done', note = '', pick } = {}) {
   if (r.status === 'ready') return 'the run has not started';
   const s = runStage(r);
   if (!s || s.id !== sid) return 'not the current stage';
-  if (o === 'skipped' && !s.skip) return "this stage can't be skipped";
+  const gone =
+    (s.type === 'procedure' && !procOf(s.kb)) || (s.type === 'flow' && !S.flows.some(f => f.id === s.flow));
+  if (o === 'skipped' && !s.skip && !gone) return "this stage can't be skipped";
   if (s.type === 'decide' && o === 'done' && !(s.choices || [])[pick]) return 'choose first';
   const out = { o, at: Date.now() };
   if (note) out.note = txt(note, 300);
   if (r.live.exec) out.exec = r.live.exec;
   if (r.live.run) out.run = r.live.run;
   if (r.live.wait) out.wait = r.live.wait;
-  if (s.type === 'decide' && o === 'done') out.pick = pick;
+  if (s.type === 'decide' && o === 'done') {
+    out.pick = pick;
+    if (!out.note) out.note = txt(s.choices[pick].label, 300);
+  }
   r.st[sid] = out;
   r.live = {};
   r.err = '';
@@ -309,6 +353,20 @@ function resumeRun(r) {
   r.status = 'running';
   runLog(r, 'resumed');
   settleRun(r);
+  const p = r.live.pending,
+    s = runStage(r);
+  if (p && s && s.type === 'flow') {
+    // (the flow's result came while paused: applied now)
+    delete r.live.pending;
+    if (p.k === 'exec_succeeded') completeStage(r, s.id, { note: p.msg ? 'Flow: ' + p.msg : '' });
+    else
+      failStage(
+        r,
+        s.id,
+        (p.k === 'exec_cancelled' ? 'Flow cancelled' : 'Flow failed') + (p.msg ? ': ' + p.msg : ''),
+      );
+    emitRun(r);
+  }
   return '';
 }
 function cancelRun(r, why = '') {
@@ -326,9 +384,13 @@ function onWorkflowEvent(ev) {
     S.wruns.forEach(r => {
       const s = runStage(r);
       if (!s || s.type !== 'flow' || r.live.exec !== ev.exec) return;
+      if (r.status === 'paused') {
+        r.live.pending = { k: ev.k, msg: ev.msg || '' }; // (applied on resume)
+        return;
+      }
       if (ev.k === 'exec_succeeded') {
         if (completeStage(r, s.id, { note: ev.msg ? 'Flow: ' + ev.msg : '' }) === '') emitRun(r);
-      } else if (!WRUN_FINAL.includes(r.status) && r.status !== 'paused') {
+      } else if (!WRUN_FINAL.includes(r.status)) {
         failStage(
           r,
           s.id,
@@ -347,7 +409,7 @@ function onWorkflowEvent(ev) {
   if (ev.k === 'wait_resolved')
     S.wruns.forEach(r => {
       const s = runStage(r);
-      if (s && s.type === 'wait' && r.live.wait === ev.node && completeStage(r, s.id, {}) === '') emitRun(r);
+      if (s && s.type === 'wait' && ev.node === r.live.wait && completeStage(r, s.id, {}) === '') emitRun(r);
     });
 }
 // A run that just ended tells the rules (once per outcome: the key names it).
@@ -359,6 +421,7 @@ function emitRun(r) {
       wrun: r.id,
       wf: r.wf,
       name: r.name,
+      byRule: !!r.byRule,
     });
   if (r.status === 'failed')
     // (named by the stage and the attempt, not the time: the same on every device)
@@ -369,6 +432,7 @@ function emitRun(r) {
       wf: r.wf,
       name: r.name,
       err: r.err,
+      byRule: !!r.byRule,
     });
 }
 // A recurring workflow's run for today, made the same on every device (id = workflow + day),
@@ -384,6 +448,11 @@ function rolloverWorkflows(d) {
     if (!hit) return;
     const id = w.id + '-' + d;
     if (S.wruns.some(r => r.id === id) || (sync2.gone && sync2.gone['wrun:' + id])) return;
+    // An earlier day's run of it never started: it gives way (kept in the history as cancelled).
+    S.wruns.forEach(r => {
+      if (r.wf === w.id && r.status === 'ready' && /-\d{4}-\d\d-\d\d$/.test(r.id) && r.id < id)
+        cancelRun(r, 'not started that day');
+    });
     S.wruns.push(makeRun(w, { id, prepared: true }));
     emitEvent({ k: 'wf_due', key: 'wfdue:' + id, wf: w.id, wrun: id, name: w.name });
   });
@@ -393,9 +462,9 @@ function startWorkflow(wfId, q = '') {
   const w = wfById(wfId);
   if (!w || !w.stages.length) return toast('That workflow has no stages yet', false, 3000);
   // A run already under way for it (same quest): that one, not a second.
-  const open = S.wruns.find(
-    r => r.wf === wfId && (r.q || '') === (q || w.q || '') && !WRUN_OVER.includes(r.status),
-  );
+  const open = S.wruns
+    .filter(r => r.wf === wfId && (r.q || '') === (q || w.q || '') && !WRUN_OVER.includes(r.status))
+    .sort((a, b) => b.started - a.started)[0];
   if (open) {
     if (open.status === 'ready') beginRun(open);
     save();
@@ -408,13 +477,14 @@ function startWorkflow(wfId, q = '') {
 }
 function openWorkflowRun(id) {
   if (!wrunById(id)) return toast('That run is gone', false, 3000);
-  wfOpen = id;
-  kbRun = null;
-  kbArt = null;
-  kbEdit = null;
-  if (view !== 'knowledge') go('knowledge');
-  else renderKnowledge();
-  window.scrollTo(0, 0);
+  leaveEditor(() => {
+    wfOpen = id;
+    kbRun = null;
+    kbArt = null;
+    if (view !== 'knowledge') go('knowledge');
+    else renderKnowledge();
+    window.scrollTo(0, 0);
+  });
 }
 // A stage's "Launch" for a flow (the tap on its button): the execution, when tracked, is the
 // stage's own attempt; untracked, the launch is noted and the result is yours to confirm.
@@ -427,6 +497,13 @@ function wfLaunched(wrunId, stageId, x) {
   else r.live.launched = Date.now();
   runLog(r, 'launched', x ? '' : 'untracked');
   settleRun(r);
+}
+// The node a waiting stage is waiting through: the Inbox item it made, or (taken to Today) the
+// waiting step its details moved to (see rekeyFollows). Null once it isn't waiting any more.
+function stageWaitNode(r) {
+  if (!r.live.wait) return null;
+  const w = findWaitable(r.live.wait);
+  return w && w.n && w.n.wait ? w.n : null;
 }
 // The waiting item a waiting stage asks for: an Inbox item waiting on `who`, named for the stage,
 // the same on every device (run + stage).
@@ -457,7 +534,8 @@ function wfClick(d, b) {
   const r = d.wrun && wrunById(d.wrun);
   if (d.wrun && !r) return toast('That run is gone', false, 3000);
   if (!r) return wfEditClick(d, b);
-  const s = runStage(r);
+  const s = runStage(r),
+    was = r.status;
   let why = '';
   if (d.wfact === 'begin') why = beginRun(r);
   else if (d.wfact === 'done') {
@@ -542,7 +620,6 @@ function wfClick(d, b) {
     // Tracking off, or no word after a day: the result, confirmed by you (and said so).
     if (d.ok === 'yes') why = completeStage(r, s ? s.id : '', { note: 'Result confirmed by hand' });
     else why = failStage(r, s ? s.id : '', 'Failed (confirmed by hand)');
-    if (!why) emitRun(r);
   } else if (d.wfact === 'procedure') {
     if (!s || s.type !== 'procedure' || !procOf(s.kb)) return toast('That procedure is gone', false, 3000);
     const pr = openRunFor(s.kb, 'wr-' + r.id) || null;
@@ -577,13 +654,13 @@ function wfClick(d, b) {
     return renderKnowledge();
   } else if (d.wfact === 'received') {
     // The reply came (the item's been cleared elsewhere, or you say so): the stage is done.
-    const it = r.live.wait && findWaitable(r.live.wait);
-    if (it && it.n && it.n.wait)
-      setWaiting(r.live.wait, null); // (emits wait_resolved: the run moves on there)
+    const wn = stageWaitNode(r);
+    if (wn)
+      setWaiting(wn.id, null); // (emits wait_resolved: the run moves on there)
     else why = completeStage(r, s ? s.id : '', { note: 'received' });
   }
   if (why) toast("Couldn't: " + why, false, 3000);
-  if (r.status === 'succeeded' || r.status === 'failed') emitRun(r);
+  if ((r.status === 'succeeded' || r.status === 'failed') && r.status !== was) emitRun(r);
   save();
   renderKnowledge();
   if (r.status === 'succeeded') toast('Workflow succeeded');
@@ -616,7 +693,7 @@ function wfRunView(r) {
     final = WRUN_OVER.includes(r.status);
   let h = `<button class="linkbtn" data-wfback="1">‹ Workflows</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(r.name)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div>
-    <p class="hint runprog"><span class="wst w-${r.status}">${WRUN_WORD[r.status]}</span>${s ? ` · stage ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}</p>`;
+    <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · stage ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}</p>`;
   if (r.err && r.status === 'failed')
     h += `<div class="ask box werr"><p><b>Failed.</b> ${esc(r.err)}</p></div>`;
   if (r.status === 'ready')
@@ -705,11 +782,11 @@ function stageCard(r, s, i) {
       }${s.skip ? b('skip', 'Skip') : ''}`;
     }
   } else if (s.type === 'wait') {
-    const it = r.live.wait && findWaitable(r.live.wait);
-    if (it && it.n && it.n.wait)
-      body += `<p class="hint">Waiting on ${esc(it.n.wait.who || 'someone')} · <button class="linkbtn" data-goto="waiting">Waiting Centre</button></p>`;
+    const wn = stageWaitNode(r);
+    if (wn)
+      body += `<p class="hint">Waiting on ${esc(wn.wait.who || 'someone')} · <button class="linkbtn" data-goto="waiting">Waiting Centre</button></p>`;
     else if (r.live.wait) body += '<p class="hint">The waiting item was cleared.</p>';
-    acts = `${it && it.n && it.n.wait ? b('received', 'Reply received', 'green') : r.live.wait ? b('received', 'Received, next', 'green') : b('waititem', 'Start waiting' + (s.who ? ' on ' + esc(s.who) : ''), 'blue')}${s.skip ? b('skip', 'Skip') : ''}`;
+    acts = `${wn ? b('received', 'Reply received', 'green') : r.live.wait ? b('received', 'Received, next', 'green') : b('waititem', 'Start waiting' + (s.who ? ' on ' + esc(s.who) : ''), 'blue')}${s.skip ? b('skip', 'Skip') : ''}`;
   }
   return `<div class="pstep box${failed ? ' failed' : ''}"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3><p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>${body}<div class="acts wacts">${acts}</div></div>`;
 }
@@ -796,17 +873,20 @@ function templateToWorkflow(t) {
   return w;
 }
 const wfRuns = id => S.wruns.filter(r => r.wf === id).sort((a, b) => b.started - a.started);
-const wfOpenRun = id => S.wruns.find(r => r.wf === id && !WRUN_OVER.includes(r.status)) || null;
+const wfOpenRun = id =>
+  S.wruns
+    .filter(r => r.wf === id && !WRUN_OVER.includes(r.status))
+    .sort((a, b) => b.started - a.started)[0] || null;
 function kbWorkflows() {
   const ws = S.workflows.filter(w => !w.archived).sort((a, b) => byName(a.name, b.name)),
     arch = S.workflows.filter(w => w.archived).length,
     open = S.wruns.filter(r => !WRUN_OVER.includes(r.status)).sort((a, b) => b.at - a.at);
-  let h = `<h2 class="kbhead">Workflows</h2>`;
+  let h = `<h2 class="wfhead" id="wfhead">Workflows</h2>`;
   if (open.length)
     h += `<div class="list box">${open
       .map(
         r =>
-          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${WRUN_WORD[r.status]}</span>${runStage(r) ? ' · ' + esc(runStage(r).title) : ''} · ${esc(whenLabel(r.at))}</small></button></div>`,
+          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${runWord(r)}</span>${runStage(r) ? ' · ' + esc(runStage(r).title) : ''} · ${esc(whenLabel(r.at))}</small></button></div>`,
       )
       .join('')}</div>`;
   h += ws.length
@@ -825,7 +905,8 @@ function kbWorkflows() {
 }
 function wfEditor() {
   const w = wfEdit,
-    st = (k, l, p) => `<button class="chip" data-wfpreset="${k}" aria-pressed="${p}">${l}</button>`;
+    st = (k, l, p) =>
+      `<button class="chip" type="button" data-wfpreset="${k}" aria-pressed="${p}">${l}</button>`;
   let h = `<h2>${w.id ? 'Edit workflow' : 'New workflow'}</h2><form id="wfform">
     <label class="f" for="wfname">Name</label><input class="fld" id="wfname" maxlength="120" value="${esc(w.name || '')}" autocomplete="off" required>
     <label class="f" for="wfdesc">What it is for <small class="hint">(optional)</small></label><textarea class="fld" id="wfdesc" rows="2" maxlength="600">${esc(w.desc || '')}</textarea>
@@ -852,6 +933,13 @@ function wfStagesList() {
         `<li><button class="pjump" type="button" data-wfstage="${s.id}">${esc(s.title)} <small>· ${WF_TYPE_NAME[s.type]}</small></button><span class="pmv"><button class="mv" type="button" data-wfup="${s.id}" aria-label="Move up"${i === 0 ? ' disabled' : ''}>&#9650;</button><button class="mv" type="button" data-wfdown="${s.id}" aria-label="Move down"${i === ss.length - 1 ? ' disabled' : ''}>&#9660;</button><button class="x" type="button" data-wfdel="${s.id}" aria-label="Remove stage: ${esc(s.title)}">×</button></span></li>`,
     )
     .join('')}</ol>`;
+}
+// What's typed in the editor, into the draft (so a redraw shows it).
+function readWfForm() {
+  if (!wfEdit || !$('#wfform')) return;
+  wfEdit.name = $('#wfname').value;
+  wfEdit.desc = $('#wfdesc').value;
+  wfEdit.monthDay = +$('#wfmonth').value || 0;
 }
 function wfRenderStages() {
   const el = $('#wfstages');
@@ -945,6 +1033,13 @@ function saveWorkflowForm() {
     monthDay: +$('#wfmonth').value,
     at: Date.now(),
   });
+  const missing = w.stages.find(s => (s.type === 'flow' && !s.flow) || (s.type === 'procedure' && !s.kb));
+  if (missing)
+    return toast(
+      `Choose the ${missing.type === 'flow' ? 'flow' : 'procedure'} for “${missing.title}”`,
+      false,
+      3500,
+    );
   const cur = wfById(w.id);
   if (cur) {
     // A changed definition is a new version; runs under way keep their own copy.
@@ -996,7 +1091,11 @@ function wfEditClick(d, b) {
       archived: false,
       at: Date.now(),
     });
-    c.stages.forEach(s => (s.id = uid()));
+    const ids = new Map(c.stages.map(s => [s.id, uid()]));
+    c.stages.forEach(s => {
+      s.id = ids.get(s.id);
+      (s.choices || []).forEach(ch => (ch.next = ids.get(ch.next) || ''));
+    });
     S.workflows.push(c);
     wfEdit = null;
     save();
@@ -1028,6 +1127,7 @@ function wfEditClick(d, b) {
     wfEdit.stages = wfEdit.stages.filter(x => x.id !== d.wfdel);
     wfRenderStages();
   }
+  if (d.wfday !== undefined || d.wfpreset) readWfForm();
   if (d.wfday !== undefined) {
     const wd = +d.wfday;
     wfEdit.days = wfEdit.days.includes(wd) ? wfEdit.days.filter(x => x !== wd) : [...wfEdit.days, wd];
@@ -1047,7 +1147,7 @@ function questWorkflows(qid) {
   return `<div class="list box reslist">${runs
     .map(
       r =>
-        `<div class="row resrow"><button class="open" data-wfopen="${r.id}"><small>Workflow</small><span>${esc(r.name)}</span></button><span class="procline"><small>${WRUN_WORD[r.status]}${runStage(r) ? ' · ' + esc(runStage(r).title) : ''}</small><button class="btn sm blue" data-wfopen="${r.id}">Open</button></span></div>`,
+        `<div class="row resrow"><button class="open" data-wfopen="${r.id}"><small>Workflow</small><span>${esc(r.name)}</span></button><span class="procline"><small>${runWord(r)}${runStage(r) ? ' · ' + esc(runStage(r).title) : ''}</small><button class="btn sm blue" data-wfopen="${r.id}">Open</button></span></div>`,
     )
     .join('')}${ws
     .filter(w => !runs.some(r => r.wf === w.id))

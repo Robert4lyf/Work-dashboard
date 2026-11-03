@@ -285,7 +285,7 @@ test('Scenario D: an NFC card opens the Command Centre; a pinned workflow starts
   s = await app.state();
   expect(s.wruns).toHaveLength(1);
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-knowledge h2.kbhead', { hasText: 'Workflows' })).toBeVisible();
+  await expect(page.locator('#v-knowledge h2.wfhead')).toBeVisible();
   await page.evaluate(() => history.back());
   await expect(page.locator('#v-today')).toBeVisible();
   expect(app.errors).toEqual([]);

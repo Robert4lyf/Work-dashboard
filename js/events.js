@@ -701,6 +701,7 @@ document.addEventListener('click', e => {
     // copy would break every device's notifications), the device list and any running session.
     // Nor the notes' pictures when it has none of its own (a previous version leaves them out).
     const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
+      hadCap = S.cap,
       imgs = Array.isArray(pending.noteImgs) ? null : S.noteImgs,
       artImgs = new Map(S.kb.map(a => [a.id, a.imgs])),
       hadArtImgs = new Set(
@@ -729,6 +730,7 @@ document.addEventListener('click', e => {
       return toast("That backup couldn't be read", false, 3000);
     }
     Object.assign(S, keep);
+    if (pending.cap === undefined && hadCap) S.cap = hadCap; // (a copy from before capacity)
     if (imgs) S.noteImgs = imgs;
     // (pictures still waiting for their article: kept too, or they'd be deleted everywhere)
     S.kbimgLoose = [...S.kbimgLoose, ...keptLoose.filter(p => !S.kbimgLoose.some(q => q.id === p.id))];

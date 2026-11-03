@@ -1544,6 +1544,27 @@ test('Release C: a recurring workflow’s run is made once across devices, a run
     expect(s.cap).toEqual([0, 240, 240, 240, 240, 240, 0]);
     expect(s.pins).toEqual([{ k: 'wf', id: 'w1' }]);
   }
+  // Cleared on B, neither device's next reset brings it back (remembered as gone).
+  await b.page.evaluate(() => {
+    S.wruns = [];
+    save();
+  });
+  await settle(a, b);
+  for (const d of [a, b]) {
+    await d.page.evaluate(() => {
+      S.day = shift(today(), -1);
+      rollover();
+    });
+    expect((await d.state()).wruns).toHaveLength(0);
+  }
+  await settle(a, b);
+  for (const d of [a, b]) expect((await d.state()).wruns).toHaveLength(0);
+  // Made afresh for the rest of the test.
+  await a.page.evaluate(() => {
+    S.wruns.push(makeRun(S.workflows[0], { id: 'w1-' + today(), prepared: true }));
+    save();
+  });
+  await settle(a, b);
   // A starts the run and finishes the first stage; B sees it at the second.
   await a.page.evaluate(() => {
     beginRun(S.wruns[0]);

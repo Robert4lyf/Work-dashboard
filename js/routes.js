@@ -174,7 +174,7 @@ function followRoute(r, first) {
         kbArt = kbRun = wfOpen = wfEdit = null;
         kbCatOpen = null;
         go('knowledge');
-        const el = $('#v-knowledge .kbhead');
+        const el = $('#wfhead');
         if (el) el.scrollIntoView({ block: 'start' });
       });
     case 'wrun': {

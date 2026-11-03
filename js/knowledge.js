@@ -112,6 +112,8 @@ function renderKnowledge() {
   // A background redraw (a sync, coming back to the app) leaves an article being written alone:
   // redrawing it would lose the scroll position, and on a phone break a word being typed.
   if (background && kbEdit && $('#kbform')) return;
+  if (background && wfEdit && $('#wfform')) return;
+  if (wfEdit && $('#wfform')) readWfForm(); // (what's typed is the draft)
   // What's typed in the editor is the draft: a redraw (a tick elsewhere, undo) shows it, not the
   // saved article.
   if (kbEdit && $('#kbform')) {
