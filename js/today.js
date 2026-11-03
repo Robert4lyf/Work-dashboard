@@ -252,6 +252,20 @@ function renderAttention() {
     c.push(
       `<button class="chip warn" data-xdet="${xf[xf.length - 1].id}">${xf.length === 1 ? 'Flow failed' : xf.length + ' flows failed'}</button>`,
     );
+  const nAtt = opsAttention().length;
+  c.unshift(
+    `<button class="chip ops" data-goto="ops">Command Centre${nAtt ? ` <small>${nAtt}</small>` : ''}</button>`,
+  );
+  const wfl = S.wruns.filter(r => r.status === 'failed' && !r.ack),
+    wfr = S.wruns.filter(r => r.status === 'ready');
+  if (wfl.length)
+    c.push(
+      `<button class="chip warn" data-wfopen="${wfl[wfl.length - 1].id}">${wfl.length === 1 ? 'Workflow failed' : wfl.length + ' workflows failed'}</button>`,
+    );
+  if (wfr.length)
+    c.push(
+      `<button class="chip" data-wfopen="${wfr[0].id}">${wfr.length === 1 ? 'Workflow ready: ' + esc(wfr[0].name) : wfr.length + ' workflows ready'}</button>`,
+    );
   return c.length ? `<div class="attn chips">${c.join('')}</div>` : '';
 }
 
@@ -346,7 +360,10 @@ function renderNode({ n, parents }) {
       dueTag(n) +
       (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
       (!d && !n.wait && kids ? stepWaitBadge(n) : '') +
-      (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '');
+      (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '') +
+      (!d
+        ? `<button class="tag estpick" data-estpick="${n.id}">${effEst(n) ? 'Estimate ' + esc(estLabel(n)) : '+ Estimate'}</button>`
+        : '');
   if (meta) h += `<div class="factsrow">${meta}</div>`;
   // The next step (the first to do, in order), or where it stands.
   const nx = !d && kids ? nextLeaf(n) : null;
@@ -370,7 +387,7 @@ function renderNode({ n, parents }) {
   if (top && needsNext(n))
     h += `<div class="ask box nextask"><p><b>Every step is ticked.</b> What's next? Add it below, or finish the quest.</p><div class="acts"><button class="btn green" data-finish="${n.id}">Finish quest</button><button class="btn" data-unsure="${n.id}">Not sure yet</button></div></div>`;
   // What the work needs: articles, flows, web pages (see links.js). A step shares its quest's.
-  h += top ? renderLinks(n) : renderInheritedLinks(q);
+  h += top ? renderLinks(n) + questWorkflows(n.id) : renderInheritedLinks(q);
   // The steps come first: they're what you work through. (A quest has steps; a step doesn't.)
   if (top) {
     h += listHead('Subquests', n.children);

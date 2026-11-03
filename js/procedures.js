@@ -99,6 +99,8 @@ function openRun(art, q) {
   kbRun = r.id;
   kbArt = art;
   kbImgShown = null;
+  wfOpen = null; // (a workflow run being followed gives way; its ‹ isn't this run's)
+  kbRunBackWf = null;
   if (q && view === 'today' && path.length) kbReturn = true; // (the article's ‹ goes back to the quest)
   if (view !== 'knowledge') go('knowledge');
   else renderKnowledge();
@@ -165,7 +167,7 @@ function kbRunView(r) {
     s = runStep(r),
     q = r.q && (find(r.q) || find(r.q, S.later)),
     i = s ? a.steps.indexOf(s) : a.steps.length;
-  let h = `<button class="linkbtn" data-runback="1">‹ ${esc(a.title)}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
+  let h = `<button class="linkbtn" data-runback="1">‹ ${kbRunBackWf && wrunById(kbRunBackWf) ? 'Back to the workflow' : esc(a.title)}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(a.title)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div><p class="hint runprog">${
       s ? `Step ${i + 1} of ${p.total}` : `All ${p.total} steps done`
     }${r.fin ? ' · finished' : ''}</p>`;
@@ -262,6 +264,11 @@ function kbRunClick(d, b) {
   if (d.runstart) return openRun(d.runstart, d.q || '');
   if (d.runback) {
     kbRun = null;
+    if (kbRunBackWf && wrunById(kbRunBackWf)) {
+      wfOpen = kbRunBackWf;
+      kbArt = null;
+    }
+    kbRunBackWf = null;
     renderKnowledge();
     window.scrollTo(0, 0);
     return;
@@ -308,8 +315,11 @@ function kbRunClick(d, b) {
   if (d.runfinish) {
     r.fin = r.at = Date.now();
     r.cur = '';
+    emitEvent({ k: 'proc_finished', key: 'proc:' + r.id + ':fin', run: r.id, art: r.art, q: r.q });
     save();
-    renderKnowledge();
+    if (kbRunBackWf && wrunById(kbRunBackWf))
+      kbRunClick({ runback: '1' }, {}); // (back to the workflow)
+    else renderKnowledge();
     toast('Procedure finished');
   }
   if (d.runfresh) {

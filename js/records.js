@@ -22,6 +22,10 @@ const LISTS = {
   follow: ['follows', x => x.id],
   run: ['runs', x => x.id],
   exec: ['execs', x => x.id],
+  workflow: ['workflows', x => x.id],
+  wrun: ['wruns', x => x.id],
+  rule: ['rules', x => x.id],
+  rlog: ['rlog', x => x.id],
 };
 function toRecords(s) {
   const m = new Map();
@@ -33,6 +37,10 @@ function toRecords(s) {
   // Today's top 3, its own record (not in prefs: choosing it mustn't fight a prefs change made
   // elsewhere). Only while there is one; clearing it deletes the record.
   if (s.top3) m.set('meta:top3', { day: s.top3.day, ids: s.top3.ids });
+  // Capacity per weekday (Release C): its own record, only once set.
+  if (s.cap) m.set('meta:cap', { days: s.cap });
+  // Quick-launch pins (Release C): their own record, only once there are any.
+  if (s.pins && s.pins.length) m.set('meta:pins', { pins: s.pins });
   // An article's pictures are records of their own, so editing its text doesn't send them again.
   // (The article keeps an empty list in their place: that's how a device from before this reads
   // it, so the two don't keep rewriting it back and forth.)
@@ -112,8 +120,14 @@ function fromRecords(m, day) {
     follows: (by.follow || []).sort((a, b) => a.t - b.t),
     runs: by.run || [],
     execs: by.exec || [],
+    workflows: by.workflow || [],
+    wruns: by.wrun || [],
+    rules: by.rule || [],
+    rlog: (by.rlog || []).sort((a, b) => a.t - b.t),
     notes: (m.get('meta:notes') || {}).text || '',
     top3: m.get('meta:top3') || null,
+    cap: (m.get('meta:cap') || {}).days || null,
+    pins: (m.get('meta:pins') || {}).pins || [],
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),
     timer: (m.get('meta:timer') || {}).timer || null,
@@ -163,7 +177,19 @@ function saveSyncState() {
 }
 // Record kinds this version knows. Rows of other kinds (from a newer version on another
 // device) are left alone, never deleted for being missing here.
-const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy', 'top3', 'track'];
+const META_KEYS = [
+  'notes',
+  'order',
+  'prefs',
+  'pushkey',
+  'timer',
+  'score',
+  'legacy',
+  'top3',
+  'track',
+  'cap',
+  'pins',
+];
 const knownKey = k =>
   k.slice(0, k.indexOf(':')) in LISTS ||
   k.startsWith('kbimg:') ||
@@ -201,7 +227,7 @@ function markDirty(now) {
       sync2.dirty[k] = { h: null, at: at(k) };
       // A repeat's copy for a day, deleted here: remembered, so the day's reset (which makes
       // that same copy, with the same id) doesn't bring it back.
-      if (/^quest:.+-\d{4}-\d\d-\d\d$/.test(k)) (sync2.gone = sync2.gone || {})[k] = 1;
+      if (/^(quest|wrun):.+-\d{4}-\d\d-\d\d$/.test(k)) (sync2.gone = sync2.gone || {})[k] = 1;
     }
   converted.clear(); // (from here on, changes to them are edits)
   // Added and removed again before it was ever sent: nothing to send.

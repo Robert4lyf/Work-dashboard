@@ -135,7 +135,8 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     if (!knownKey(r.key)) continue;
     // A repeat's copy for a day (id <template>-<date>) cleared by another device's reset:
     // remembered, so this device's look-back doesn't make it again.
-    if (r.deleted && /^quest:.+-\d{4}-\d\d-\d\d$/.test(r.key)) (sync2.gone = sync2.gone || {})[r.key] = 1;
+    if (r.deleted && /^(quest|wrun):.+-\d{4}-\d\d-\d\d$/.test(r.key))
+      (sync2.gone = sync2.gone || {})[r.key] = 1;
     const h = r.deleted ? null : recHash(r.key, r.data),
       mine = sync2.dirty[r.key];
     if (mine && mine.at > Number(r.edited_at)) continue; // (not taken in: fetched again next time)
@@ -350,7 +351,7 @@ async function sync() {
         norm(null);
         persistLocal();
         // (nothing of the other account's left open: an article being written, a search...)
-        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = null;
+        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = wfOpen = wfEdit = null;
         execToken = '';
         try {
           localStorage.removeItem(EXEC_KEY);
@@ -594,6 +595,7 @@ function renderAccount() {
   // Notifications, then the rarely-needed bits folded away.
   if (sb && session) h += renderNotifySettings();
   h += renderShortcuts();
+  h += renderRuleSettings();
   if (sb && session) h += renderExecSettings();
   h += `<details id="advd" class="more"${panels.advd ? ' open' : ''}><summary>Advanced: capture link, health check</summary>${sb && session ? renderCapture() : ''}${renderHealth()}</details>`;
   setHTML($('#v-account'), h);

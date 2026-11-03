@@ -165,6 +165,7 @@ function fix(n) {
   n.children = (n.children || []).map(fix);
   if (n.start) n.start = cleanDay(n.start);
   cleanWait(n);
+  cleanEst(n);
   if (n.since) n.since = cleanDay(n.since);
   n.tag = cleanText(n.tag || ''); // (a tag's name is part of its record's key: see LISTS)
   n.project = n.project || '';
@@ -226,6 +227,11 @@ function norm(s) {
       follows: [],
       runs: [],
       execs: [],
+      workflows: [],
+      wruns: [],
+      rules: [],
+      rlog: [],
+      pins: [],
     },
     s || {},
   );
@@ -251,6 +257,8 @@ function norm(s) {
     }));
   normRuns();
   normExecs();
+  normWorkflows();
+  normRules();
   // Finished items go into lists as they are: each needs its trail (the steps above it).
   if (!Array.isArray(S.log)) S.log = [];
   S.log = S.log
@@ -269,6 +277,8 @@ function norm(s) {
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;
   S.top3 = cleanTop3(S.top3);
+  S.cap = cleanCap(S.cap);
+  S.pins = cleanPins(S.pins);
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
   // (only objects, with a quest behind them only if that's an object too: a synced row or a
@@ -441,6 +451,8 @@ function save() {
   S.follows = S.follows.filter(x => x.t > Date.now() - 180 * 864e5);
   pruneRuns();
   pruneExecs();
+  pruneRuns2();
+  pruneRlog();
   stampSince();
   S.editedAt = Date.now();
   dropUndo();
@@ -509,6 +521,9 @@ function rollover() {
       }
     });
   }
+  // A recurring workflow's run for today, ready to start (the same id on every device).
+  rolloverWorkflows(today());
+  rolloverRules(today());
   // Scheduled quests whose day has come join the end of Today's list.
   S.later = S.later.filter(n => {
     if (n.start > today()) return true;

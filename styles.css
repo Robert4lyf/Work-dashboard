@@ -2809,3 +2809,264 @@ details.more > details {
   color: var(--muted);
   border-style: dashed;
 }
+
+/* Release C: workflows */
+.wst {
+  font-weight: 600;
+}
+.w-succeeded {
+  color: var(--green);
+}
+.w-failed,
+.w-cancelled {
+  color: var(--pink-ink);
+}
+.w-awaiting_user,
+.w-ready {
+  color: var(--blue);
+}
+.w-awaiting_automation,
+.w-waiting,
+.w-paused {
+  color: var(--muted);
+}
+.werr {
+  margin: 8px 0;
+}
+.pstep.failed {
+  border-color: var(--pink);
+}
+.pstep .ptype {
+  margin: -4px 0 6px;
+}
+.wchecks {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.wacts {
+  flex-wrap: wrap;
+}
+.wlist li.skipped .pjump,
+.wlist li.failed .pjump {
+  opacity: 0.7;
+}
+.wlist li.failed .pjump {
+  color: var(--pink-ink);
+}
+.wlist .pjump small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+}
+.wfhead {
+  margin-top: 18px;
+}
+
+/* Release C: rules */
+.rulerow.off .open {
+  opacity: 0.6;
+}
+.rlprev {
+  margin: 10px 0 4px;
+}
+
+/* Release C: forecast */
+.tag.estpick {
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8em;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+}
+.radar {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  height: 120px;
+  padding: 6px 0 0;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 6px;
+}
+.radar.tight {
+  gap: 2px;
+}
+.rday {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.rday .rbar {
+  display: block;
+  min-height: 2px;
+  border: 2px solid var(--ink);
+  border-bottom: 0;
+  background: var(--green);
+}
+.rday.tight .rbar {
+  background: var(--yellow, #ffec27);
+}
+.rday.over .rbar {
+  background: var(--pink);
+}
+.rday.none .rbar {
+  background: transparent;
+  border-color: var(--muted);
+}
+.rday small {
+  text-align: center;
+  font-size: 0.7em;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.radar.tight .rday small {
+  font-size: 0.6em;
+}
+.recs {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.rec {
+  border-left: 4px solid var(--blue);
+  padding: 2px 0 2px 10px;
+  margin: 8px 0;
+}
+.rec.over {
+  border-color: var(--pink);
+}
+.rec.ok {
+  border-color: var(--green);
+}
+.rec.none {
+  border-color: var(--muted);
+}
+.rec p {
+  margin: 0 0 6px;
+}
+.fday {
+  margin: 8px 0 12px;
+}
+.capgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+}
+.capgrid label {
+  display: grid;
+  gap: 2px;
+  font-size: 0.85em;
+}
+
+/* Release C: insights */
+.ibars {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 56px;
+  border-bottom: 2px solid var(--ink);
+  margin: 0 0 10px;
+}
+.ibars.tight {
+  gap: 1px;
+}
+.ibar {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 2px;
+  background: var(--blue);
+  border: 1px solid var(--ink);
+  border-bottom: 0;
+}
+.ilabel {
+  margin: 8px 0 2px;
+}
+.ilines {
+  padding-left: 18px;
+  margin: 4px 0 14px;
+}
+.ilines li {
+  margin: 4px 0;
+}
+
+/* Release C: command centre */
+.chip.ops {
+  font-weight: 700;
+}
+.chip.ops small {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+.opsync {
+  margin: 0 0 12px;
+}
+.opsec {
+  margin: 0 0 14px;
+}
+.oprow.late .open > span {
+  color: var(--pink-ink);
+}
+.oprow.over .open > span {
+  color: var(--pink-ink);
+}
+.oprow.bad .open > small {
+  color: var(--pink-ink);
+}
+.pins {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.pins.editing {
+  grid-template-columns: 1fr;
+}
+.pinwrap {
+  display: grid;
+  gap: 2px;
+}
+.pinwrap small {
+  color: var(--muted);
+  font-size: 0.7em;
+}
+.pin {
+  display: block;
+  padding: 10px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.pin.gone {
+  opacity: 0.6;
+  box-shadow: none;
+  cursor: default;
+}
+.pins.editing .pinwrap {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.pins.editing .pinwrap small {
+  grid-column: 1 / -1;
+}

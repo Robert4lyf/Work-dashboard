@@ -12,11 +12,20 @@ const test = base.test.extend({
     );
     // A reload waits for writes to the store to finish first, then, like opening, for the app to
     // have started (it reads the store first).
+    // With the sync library present (the service worker may have cached it), the app starts
+    // deferred: the day's reset waits for the first auth event, which arrives a moment later.
+    // A test acts only once that has happened, so the reset can't land mid-test.
+    const started = async () => {
+      await page.waitForFunction(() => window.appReady === true);
+      await page
+        .waitForFunction(() => typeof sb === 'undefined' || !sb || authSeen, null, { timeout: 5000 })
+        .catch(() => {});
+    };
     const reload = page.reload.bind(page);
     page.reload = async (...a) => {
       await page.evaluate(() => (window.storeDone ? storeDone() : null)).catch(() => {});
       const r = await reload(...a);
-      await page.waitForFunction(() => window.appReady === true);
+      await started();
       return r;
     };
     const app = {
@@ -32,7 +41,7 @@ const test = base.test.extend({
           }),
         );
         await page.goto('/');
-        await page.waitForFunction(() => window.appReady === true);
+        await started();
       },
       // The app's data as saved (the state in memory is what the store holds, pictures included).
       state: () => page.evaluate(() => JSON.parse(JSON.stringify(S))),

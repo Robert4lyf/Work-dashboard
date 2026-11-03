@@ -89,7 +89,28 @@ function settle(before) {
     if (v.done && !was && v.kids < before.get(id).kids) return;
     if (v.done && !was) {
       gain += pts;
-      S.log.push({ id, d: today(), text: v.text, trail: v.trail, p: projectOf(id) });
+      {
+        const rr = find(id) || find(id, S.later),
+          est = rr ? effEst(rr.n) : 0;
+        // (with its estimate and the focus time on it, for the comparison in Review)
+        S.log.push({
+          id,
+          d: today(),
+          text: v.text,
+          trail: v.trail,
+          p: projectOf(id),
+          ...(est ? { est, m: spent(rr.n) } : {}),
+        });
+        emitEvent({
+          k: 'quest_done',
+          key: 'quest:' + id + ':done:' + today(),
+          id,
+          text: v.text,
+          top: !!v.top,
+          p: projectOf(id),
+          byRule: !!(rr && rr.n.byRule),
+        });
+      }
     }
     if (!v.done && was) {
       gain -= pts;
@@ -170,6 +191,7 @@ const strip = n => ({
   opt: n.opt,
   notes: n.notes,
   ...(n.links ? { links: n.links } : {}),
+  ...(n.est ? { est: n.est } : {}),
   children: n.children.filter(c => !c.wait).map(strip), // (waiting is this time's, not every time's)
 });
 const inst = t =>
@@ -181,6 +203,7 @@ const inst = t =>
     opt: t.opt,
     notes: t.notes,
     ...(t.links ? { links: t.links.map(l => ({ ...l })) } : {}),
+    ...(t.est ? { est: t.est } : {}),
     children: t.children.map(inst),
   });
 
@@ -208,6 +231,7 @@ function setRepeat(n, fn) {
   n.tpl = t.id;
   Object.assign(t, strip(n));
   if (!n.links) delete t.links; // (assigning can't take a key away)
+  if (!n.est) delete t.est;
   fn(t);
   if (t.auto && !repeats(t)) {
     S.templates = S.templates.filter(x => x !== t);

@@ -24,6 +24,7 @@ function renderView(v = view) {
     knowledge: renderKnowledge,
     search: renderSearch,
     account: renderAccount,
+    ops: renderOps,
   }[v];
   if (r) r();
 }
@@ -51,9 +52,19 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  ['today', 'inbox', 'waiting', 'notes', 'knowledge', 'search', 'review', 'focus', 'log', 'account'].forEach(
-    k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)),
-  );
+  [
+    'today',
+    'inbox',
+    'waiting',
+    'notes',
+    'knowledge',
+    'search',
+    'review',
+    'focus',
+    'log',
+    'account',
+    'ops',
+  ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
@@ -117,6 +128,9 @@ document.addEventListener('submit', e => {
   if (f.id === 'twform') triageWaiting(f.dataset.id);
   if (f.id === 'fuform') saveFollowUp(f.dataset.id);
   if (f.id === 'pstepform') saveProcStep(f.dataset.id);
+  if (f.id === 'wfform') saveWorkflowForm();
+  if (f.id === 'wfstageform') saveStageForm(f.dataset.id);
+  if (f.id === 'ruleform') saveRuleForm();
   if (f.id === 'authform') signIn();
   if (f.id === 'wform') addWaiting();
   if (f.id === 'kbform') kbSave();
@@ -153,6 +167,10 @@ document.addEventListener('submit', e => {
 document.addEventListener('change', e => {
   if (!window.appReady) return;
   const el = e.target;
+  if (el.id === 'wstype') return wsShowKind();
+  if (el.id === 'rlon' || el.id === 'rldo') return redrawRuleForm();
+  if (el.dataset && el.dataset.cap !== undefined) return capChange(el);
+  if (el.dataset && el.dataset.wfact === 'check') return wfClick(el.dataset, el);
   // Committed. (Not a time: those change a part at a time and are still being typed.)
   // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
   // Nor an article being written: it's saved with its Save button.
@@ -305,6 +323,7 @@ document.addEventListener('input', e => {
   if (el.id === 'kbq') return kbSearch(el.value);
   if (el.id === 'sq') return typedSearch(el.value);
   if (el.id === 'resq') return resourceSearch(el.value, el.dataset.id);
+  if (el.closest('#ruleform')) return typedRuleForm();
   if (el.dataset.field === 'summary') {
     const r = find(el.dataset.id);
     if (!r) return;
@@ -341,6 +360,11 @@ document.addEventListener('click', e => {
   waitClick(d);
   kbRunClick(d, b);
   execClick(d, b);
+  wfClick(d, b);
+  ruleClick(d, b);
+  forecastClick(d, b);
+  insightClick(d);
+  opsClick(d, b);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -511,7 +535,7 @@ document.addEventListener('click', e => {
   }
   if (d.rsub) {
     reviewSub = d.rsub;
-    go(d.rsub === 'week' ? 'review' : d.rsub);
+    go(d.rsub === 'log' ? 'log' : 'review');
   }
   if (d.rstep) {
     reviewStep += +d.rstep;
@@ -677,12 +701,25 @@ document.addEventListener('click', e => {
     // copy would break every device's notifications), the device list and any running session.
     // Nor the notes' pictures when it has none of its own (a previous version leaves them out).
     const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
+      hadCap = S.cap,
       imgs = Array.isArray(pending.noteImgs) ? null : S.noteImgs,
       artImgs = new Map(S.kb.map(a => [a.id, a.imgs])),
       hadArtImgs = new Set(
         (Array.isArray(pending.kb) ? pending.kb : []).filter(a => a && Array.isArray(a.imgs)).map(a => a.id),
       ),
-      kept = { kb: S.kb, kbcats: S.kbcats, flows: S.flows, follows: S.follows, runs: S.runs, execs: S.execs },
+      kept = {
+        kb: S.kb,
+        kbcats: S.kbcats,
+        flows: S.flows,
+        follows: S.follows,
+        runs: S.runs,
+        execs: S.execs,
+        workflows: S.workflows,
+        wruns: S.wruns,
+        rules: S.rules,
+        rlog: S.rlog,
+        pins: S.pins,
+      },
       keptLoose = S.kbimgLoose,
       was = JSON.stringify(S);
     try {
@@ -693,12 +730,25 @@ document.addEventListener('click', e => {
       return toast("That backup couldn't be read", false, 3000);
     }
     Object.assign(S, keep);
+    if (pending.cap === undefined && hadCap) S.cap = hadCap; // (a copy from before capacity)
     if (imgs) S.noteImgs = imgs;
     // (pictures still waiting for their article: kept too, or they'd be deleted everywhere)
     S.kbimgLoose = [...S.kbimgLoose, ...keptLoose.filter(p => !S.kbimgLoose.some(q => q.id === p.id))];
     // A copy from before the Knowledge tab (or Release B's records) has none of it: what's
     // here stays.
-    ['kb', 'kbcats', 'flows', 'follows', 'runs', 'execs'].forEach(k => {
+    [
+      'kb',
+      'kbcats',
+      'flows',
+      'follows',
+      'runs',
+      'execs',
+      'workflows',
+      'wruns',
+      'rules',
+      'rlog',
+      'pins',
+    ].forEach(k => {
       if (!Array.isArray(pending[k])) S[k] = kept[k];
     });
     S.kb.forEach(a => {
@@ -806,7 +856,7 @@ function closeImgs() {
 }
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'i or n capture (n on a quest: subquest) · / search · t today · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: subquest) · / search · t today · o command centre · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (!window.appReady) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -857,6 +907,7 @@ document.addEventListener('keydown', e => {
     if (b) b.click();
   } else if (k === '?') toast(KEYS, false, 5000);
   else if (k === 's') go('account');
+  else if (k === 'o') go('ops');
   else if (k === 'z') setZen(!zen);
   else if (k === 'Escape') {
     if ($('#sheet')) closeSheet();
@@ -984,8 +1035,17 @@ function appBack() {
     leaveEditor(kbEdit.fromInbox && triage ? () => triageReturn(false) : renderKnowledge);
     return true;
   }
+  if (view === 'knowledge' && wfEdit) {
+    wfEdit = null;
+    renderKnowledge();
+    return true;
+  }
   if (view === 'knowledge' && kbRun) {
-    kbRun = null;
+    kbRunClick({ runback: '1' }, {});
+    return true;
+  }
+  if (view === 'knowledge' && wfOpen) {
+    wfOpen = null;
     renderKnowledge();
     return true;
   }

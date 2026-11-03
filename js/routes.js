@@ -12,13 +12,30 @@
      #/focus            the Focus tab (no session is started or changed)
      #/continue         the work most recently left: the newest saved place, else what's next
      #/review           the weekly review
+     #/workflows        the workflows (Knowledge)
+     #/ops              the Command Centre
+     #/wrun/<id>        one workflow run (opened, never started or moved on)
    Followed at start once the saved copy is in; a target not here yet (a quest made on another
    device) is looked for again after the first sync. The hash is cleared once followed, so a
    reload or the back gesture doesn't replay it. Ids go through the same checks as everything
    else from outside; anything unknown is refused with a plain message. Opening a link never
    ticks, launches or sends anything; #/inbox/triage begins the walk and #/kb/<id>/run starts or
    resumes a run (a record of its own), which is what those places do on arrival. */
-const ROUTES = ['today', 'inbox', 'triage', 'q', 'kb', 'run', 'waiting', 'focus', 'continue', 'review'];
+const ROUTES = [
+  'today',
+  'inbox',
+  'triage',
+  'q',
+  'kb',
+  'run',
+  'waiting',
+  'focus',
+  'continue',
+  'review',
+  'workflows',
+  'wrun',
+  'ops',
+];
 let pendingRoute = null, // a route whose target isn't here yet, tried again after a sync
   routeGiveUp = null,
   launchRoute = '', // the route the app was opened at (taken off the address at once: see events.js)
@@ -40,8 +57,8 @@ function parseRoute(hash) {
   if (kind === 'kb' && sub === 'run') return { kind: 'run', id };
   if (sub) return null;
   if (!ROUTES.includes(kind) || kind === 'triage' || kind === 'run') return null;
-  if (['q', 'kb'].includes(kind) && !id) return null;
-  if (['today', 'inbox', 'focus', 'continue', 'review'].includes(kind) && id) return null;
+  if (['q', 'kb', 'wrun'].includes(kind) && !id) return null;
+  if (['today', 'inbox', 'focus', 'continue', 'review', 'workflows', 'ops'].includes(kind) && id) return null;
   return { kind, id };
 }
 // The URL's route, taken and cleared. Returns whether there was one.
@@ -149,6 +166,24 @@ function followRoute(r, first) {
     case 'focus':
       go('focus');
       return;
+    case 'ops':
+      go('ops');
+      return;
+    case 'workflows':
+      return leaveEditor(() => {
+        kbArt = kbRun = wfOpen = wfEdit = null;
+        kbCatOpen = null;
+        go('knowledge');
+        const el = $('#wfhead');
+        if (el) el.scrollIntoView({ block: 'start' });
+      });
+    case 'wrun': {
+      if (!wrunById(r.id)) return miss('workflow run', 'knowledge');
+      return leaveEditor(() => {
+        kbArt = kbRun = wfEdit = null;
+        openWorkflowRun(r.id);
+      });
+    }
     case 'review':
       reviewSub = 'week';
       go('review');
@@ -188,6 +223,8 @@ const SHORTCUTS = [
   ['q', 'A quest', 'quest'],
   ['kb', 'A Knowledge article', 'article'],
   ['run', 'A procedure, to follow', 'procedure'],
+  ['workflows', 'Workflows', ''],
+  ['ops', 'Command Centre', ''],
   ['focus', 'Focus', ''],
   ['review', 'Weekly review', ''],
 ];

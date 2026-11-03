@@ -138,9 +138,15 @@ test('a sync redraw while a sheet is up leaves it; an action on a quest removed 
   await page.click('#sheet [data-toggle]');
   await expect(page.locator('#sheet')).toHaveCount(0);
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Report', 'Old thing']);
-  // Rapid double taps on ⋯ open one sheet, not two.
-  await page.click('[aria-label="Actions: Report"]', { clickCount: 2 });
+  // Rapid double taps on ⋯ open one sheet, not two. (Both taps on the button itself: with the
+  // page's height, a second tap at the same spot could land on the sheet that the first opened.)
+  await page.evaluate(() => {
+    const b = document.querySelector('[aria-label="Actions: Report"]');
+    b.click();
+    b.click();
+  });
   await expect(page.locator('#sheet')).toHaveCount(1);
+  await expect(page.locator('#sheettitle')).toHaveText('Report');
 });
 
 test('the board’s tiles and a quest page’s steps have the same ⋯; drag-to-reorder still works on desktop', async ({
