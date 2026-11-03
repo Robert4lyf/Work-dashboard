@@ -179,7 +179,8 @@ function recommendations(f) {
   if (f.assumed)
     out.push({
       k: 'cap',
-      text: 'Capacity is assumed: 5h on weekdays, none at weekends. Set yours below so the forecast is yours.',
+      text: 'Capacity is assumed: 5h on weekdays, none at weekends.',
+      more: 'Set yours under Capacity per weekday, below.',
     });
   f.days.forEach((day, di) => {
     if (day.load <= day.cap) return;
@@ -187,7 +188,8 @@ function recommendations(f) {
       names = day.items.map(x => `${x.text} ${hm(x.take)}`).join(', ');
     const rec = {
       k: 'over',
-      text: `${dayLabel(day.d)} is over by ${hm(over)}: ${hm(day.load)} planned against ${hm(day.cap)} (${names}).`,
+      text: `${dayLabel(day.d)} is overloaded by ${hm(over)}.`,
+      more: `${hm(day.load)} estimated against ${hm(day.cap)} capacity: ${names}.`,
     };
     // Everything placed by then is due by then (that's the order), so something has to slip: the
     // smallest task that didn't fit, to the first later day with room for all of it. Said
@@ -197,9 +199,10 @@ function recommendations(f) {
       const to = f.days.find((x, j) => j > di && x.cap - x.load >= slip.min);
       if (to) {
         rec.move = { id: slip.id, text: slip.text, d: to.d };
-        rec.text += ` Moving ${slip.text} to ${dayLabel(to.d)} would fit (${hm(to.cap - to.load)} free that day), ${slip.late ? 'though it is already overdue' : 'after its due date'}.`;
+        rec.text += ` ${slip.text} could move to ${dayLabel(to.d)}, ${slip.late ? 'though it is already overdue' : 'which is after its due date'}.`;
+        rec.more += ` ${dayLabel(to.d)} has ${hm(to.cap - to.load)} free.`;
       } else rec.text += ` No later day in view has room for ${slip.text}.`;
-    } else rec.text += " What doesn't fit repeats that day or was already scheduled.";
+    } else rec.more += " What doesn't fit repeats that day or was already scheduled.";
     out.push(rec);
   });
   const beyond = f.items.filter(x => x.beyond);
@@ -211,7 +214,8 @@ function recommendations(f) {
   if (f.none.length)
     out.push({
       k: 'none',
-      text: `${plural(f.none.length, 'task')} without an estimate ${f.none.length === 1 ? 'is' : 'are'} left out of the plan.`,
+      text: `${plural(f.none.length, 'task')} ${f.none.length === 1 ? 'has' : 'have'} no estimate.`,
+      more: 'Unestimated work is counted but not planned: it is not spare capacity.',
       ids: f.none.slice(0, 6).map(q => [q.id, q.text]),
     });
   if (!out.length)
@@ -244,44 +248,92 @@ function accuracyText(a) {
         : 'Estimates are about right.';
   return `Over the last ${a.days} days, ${plural(a.n, 'finished task')} with an estimate took ${hm(a.m)} of focus time against ${hm(a.est)} estimated; the typical task took ${a.median.toFixed(1)}× its estimate, and ${a.within} of ${a.n} came within a quarter of it. ${word} (Focus time is what the timer measured; work done without the timer isn't counted.)`;
 }
+// How complete the forecast is, in one of four fixed classes (see the page's "How this forecast
+// works"): every relevant task estimated; some unestimated (a quarter or fewer of the tasks in
+// view); much of it incomplete (more than a quarter); and whether capacity is assumed.
+function coverage(f) {
+  const est = f.items.filter(x => !x.fixed).length,
+    un = f.none.length,
+    total = est + un;
+  let k = 'all',
+    text = total ? 'All relevant work is estimated.' : 'Nothing to estimate in view.';
+  if (un && un / total <= 0.25) {
+    k = 'some';
+    text = `Some work is unestimated: ${plural(un, 'task')} of ${total}.`;
+  } else if (un) {
+    k = 'much';
+    text = `Much of the forecast is incomplete: ${un} of ${plural(total, 'task')} have no estimate.`;
+  }
+  return { k, text, est, un, total, assumed: f.assumed };
+}
 /* the Review tab's Forecast page */
 function renderForecast() {
   const f = allocate(forecastSpan),
     recs = recommendations(f),
     pct = f.cap ? Math.round((f.load / f.cap) * 100) : 0;
-  let h = `<div class="chips">${FORECAST_SPANS.map(s => `<button class="chip" data-fspan="${s}" aria-pressed="${s === forecastSpan}">${s} days</button>`).join('')}</div>
-    <h2>Workload radar</h2><p class="hint">${hm(f.load)} planned of ${hm(f.cap)} capacity (${pct}%)${f.assumed ? ' · capacity assumed' : ''}${f.none.length ? ` · ${plural(f.none.length, 'task')} unestimated` : ''}</p>
-    <div class="radar${forecastSpan > 14 ? ' tight' : ''}" role="img" aria-label="Planned time against capacity, each day">${f.days
-      .map(day => {
-        const r = day.cap ? day.load / day.cap : day.load ? 2 : 0,
-          cls = !day.load ? 'none' : r > 1 ? 'over' : r > 0.8 ? 'tight' : 'ok',
-          hgt = Math.min(100, Math.round(r * 60));
-        return `<button class="rday ${cls}" data-fday="${day.d}" title="${esc(dayLabel(day.d))}: ${hm(day.load)} of ${hm(day.cap)}"><span class="rbar" style="height:${hgt}%"></span><small>${forecastSpan > 14 ? (new Date(day.d + 'T12:00').getDay() === 1 ? 'M' : '') : WD[new Date(day.d + 'T12:00').getDay()].slice(0, forecastSpan > 7 ? 1 : 3)}</small></button>`;
-      })
-      .join('')}</div>`;
+  const cov = coverage(f),
+    overDays = f.days.filter(d => d.load > d.cap);
+  let h = `<div class="chips">${FORECAST_SPANS.map(s => `<button class="chip" data-fspan="${s}" aria-pressed="${s === forecastSpan}">${s} days</button>`).join('')}</div>`;
+  // The headline: what's estimated, what there is room for, what isn't counted.
+  h += `<div class="box fhead"><div class="fhl"><b>${hm(f.load)}</b><small>estimated work</small></div><div class="fhl"><b>${hm(f.cap)}</b><small>capacity${f.assumed ? ' (assumed)' : ''}</small></div><div class="fhl${overDays.length ? ' over' : ''}"><b>${overDays.length}</b><small>${overDays.length === 1 ? 'day overloaded' : 'days overloaded'}</small></div><div class="fhl${f.none.length ? ' none' : ''}"><b>${f.none.length}</b><small>${f.none.length === 1 ? 'task not estimated' : 'tasks not estimated'}</small></div></div>
+    <p class="hint fcov fcov-${cov.k}">${esc(cov.text)}${f.assumed ? ' Capacity uses assumed defaults.' : ''}${f.none.length ? ' Unestimated work is not spare capacity.' : ''}</p>`;
+  // The radar: a bar a day; tap one (or pick one, at 30 days) for what's on it.
+  h += `<h2>Workload radar</h2><div class="radar${forecastSpan > 14 ? ' tight' : ''}" role="group" aria-label="Estimated work against capacity, each day">${f.days
+    .map(day => {
+      const r = day.cap ? day.load / day.cap : day.load ? 2 : 0,
+        cls = !day.load ? 'none' : r > 1 ? 'over' : r > 0.8 ? 'tight' : 'ok',
+        hgt = Math.min(100, Math.round(r * 60)),
+        label = `${dayLabel(day.d)}: ${hm(day.load)} of ${hm(day.cap)}${day.load > day.cap ? ', overloaded' : ''}`;
+      return forecastSpan > 14
+        ? `<span class="rday ${cls}${forecastDay === day.d ? ' picked' : ''}" aria-hidden="true"><span class="rbar" style="height:${hgt}%"></span><small>${new Date(day.d + 'T12:00').getDay() === 1 ? 'M' : ''}</small></span>`
+        : `<button class="rday ${cls}${forecastDay === day.d ? ' picked' : ''}" data-fday="${day.d}" aria-label="${esc(label)}" aria-pressed="${forecastDay === day.d}"><span class="rbar" style="height:${hgt}%"></span><small>${WD[new Date(day.d + 'T12:00').getDay()].slice(0, forecastSpan > 7 ? 1 : 3)}</small></button>`;
+    })
+    .join('')}</div>`;
+  if (forecastSpan > 14)
+    h += `<label class="f" for="fdaypick">Look at a day</label><select class="fld" id="fdaypick"><option value="">Choose a day</option>${f.days.map(day => `<option value="${day.d}"${forecastDay === day.d ? ' selected' : ''}>${esc(dayLabel(day.d))} · ${hm(day.load)} of ${hm(day.cap)}${day.load > day.cap ? ' (overloaded)' : ''}</option>`).join('')}</select>`;
+  // The day picked: what's estimated on it, its deadlines, its capacity, what isn't estimated.
+  const open = f.days.find(d => d.d === forecastDay);
+  if (open) {
+    const dueHere = [],
+      unest = [];
+    (function w(ns, top) {
+      ns.forEach(n => {
+        if (isDone(n)) return;
+        if (n.due === open.d) dueHere.push(n);
+        w(n.children, false);
+      });
+    })(S.quests, true);
+    f.none.forEach(q => {
+      if ((q.due && q.due === open.d) || (q.start && q.start === open.d)) unest.push(q);
+    });
+    const over = open.load - open.cap;
+    h += `<div class="box fday"><h3>${esc(dayLabel(open.d))}</h3><p class="hint">${hm(open.load)} estimated · ${hm(open.cap)} capacity${over > 0 ? ` · <b class="late">over by ${hm(over)}</b>` : open.cap ? ` · ${hm(open.cap - open.load)} free` : ''}</p>${
+      open.items.length
+        ? `<ul class="flist">${open.items.map(x => `<li><small>${hm(x.take)}${x.over ? ' over' : ''}</small><span>${x.fixed ? esc(x.text) + ' <small>(repeats)</small>' : `<button class="linkbtn" data-open="${x.id}">${esc(x.text)}</button>`}${x.due ? ` <small>due ${esc(dayLabel(x.due))}</small>` : ''}</span></li>`).join('')}</ul>`
+        : '<p class="hint">Nothing estimated for this day.</p>'
+    }${dueHere.length ? `<p class="hint">Due this day: ${dueHere.map(n => `<button class="linkbtn" data-open="${n.id}">${esc(n.text)}</button>`).join(', ')}</p>` : ''}${
+      unest.length
+        ? `<p class="hint">Not estimated (not counted): ${unest.map(q => `<button class="linkbtn" data-open="${q.id}">${esc(q.text)}</button>`).join(', ')}</p>`
+        : ''
+    }</div>`;
+  }
+  // What to do: the overloaded days first, then what's missing; each with its reason a tap away.
   h += `<h2>What to do about it</h2><ul class="recs">${recs
     .map(
       r =>
-        `<li class="rec ${r.k}"><p>${esc(r.text)}</p>${r.move ? `<button class="btn sm blue" data-fmove="${r.move.id}" data-fdate="${r.move.d}">Move ${esc(r.move.text)} to ${esc(dayLabel(r.move.d))}</button>` : ''}${
+        `<li class="rec ${r.k}"><p>${esc(r.text)}</p>${r.more ? `<p class="hint recmore">${esc(r.more)}</p>` : ''}${r.move ? `<button class="btn sm blue" data-fmove="${r.move.id}" data-fdate="${r.move.d}">Move ${esc(r.move.text)} to ${esc(dayLabel(r.move.d))}</button>` : ''}${
           r.ids
             ? `<div class="chips">${r.ids.map(([id, t]) => `<button class="chip" data-open="${id}">${esc(t)}</button>`).join('')}</div>`
             : ''
         }</li>`,
     )
     .join('')}</ul>`;
-  const open = f.days.find(d => d.d === forecastDay);
-  if (open)
-    h += `<div class="box fday"><h3>${esc(dayLabel(open.d))} · ${hm(open.load)} of ${hm(open.cap)}</h3>${
-      open.items.length
-        ? `<ul class="flist">${open.items.map(x => `<li><small>${hm(x.take)}${x.over ? ' over' : ''}</small><span>${x.fixed ? esc(x.text) + ' <small>(repeats)</small>' : `<button class="linkbtn" data-open="${x.id}">${esc(x.text)}</button>`}${x.due ? ` <small>due ${esc(dayLabel(x.due))}</small>` : ''}</span></li>`).join('')}</ul>`
-        : '<p class="hint">Nothing planned.</p>'
-    }</div>`;
   h += `<details id="capd"${panels.capd ? ' open' : ''}><summary>Capacity per weekday${f.assumed ? ' <small>(assumed)</small>' : ''}</summary><p class="hint">Minutes of task time you can plan each day.</p><div class="capgrid">${WEEK.map(
     wd =>
       `<label><span>${WD[wd]}</span><input class="fld" type="number" min="0" max="960" step="15" value="${capacity()[wd]}" data-cap="${wd}" aria-label="Capacity ${WD[wd]}, minutes"></label>`,
   ).join('')}</div></details>`;
   h += `<details id="accd"${panels.accd ? ' open' : ''}><summary>Estimates against focus time</summary><p class="hint">${esc(accuracyText(estimateAccuracy()))}</p></details>`;
-  h += `<details id="howd"${panels.howd ? ' open' : ''}><summary>How the forecast is worked out</summary><p class="hint">Each day has its capacity. Tasks are taken in order of due date (undated last), today's top 3 first, then list order, and each takes the first days with room between its start and its due date, split across days when it's bigger than a day's room. A task that can't fit by its due date is placed on that day anyway and shown as an overrun. Repeating tasks count on their days with the template's estimate and don't move. A task's estimate is its steps' estimates when any step has one, else its own; what's left is the estimate less focus time on it. Tasks without an estimate are counted but not planned. Nothing is moved for you: each move is a button.</p></details>`;
+  h += `<details id="howd"${panels.howd ? ' open' : ''}><summary>How this forecast works</summary><p class="hint">Each day has its capacity. Tasks are taken in order of due date (undated last), today's top 3 first, then list order, and each takes the first days with room between its start and its due date, split across days when it's bigger than a day's room. A task that can't fit by its due date is placed on that day anyway and shown as an overrun. Repeating tasks count on their days with the template's estimate and don't move. A task's estimate is its steps' estimates when any step has one, else its own; what's left is the estimate less focus time on it. Tasks without an estimate are counted but not planned: they are not spare capacity. Nothing is moved for you: each move is a button that asks first. Coverage: “all relevant work estimated” when every task in view has an estimate; “some unestimated” when a quarter or fewer have none; “much incomplete” when more than a quarter have none; “assumed” when capacity hasn't been set.</p></details>`;
   return h;
 }
 let forecastDay = '';

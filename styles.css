@@ -3268,3 +3268,121 @@ details.more > details {
 .tplprev {
   margin: 4px 0 10px;
 }
+
+/* Phase 3: findings, key numbers, tappable bars; the forecast headline */
+.findings {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.finding {
+  border: 2px solid var(--ink);
+  border-left-width: 6px;
+  padding: 8px 10px;
+  background: var(--paper);
+}
+.finding.sev0 {
+  border-left-color: var(--pink);
+}
+.finding.sev1 {
+  border-left-color: var(--yellow, #ffec27);
+}
+.finding.sev2 {
+  border-left-color: var(--blue);
+}
+.finding b {
+  display: block;
+  margin: 0 0 2px;
+}
+.finding p {
+  margin: 0 0 8px;
+}
+.findnone {
+  margin: 0 0 14px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.stat {
+  border: 2px solid var(--ink);
+  padding: 8px 10px;
+  background: var(--paper);
+  min-width: 0;
+}
+.stat small {
+  display: block;
+  color: var(--muted);
+}
+.stat b {
+  display: block;
+  font-size: 1.3em;
+}
+.stat b small {
+  display: inline;
+  font-size: 0.6em;
+  font-weight: 400;
+}
+.stat span {
+  display: block;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.ibar {
+  padding: 0;
+  cursor: pointer;
+}
+.ibar.picked {
+  background: var(--pink);
+}
+.ipick {
+  margin: 4px 0 8px;
+}
+.itab {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.itab th,
+.itab td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--muted);
+}
+#idetail h3 {
+  margin: 12px 0 4px;
+  font-size: 1em;
+}
+.fhead {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+  margin: 0 0 8px;
+}
+.fhl b {
+  display: block;
+  font-size: 1.3em;
+}
+.fhl small {
+  color: var(--muted);
+}
+.fhl.over b {
+  color: var(--pink-ink);
+}
+.fhl.none b {
+  color: var(--muted);
+}
+.fcov {
+  margin: 0 0 12px;
+}
+.rday.picked .rbar {
+  outline: 2px dashed var(--ink);
+}
+.recmore {
+  margin: -2px 0 6px;
+}
+.fday .late {
+  color: var(--pink-ink);
+}

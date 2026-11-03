@@ -198,7 +198,8 @@ test('the page shows the period, charts and sentences; exports carry the numbers
   await app.go('review');
   await page.click('[data-rsub="insights"]');
   await expect(page.locator('[data-ispan="30"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#v-review h2')).toHaveText([
+  await expect(page.locator('#v-review h2')).toHaveText(['What stands out', 'Key numbers', 'Trends']);
+  await expect(page.locator('#idetail h3')).toHaveText([
     'Productivity',
     'Processes',
     'Automation',
@@ -244,10 +245,11 @@ test('empty records give plain sentences, no errors', async ({ app, page }) => {
   await app.open();
   await app.go('review');
   await page.click('[data-rsub="insights"]');
-  await expect(page.locator('#v-review')).toContainText('No tasks finished in either period.');
-  await expect(page.locator('#v-review')).toContainText('No process runs started this period.');
-  await expect(page.locator('#v-review')).toContainText('No automation launches this period.');
-  await expect(page.locator('#v-review')).toContainText('No rules fired this period.');
-  await expect(page.locator('#v-review')).toContainText('No finished tasks with an estimate yet');
+  await expect(page.locator('#v-review')).toContainText('Not much to measure yet.');
+  await expect(page.locator('.stats')).toHaveCount(0); // (no empty sections)
+  await expect(page.locator('.ibars')).toHaveCount(0);
+  expect(await page.evaluate(() => insightsText(insights(30)))).toContain(
+    'No tasks finished in either period.',
+  );
   expect(app.errors).toEqual([]);
 });

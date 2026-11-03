@@ -150,11 +150,11 @@ test('Scenario B: month-end workload: estimates against capacity show the crunch
   // Thursday... and the rest lands on Friday as an overrun. Nothing moves until asked.
   expect(f.days[0]).toEqual(['2026-11-23', 240, 240, 0]);
   expect(f.days[4][3]).toBeGreaterThan(0);
-  expect(f.recs[0]).toMatch(/^Fri 27 Nov is over by/);
-  expect(f.recs[0]).toContain('planned against 4h 0m');
+  expect(f.recs[0]).toMatch(/^Fri 27 Nov is overloaded by/);
+  expect(f.recs[0]).toContain('could move to');
   expect(f.none).toEqual(['Tidy the shared drive']);
   await expect(page.locator('.rday.over')).toHaveCount(2); // (Friday, and the 30th: board pack and close)
-  await expect(page.locator('.rec.over').first()).toContainText('Moving');
+  await expect(page.locator('.rec.over').first()).toContainText('could move to');
   const before = await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
   await page.click('.rec.over [data-fmove]');
   await expect(page.locator('#sheettitle')).toContainText('Move “');
