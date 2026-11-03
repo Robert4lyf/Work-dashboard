@@ -874,6 +874,11 @@ document.addEventListener('keydown', e => {
     }
     return;
   }
+  // Enter in the process editor's step row adds the step (not the form's Save).
+  if (e.key === 'Enter' && el.id === 'wfstepin') {
+    e.preventDefault();
+    return addTypedStep();
+  }
   if (el.closest && el.closest('input,textarea,select,[contenteditable]')) {
     if (e.key === 'Escape') el.closest('#sheet') ? closeSheet() : el.blur();
     return;

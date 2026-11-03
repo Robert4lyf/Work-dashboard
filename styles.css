@@ -3257,3 +3257,14 @@ details.more > details {
 .wfacts {
   margin-top: 14px;
 }
+
+/* Phase 2: the process editor's step row, the run card's "what happens next" */
+.wfaddrow {
+  margin: 8px 0 4px;
+}
+.pstep .pnext {
+  margin: 6px 0 8px;
+}
+.tplprev {
+  margin: 4px 0 10px;
+}

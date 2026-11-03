@@ -311,7 +311,7 @@ test('a definition edited later is a new version; a run under way keeps its own 
   await page.selectOption('#wstype', 'flow');
   await page.fill('#wstitle', 'Another flow');
   await page.click('#sheetok');
-  await expect(page.locator('#toast')).toContainText('Choose which one');
+  await expect(page.locator('#toast')).toContainText('Choose the desktop automation to launch');
   await page.selectOption('#wsflow', 'f1');
   await page.click('#sheetok');
   await expect(page.locator('#sheet')).toHaveCount(0);

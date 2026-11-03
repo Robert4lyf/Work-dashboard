@@ -38,7 +38,6 @@ function kbProcesses() {
   h += ws.length
     ? `<div class="list box">${ws.map(processRow).join('')}</div>`
     : '<p class="hint kbempty">A process is a checklist you can run again, with an automation, a guide, a check, a wait or a decision on any step that needs one. <button class="linkbtn" data-newproc="1">Make your first one</button>, from an example or from scratch.</p>';
-  h += `<div class="chips resadd"><button class="chip" data-wfnew="1">+ From scratch</button>${WF_TEMPLATES.map((t, i) => `<button class="chip" data-wftpl="${i}">+ ${esc(t.name)}</button>`).join('')}</div>`;
   if (arch) h += `<p class="hint">${plural(arch, 'archived process')} (restore from Settings > Backup).</p>`;
   h += '</section>';
   h += `<section class="kbsec"><div class="sechead"><h2 class="kbhead">Guides</h2><button class="linkbtn" data-newguide="1">+ New guide</button></div>`;
@@ -116,8 +115,7 @@ function createClick(d, b) {
     }
   }
 }
-// A new process: the editor, empty (the examples are a chip away in it). CP2 adds the picker.
+// A new process: pick an example (previewed) or start from scratch.
 function openProcessStart() {
-  kbView = 'proc';
-  wfEditClick({ wfnew: '1' }, null);
+  openTemplatePicker();
 }

@@ -135,7 +135,9 @@ test('audit 2: the workflow editor keeps typed fields over a day toggle, a backg
   });
   // A template's flow stage can't be saved without a flow.
   await app.processes();
-  await page.click('[data-wftpl="0"]');
+  await page.click('[data-newproc]');
+  await page.click('[data-wftplpick="1"]'); // (Weekly report: previewed first)
+  await page.click('[data-wftpl="1"]');
   await page.fill('#wfname', 'Weekly');
   await page.click('#wfform .btn.green');
   await expect(page.locator('#toast')).toContainText('Choose the automation for “Run the report automation”');
