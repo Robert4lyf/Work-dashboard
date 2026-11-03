@@ -207,6 +207,7 @@ function setRepeat(n, fn) {
   }
   n.tpl = t.id;
   Object.assign(t, strip(n));
+  if (!n.links) delete t.links; // (assigning can't take a key away)
   fn(t);
   if (t.auto && !repeats(t)) {
     S.templates = S.templates.filter(x => x !== t);

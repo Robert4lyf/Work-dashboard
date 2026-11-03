@@ -126,6 +126,7 @@ function receiveLaunch() {
   if (!q.has('capture') && !q.has('talk') && !q.has('focus')) return;
   history.replaceState(null, '', location.pathname);
   if (q.has('focus')) return;
+  triage = null;
   go('inbox'); // (?talk came from a removed shortcut: the capture box instead)
   const i = $('#iin');
   if (i) i.focus();

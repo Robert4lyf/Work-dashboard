@@ -238,3 +238,36 @@ test('Save my place on the Focus tab; resuming a paused session on the same ques
   await expect(page.locator('#toast')).toContainText('running session');
   await expect(page.locator('#v-zen')).toBeHidden();
 });
+
+test('review fixes: the row mark stays a small tag; editing the note keeps the step and time; an empty place is refused', async ({
+  app,
+  page,
+}) => {
+  await app.setState(
+    s => (s.quests[0].resume = { note: 'Check credits', at: Date.now() - 3600e3, step: 's2' }),
+  );
+  await page.reload();
+  const tag = page.locator('#v-today .row .tag.place');
+  const box = await tag.boundingBox();
+  expect(box.height).toBeLessThan(30); // (not styled as the card on the quest's page)
+  await app.openQuest('Reconciliation');
+  await expect(page.locator('#placecard .placestep')).toHaveText('At: April totals');
+  await page.click('#placecard [data-saveplace]');
+  await page.fill('#sheetin', 'Check credits (typo fixed)');
+  await page.click('#sheetok');
+  let s = await app.state();
+  expect(s.quests[0].resume.step).toBe('s2'); // (still the step it was on, not the first open one)
+  await expect(page.locator('#placecard .placestep')).toHaveText('At: April totals');
+  // The same note saved again: the time is left as it was.
+  const at = s.quests[0].resume.at;
+  await page.click('#placecard [data-saveplace]');
+  await page.click('#sheetok');
+  expect((await app.state()).quests[0].resume.at).toBe(at);
+  // A quest without steps and no note: nothing to save.
+  await page.click('[data-crumb="-1"]');
+  await page.click('[aria-label="Actions: Call Sam"]');
+  await page.click('#sheet [data-saveplace]');
+  await page.click('#sheetok');
+  await expect(page.locator('#toast')).toContainText('Write a note first');
+  expect((await app.state()).quests[1].resume).toBeUndefined();
+});

@@ -53,8 +53,9 @@ function renderTriage() {
   if (triage.pane === 'later') h += `<div class="tpane box">${laterPicker('i', it.id)}</div>`;
   if (triage.pane === 'waiting')
     h += `<form class="tpane box" id="twform" data-id="${it.id}"><label class="f" for="twho">Waiting on whom</label><input class="fld" id="twho" maxlength="60" value="${esc((it.wait && it.wait.who) || '')}" list="wholist" autocomplete="off" required><label class="f" for="tdue">Chase on <small class="hint">(optional)</small></label><input class="fld" type="date" id="tdue" value="${esc((it.wait && it.wait.due) || '')}">${whoList()}<div class="acts"><button class="btn blue">Set waiting</button><button class="btn" type="button" data-tdo="close">Cancel</button></div></form>`;
+  // (each decision names the item it was drawn for: a redraw meanwhile mustn't retarget a tap)
   const b = (k, l, c = '') =>
-    `<button class="btn ${c}" data-tdo="${k}" aria-pressed="${triage.pane === k}">${l}</button>`;
+    `<button class="btn ${c}" data-tdo="${k}" data-id="${it.id}" aria-pressed="${triage.pane === k}">${l}</button>`;
   h += `<div class="tacts" role="group" aria-label="Decide">${b('today', 'Today', 'blue')}${b('later', 'Later')}${b('waiting', 'Waiting')}${b('ref', 'Reference')}${b('delete', 'Delete')}${b('skip', 'Skip')}</div>`;
   return h;
 }
@@ -120,7 +121,7 @@ function triageClick(d, b) {
   if (d.sched && d.kind === 'i' && triage.cur === d.sched) triage.cur = null; // (moves on once scheduled)
   if (!d.tdo) return;
   const it = triageItem();
-  if (!it) return renderInbox();
+  if (!it || (d.id && d.id !== it.id)) return renderInbox(); // (the item shown went meanwhile)
   const id = it.id;
   if (d.tdo === 'today') {
     triage.cur = null;

@@ -51,6 +51,13 @@ function renderInheritedLinks(q) {
   if (!ls.length) return '';
   return `<details id="resd" class="resd"${(panels.resd ?? true) ? ' open' : ''}><summary>Resources <small>${ls.length}, the quest's</small></summary><div class="list box reslist">${ls.map(l => linkRow(l, q.id, false)).join('')}</div></details>`;
 }
+// A repeating quest's template keeps the same resources (as it keeps the name and tag).
+function mirrorLinks(n) {
+  const t = tplFor(n);
+  if (!t) return;
+  if (n.links) t.links = n.links.map(l => ({ ...l }));
+  else delete t.links;
+}
 function addLink(qid, link) {
   const r = find(qid);
   if (!r || r.parents.length) return;
@@ -61,6 +68,7 @@ function addLink(qid, link) {
   );
   if (same) return toast('Already linked');
   r.n.links = [...ls, { id: uid(), ...link }];
+  mirrorLinks(r.n);
   panels.resd = true;
   save();
   renderToday();
@@ -74,6 +82,7 @@ function removeLink(qid, lid) {
   withUndo('Resource removed', () => {
     r.n.links = r.n.links.filter(x => x.id !== lid);
     if (!r.n.links.length) delete r.n.links;
+    mirrorLinks(r.n);
     save();
     renderToday();
   });

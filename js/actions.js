@@ -40,7 +40,7 @@ function questActions(id, fromList) {
   if (top && !d && S.quests.includes(n))
     act(inTop3(id) ? 'Remove from Top 3' : 'Add to Top 3', `data-top3="${id}"`);
   if (!d) act(q.resume ? 'Update saved place' : 'Save my place', `data-saveplace="${id}"`);
-  if (q.resume) act('Clear saved place', `data-clearplace="${q.id}"`);
+  if (q.resume && !isDone(q)) act('Clear saved place', `data-clearplace="${q.id}"`);
   if (!n.children.length) act(d ? 'Mark not done' : 'Mark done', `data-toggle="${id}"`);
   else if (top && needsNext(n)) act('Finish quest', `data-finish="${id}"`);
   else if (top && d) act('Reopen quest', `data-reopen="${id}"`);
@@ -68,11 +68,9 @@ function primaryAction(n, parents = []) {
       ? { label: 'Reopen quest', attrs: `data-reopen="${n.id}"`, cls: '' }
       : { label: 'Mark not done', attrs: `data-toggle="${n.id}"`, cls: '' };
   if (S.timer && topOf(S.timer.q) === q)
-    return {
-      label: S.timer.left != null ? 'Resume focus' : 'Back to focus',
-      attrs: 'data-pause="1"',
-      cls: 'blue',
-    };
+    return S.timer.left != null
+      ? { label: 'Resume focus', attrs: 'data-pause="1"', cls: 'blue' }
+      : { label: 'Back to focus', attrs: 'data-zen="1"', cls: 'blue' };
   if (q.resume && placeFits(q, n))
     return { label: 'Resume work', attrs: `data-resume="${q.id}"`, cls: 'green' };
   if (top && needsNext(n)) return { label: 'Finish quest', attrs: `data-finish="${n.id}"`, cls: 'green' };

@@ -106,6 +106,7 @@ function receiveShare() {
   S.inbox.unshift(item);
   save();
   renderAll();
+  triage = null; // (a walk under way would hide what just arrived)
   if (!focusLocked()) go('inbox'); // (mid-session, single-task mode stays: the toast says)
   toast('Added to inbox');
 }

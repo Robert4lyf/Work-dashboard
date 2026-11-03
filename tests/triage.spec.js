@@ -100,14 +100,13 @@ test('Reference: the item becomes an article with its details; the item goes onl
   await page.click('#kbform [data-kbcancel]');
   await expect(card(page).locator('.ttitle')).toHaveText('Supplier onboarding');
   expect((await app.state()).inbox).toHaveLength(4);
-  // Android back from the editor keeps the item too; the Inbox tab picks triage up again.
+  // Android back from the editor keeps the item too, and comes back to it.
   await page.click('[data-tdo="ref"]');
   await page.fill('#kbb', 'edited');
   await page.goBack();
   await page.click('#sheet #sheetok'); // (Leave this article?)
-  await expect(page.locator('#v-knowledge')).toBeVisible();
+  await expect(page.locator('#v-inbox')).toBeVisible();
   expect((await app.state()).inbox).toHaveLength(4);
-  await app.go('inbox');
   await expect(card(page).locator('.ttitle')).toHaveText('Supplier onboarding');
   // Saved: the article exists, the item is gone, Undo puts both back as they were.
   await page.click('[data-tdo="ref"]');
@@ -215,4 +214,32 @@ test('edge cases: empty Inbox, an item removed elsewhere, double taps, long text
   await page.goBack();
   await expect(page.locator('#iform')).toBeVisible();
   await expect(page.locator('#v-inbox')).toBeVisible();
+});
+
+test('review fixes: a stale decision button does nothing; back from the article returns to the item; capture leaves triage', async ({
+  app,
+  page,
+}) => {
+  await page.click('[data-triagestart]');
+  // The item shown goes (another device) between the draw and the tap: the tap is dropped.
+  await page.evaluate(() => {
+    const stale = document.querySelector('[data-tdo="delete"]');
+    S.inbox = S.inbox.filter(i => i.id !== 'i1');
+    save();
+    inBackground(renderAll);
+    stale.click();
+  });
+  expect((await app.state()).inbox.map(i => i.id)).toEqual(['i2', 'i3', 'i4']);
+  await expect(card(page).locator('.ttitle')).toHaveText('Renew parking permit');
+  // Android back out of the article being written from the item comes back to it, untouched.
+  await page.click('[data-tdo="ref"]');
+  await page.goBack();
+  await page.click('#sheet #sheetok');
+  await expect(card(page).locator('.ttitle')).toHaveText('Renew parking permit');
+  expect((await app.state()).inbox).toHaveLength(3);
+  // The i shortcut (and Today's capture link) want the capture box, not the walk.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('i');
+  await expect(page.locator('#iin')).toBeFocused();
+  await expect(page.locator('#v-inbox .tcard')).toHaveCount(0);
 });

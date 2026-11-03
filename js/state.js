@@ -254,6 +254,9 @@ function norm(s) {
     cleanId(t);
     if (!Array.isArray(t.days)) t.days = [];
     t.monthDay = t.monthDay || 0;
+    const links = cleanLinks(t.links);
+    if (links.length) t.links = links;
+    else delete t.links;
   });
   // Promises (an earlier feature) become quests: "waiting for" ones set waiting, "I owe" ones
   // plain. Ids come from the promise, so two devices converting the same one don't double it.

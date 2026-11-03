@@ -22,16 +22,19 @@ function savePlace(id) {
   // Saving from a running session pauses it first: that is the interruption. (The session's
   // minutes are kept, as any pause keeps them.)
   if (S.timer && topOf(S.timer.q) === q && S.timer.left == null && !timerDue()) togglePause();
-  // The step: the one asked about, else the session's, else the quest's next.
+  // The step: the one asked about, else the session's, else (editing the note) the one the place
+  // already points at while it's still to do, else the quest's next.
+  const cur = q.resume,
+    kept = cur && placeStep(q);
   let step = '';
   if (r.parents.length) step = n.id;
   else if (S.timer && topOf(S.timer.q) === q && S.timer.q !== q.id) step = S.timer.q;
+  else if (kept && !isDone(kept)) step = kept.id;
   else {
     const nx = nextLeaf(q);
     step = nx ? nx.id : '';
   }
-  const at = step && step !== n.id ? find(step) : null,
-    cur = q.resume;
+  const at = step && step !== n.id ? find(step) : null;
   sheet(
     {
       title: cur ? 'Update your saved place' : 'Save my place',
@@ -49,7 +52,10 @@ function savePlace(id) {
       const note = cleanText(typeof v === 'string' ? v : '')
         .trim()
         .slice(0, RESUME_MAX);
-      now.n.resume = { note, at: Date.now(), step };
+      if (!note && !step) return toast("Write a note first: there's no step to point at");
+      // (the time is when you stopped: editing the note alone doesn't move it)
+      const was = now.n.resume;
+      now.n.resume = { note, at: was && was.note === note && was.step === step ? was.at : Date.now(), step };
       save();
       renderAll();
       toast('Place saved');
@@ -95,7 +101,7 @@ function placeCard(q) {
           : st.text
         : 'a step since removed'
       : '';
-  return `<div class="place box" id="placecard"><p class="placehead"><b>Where you left off</b><small>${esc(whenLabel(rs.at))}</small></p>${
+  return `<div class="placebox box" id="placecard"><p class="placehead"><b>Where you left off</b><small>${esc(whenLabel(rs.at))}</small></p>${
     rs.note ? `<p class="placenote">${esc(rs.note)}</p>` : ''
   }${stepLine ? `<p class="hint placestep">At: ${esc(stepLine)}</p>` : ''}<div class="links placeacts"><button class="linkbtn" data-saveplace="${q.id}">Edit the note</button><button class="linkbtn" data-clearplace="${q.id}">Clear</button></div>`;
 }

@@ -1358,21 +1358,6 @@ body.zen nav {
   outline: 3px dashed var(--blue);
   outline-offset: 3px;
 }
-/* a row's × opens two choices */
-.xchoice {
-  display: flex;
-  gap: 6px;
-  flex: none;
-}
-.xchoice .chip {
-  padding: 4px 10px;
-  font-size: 15px;
-  border-width: 2px;
-}
-.xchoice .del {
-  background: var(--pink);
-  color: var(--on-accent);
-}
 .iacts.quick .chip {
   padding: 3px 10px;
   font-size: 15px;
@@ -2217,7 +2202,7 @@ details.more > details {
   color: var(--muted);
   font-size: 14px;
 }
-.place {
+.placebox {
   padding: 10px 14px 12px;
   margin: 12px 0 0;
   background: var(--bg);
@@ -2456,10 +2441,20 @@ details.more > details {
   color: var(--ink);
 }
 .tsubs {
+  list-style: none;
   margin: 10px 0 0;
+  padding: 0;
 }
 .tsubs li {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  border-top: 2px dashed var(--muted);
+  padding: 4px 0 4px 10px;
+  overflow-wrap: anywhere;
+}
+.tsubs li span {
+  flex: 1;
 }
 .tpane {
   padding: 4px 14px 12px;

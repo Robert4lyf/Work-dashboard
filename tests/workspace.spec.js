@@ -246,3 +246,39 @@ test('the primary action follows the quest’s state: waiting, every step ticked
   await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Reopen quest']);
   await expect(page.locator('#resd')).toHaveCount(1); // (resources still there to add)
 });
+
+test('review fixes: a repeating quest’s resources follow it onto the template; junk template links are dropped', async ({
+  app,
+  page,
+}) => {
+  await app.openQuest('Weekly reporting');
+  await app.openMore();
+  await page.click('#rptd summary');
+  await page.click('[data-rpreset="weekdays"]');
+  await openRes(page);
+  await page.click('[data-resadd="kb"]');
+  await page.click('#sheet [data-linkkb="a1"]');
+  let s = await app.state();
+  expect(s.templates[0].links).toEqual([{ id: expect.any(String), kind: 'kb', ref: 'a1' }]);
+  await page.click('#resd .resrow [data-unlink]');
+  s = await app.state();
+  expect(s.templates[0].links).toBeUndefined();
+  // Changing the repeat with no links left doesn't leave stale ones on the template.
+  await app.setState(s => (s.templates[0].links = [{ id: 'stale', kind: 'kb', ref: 'a2' }]));
+  await page.reload();
+  await app.openQuest('Weekly reporting');
+  await app.openMore();
+  await page.click('#rptd summary');
+  await page.click('[data-rpreset="daily"]');
+  expect((await app.state()).templates[0].links).toBeUndefined();
+  // A template row holding nonsense for links doesn't break the day's reset.
+  await app.setState(s => (s.templates[0].links = 'junk'));
+  await page.reload();
+  await page.evaluate(() => {
+    S.quests = [];
+    S.day = shift(today(), -1);
+    rollover();
+    renderAll();
+  });
+  expect((await app.state()).quests.map(q => q.text)).toEqual(['Weekly reporting']);
+});

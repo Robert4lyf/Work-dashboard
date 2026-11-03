@@ -355,6 +355,7 @@ document.addEventListener('click', e => {
     if (u) u.open = panels.upd = true;
   }
   if (d.goto) {
+    if (d.goto === 'inbox') triage = null; // (the capture box, not a walk under way)
     go(d.goto);
     if (d.openadd) {
       panels.waddd = true;
@@ -474,12 +475,6 @@ document.addEventListener('click', e => {
       save();
       renderAll();
     });
-  }
-  if (d.focuson) {
-    S.focusQ = d.focuson;
-    save();
-    renderFocus();
-    go('focus');
   }
   if (d.promote) promoteInbox(d.promote);
   if (d.tview) setTodayView(d.tview);
@@ -822,6 +817,7 @@ document.addEventListener('keydown', e => {
   };
   if (k === 'n' && view === 'today' && path.length && $('#sin')) field('#sin');
   else if (k === 'n' || k === 'i') {
+    triage = null; // (the capture box, not a walk under way)
     go('inbox');
     field('#iin');
   } else if (k === 't') {
@@ -958,7 +954,8 @@ function appBack() {
   if (zen && !focusLocked()) return (setZen(false), true);
   if ($('#sheet')) return (closeSheet(), true);
   if (view === 'knowledge' && kbEdit) {
-    leaveEditor(renderKnowledge);
+    // (an article written from an Inbox item in triage: back goes to that item, untouched)
+    leaveEditor(kbEdit.fromInbox && triage ? () => triageReturn(false) : renderKnowledge);
     return true;
   }
   if (view === 'knowledge' && kbArt) {

@@ -66,7 +66,7 @@ function searchResults() {
   (function w(ns, trail) {
     ns.forEach(n => {
       const wt = n.wait ? [n.wait.who, n.wait.note].join(' ') : '';
-      const rn = n.resume ? n.resume.note : '';
+      const rn = n.resume && !isDone(n) ? n.resume.note : '';
       if (has(n.text) || has(n.summary) || has(n.notes) || has(wt) || has(rn)) {
         const sub = [
           trail.length ? esc(trail.join(' / ')) : '',
