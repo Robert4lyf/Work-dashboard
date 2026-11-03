@@ -43,6 +43,7 @@ function go(v) {
   }
   // Leaving the Inbox leaves triage, except to write an article from an item (see triage.js).
   if (triage && v !== 'inbox' && !(triage.ref && kbEdit && kbEdit.fromInbox)) triage = null;
+  if (v !== 'waiting') waitMark = ''; // (a deep link's mark on a waiting item lasts a visit)
   view = v;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
@@ -114,6 +115,8 @@ document.addEventListener('submit', e => {
   }
   if (f.id === 'resurlform') submitLinkUrl(f.dataset.id);
   if (f.id === 'twform') triageWaiting(f.dataset.id);
+  if (f.id === 'fuform') saveFollowUp(f.dataset.id);
+  if (f.id === 'pstepform') saveProcStep(f.dataset.id);
   if (f.id === 'authform') signIn();
   if (f.id === 'wform') addWaiting();
   if (f.id === 'kbform') kbSave();
@@ -208,8 +211,12 @@ document.addEventListener('change', e => {
     const it = S.inbox.find(x => x.id === el.dataset.iwait),
       who = el.value.trim();
     if (it) {
+      const had = !!it.wait;
       if (who) it.wait = { note: '', due: '', since: today(), ...it.wait, who };
       else delete it.wait;
+      // (its history, as the Waiting Centre keeps it)
+      if (who && !had) addFollow(it.id, followsFor(it.id).some(f => f.k === 'resolve') ? 'reopen' : 'start');
+      if (!who && had) addFollow(it.id, 'resolve');
     }
     save();
     renderAll();
@@ -242,6 +249,12 @@ document.addEventListener('change', e => {
     S.focusQ = el.value;
     save();
     renderFocus();
+    return;
+  }
+  if (el.id === 'scpick' || el.id === 'scid') {
+    if (el.id === 'scpick') shortcutKind = el.value;
+    else shortcutId = el.value;
+    renderAccount();
     return;
   }
   const fld = el.dataset.field;
@@ -316,6 +329,7 @@ document.addEventListener('click', e => {
   let b = e.target.closest('button');
   if (!b) return;
   const d = b.dataset;
+  if (waitMark && !b.closest('#sheet')) waitMark = ''; // (seen: the mark goes with the next redraw)
   // A quest's quick actions (its ⋯), from a row or tile on a list, or from its page.
   if (d.qact) openQuestActions(d.qact, !b.closest('.qfoot'));
   if (d.saveplace) savePlace(d.saveplace);
@@ -324,6 +338,9 @@ document.addEventListener('click', e => {
   top3Click(d);
   linkClick(d);
   triageClick(d, b);
+  waitClick(d);
+  kbRunClick(d, b);
+  execClick(d, b);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -340,6 +357,8 @@ document.addEventListener('click', e => {
   if (b.id === 'searchBtn') openSearch();
   if (d.sart)
     leaveEditor(() => {
+      kbRunBack = kbRun; // (opened from a run being followed: the article's ‹ goes back to it)
+      kbRun = null;
       kbArt = d.sart;
       kbImgShown = null;
       kbReturn = view === 'today' && path.length > 0; // (opened from a quest: back goes to it)
@@ -663,7 +682,7 @@ document.addEventListener('click', e => {
       hadArtImgs = new Set(
         (Array.isArray(pending.kb) ? pending.kb : []).filter(a => a && Array.isArray(a.imgs)).map(a => a.id),
       ),
-      kept = { kb: S.kb, kbcats: S.kbcats, flows: S.flows },
+      kept = { kb: S.kb, kbcats: S.kbcats, flows: S.flows, follows: S.follows, runs: S.runs, execs: S.execs },
       keptLoose = S.kbimgLoose,
       was = JSON.stringify(S);
     try {
@@ -677,8 +696,9 @@ document.addEventListener('click', e => {
     if (imgs) S.noteImgs = imgs;
     // (pictures still waiting for their article: kept too, or they'd be deleted everywhere)
     S.kbimgLoose = [...S.kbimgLoose, ...keptLoose.filter(p => !S.kbimgLoose.some(q => q.id === p.id))];
-    // A copy from before the Knowledge tab has none of it: what's here stays.
-    ['kb', 'kbcats', 'flows'].forEach(k => {
+    // A copy from before the Knowledge tab (or Release B's records) has none of it: what's
+    // here stays.
+    ['kb', 'kbcats', 'flows', 'follows', 'runs', 'execs'].forEach(k => {
       if (!Array.isArray(pending[k])) S[k] = kept[k];
     });
     S.kb.forEach(a => {
@@ -717,11 +737,13 @@ document.addEventListener('click', e => {
       })
       .then(() => {
         captureToken = '';
+        execToken = '';
         pushTest = null;
         health = null;
         try {
           localStorage.removeItem(CAPTURE_KEY);
           localStorage.removeItem(NOTICE_HASH);
+          localStorage.removeItem(EXEC_KEY);
         } catch (e) {}
       })
       .then(() => {
@@ -761,6 +783,9 @@ document.addEventListener('click', e => {
         token: captureToken,
         vpub: S.pushKey,
         vpriv: newPrivateKey,
+        shortcut: shortcutUrl(shortcutKind, shortcutId),
+        xtoken: execToken,
+        xurl: execReportUrl(),
       }[d.copy],
     );
 });
@@ -930,6 +955,7 @@ function start(pics, kv) {
   go(view);
   receiveShare();
   receiveLaunch();
+  takeRoute(); // (a deep link: followed now, or after the first sync if its target isn't here yet)
   setInterval(timerTick, 500);
   setInterval(alarmTick, 1000);
   listenAuth();
@@ -958,6 +984,11 @@ function appBack() {
     leaveEditor(kbEdit.fromInbox && triage ? () => triageReturn(false) : renderKnowledge);
     return true;
   }
+  if (view === 'knowledge' && kbRun) {
+    kbRun = null;
+    renderKnowledge();
+    return true;
+  }
   if (view === 'knowledge' && kbArt) {
     kbClick({ kbback: '1' }, {});
     return true;
@@ -977,12 +1008,19 @@ function appBack() {
 try {
   // (after a reload the entries are already there)
   if (!(history.state && history.state.app === 'in')) {
-    history.replaceState({ app: 'root' }, '');
+    // A deep link's route is taken off the address first (kept for takeRoute): the entry under
+    // the app's own mustn't carry it, or the back gesture would replay it on the way out.
+    if (location.hash.startsWith('#/')) {
+      launchRoute = location.hash;
+      history.replaceState({ app: 'root' }, '', location.pathname + location.search);
+    } else history.replaceState({ app: 'root' }, '');
     history.pushState({ app: 'in' }, '');
   }
 } catch (e) {}
 window.addEventListener('popstate', () => {
   if (!window.appReady) return;
+  // A deep link opened while the app is up (a hash navigation fires this too): not a back step.
+  if (location.hash.startsWith('#/')) return takeRoute();
   if (appBack()) history.pushState({ app: 'in' }, '');
   else history.back();
 });
@@ -1021,6 +1059,7 @@ function listenAuth() {
         releaseHeld(heldAtStart);
         if (timerDue()) finishTimer(true);
         else inBackground(renderAll);
+        retryRoute(true); // (no session: a deep link's missing target won't be synced in)
       } else sync().finally(() => releaseHeld(heldAtStart)); // (the sync runs the day's reset)
     }
     if (s && (ev === 'SIGNED_IN' || ev === 'INITIAL_SESSION')) {

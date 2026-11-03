@@ -46,6 +46,28 @@
           "sizes": "192x192"
         }
       ]
+    },
+    {
+      "name": "Process inbox",
+      "short_name": "Process",
+      "url": "./index.html#/inbox/triage",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Continue work",
+      "short_name": "Continue",
+      "url": "./index.html#/continue",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

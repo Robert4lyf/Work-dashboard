@@ -52,6 +52,11 @@ function fakeSupabase() {
         };
       },
       then(res, rej) {
+        if (table === 'cockpit_exec_events')
+          return window
+            .srvExecRows(q.gt || 0)
+            .then(data => ({ data, error: null }))
+            .then(res, rej);
         if (table !== 'cockpit_items') return Promise.resolve({ data: [], error: null }).then(res, rej);
         return window
           .srvRows(q.gt || 0, q.limit || 1000, q.cols || '', q.keys || null)
@@ -85,11 +90,53 @@ function fakeSupabase() {
         return ch;
       },
       removeChannel() {},
-      rpc: async name => ({ data: await window.srvRpc(name), error: null }),
+      rpc: async (name, args) => {
+        const r = await window.srvRpc(name, args || null);
+        return r && r.error ? { data: null, error: { message: r.error } } : { data: r, error: null };
+      },
     }),
   };
 }
 
+// What cockpit_exec_report does (see supabase-setup.sql): checks the token, pairs the report
+// with an execution (the caller's, the run_ref's, or the newest open launch of the flow), and
+// keeps it as a row other devices hear about.
+function execReport(srv, a, from) {
+  if (!a || a.token !== srv.xtoken) return { error: 'unknown execution token' };
+  if (!/^[\w-]{1,40}$/.test(a.flow || '')) return { error: "flow must be the flow's id" };
+  if (!['running', 'succeeded', 'failed', 'cancelled'].includes(a.status))
+    return { error: 'status must be running, succeeded, failed or cancelled' };
+  srv.events = srv.events || [];
+  let x = a.execution || '';
+  if (!x && a.run_ref) {
+    const first = srv.events.find(e => e.flow === a.flow && e.run_ref === a.run_ref);
+    if (first) x = first.execution || 'u' + first.id;
+  }
+  if (!x) {
+    const open = [...srv.rows.values()]
+      .filter(
+        r =>
+          r.key.startsWith('exec:') &&
+          !r.deleted &&
+          r.data.flow === a.flow &&
+          ['requested', 'running'].includes(r.data.status),
+      )
+      .sort((p, q) => q.data.at - p.data.at)[0];
+    x = open ? open.data.id : '';
+  }
+  const ev = {
+    id: ++srv.seq,
+    execution: x,
+    flow: a.flow,
+    status: a.status,
+    message: String(a.message || '').slice(0, 300),
+    run_ref: a.run_ref || '',
+    reported_at: new Date().toISOString(),
+  };
+  srv.events.push(ev);
+  srv.devices.forEach(d => d.page.evaluate(() => window.__live && window.__live()).catch(() => {}));
+  return { execution: x, event: ev.id };
+}
 // Postgres jsonb does not keep key order: it stores shorter keys first, then sorts by bytes.
 function jsonb(v) {
   if (Array.isArray(v)) return v.map(jsonb);
@@ -149,9 +196,14 @@ async function device(browser, srv, seed, opts = {}) {
     return wrote;
   });
   await page.exposeFunction('srvState', () => srv.state);
-  await page.exposeFunction('srvRpc', name =>
-    name === 'cockpit_new_capture_token' ? (srv.token = 'tok123') : null,
-  );
+  await page.exposeFunction('srvRpc', (name, args) => {
+    if (name === 'cockpit_new_capture_token') return (srv.token = 'tok123');
+    if (name === 'cockpit_new_exec_token') return (srv.xtoken = 'xtok' + ++srv.seq);
+    if (name === 'cockpit_revoke_exec_token') return ((srv.xtoken = ''), true);
+    if (name === 'cockpit_exec_report') return execReport(srv, args, page);
+    return null;
+  });
+  await page.exposeFunction('srvExecRows', gt => (srv.events || []).filter(e => e.id > gt));
   // The capture endpoint, doing what the cockpit_capture database function does.
   await page.route('**/rest/v1/rpc/cockpit_capture', async r => {
     const body = r.request().postDataJSON();
@@ -386,7 +438,7 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   await a.page.click('nav [data-v=account]');
   await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
   await a.page.click('#capnew');
-  await expect(a.page.locator('.caprow code').nth(3)).toHaveText('tok123');
+  await expect(a.page.locator('#capsetup .caprow code').nth(3)).toHaveText('tok123');
   await a.page.click('#captest');
   await expect
     .poll(async () => (await a.state()).inbox.map(i => i.text))
@@ -403,9 +455,9 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   await a.page.reload();
   await a.page.click('nav [data-v=account]');
   await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
-  await expect(a.page.locator('.caprow').first()).toBeHidden();
+  await expect(a.page.locator('#capsetup .caprow').first()).toBeHidden();
   await a.page.click('#capsetup summary');
-  await expect(a.page.locator('.caprow code').nth(3)).toHaveText('tok123');
+  await expect(a.page.locator('#capsetup .caprow code').nth(3)).toHaveText('tok123');
   expect(a.errors).toEqual([]);
 });
 
@@ -1177,5 +1229,262 @@ test('triage on one device while the other device moves the item: the walk goes 
   await settle(a, b);
   expect(texts(await b.state())).toEqual(['Three', 'Two']);
   expect((await b.state()).inbox.map(i => i.text)).toEqual(['One']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+/* Release B: executions and their reports across devices; follow-ups and runs */
+// A script's report, as PowerShell or Power Automate Desktop would send it.
+const report = (d, args) => d.page.evaluate(a => sb.rpc('cockpit_exec_report', a), args);
+test('a launch on one device, reports from a script: both devices show the same verified result, once', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.flows = [{ id: 'f1', name: 'Weekly report', url: 'ms-powerautomate:/console/flow/run?x=1', last: 0 }];
+    save();
+    renderAll();
+  });
+  await a.page.click('nav [data-v=account]');
+  await a.page.click('#xnew');
+  await expect(a.page.locator('#xsetup .caprow code').nth(2)).toHaveText(/^xtok/);
+  const token = await a.page.evaluate(() => execToken);
+  await a.sync();
+  const b = await device(browser, srv);
+  expect((await b.state()).track).toBe(true);
+  // A taps the flow; B hears of the launch, unconfirmed.
+  await a.page.evaluate(
+    () => (addEventListener('click', e => e.target.closest('a[data-flow]') && e.preventDefault()), 0),
+  );
+  await a.page.click('nav [data-v=today]');
+  await a.page.click('#v-today a[data-flow="f1"]');
+  await a.page.waitForTimeout(20);
+  await settle(a, b);
+  const x = (await a.state()).execs[0].id;
+  expect((await b.state()).execs).toEqual([expect.objectContaining({ id: x, status: 'requested' })]);
+  // The script reports running, then success: the report pairs with the launch, both devices agree.
+  let r = await report(b, { token, flow: 'f1', status: 'running' });
+  expect(r.data).toEqual({ execution: x, event: expect.any(Number) });
+  r = await report(b, { token, flow: 'f1', status: 'succeeded', message: 'Sent 3 files' });
+  expect(r.data.execution).toBe(x);
+  await settle(a, b);
+  for (const d of [a, b]) {
+    const s = await d.state();
+    expect(s.execs).toHaveLength(1);
+    expect(s.execs[0]).toMatchObject({ id: x, status: 'succeeded', msg: 'Sent 3 files' });
+    expect(s.execs[0].ev.map(e => e.s)).toEqual(['running', 'succeeded']);
+    await expect(d.page.locator('#v-today a[data-flow="f1"] .xst')).toHaveText('✓');
+  }
+  // Both folded the same reports into the same record: nothing left to send back and forth.
+  const h = await Promise.all(
+    [a, b].map(d => d.page.evaluate(() => hashOf(toRecords(S).get('exec:' + S.execs[0].id)))),
+  );
+  expect(h[0]).toBe(h[1]);
+  const before = srv.writes;
+  await settle(a, b);
+  expect(srv.writes - before).toBe(0);
+  // Bad reports are refused by the server, and change nothing.
+  expect((await report(b, { token: 'nope', flow: 'f1', status: 'running' })).error.message).toContain(
+    'unknown',
+  );
+  expect((await report(b, { token, flow: 'f1', status: 'done' })).error.message).toContain('status');
+  // A failure: both devices flag it; acknowledging on one clears it on the other.
+  await a.page.click('nav [data-v=today]');
+  await a.page.click('#v-today a[data-flow="f1"]');
+  await a.page.waitForTimeout(20);
+  await settle(a, b);
+  await report(a, { token, flow: 'f1', status: 'failed', message: 'Step 4: file not found' });
+  await settle(a, b);
+  for (const d of [a, b]) await expect(d.page.locator('#v-today .attn .chip.warn')).toHaveText('Flow failed');
+  await b.page.click('#v-today .attn .chip.warn');
+  await b.page.click('#sheet [data-xack]');
+  await settle(a, b);
+  for (const d of [a, b]) await expect(d.page.locator('#v-today .attn .chip.warn')).toHaveCount(0);
+  // Revoked: reports stop; the records stay.
+  await a.page.click('nav [data-v=account]');
+  await a.page.click('#xrevoke');
+  await expect(a.page.locator('#xrevoke')).toHaveText('Revoke?'); // (a two-tap confirmation)
+  await a.page.evaluate(() => revokeExecToken()); // (a sync redraw mid-way would un-arm it)
+  await settle(a, b);
+  expect((await report(b, { token, flow: 'f1', status: 'running' })).error.message).toContain('unknown');
+  expect((await b.state()).execs).toHaveLength(2);
+  expect((await b.state()).track).toBe(false);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('a report before the launch has synced, or with no launch at all, becomes a record of its own on every device', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.flows = [{ id: 'f1', name: 'Weekly report', url: 'ms-powerautomate:/x', last: 0 }];
+    save();
+    renderAll();
+  });
+  await a.page.click('nav [data-v=account]');
+  await a.page.click('#xnew');
+  const token = await a.page.evaluate(() => execToken);
+  await a.sync();
+  const b = await device(browser, srv);
+  // A is offline when it taps; the flow (started by that tap) reports before A's launch is synced.
+  await a.ctx.setOffline(true);
+  await a.page.evaluate(
+    () => (addEventListener('click', e => e.target.closest('a[data-flow]') && e.preventDefault()), 0),
+  );
+  await a.page.click('nav [data-v=today]');
+  await a.page.click('#v-today a[data-flow="f1"]');
+  await a.page.waitForTimeout(20);
+  const r = await report(b, { token, flow: 'f1', status: 'succeeded', message: 'ok', run_ref: 'r1' });
+  expect(r.data.execution).toBe('');
+  await a.ctx.setOffline(false);
+  await settle(a, b);
+  // Both devices: the launch stays unconfirmed (honestly), and the report is its own record.
+  for (const d of [a, b]) {
+    const s = await d.state();
+    expect(s.execs.map(x => [x.status, !!x.unreq]).sort()).toEqual([
+      ['requested', false],
+      ['succeeded', true],
+    ]);
+    expect(s.execs.find(x => x.unreq).id).toBe('u' + r.data.event);
+  }
+  // A later report with the same run_ref joins that same record.
+  await report(b, { token, flow: 'f1', status: 'failed', message: 'later', run_ref: 'r1' });
+  await settle(a, b);
+  for (const d of [a, b]) {
+    const s = await d.state();
+    expect(s.execs).toHaveLength(2);
+    expect(s.execs.find(x => x.unreq)).toMatchObject({ status: 'failed', msg: 'later', ref: 'r1' });
+  }
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('follow-ups recorded on two devices offline are both kept; a run’s progress and the waiting details sync', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kb = [
+      {
+        id: 'a1',
+        cat: '',
+        title: 'Proc',
+        body: '',
+        edited: 1,
+        imgs: [],
+        steps: [
+          { id: 'p1', title: 'One' },
+          { id: 'p2', title: 'Two' },
+        ],
+      },
+    ];
+    S.quests = [
+      fix({
+        id: 'q1',
+        text: 'Approval',
+        children: [
+          fix({ id: 's1', text: 'Sign-off', wait: { who: 'Sam', note: '', due: today(), since: today() } }),
+        ],
+      }),
+    ];
+    save();
+  });
+  await a.sync();
+  const b = await device(browser, srv);
+  await a.ctx.setOffline(true);
+  await b.ctx.setOffline(true);
+  const follow = (d, note) =>
+    d.page.evaluate(note => {
+      addFollow('s1', 'chase', note);
+      find('s1').n.wait.last = today();
+      save();
+    }, note);
+  await follow(a, 'Emailed');
+  await follow(b, 'Called');
+  await a.ctx.setOffline(false);
+  await b.ctx.setOffline(false);
+  await settle(a, b);
+  for (const d of [a, b]) {
+    const s = await d.state();
+    expect(s.follows.map(f => f.note).sort()).toEqual(['Called', 'Emailed']);
+    expect(s.quests[0].children[0].wait.last).toBe(await d.page.evaluate(() => today()));
+  }
+  // A run started on A, a step done on B: the same run, its progress everywhere.
+  await a.page.evaluate(() => openRun('a1', 'q1'));
+  await settle(a, b);
+  const id = (await a.state()).runs[0].id;
+  expect((await b.state()).runs.map(r => r.id)).toEqual([id]);
+  await b.page.evaluate(id => {
+    const r = S.runs.find(x => x.id === id);
+    r.done.push('p1');
+    r.at = Date.now();
+    save();
+  }, id);
+  await settle(a, b);
+  expect((await a.state()).runs[0].done).toEqual(['p1']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('review fix: a device still on the previous version doesn’t strip procedure steps or switch tracking off', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kb = [
+      {
+        id: 'a1',
+        cat: '',
+        title: 'Proc',
+        body: 'b',
+        edited: 1,
+        imgs: [],
+        steps: [{ id: 'p1', title: 'One' }],
+      },
+    ];
+    S.track = true;
+    save();
+  });
+  await a.sync();
+  // Steps and tracking are rows of their own, which an older copy leaves alone.
+  expect(srv.rows.get('kb:a1').data.steps).toBeUndefined();
+  expect(srv.rows.get('kbsteps:a1').data.steps).toEqual([{ id: 'p1', title: 'One' }]);
+  expect(srv.rows.get('meta:track').data).toEqual({ on: true });
+  expect(srv.rows.get('meta:prefs').data.track).toBeUndefined();
+  // The older copy edits the article's title and its prefs (as it would: from the keys it knows).
+  const kb = srv.rows.get('kb:a1'),
+    prefs = srv.rows.get('meta:prefs');
+  srv.rows.set('kb:a1', {
+    ...kb,
+    data: { ...kb.data, title: 'Proc, renamed' },
+    edited_at: Date.now() + 10,
+    seq: ++srv.seq,
+  });
+  srv.rows.set('meta:prefs', {
+    ...prefs,
+    data: { ...prefs.data, mins: 45 },
+    edited_at: Date.now() + 10,
+    seq: ++srv.seq,
+  });
+  await a.sync();
+  const s = await a.state();
+  expect(s.kb[0].title).toBe('Proc, renamed');
+  expect(s.kb[0].steps).toEqual([{ id: 'p1', title: 'One' }]);
+  expect(s.track).toBe(true);
+  expect(s.mins).toBe(45);
+  // A second device reads them the same way.
+  const b = await device(browser, srv);
+  const sb2 = await b.state();
+  expect(sb2.kb[0].steps).toEqual([{ id: 'p1', title: 'One' }]);
+  expect(sb2.track).toBe(true);
+  // Removing the steps removes their row.
+  await a.page.evaluate(() => {
+    delete S.kb[0].steps;
+    save();
+  });
+  await settle(a, b);
+  expect(srv.rows.get('kbsteps:a1').deleted).toBe(true);
+  expect((await b.state()).kb[0].steps).toBeUndefined();
   for (const d of [a, b]) expect(d.errors).toEqual([]);
 });

@@ -22,14 +22,18 @@ function linkRow(l, qid, editable) {
   if (l.kind === 'kb') {
     const a = S.kb.find(x => x.id === l.ref);
     name = a ? a.title : 'removed article';
+    const proc = a && a.steps && a.steps.length;
     body = a
-      ? `<button class="open" data-sart="${a.id}"><small>Article</small><span>${esc(a.title)}</span></button>`
+      ? `<button class="open" data-sart="${a.id}"><small>${proc ? 'Procedure' : 'Article'}</small><span>${esc(a.title)}</span></button>${proc ? procLinkLine(a.id, qid) : ''}`
       : '<span class="open gone"><small>Article</small><span>Removed from Knowledge</span></span>';
   } else if (l.kind === 'flow') {
     const f = S.flows.find(x => x.id === l.ref);
     name = f ? f.name : 'removed flow';
+    const x = f && latestExec(f.id, qid);
     body = f
-      ? `<a class="open" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}"><small>Flow</small><span>&#9654; ${esc(f.name)}</span></a>`
+      ? `<a class="open" href="${esc(f.url)}" data-flow="${f.id}" data-q="${qid}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}"><small>Flow</small><span>&#9654; ${esc(f.name)}</span></a>${
+          x ? `<button class="linkbtn xmini" data-xdet="${x.id}">${execLine(x)}</button>` : ''
+        }`
       : '<span class="open gone"><small>Flow</small><span>Flow removed</span></span>';
   } else
     body = `<a class="open" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"><small>Link</small><span>${esc(l.label || hostOf(l.url))}</span></a>`;

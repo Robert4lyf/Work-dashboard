@@ -275,7 +275,7 @@ async function syncNotices() {
   const now = Math.max(S.editedAt || 0, sync2.serverAt || 0) || Date.now(),
     keep = new Set(want.map(n => n.key)),
     stale = data
-      .filter(r => !keep.has(r.key) && !/^(test|alert):/.test(r.key))
+      .filter(r => !keep.has(r.key) && !/^(test|alert|exec):/.test(r.key))
       .filter(r => r.key.startsWith('alarm:') || Date.parse(r.at) > now)
       .map(r => r.key);
   if (want.length) {

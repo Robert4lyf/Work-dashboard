@@ -64,8 +64,15 @@ function triageWaiting(id) {
     who = cleanText($('#twho').value.trim()).slice(0, 60),
     due = $('#tdue').value || '';
   if (!it || !who) return;
-  const was = it.wait || {};
-  it.wait = { who, note: was.note || '', due: cleanDay(due), since: was.since || today() };
+  const was = it.wait;
+  it.wait = {
+    ...(was || {}),
+    who,
+    note: (was && was.note) || '',
+    due: cleanDay(due),
+    since: (was && was.since) || today(),
+  };
+  if (!was) addFollow(id, followsFor(id).some(f => f.k === 'resolve') ? 'reopen' : 'start');
   triage.decided.add(id);
   triage.cur = null;
   save();

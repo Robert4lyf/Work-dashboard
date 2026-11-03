@@ -281,3 +281,148 @@ begin
 end $$;
 revoke execute on function public.cockpit_notify_status() from public, anon;
 grant execute on function public.cockpit_notify_status() to authenticated;
+
+-- Automation execution tracking (Release B). The app records an execution when a flow's button
+-- is tapped (kind 'exec' in cockpit_items, synced like everything else); the flow itself, or a
+-- script, then reports what really happened through cockpit_exec_report with an execution
+-- token. Reports are kept as their own append-only rows here (never edited), and the app folds
+-- them into its execution records. A tapped button is never taken as a result: without a
+-- report, an execution stays unconfirmed.
+--
+-- The execution token is separate from the capture token and does one thing: add a status
+-- report. It can't read anything, and can't change quests, notes or articles. Settings > Flows
+-- and automations creates or replaces it (the old one stops working at once) or revokes it.
+create table if not exists public.cockpit_exec_tokens (
+  token      text primary key,
+  user_id    uuid not null unique references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+alter table public.cockpit_exec_tokens enable row level security;
+-- No policies: only reachable through the functions below.
+
+create or replace function public.cockpit_new_exec_token() returns text
+language plpgsql security definer set search_path = public as $$
+declare t text := 'x' || replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+begin
+  if auth.uid() is null then raise exception 'sign in first'; end if;
+  delete from cockpit_exec_tokens where user_id = auth.uid();
+  insert into cockpit_exec_tokens (token, user_id) values (t, auth.uid());
+  return t;
+end $$;
+revoke execute on function public.cockpit_new_exec_token() from public, anon;
+grant execute on function public.cockpit_new_exec_token() to authenticated;
+
+create or replace function public.cockpit_revoke_exec_token() returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'sign in first'; end if;
+  delete from cockpit_exec_tokens where user_id = auth.uid();
+  return true;
+end $$;
+revoke execute on function public.cockpit_revoke_exec_token() from public, anon;
+grant execute on function public.cockpit_revoke_exec_token() to authenticated;
+
+-- One row per report. `execution` is the app's execution id when it's known: given by the
+-- caller, matched by run_ref to an earlier report, or paired here with the newest unconfirmed
+-- launch of that flow. Otherwise the app makes an execution of its own for the report.
+create sequence if not exists public.cockpit_exec_events_seq;
+create table if not exists public.cockpit_exec_events (
+  id          bigint primary key default nextval('public.cockpit_exec_events_seq'),
+  user_id     uuid not null references auth.users(id) on delete cascade,
+  execution   text not null default '',
+  flow        text not null,
+  status      text not null,
+  message     text not null default '',
+  run_ref     text not null default '',
+  reported_at timestamptz not null default now()
+);
+create index if not exists cockpit_exec_events_user on public.cockpit_exec_events (user_id, id);
+alter table public.cockpit_exec_events enable row level security;
+drop policy if exists "read own exec events" on public.cockpit_exec_events;
+create policy "read own exec events" on public.cockpit_exec_events for select using (auth.uid() = user_id);
+-- (no insert, update or delete policies: rows come only from the function below, and stay as reported)
+
+-- Live updates for reports too, so the app hears a result within a second.
+do $$ begin
+  if exists (select 1 from pg_publication where pubname = 'supabase_realtime')
+     and not exists (select 1 from pg_publication_tables
+                     where pubname = 'supabase_realtime' and tablename = 'cockpit_exec_events') then
+    alter publication supabase_realtime add table public.cockpit_exec_events;
+  end if;
+end $$;
+
+-- Report an execution's status. Called by Power Automate Desktop, PowerShell or any script:
+--   token      the execution token (Settings > Flows and automations)
+--   flow       the flow's id in the app (shown beside the flow under Knowledge > Flows)
+--   status     running | succeeded | failed | cancelled
+--   message    a short, plain description (an error's text, a count): at most 300 characters,
+--              kept as text, never report contents or personal information
+--   execution  the app's execution id, if the script knows it (optional)
+--   run_ref    the script's own id for this run, so its reports stay together (optional)
+-- Returns {"execution": <id or "">, "event": <row id>}. At most 120 reports an hour.
+create or replace function public.cockpit_exec_report(
+  token text, flow text, status text, message text default '', execution text default '', run_ref text default ''
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  u uuid;
+  f text := trim(coalesce(flow, ''));
+  s text := lower(trim(coalesce(status, '')));
+  m text := left(trim(regexp_replace(regexp_replace(coalesce(message, ''), '[[:cntrl:]]+', ' ', 'g'), '\s+', ' ', 'g')), 300);
+  x text := trim(coalesce(execution, ''));
+  r text := left(trim(coalesce(run_ref, '')), 60);
+  fname text;
+  ev bigint;
+begin
+  select t.user_id into u from cockpit_exec_tokens t where t.token = cockpit_exec_report.token;
+  if u is null then raise exception 'unknown execution token'; end if;
+  if f !~ '^[A-Za-z0-9_-]{1,40}$' then raise exception 'flow must be the flow''s id'; end if;
+  if s not in ('running', 'succeeded', 'failed', 'cancelled') then
+    raise exception 'status must be running, succeeded, failed or cancelled';
+  end if;
+  if x !~ '^[A-Za-z0-9_-]{0,40}$' then raise exception 'execution must be an execution id'; end if;
+  if r !~ '^[A-Za-z0-9_.:-]{0,60}$' then raise exception 'run_ref may only hold letters, digits and ._:-'; end if;
+  m := trim(m);
+  -- A runaway script (or a leaked token) can't flood the account; calls take turns per person.
+  perform pg_advisory_xact_lock(hashtext('cockpit_exec:' || u::text));
+  if (select count(*) from cockpit_exec_events e where e.user_id = u
+      and e.reported_at > now() - interval '1 hour') >= 120 then
+    raise exception 'too many reports: at most 120 an hour';
+  end if;
+  delete from cockpit_exec_events e where e.user_id = u and e.reported_at < now() - interval '90 days';
+  delete from cockpit_notices n where n.user_id = u and n.key like 'exec:%' and n.sent_at < now() - interval '30 days';
+  -- Which execution this is about: the caller's say, else the run it reported before (an
+  -- earlier report with no execution of its own stands for one, named 'u' + its row id, as the
+  -- app names it), else the newest launch of this flow still waiting to hear (requested or
+  -- running, within a day).
+  if x = '' and r <> '' then
+    select coalesce(nullif(e.execution, ''), 'u' || e.id) into x from cockpit_exec_events e
+      where e.user_id = u and e.flow = f and e.run_ref = r
+        and e.reported_at > now() - interval '7 days'
+      order by e.id limit 1;
+    x := coalesce(x, '');
+  end if;
+  if x = '' then
+    select i.data->>'id' into x from cockpit_items i
+      where i.user_id = u and i.kind = 'exec' and not i.deleted
+        and i.data->>'flow' = f and i.data->>'status' in ('requested', 'running')
+        and (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end)
+            > (extract(epoch from now() - interval '24 hours') * 1000)::bigint
+      order by (i.data->>'at')::bigint desc limit 1;
+    x := coalesce(x, '');
+    if x !~ '^[A-Za-z0-9_-]{1,40}$' then x := ''; end if;
+  end if;
+  insert into cockpit_exec_events (user_id, execution, flow, status, message, run_ref)
+    values (u, x, f, s, m, r) returning id into ev;
+  -- A failure is worth a notification (the send-notices job pushes it within a minute).
+  if s = 'failed' then
+    select i.data->>'name' into fname from cockpit_items i
+      where i.user_id = u and i.key = 'flow:' || f and not i.deleted;
+    insert into cockpit_notices (user_id, key, at, title, body)
+      values (u, 'exec:' || ev, now(), 'Flow failed: ' || left(coalesce(fname, f), 60), left(m, 300))
+      on conflict (user_id, key) do nothing;
+  end if;
+  return jsonb_build_object('execution', x, 'event', ev);
+end $$;
+revoke execute on function public.cockpit_exec_report(text, text, text, text, text, text) from public;
+grant execute on function public.cockpit_exec_report(text, text, text, text, text, text) to anon, authenticated;

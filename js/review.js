@@ -45,16 +45,24 @@ function renderWeek() {
     q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today(),
   );
   step('Carried over', stale.length ? carriedRows(stale) : '', stale.length);
-  // 3. Chase what you're waiting on.
-  const wait = waitingNodes();
+  // 3. Chase what you're waiting on: what's overdue or slipped first, then the rest.
+  const wait = waitingNodes().sort((a, b) => {
+      const rank = x => (waitBucket(x.n.wait) === 'chase' ? 0 : waitBucket(x.n.wait) === 'soon' ? 1 : 2);
+      return rank(a) - rank(b);
+    }),
+    toChase = wait.filter(x => waitBucket(x.n.wait) === 'chase').length,
+    slipped = wait.filter(x => x.n.wait.expect && x.n.wait.expect < today()).length;
   step(
     'Waiting',
-    wait
-      .map(
-        ({ n, trail }) =>
-          `<div class="crow"><p>${esc([...trail, n.text].join(' / '))}${n.wait.who ? ` <small>from ${esc(n.wait.who)}</small>` : ''} ${chaseTag(n.wait)}</p><div class="chips"><button class="chip" data-waitclear="${n.id}">Got it</button></div></div>`,
-      )
-      .join(''),
+    (wait.length
+      ? `<p class="hint wsum2">${[toChase ? plural(toChase, 'item') + ' to chase' : '', slipped ? plural(slipped, 'promised reply') + ' overdue' : ''].filter(Boolean).join(', ') || 'Nothing overdue'}.</p>`
+      : '') +
+      wait
+        .map(
+          ({ n, trail }) =>
+            `<div class="crow"><p>${esc([...trail, n.text].join(' / '))}${n.wait.who ? ` <small>from ${esc(n.wait.who)}</small>` : ''}${n.wait.last ? ` <small>followed up ${esc(dayLabel(n.wait.last))}</small>` : ''} ${chaseTag(n.wait)}</p><div class="chips"><button class="chip" data-chase="${n.id}">Follow up</button><button class="chip" data-waitclear="${n.id}">Got it</button></div></div>`,
+        )
+        .join(''),
     wait.length,
   );
   // 4. What's coming back next week.

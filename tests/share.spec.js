@@ -38,5 +38,5 @@ test('app-icon shortcuts: Capture opens the inbox ready to type; there is no Foc
   await page.goto('/index.html?talk=1');
   await expect(page.locator('#iin')).toBeFocused();
   const m = await (await page.request.get('/manifest.webmanifest')).json();
-  expect(m.shortcuts.map(s => s.short_name)).toEqual(['Capture']);
+  expect(m.shortcuts.map(s => s.short_name)).toEqual(['Capture', 'Process', 'Continue']);
 });

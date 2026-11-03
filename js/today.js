@@ -218,7 +218,7 @@ function drawToday() {
 function quickActions() {
   if (!S.flows.length) return '';
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
-  return `<div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}</a>`).join('')}</div>`;
+  return `<div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div>`;
 }
 // Things being waited on that aren't on Today's list (in the Inbox, or on Upcoming), folded away
 // under it; quests on the list already say so themselves. The chip at the top opens the full view.
@@ -247,6 +247,11 @@ function renderAttention() {
   if (due) c.push(`<span class="chip due">${due} due today</span>`);
   if (ch) c.push(`<button class="chip" data-goto="waiting">${ch} to chase</button>`);
   if (reviewDue()) c.push('<button class="chip" data-rsub="week">Weekly review</button>');
+  const xf = execFailures();
+  if (xf.length)
+    c.push(
+      `<button class="chip warn" data-xdet="${xf[xf.length - 1].id}">${xf.length === 1 ? 'Flow failed' : xf.length + ' flows failed'}</button>`,
+    );
   return c.length ? `<div class="attn chips">${c.join('')}</div>` : '';
 }
 

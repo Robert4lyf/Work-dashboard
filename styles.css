@@ -2489,6 +2489,26 @@ details.more > details {
   .tacts {
     grid-template-columns: repeat(2, 1fr);
   }
+  /* a waiting row's Got it and ⋯ go under its text, which keeps its width */
+  #v-waiting .row,
+  #waitsec .row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 4px 10px;
+  }
+  #v-waiting .row .open,
+  #waitsec .row .open {
+    grid-column: 1 / -1;
+  }
+  #v-waiting .row .btn.sm,
+  #waitsec .row .btn.sm {
+    grid-column: 2;
+    justify-self: start;
+  }
+  #v-waiting .row .check,
+  #waitsec .row .check {
+    grid-row: 2;
+  }
   .t3row {
     display: grid;
     grid-template-columns: auto 1fr;
@@ -2503,4 +2523,289 @@ details.more > details {
 }
 .tdone .btn {
   flex: 1;
+}
+/* Release B: the Waiting Centre, procedures, executions, deep links */
+/* (rows scrolled into view land clear of the sticky footer and the tab bar) */
+.row,
+.resrow,
+.t3row,
+.crow,
+.row > *,
+.resrow > * {
+  scroll-margin-bottom: 150px;
+}
+.wgroup {
+  font-family: var(--display);
+  font-size: 11px;
+  margin: 18px 0 6px;
+}
+.wgroup small {
+  color: var(--muted);
+  font-family: var(--body);
+  font-size: 14px;
+  font-weight: 400;
+}
+.row.marked {
+  outline: 3px dashed var(--yellow);
+  outline-offset: -3px;
+}
+#v-waiting .row .qmore,
+#waitsec .row .qmore {
+  margin-left: -6px;
+}
+.flist {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+.flist li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 5px 0;
+  border-top: 1.5px solid var(--line);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.flist li:first-child {
+  border-top: 0;
+}
+.flist li small {
+  flex: none;
+  color: var(--muted);
+  font-size: 14px;
+  min-width: 68px;
+}
+.flist li.hint {
+  color: var(--muted);
+}
+.fhead {
+  margin: 14px 0 0;
+  font-size: 15px;
+}
+.prow2 label.f {
+  margin-top: 8px;
+}
+.wsum2 {
+  margin: 0 0 8px;
+}
+#waitd .acts .qmore {
+  flex: 0 0 44px;
+  padding: 6px 0;
+  opacity: 1;
+  color: var(--ink);
+  background: var(--panel);
+}
+/* procedures: steps in an article, following a run, editing steps */
+.pshead {
+  margin: 18px 0 8px;
+}
+.pshead h2 small {
+  font-family: var(--body);
+  font-size: 14px;
+  color: var(--muted);
+}
+.plist {
+  margin: 0 0 14px;
+  padding-left: 26px;
+}
+.plist li {
+  margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+.plist li p {
+  margin: 2px 0 4px;
+  white-space: pre-line;
+  color: var(--muted);
+  font-size: 16px;
+}
+.pacts {
+  margin-top: 4px;
+  gap: 6px;
+}
+.pacts .btn {
+  text-decoration: none;
+  font-size: 15px;
+}
+.runprog {
+  margin: 6px 0 12px;
+}
+.pstep {
+  position: relative;
+  padding: 14px 14px 12px 14px;
+  margin-bottom: 16px;
+}
+.pstep .pnum {
+  position: absolute;
+  top: -12px;
+  left: 10px;
+  margin: 0;
+  width: 28px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: var(--yellow);
+  color: var(--on-accent);
+  border: 2px solid var(--edge);
+  font-family: var(--display);
+  font-size: 11px;
+}
+.pstep h3 {
+  margin: 4px 0 6px;
+  font-size: 20px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.pstep .ptext {
+  margin: 0 0 6px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.pstep .pverify {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+.pstep .xline {
+  margin: 6px 0 0;
+  font-size: 15px;
+}
+.pstep .acts .btn {
+  flex: 1;
+}
+.pstep.done h3 {
+  margin-bottom: 0;
+}
+.runlist {
+  list-style: none;
+  padding: 0;
+}
+.runlist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.pjump {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 6px 0;
+  color: var(--ink);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  min-height: 40px;
+}
+.runlist li.done .pjump {
+  color: var(--muted);
+}
+.runlist li.cur .pjump {
+  font-weight: 600;
+}
+.runlist .linkbtn {
+  font-size: 15px;
+  color: var(--muted);
+}
+.editlist {
+  padding-left: 22px;
+}
+.editlist li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.editlist .pjump {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.editlist .pjump small {
+  color: var(--muted);
+  text-decoration: none;
+}
+.pmv {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.pmv .mv {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+.procline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-basis: 100%;
+  padding: 0 0 2px;
+}
+.procline small {
+  color: var(--muted);
+  font-size: 14px;
+}
+.resrow:has(.procline) {
+  flex-wrap: wrap;
+}
+.resrow .procline .btn {
+  margin-left: auto;
+}
+/* executions: a state glyph on a flow's chip, a line on its row, the failure chip */
+.xst {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.flows .chip .xst {
+  margin-left: 6px;
+  font-size: 14px;
+}
+.x-succeeded {
+  color: #0a7a2a;
+}
+.x-failed {
+  color: var(--pink-ink);
+}
+.x-running,
+.x-requested,
+.x-unconfirmed,
+.x-cancelled {
+  color: var(--muted);
+}
+:root[data-theme='dark'] .x-succeeded {
+  color: var(--green);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .x-succeeded {
+    color: var(--green);
+  }
+}
+.flowline {
+  margin: -2px 0 8px;
+  font-size: 15px;
+}
+.flowline .linkbtn {
+  font-size: 15px;
+  padding: 2px 0;
+}
+.xmini {
+  flex-basis: 100%;
+  text-align: left;
+  font-size: 15px;
+  padding: 0 0 2px;
+  text-decoration: none;
+  color: var(--muted);
+}
+.resrow:has(.xmini) {
+  flex-wrap: wrap;
+}
+.xhead {
+  margin: 0 0 4px;
+}
+#sheet .flist {
+  margin-bottom: 8px;
+}
+.tag.gone {
+  background: var(--panel);
+  color: var(--muted);
+  border-style: dashed;
 }
