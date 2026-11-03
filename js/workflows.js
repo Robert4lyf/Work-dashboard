@@ -1004,7 +1004,7 @@ function wfEditor() {
   const w = wfEdit,
     st = (k, l, p) =>
       `<button class="chip" type="button" data-wfpreset="${k}" aria-pressed="${p}">${l}</button>`;
-  let h = `<h2>${w.id ? 'Edit process' : 'New process'}</h2><form id="wfform">
+  let h = `<h2>${w.id ? 'Edit process' : 'New process'}</h2>${w.id ? '' : hintBox('proc', 'Write the steps as a checklist, one line each. Tap a step later to make it smarter: an automation to launch, a guide to follow, a check, a wait for someone or a decision.')}<form id="wfform">
     <label class="f" for="wfname">Name</label><input class="fld" id="wfname" maxlength="120" value="${esc(w.name || '')}" autocomplete="off" required>
     <label class="f" for="wfdesc">What it is for <small class="hint">(optional)</small></label><textarea class="fld" id="wfdesc" rows="2" maxlength="600">${esc(w.desc || '')}</textarea>
     <div class="sechead kbimghead"><h2>Steps</h2>${w.stages.length ? `<button class="btn sm" type="button" id="wfstageadd">Add with options</button>` : ''}</div><div id="wfstages">${wfStagesList()}</div>

@@ -5,6 +5,25 @@
    goes through the Inbox, as everything captured does. No new kind of record: a process is a
    workflow definition, a guide an article with steps, an automation a flow. */
 let kbView = 'ref'; // 'ref' or 'proc' (this device's choice for the session)
+/* a line of help where it solves a real confusion, shown until dismissed (this device remembers) */
+const HINTS_KEY = 'dashboard-hints';
+function hintsOff() {
+  try {
+    return JSON.parse(localStorage.getItem(HINTS_KEY) || '[]');
+  } catch (e) {
+    return [];
+  }
+}
+function hintBox(key, text) {
+  if (hintsOff().includes(key)) return '';
+  return `<div class="hintbox" data-hint="${key}"><span>${text}</span><button class="x" type="button" data-hintoff="${key}" aria-label="Dismiss this tip">×</button></div>`;
+}
+function hintOff(key) {
+  try {
+    localStorage.setItem(HINTS_KEY, JSON.stringify([...new Set([...hintsOff(), key])]));
+  } catch (e) {}
+  document.querySelectorAll(`[data-hint="${key}"]`).forEach(el => el.remove());
+}
 const KB_VIEWS = [
   ['ref', 'Reference'],
   ['proc', 'Processes'],
@@ -75,6 +94,7 @@ function openNewSheet() {
   );
 }
 function createClick(d, b) {
+  if (d.hintoff) return hintOff(d.hintoff);
   if (d.kbview) {
     kbView = d.kbview;
     kbMoving = null;

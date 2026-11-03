@@ -20,6 +20,145 @@ const RULE_ON = {
   wait_due: 'A waiting item’s chase date comes',
   day: 'The app is opened on a day of the week',
 };
+// When each trigger can actually fire: on the device where the event happens, while the app is
+// open. Nothing runs in the background or on a server; the day and chase-date triggers check
+// when the app is first opened that day.
+const RULE_WHEN = {
+  quest_done: 'Runs the moment a task is finished, on the device it happens on, while the app is open.',
+  exec_failed:
+    'Runs when the automation’s report reaches the app (it pulls reports while open), not in the background.',
+  exec_succeeded:
+    'Runs when the automation’s report reaches the app (it pulls reports while open), not in the background.',
+  wrun_failed: 'Runs when the process fails, on the device it happens on, while the app is open.',
+  wrun_succeeded: 'Runs when the process completes, on the device it happens on, while the app is open.',
+  wf_due:
+    'Checks when the app is first opened on a day the process repeats; a day the app isn’t opened is skipped.',
+  proc_finished: 'Runs when the guide is finished, on the device it happens on, while the app is open.',
+  wait_resolved: 'Runs when the reply is marked received, on the device it happens on.',
+  wait_due:
+    'Checks when the app is first opened on or after the chase date; it does not run in the background.',
+  day: 'Checks when the app is first opened on the chosen days; a day the app isn’t opened is skipped. It never runs in the background.',
+};
+// Starter rules, each one the engine can really do (nothing here needs a server).
+const RULE_TEMPLATES = [
+  {
+    name: 'When a process fails, add an Inbox item',
+    why: 'So a failed run is waiting for you in the Inbox, with the error.',
+    on: { k: 'wrun_failed' },
+    do: { k: 'inbox', text: 'Look at {name}: {err}' },
+  },
+  {
+    name: 'When an automation fails, flag it in the Inbox',
+    why: 'So a failed desktop automation is sorted with the rest of your work.',
+    on: { k: 'exec_failed' },
+    do: { k: 'inbox', text: 'Check {name}: {err}' },
+  },
+  {
+    name: 'When a reply arrives, add the next step to the Inbox',
+    why: 'So resolving a waiting item leaves the follow-on action to sort.',
+    on: { k: 'wait_resolved' },
+    do: { k: 'inbox', text: 'Next step after {name}' },
+  },
+  {
+    name: 'When a recurring process is due, add a task for it to Today',
+    why: 'The run is made ready anyway; this puts the day’s work on the list too.',
+    on: { k: 'wf_due' },
+    do: { k: 'quest', text: 'Do {name}' },
+  },
+  {
+    name: 'When a chase date comes, add a reminder to the Inbox',
+    why: 'So the person to chase is in front of you when you sort the Inbox.',
+    on: { k: 'wait_due' },
+    do: { k: 'inbox', text: 'Chase {who} about {name}' },
+  },
+];
+function openRuleTemplates() {
+  popSheet(
+    `<h2 id="sheettitle">New rule</h2><p class="hint qahint">Start from one of these (you can change it), or from scratch. Rules run while the app is open: nothing runs in the background.</p><div class="qalist newlist">${RULE_TEMPLATES.map(
+      (t, i) =>
+        `<button class="qact" data-ruletpl="${i}"><b>${esc(t.name)}</b><small>${esc(t.why)}</small></button>`,
+    ).join(
+      '',
+    )}<button class="qact" data-rulescratch="1"><b>From scratch</b><small>Choose the trigger and the action yourself.</small></button></div><div class="acts"><button class="btn" type="button" data-sheetclose="1">Cancel</button></div>`,
+    { labelledBy: 'sheettitle' },
+  );
+}
+// What the rule would have done, worked out from the records and nothing else: the recent events
+// that fit, and the text it would have made for them. Nothing is created, launched or sent.
+function rulePreview(r) {
+  const cut = Date.now() - 30 * 864e5,
+    dcut = shift(today(), -30),
+    o = r.on,
+    evs = [],
+    hit = ev => ruleMatches(r, ev);
+  if (o.k === 'quest_done')
+    S.log.forEach(
+      l =>
+        l.d >= dcut &&
+        hit({ k: o.k, text: l.text, top: !l.trail.length, p: l.p }) &&
+        evs.push({ k: o.k, text: l.text, name: l.text }),
+    );
+  if (o.k === 'exec_failed' || o.k === 'exec_succeeded')
+    S.execs.forEach(x => {
+      const f = S.flows.find(y => y.id === x.flow);
+      if (x.upd > cut && x.status === o.k.slice(5) && hit({ k: o.k, flow: x.flow }))
+        evs.push({ k: o.k, flow: x.flow, name: f ? f.name : x.flow, msg: x.msg, err: x.msg });
+    });
+  if (o.k === 'wrun_failed' || o.k === 'wrun_succeeded')
+    S.wruns.forEach(
+      x =>
+        x.at > cut &&
+        x.status === o.k.slice(5) &&
+        hit({ k: o.k, wf: x.wf }) &&
+        evs.push({ k: o.k, wf: x.wf, name: x.name, err: x.err }),
+    );
+  if (o.k === 'wf_due')
+    S.wruns.forEach(
+      x =>
+        x.started > cut &&
+        x.id.startsWith(x.wf + '-20') &&
+        hit({ k: o.k, wf: x.wf }) &&
+        evs.push({ k: o.k, wf: x.wf, name: x.name }),
+    );
+  if (o.k === 'proc_finished')
+    S.runs.forEach(x => {
+      const a = procOf(x.art);
+      if (x.fin > cut && hit({ k: o.k, art: x.art }))
+        evs.push({ k: o.k, art: x.art, name: a ? a.title : 'guide' });
+    });
+  if (o.k === 'wait_resolved')
+    S.follows.forEach(f => {
+      if (f.t > cut && f.k === 'resolve') {
+        const n = findWaitable(f.n).n;
+        evs.push({ k: o.k, node: f.n, name: n ? n.text : 'a waiting item', text: n ? n.text : '' });
+      }
+    });
+  if (o.k === 'wait_due')
+    waitingNodes().forEach(
+      x =>
+        x.n.wait.due &&
+        x.n.wait.due <= today() &&
+        evs.push({ k: o.k, node: x.n.id, name: x.trail[0] || x.n.text, who: x.n.wait.who }),
+    );
+  if (o.k === 'day') (o.days || []).forEach(d => evs.push({ k: o.k, wd: d, name: WD[d] }));
+  const a = r.do,
+    made = ev =>
+      a.k === 'note'
+        ? 'a log entry'
+        : a.k === 'notify'
+          ? `a notification: “${ruleFill(a.text, ev) || r.name}”`
+          : a.k === 'wrun'
+            ? `a run of ${(wfById(a.wf) || {}).name || 'a removed process'}, ready to start`
+            : a.k === 'wait'
+              ? `a waiting item on ${ruleFill(a.who, ev) || 'someone'}: “${ruleFill(a.text, ev) || r.name}”`
+              : `${a.k === 'inbox' ? 'an Inbox item' : 'a task on Today'}: “${ruleFill(a.text, ev) || r.name}”`;
+  return {
+    n: evs.length,
+    samples: evs.slice(0, 3).map(made),
+    day: o.k === 'day',
+    days: o.k === 'day' ? (o.days || []).map(d => WD[d]) : [],
+  };
+}
 const RULE_DO = {
   inbox: 'Add an Inbox item',
   quest: 'Add a task to Today',
@@ -229,6 +368,7 @@ function rulePreviewCount(r) {
   if (o.k === 'day') return (o.days || []).length * 4;
   return 0;
 }
+const lc = s => s.charAt(0).toLowerCase() + s.slice(1); // (mid-sentence)
 const ruleOnLine = r => {
   const o = r.on;
   let s = RULE_ON[o.k];
@@ -251,20 +391,22 @@ const ruleDoLine = r => {
 /* Settings: the list, each with its switch and log; the editor sheet */
 let ruleEdit = null;
 function renderRuleSettings() {
-  let h = `<h2 style="margin-top:26px" id="rulesec">Rules</h2><p class="hint">When something happens here, do one thing. Rules run on the device where it happens, while the app is open: nothing runs in the background or on a server, so a day-of-week rule waits for the app to be opened that day. What a rule makes is named the same on every device, so it isn't made twice.</p>`;
+  let h = `<h2 style="margin-top:26px" id="rulesec">Rules</h2><p class="hint">When something happens, do one thing. A rule runs on the device where the thing happens, while Work Dashboard is open: nothing runs in the background or on a server. What a rule makes is named the same on every device, so it isn't made twice.</p>`;
   if (S.rules.length)
     h += `<div class="list box">${S.rules
       .map(r => {
         const logs = S.rlog.filter(l => l.r === r.id).sort((a, b) => b.t - a.t),
           last = logs[0];
-        return `<div class="row rulerow${r.enabled ? '' : ' off'}"><button class="open" data-ruleedit="${r.id}"><span>${esc(r.name)}</span><small>When ${esc(ruleOnLine(r))}, ${esc(ruleDoLine(r))}</small><small>${
+        return `<div class="row rulerow${r.enabled ? '' : ' off'}"><button class="open" data-ruleedit="${r.id}"><span>${esc(r.name)}</span><small>When ${esc(lc(ruleOnLine(r)))}, ${esc(ruleDoLine(r))}.</small><small class="rulewhen">${esc(RULE_WHEN[r.on.k])}</small><small>${
           last
-            ? `Last: ${esc(whenLabel(last.t))} · ${esc(last.out === 'done' ? last.m || 'done' : last.out + (last.m ? ': ' + last.m : ''))}`
-            : 'Never fired'
-        }${logs.length ? ` · ${plural(logs.length, 'time')} in ${RLOG_DAYS} days` : ''}</small></button><button class="btn sm ${r.enabled ? 'green' : ''}" data-ruleon="${r.id}" aria-pressed="${r.enabled}" aria-label="${r.enabled ? 'On' : 'Off'}: ${esc(r.name)}">${r.enabled ? 'On' : 'Off'}</button></div>`;
+            ? `Last ran ${esc(whenLabel(last.t))}: ${last.out === 'done' ? '<span class="ok">ok</span>' : last.out === 'err' ? '<span class="late">error</span>' : esc(last.out)}${last.m ? ' · ' + esc(last.m) : ''}`
+            : 'Has not run yet'
+        }${logs.length ? ` · ${plural(logs.length, 'time')} in ${RLOG_DAYS} days` : ''}${r.enabled ? '' : ' · off'}</small></button><button class="btn sm ${r.enabled ? 'green' : ''}" data-ruleon="${r.id}" aria-pressed="${r.enabled}" aria-label="${r.enabled ? 'On' : 'Off'}: ${esc(r.name)}">${r.enabled ? 'On' : 'Off'}</button></div>`;
       })
       .join('')}</div>`;
   h += `<div class="acts"><button class="btn" data-rulenew="1">Add rule</button></div>`;
+  if (!S.rules.length)
+    h += `<p class="hint">Examples: when a process fails, add an Inbox item; when a chase date comes, add a reminder. Add rule shows them.</p>`;
   const log = S.rlog
     .slice()
     .sort((a, b) => b.t - a.t)
@@ -318,10 +460,11 @@ function ruleForm() {
   if (a.k === 'wrun')
     doFields = `<label class="f" for="rlwrun">Which process</label>${sel('rlwrun', wfs, a.wf || '', wfs.length ? 'Choose' : 'No processes yet')}`;
   return `<form id="ruleform" data-id="${r.id}"><h2 id="sheettitle">${r.id ? 'Edit rule' : 'New rule'}</h2>
-    <label class="f" for="rlname">Name</label><input class="fld" id="rlname" maxlength="80" value="${esc(r.name)}" autocomplete="off" required>
-    <label class="f" for="rlon">When</label>${sel('rlon', Object.entries(RULE_ON), o.k)}${onFields}
+    ${hintBox('rule', 'A rule is one sentence: when this happens, do that. It runs on this device while the app is open, never in the background.')}<label class="f" for="rlname">Name</label><input class="fld" id="rlname" maxlength="80" value="${esc(r.name)}" autocomplete="off" required>
+    <label class="f" for="rlon">When</label>${sel('rlon', Object.entries(RULE_ON), o.k)}<p class="hint rlwhen">${esc(RULE_WHEN[o.k])}</p>${onFields}
     <label class="f" for="rldo">Then</label>${sel('rldo', Object.entries(RULE_DO), a.k)}${doFields}
     <p class="hint rlprev">${rulePreviewLine(r)}</p>
+    <div class="acts"><button class="btn sm" type="button" data-rulepreview="1" data-stay="1">Preview on recent records</button></div><div id="rldry" class="hint" aria-live="polite"></div>
     <div class="acts"><button class="btn green" id="sheetok">${r.id ? 'Save rule' : 'Add rule'}</button><button class="btn" type="button" data-sheetclose="1">Cancel</button></div>${
       r.id
         ? `<div class="links"><button class="dellink" type="button" data-ruledel="${r.id}">Delete rule</button></div>`
@@ -351,7 +494,22 @@ function readRuleForm() {
 function rulePreviewLine(r) {
   const c = cleanRule({ ...r, id: r.id || 'x' }) || r,
     n = rulePreviewCount(c);
-  return `Preview: when ${esc(ruleOnLine(c))}, ${esc(ruleDoLine(c))}.${c.on.k === 'day' ? '' : ` In the last 30 days this would have fired ${plural(n, 'time')}.`}`;
+  return `When ${esc(lc(ruleOnLine(c)))}, ${esc(ruleDoLine(c))}.${c.on.k === 'day' ? '' : ` In the last 30 days this would have fired ${plural(n, 'time')}.`}`;
+}
+// The dry run: what the rule would have made for the recent events that fit. Nothing is made.
+function showRulePreview() {
+  if (!ruleEdit || !$('#ruleform')) return;
+  readRuleForm();
+  const c = cleanRule({ ...ruleEdit, id: ruleEdit.id || 'x' });
+  const el = $('#rldry');
+  if (!el) return;
+  if (!c) return (el.textContent = "The rule isn't complete yet: choose what it does.");
+  const pv = rulePreview(c);
+  el.innerHTML = pv.day
+    ? `<p>On ${pv.days.length ? esc(pv.days.join(', ')) : 'no day chosen'}, when the app is first opened that day, it would make ${pv.samples.length ? esc(pv.samples[0]) : 'nothing'}. Nothing was made now.</p>`
+    : pv.n
+      ? `<p>In the last 30 days it would have fired ${plural(pv.n, 'time')}, making for example:</p><ul class="ilines">${pv.samples.map(s => `<li>${esc(s)}</li>`).join('')}</ul><p>Nothing was made now: this is a preview of the records.</p>`
+      : `<p>Nothing in the last 30 days would have fired it. Nothing was made now.</p>`;
 }
 function typedRuleForm() {
   if (!ruleEdit || !$('#ruleform')) return;
@@ -360,6 +518,7 @@ function typedRuleForm() {
   if (p) p.innerHTML = rulePreviewLine(ruleEdit);
 }
 function redrawRuleForm() {
+  // (the "when it runs" line follows the trigger)
   readRuleForm();
   const f = $('#ruleform');
   if (f) f.outerHTML = ruleForm();
@@ -386,7 +545,17 @@ function saveRuleForm() {
   toast('Rule saved');
 }
 function ruleClick(d, b) {
-  if (d.rulenew) return openRuleEditor('');
+  if (d.rulenew) return openRuleTemplates();
+  if (d.rulescratch) return openRuleEditor('');
+  if (d.ruletpl !== undefined) {
+    const t = RULE_TEMPLATES[+d.ruletpl];
+    if (!t) return;
+    ruleEdit = { id: '', name: t.name, on: { ...t.on }, do: { ...t.do }, enabled: true };
+    popSheet(ruleForm(), { labelledBy: 'sheettitle' });
+    $('#rlname').focus();
+    return;
+  }
+  if (d.rulepreview) return showRulePreview();
   if (d.ruleedit) return openRuleEditor(d.ruleedit);
   if (d.ruleon) {
     const r = ruleById(d.ruleon);

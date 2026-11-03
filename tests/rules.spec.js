@@ -206,10 +206,15 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await app.go('account');
   await expect(page.locator('#v-account .rulerow')).toHaveCount(5);
   await expect(page.locator('#v-account .rulerow').nth(0)).toContainText(
-    'When A task is finished (named like “report”), add an inbox item: “File {name}”',
+    'When a task is finished (named like “report”), add an inbox item: “File {name}”',
   );
-  await expect(page.locator('#v-account .rulerow').nth(0)).toContainText('Never fired');
+  await expect(page.locator('#v-account .rulerow').nth(0)).toContainText('Has not run yet');
+  await expect(page.locator('#v-account .rulerow').nth(0)).toContainText(
+    'Runs the moment a task is finished',
+  );
   await page.click('[data-rulenew]');
+  await expect(page.locator('#sheet .qact')).toHaveCount(6); // (five starters and from scratch)
+  await page.click('[data-rulescratch]');
   await page.fill('#rlname', 'Chase on Friday');
   await page.selectOption('#rlon', 'day');
   await expect(page.locator('#ruleform .days')).toBeVisible();
@@ -219,7 +224,7 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await page.fill('#rltext', 'Chase the week’s approvals');
   await page.fill('#rlest', '20');
   await expect(page.locator('.rlprev')).toContainText(
-    'Preview: when The app is opened on Fri, add a task to today: “Chase the week’s approvals”.',
+    'When the app is opened on Fri, add a task to today: “Chase the week’s approvals”.',
   );
   await page.click('#sheetok');
   await expect(page.locator('#sheet')).toHaveCount(0);
@@ -261,6 +266,7 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await expect(page.locator('#rlogd li')).toContainText('removed rule');
   // A rule needs the right bits: no workflow chosen, no text, no day.
   await page.click('[data-rulenew]');
+  await page.click('[data-rulescratch]');
   await page.fill('#rlname', 'Half');
   await page.selectOption('#rldo', 'wrun');
   await page.selectOption('#rlwrun', '');
