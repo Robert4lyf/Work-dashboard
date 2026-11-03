@@ -33,7 +33,7 @@ const WRUN_WORD = {
   ready: 'Ready to start',
   running: 'Running',
   awaiting_user: 'Your turn',
-  awaiting_automation: 'Waiting for the flow',
+  awaiting_automation: 'Waiting for result',
   waiting: 'Waiting on someone',
   paused: 'Paused',
   succeeded: 'Succeeded',
@@ -56,7 +56,8 @@ const WF_STAGES_MAX = 30,
   WF_LOG_MAX = 40,
   WRUNS_KEEP = 120,
   WRUNS_DAYS = 180;
-let wfOpen = null, // the run being followed (its id), shown in the Knowledge view
+let wfFrom = null, // the page a run was opened from (Today, the Command Centre...): ‹ goes back there
+  wfOpen = null, // the run being followed (its id), shown in the Knowledge view
   wfEdit = null; // the definition being edited: { id (none for a new one), ...fields }
 const txt = (v, max) =>
   cleanText(typeof v === 'string' ? v : '')
@@ -475,9 +476,18 @@ function startWorkflow(wfId, q = '') {
   save();
   openWorkflowRun(r.id);
 }
+// Back from a run: to the page it was opened from, else the workflow list.
+function closeWorkflowRun() {
+  const from = wfFrom;
+  wfOpen = wfFrom = null;
+  if (from && from !== 'knowledge') go(from);
+  else renderKnowledge();
+  window.scrollTo(0, 0);
+}
 function openWorkflowRun(id) {
   if (!wrunById(id)) return toast('That run is gone', false, 3000);
   leaveEditor(() => {
+    wfFrom = view === 'knowledge' ? null : view;
     wfOpen = id;
     kbRun = null;
     kbArt = null;
@@ -525,12 +535,7 @@ function stageWaitItem(r, s) {
 function wfClick(d, b) {
   if (d.wfstart) return startWorkflow(d.wfstart, d.q || '');
   if (d.wfopen) return openWorkflowRun(d.wfopen);
-  if (d.wfback) {
-    wfOpen = null;
-    renderKnowledge();
-    window.scrollTo(0, 0);
-    return;
-  }
+  if (d.wfback) return closeWorkflowRun();
   const r = d.wrun && wrunById(d.wrun);
   if (d.wrun && !r) return toast('That run is gone', false, 3000);
   if (!r) return wfEditClick(d, b);
@@ -691,7 +696,7 @@ function wfRunView(r) {
     i = s ? r.def.indexOf(s) : r.def.length,
     q = r.q && (find(r.q) || find(r.q, S.later)),
     final = WRUN_OVER.includes(r.status);
-  let h = `<button class="linkbtn" data-wfback="1">‹ Workflows</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
+  let h = `<button class="linkbtn" data-wfback="1">‹ ${wfFrom === 'today' ? 'Today' : wfFrom === 'ops' ? 'Command Centre' : wfFrom ? 'Back' : 'Workflows'}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(r.name)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div>
     <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · stage ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}</p>`;
   if (r.err && r.status === 'failed')
@@ -1147,7 +1152,7 @@ function questWorkflows(qid) {
   return `<div class="list box reslist">${runs
     .map(
       r =>
-        `<div class="row resrow"><button class="open" data-wfopen="${r.id}"><small>Workflow</small><span>${esc(r.name)}</span></button><span class="procline"><small>${runWord(r)}${runStage(r) ? ' · ' + esc(runStage(r).title) : ''}</small><button class="btn sm blue" data-wfopen="${r.id}">Open</button></span></div>`,
+        `<div class="row resrow"><button class="open" data-wfopen="${r.id}"><small>Workflow</small><span>${esc(r.name)}</span></button><span class="procline"><small>${runWord(r)}${runStage(r) ? ' · ' + esc(runStage(r).title) : ''}</small><button class="btn sm blue" data-wfopen="${r.id}">${WRUN_FINAL.includes(r.status) ? 'Open' : 'Continue workflow'}</button></span></div>`,
     )
     .join('')}${ws
     .filter(w => !runs.some(r => r.wf === w.id))

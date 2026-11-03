@@ -118,7 +118,7 @@ function waitPanel(n, top) {
     <label class="f" for="wexp">Reply expected by <small class="hint">(optional)</small></label><input class="fld" type="date" id="wexp" value="${w.expect || ''}">
     ${whoList()}<div class="acts">${
       n.wait
-        ? `<button class="btn green" data-waitclear="${n.id}">Got it</button><button class="btn" data-chase="${n.id}">Follow up</button><button class="btn sm qmore" data-wact="${n.id}" aria-label="More for this waiting item" aria-haspopup="dialog">${dots}</button>`
+        ? `<button class="btn green" data-waitclear="${n.id}">Reply received</button><button class="btn" data-chase="${n.id}">Follow up</button><button class="btn sm qmore" data-wact="${n.id}" aria-label="More for this waiting item" aria-haspopup="dialog">${dots}</button>`
         : `<button class="btn blue" data-waitsave="${n.id}">${resolved ? 'Reopen: set waiting again' : 'Set waiting'}</button>`
     }</div>${hist ? `<p class="hint fhead">Follow-ups</p>${hist}` : ''}</details>`;
 }
@@ -392,7 +392,7 @@ function waitingRows(all) {
       ]
         .filter(Boolean)
         .join(' · ');
-    h += `<div class="row${waitMark === n.id ? ' marked' : ''}" data-wid="${n.id}">${(n.children && n.children.length) || start || inbox ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open"${inbox ? ' data-v="inbox"' : start ? ' data-goupd="1"' : ` data-open="${n.id}"`}><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Got it</button><button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
+    h += `<div class="row${waitMark === n.id ? ' marked' : ''}" data-wid="${n.id}">${(n.children && n.children.length) || start || inbox ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open"${inbox ? ' data-v="inbox"' : start ? ' data-goupd="1"' : ` data-open="${n.id}"`}><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Reply received</button><button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
   });
   return h + '</div>';
 }

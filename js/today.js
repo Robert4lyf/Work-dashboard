@@ -181,44 +181,49 @@ function drawToday() {
   path = ok;
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
-  let h = renderAttention() + quickActions() + renderTop3() + renderCarried();
-  const soon = dueSoon().filter(s => s.t.length > 1); // top-level quests show their deadline in the list
-  if (soon.length) {
-    h += '<div class="soon box"><h2>Due soon</h2>';
-    soon.forEach(
-      ({ n, t }) =>
-        (h += `<button class="soonrow" data-open="${n.id}"><span>${esc(t.join(' / '))}</span>${dueTag(n)}</button>`),
-    );
-    h += '</div>';
-  }
+  // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. Today's work.
+  let h = renderAttention() + renderTop3() + renderCarried();
   const asBoard = todayView === 'board' && qs.length;
   h += listHead("Today's quests", asBoard ? [] : qs, qs.length > 0);
   h += asBoard ? board(qs) : list(qs, true);
-  const reps = S.templates.filter(repeats);
-  if (reps.length) {
-    h += `<details id="repd" style="margin:-4px 0 18px"${panels.repd ? ' open' : ''}><summary>Repeating quests</summary>`;
-    reps.forEach(t => {
-      h += `<div class="rep"><span>${esc(t.text)}${t.monthDay ? ` <small class="hint">(also monthly on the ${ord(t.monthDay)})</small>` : ''}</span><div class="days">`;
-      WEEK.forEach(
-        i =>
-          (h += `<button class="day" data-rep="${t.id}" data-wd="${i}" aria-pressed="${t.days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0, 2)}</button>`),
-      );
-      h += '</div></div>';
-    });
-    h += '</details>';
-  }
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
     h +=
       '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
-  h += renderWaitingSection() + renderAlarms() + renderUpcoming();
+  // 4. The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
+  // repeats, flows and alarms. (Overdue and due-today work is in Needs attention.)
+  const soon = dueSoon().filter(s => s.t.length > 1 && s.n.due > today());
+  let more = '';
+  if (soon.length)
+    more += `<details id="soond"${panels.soond ? ' open' : ''}><summary>Steps due soon <small>${soon.length}</small></summary><div class="soon">${soon
+      .map(
+        ({ n, t }) =>
+          `<button class="soonrow" data-open="${n.id}"><span>${esc(t.join(' / '))}</span>${dueTag(n)}</button>`,
+      )
+      .join('')}</div></details>`;
+  more += renderWaitingSection() + renderUpcoming();
+  const reps = S.templates.filter(repeats);
+  if (reps.length) {
+    more += `<details id="repd"${panels.repd ? ' open' : ''}><summary>Repeating quests <small>${reps.length}</small></summary>`;
+    reps.forEach(t => {
+      more += `<div class="rep"><span>${esc(t.text)}${t.monthDay ? ` <small class="hint">(also monthly on the ${ord(t.monthDay)})</small>` : ''}</span><div class="days">`;
+      WEEK.forEach(
+        i =>
+          (more += `<button class="day" data-rep="${t.id}" data-wd="${i}" aria-pressed="${t.days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0, 2)}</button>`),
+      );
+      more += '</div></div>';
+    });
+    more += '</details>';
+  }
+  more += quickActions() + renderAlarms();
+  if (more) h += `<section class="todaymore" aria-label="More on Today">${more}</section>`;
   setHTML($('#v-today'), h);
 }
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
 function quickActions() {
   if (!S.flows.length) return '';
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
-  return `<div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div>`;
+  return `<details id="flowsd"${panels.flowsd ? ' open' : ''}><summary>Flows <small>${flows.length}</small></summary><div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div></details>`;
 }
 // Things being waited on that aren't on Today's list (in the Inbox, or on Upcoming), folded away
 // under it; quests on the list already say so themselves. The chip at the top opens the full view.
@@ -228,45 +233,23 @@ function renderWaitingSection() {
   return `<details id="waitsec"${panels.waitsec ? ' open' : ''}><summary>Also waiting on others <small>${all.length}</small></summary>${waitingRows(all)}<button class="linkbtn" data-goto="waiting">Open Waiting</button></details>`;
 }
 
-// What needs attention, as one row of chips at the top of Today (kept out of the header).
+// What needs attention: one line at the top of Today, saying how many and of what kind, that
+// opens to the items themselves (the same list as the Command Centre's, so the counts agree).
+// Failures needing intervention are shown under it straight away (one tap to the failed stage);
+// the rest are folded in it. Beside it, the way to the Command Centre. Opening it acknowledges
+// nothing.
 function renderAttention() {
-  const t = today();
-  let late = 0,
-    due = 0;
-  (function w(ns) {
-    ns.forEach(n => {
-      if (isDone(n)) return;
-      if (n.due && n.due < t) late++;
-      else if (n.due === t) due++;
-      w(n.children);
-    });
-  })(S.quests);
-  const ch = chaseDue(),
-    c = [];
-  if (late) c.push(`<span class="chip warn">${late} overdue</span>`);
-  if (due) c.push(`<span class="chip due">${due} due today</span>`);
-  if (ch) c.push(`<button class="chip" data-goto="waiting">${ch} to chase</button>`);
-  if (reviewDue()) c.push('<button class="chip" data-rsub="week">Weekly review</button>');
-  const xf = execFailures();
-  if (xf.length)
-    c.push(
-      `<button class="chip warn" data-xdet="${xf[xf.length - 1].id}">${xf.length === 1 ? 'Flow failed' : xf.length + ' flows failed'}</button>`,
-    );
-  const nAtt = opsAttention().length;
-  c.unshift(
-    `<button class="chip ops" data-goto="ops">Command Centre${nAtt ? ` <small>${nAtt}</small>` : ''}</button>`,
-  );
-  const wfl = S.wruns.filter(r => r.status === 'failed' && !r.ack),
-    wfr = S.wruns.filter(r => r.status === 'ready');
-  if (wfl.length)
-    c.push(
-      `<button class="chip warn" data-wfopen="${wfl[wfl.length - 1].id}">${wfl.length === 1 ? 'Workflow failed' : wfl.length + ' workflows failed'}</button>`,
-    );
-  if (wfr.length)
-    c.push(
-      `<button class="chip" data-wfopen="${wfr[0].id}">${wfr.length === 1 ? 'Workflow ready: ' + esc(wfr[0].name) : wfr.length + ' workflows ready'}</button>`,
-    );
-  return c.length ? `<div class="attn chips">${c.join('')}</div>` : '';
+  const items = attentionItems(),
+    cc = '<button class="linkbtn attcc" data-goto="ops">Command Centre &rsaquo;</button>';
+  if (!items.length) return `<div class="attn attnone"><span>Nothing needs attention</span>${cc}</div>`;
+  const fails = items.filter(i => i.sev === 0),
+    rest = items.filter(i => i.sev > 0);
+  const sum = `<b>Needs attention <span class="attn-n">${items.length}</span></b><small>${attentionCounts(items)}</small>`;
+  return `<div class="attn">${
+    rest.length
+      ? `<details id="attd" class="attsum sev${items[0].sev}"${panels.attd ? ' open' : ''}><summary>${sum}</summary><div class="attlist box">${rest.map(attentionRow).join('')}</div></details>`
+      : `<div id="attd" class="attsum sev0"><div class="attsumline">${sum}</div></div>`
+  }${fails.length ? `<div class="attlist box attfail">${fails.map(attentionRow).join('')}</div>` : ''}${cc}</div>`;
 }
 
 /* carried over: quests on Today for STALE days or more get a decision each morning */

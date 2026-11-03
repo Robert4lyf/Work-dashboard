@@ -202,8 +202,19 @@ test('a quest left asking stays open over reloads, after an earlier finish (via 
   });
   await page.evaluate(() => openPath([S.quests[0].id])); // (folded under Done today)
   await page.click('[data-reopen]');
+  // (open, and marked as asked, before the reload as after it)
+  expect(await page.evaluate(() => [isDone(S.quests[0]), S.quests[0].asked, S.day, today()])).toEqual([
+    false,
+    1,
+    '2026-09-24',
+    '2026-09-24',
+  ]);
   await page.reload();
-  expect(await page.evaluate(() => isDone(S.quests[0]))).toBe(false);
+  expect(await page.evaluate(() => [isDone(S.quests[0]), S.quests[0].asked, S.day])).toEqual([
+    false,
+    1,
+    '2026-09-24',
+  ]);
 });
 
 test('turning on a repeat for a quest with every step ticked finishes it properly', async ({ app, page }) => {

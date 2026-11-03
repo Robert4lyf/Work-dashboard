@@ -1,5 +1,5 @@
 // Release B: the three journeys the features are for, end to end.
-const { test, expect } = require('./fixtures');
+const { test, expect, unfold } = require('./fixtures');
 
 test('Workflow A: recurring report: quest → procedure → flow launched by hand → verified result → back to the quest, still open', async ({
   app,
@@ -148,12 +148,13 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   // The quest is blocked: Next up moves on; Today says 0 to chase yet.
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#hnow')).toContainText('Other work');
-  await expect(page.locator('#v-today .attn .chip:not(.ops)')).toHaveCount(0); // (the Command Centre chip is always there)
+  await expect(page.locator('#v-today .attn')).toContainText('Nothing needs attention');
   // 3-4. The chase date arrives: Today's chip, the Centre's "To chase", the 9am notice.
   await page.clock.setSystemTime(new Date(2026, 10, 4, 9));
   await page.reload();
-  await expect(page.locator('#v-today .attn [data-goto="waiting"]')).toHaveText('1 to chase');
-  await page.click('#v-today .attn [data-goto="waiting"]');
+  await expect(page.locator('#attd [data-wgo]')).toContainText('Chase Sarah today');
+  await unfold(page, 'attd');
+  await page.click('#v-today .attn [data-wgo]');
   await expect(page.locator('#v-waiting .wgroup').first()).toContainText('To chase');
   expect(
     await page.evaluate(() =>

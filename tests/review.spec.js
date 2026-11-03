@@ -1,4 +1,4 @@
-const { test, expect } = require('./fixtures');
+const { test, expect, unfold } = require('./fixtures');
 
 // Friday 25 Sep 2026, 9am.
 test.beforeEach(async ({ app, page }) => {
@@ -51,6 +51,7 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   });
   await page.reload();
   // It's Friday and the week hasn't been reviewed: the header says so.
+  await unfold(page, 'attd');
   await page.click('#v-today .attn [data-rsub="week"]');
   await expect(page.locator('nav #reviewDot')).toBeVisible();
   const v = page.locator('#v-review');

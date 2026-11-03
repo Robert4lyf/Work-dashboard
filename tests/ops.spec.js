@@ -131,7 +131,7 @@ const seed = () => {
   renderAll();
 };
 const rows = (page, i) =>
-  page.locator('#v-ops .opsec').nth(i).locator('.oprow .open > span').allTextContents();
+  page.locator('#v-ops .opsec').nth(i).locator('.oprow .open > span, .attrow .open > span').allTextContents();
 
 test('the five lists come from the records; every row opens its thing; nothing runs on its own', async ({
   app,
@@ -141,38 +141,41 @@ test('the five lists come from the records; every row opens its thing; nothing r
   await page.evaluate(seed);
   const before = await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
   const weekend = [5, 6, 0].includes(new Date().getDay());
-  await expect(page.locator('#v-today .chip.ops')).toHaveText('Command Centre ' + (weekend ? 7 : 6));
-  await page.click('#v-today .chip.ops');
+  // Today's summary counts the same items the Command Centre lists.
+  await expect(page.locator('#attd > summary')).toContainText('Needs attention ' + (weekend ? 7 : 6));
+  await page.click('#v-today .attcc');
   await expect(page.locator('#v-ops .opshead')).toHaveText('Command Centre');
   await expect(page.locator('.opsync')).toContainText("Not syncing this device's records only.");
   expect(await rows(page, 0)).toEqual(
     [
+      'Weekly report', // failed run (failures first)
+      'Report flow', // failed flow
+      'Report flow', // launched two days ago, no word
       'Overdue thing',
       'Due today',
-      'Weekly report', // failed run
-      'Report flow', // failed flow
       'Sign-off', // chase due
-      'Report flow', // launched two days ago, no word
       'Weekly review',
     ].filter((x, i) => i !== 6 || weekend),
   );
   expect(await rows(page, 1)).toEqual(['Weekly report', 'Extract', 'Report flow', 'Tomorrow']);
   await expect(page.locator('.pins .pin')).toHaveCount(4);
   await expect(page.locator('.pins .pin.gone')).toHaveText('Removed');
-  const coming = await rows(page, 3);
+  // Recent results: what's finished (failures still needing attention are above, not repeated).
+  expect(await rows(page, 3)).toEqual(['Weekly report']);
+  const coming = await rows(page, 4);
   expect(coming.length).toBeGreaterThan(0);
-  await expect(page.locator('#v-ops .opsec').nth(3)).toContainText('workflows: Weekly report');
-  expect(await rows(page, 4)).toEqual(['Report flow', 'Weekly report', 'Weekly report']); // newest first
+  expect(coming.length).toBeLessThanOrEqual(3); // (briefly: the Forecast has the rest)
+  await expect(page.locator('#v-ops .opsec').nth(4)).toContainText('workflows: Weekly report');
   // Drawing it changed nothing.
   expect(await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })))).toBe(before);
   // Rows open their things.
-  await page.click('#v-ops .oprow [data-open="q1"]');
+  await page.click('#v-ops .attrow [data-open="q1"]');
   await expect(page.locator('#v-today h1')).toHaveText('Overdue thing');
   await page.evaluate(() => go('ops'));
-  await page.click('#v-ops .oprow [data-wfopen="r1"]');
+  await page.click('#v-ops .attrow [data-wfopen="r1"]');
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Weekly report');
   await page.evaluate(() => go('ops'));
-  await page.click('#v-ops .oprow [data-wgo="q4"]');
+  await page.click('#v-ops .attrow [data-wgo="q4"]');
   await expect(page.locator('#v-waiting .row.marked')).toContainText('Sign-off');
   await page.evaluate(() => go('ops'));
   await page.click('#v-ops .oprow [data-runopen="pr1"]');
@@ -257,20 +260,20 @@ test('routines are lists of buttons; the day summary copies; the status line is 
   await page.evaluate(seed);
   await app.go('ops');
   await page.click('[data-routine="start"]');
-  await expect(page.locator('#sheettitle')).toHaveText('Start the workday');
+  await expect(page.locator('#sheettitle')).toHaveText('Morning checklist');
   const items = await page.locator('#sheet .qact').allTextContents();
   expect(items[0]).toContain('Needs attention: ');
   expect(items[1]).toBe('Pick your Top 3');
   expect(items[2]).toContain('Process the Inbox');
   expect(items[3]).toMatch(/^Today: \d+h \d+m planned of /);
-  expect(items[4]).toBe('Start on: Overdue thing');
+  expect(items[4]).toBe('Start on: Tomorrow'); // (a place saved just now comes first: see recommend)
   await page.click('#sheet [data-top3pick]');
   await expect(page.locator('#sheettitle')).toContainText('Top 3');
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   await page.click('[data-routine="finish"]');
-  await expect(page.locator('#sheettitle')).toHaveText('Finish the workday');
+  await expect(page.locator('#sheettitle')).toHaveText('End-of-day checklist');
   const fin = await page.locator('#sheet .qact').allTextContents();
-  expect(fin[0]).toBe('Save your place on Overdue thing');
+  expect(fin[0]).toBe('Save your place on Tomorrow');
   expect(fin[1]).toBe('Waiting: 1 chase due');
   expect(fin[2]).toBe('Workflows under way: 1'); // (the failed one isn't under way)
   expect(fin[4]).toMatch(/^Copy today's summary \(0 quests finished\)$/);
@@ -279,7 +282,7 @@ test('routines are lists of buttons; the day summary copies; the status line is 
   await expect(page.locator('#toast')).toContainText('Copied');
   const text = await page.evaluate(() => daySummary());
   expect(text).toContain('Finished: nothing');
-  expect(text).toContain('Still needs attention: Overdue thing');
+  expect(text).toContain('Still needs attention: Weekly report, Report flow, Report flow, Overdue thing'); // (failures first)
   // No session was started, nothing ticked, nothing launched.
   const s = await app.state();
   expect(s.timer).toBeNull();

@@ -173,7 +173,7 @@ test('a flow failure makes one waiting item on every device (same id), the day r
   expect(first[0][2]).toBe(1);
   expect(await run()).toEqual(first);
   await app.go('today');
-  await expect(page.locator('#v-today .attn')).toContainText('Workflow ready: Month end');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Month end');
   // A rule's own cap, then the cap for all rules: logged as limited, not done.
   await page.evaluate(() => {
     S.rules = [

@@ -253,7 +253,7 @@ function flowStatus(f) {
 function flowStatusLine(f) {
   const x = latestExec(f.id);
   if (!x) return S.track ? '<span class="hint">No launches yet</span>' : '';
-  return `${execLine(x)} <button class="linkbtn" data-xdet="${x.id}">Details</button>`;
+  return `${execLine(x)} <button class="linkbtn" data-xdet="${x.id}">Execution details</button>`;
 }
 // Executions of a flow, newest first, in a sheet.
 function openExecHistory(flowId) {

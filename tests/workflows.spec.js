@@ -1,5 +1,5 @@
 // Release C: executable workflows (definitions, runs, the state machine, stages, recurrence).
-const { test, expect } = require('./fixtures');
+const { test, expect, unfold } = require('./fixtures');
 
 const seed = () => {
   S.track = true;
@@ -173,7 +173,8 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   expect(r.err).toBe('Flow failed: Timeout');
   await expect(page.locator('.werr')).toContainText('Timeout');
   await app.go('today');
-  await expect(page.locator('#v-today .attn')).toContainText('Workflow failed');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Workflow failed');
+  await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   // Retry: asks first (the flow may have done its work), then a fresh attempt.
   await page.click('[data-wfact="retry"]');
@@ -358,14 +359,18 @@ test('a recurring workflow gets one ready run per day, the same id on every devi
     rollover();
     renderAll();
   });
-  await expect(page.locator('#v-today .attn')).toContainText('Workflow ready: Thursday report');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Thursday report');
+  await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Ready to start');
   await page.click('[data-wfact="begin"]');
   s = await app.state();
   expect(s.wruns[0].status).toBe('awaiting_user');
   // Starting it from the list resumes that run rather than making another.
+  // (back goes to Today, where it was opened from; the list is in Knowledge)
   await page.click('[data-wfback]');
+  await expect(page.locator('#v-today')).toBeVisible();
+  await page.evaluate(() => followRoute({ kind: 'workflows', id: '' }));
   await page.click('[data-wfstart="w1"]');
   expect((await app.state()).wruns).toHaveLength(1);
   expect(app.errors).toEqual([]);

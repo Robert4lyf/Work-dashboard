@@ -62,7 +62,7 @@ function renderWeek() {
       wait
         .map(
           ({ n, trail }) =>
-            `<div class="crow"><p>${esc([...trail, n.text].join(' / '))}${n.wait.who ? ` <small>from ${esc(n.wait.who)}</small>` : ''}${n.wait.last ? ` <small>followed up ${esc(dayLabel(n.wait.last))}</small>` : ''} ${chaseTag(n.wait)}</p><div class="chips"><button class="chip" data-chase="${n.id}">Follow up</button><button class="chip" data-waitclear="${n.id}">Got it</button></div></div>`,
+            `<div class="crow"><p>${esc([...trail, n.text].join(' / '))}${n.wait.who ? ` <small>from ${esc(n.wait.who)}</small>` : ''}${n.wait.last ? ` <small>followed up ${esc(dayLabel(n.wait.last))}</small>` : ''} ${chaseTag(n.wait)}</p><div class="chips"><button class="chip" data-chase="${n.id}">Follow up</button><button class="chip" data-waitclear="${n.id}">Reply received</button></div></div>`,
         )
         .join(''),
     wait.length,

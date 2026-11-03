@@ -1,5 +1,5 @@
 // Release B: automation execution tracking: launches, reports folded in, the states shown.
-const { test, expect } = require('./fixtures');
+const { test, expect, unfold } = require('./fixtures');
 
 const seed = () => {
   S.flows = [
@@ -34,6 +34,7 @@ test('a tap records a launch (never a result); without tracking it is only remem
   app,
   page,
 }) => {
+  await unfold(page, 'flowsd');
   await page.click('#v-today a[data-flow="f1"]');
   await page.clock.runFor(10); // (the chips redraw once the link has been followed)
   let s = await app.state();
@@ -71,6 +72,7 @@ test('reports fold in: running then a result; duplicates and out-of-order report
   app,
   page,
 }) => {
+  await unfold(page, 'flowsd');
   await page.click('#v-today a[data-flow="f1"]');
   await page.clock.runFor(10);
   const x = (await app.state()).execs[0].id;
@@ -96,7 +98,7 @@ test('reports fold in: running then a result; duplicates and out-of-order report
   s = await app.state();
   expect(s.execs[0]).toMatchObject({ status: 'failed', msg: 'Step 4 failed' });
   await page.evaluate(() => renderAll());
-  await expect(page.locator('#v-today .attn .chip.warn')).toHaveText('Flow failed');
+  await expect(page.locator('#v-today .attn [data-xdet]')).toContainText('Flow failed');
   await expect(page.locator('#v-today a[data-flow="f1"] .xst')).toHaveText('✗');
   // A report with no execution of its own: an execution made for it, marked as not launched here.
   await fold([ev(5, 'f2', 'succeeded')]);
@@ -116,6 +118,7 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
   app,
   page,
 }) => {
+  await unfold(page, 'flowsd');
   await page.click('#v-today a[data-flow="f1"]');
   await page.clock.runFor(10);
   const x = (await app.state()).execs[0].id;
@@ -132,7 +135,8 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
       ev(2, 'f1', 'failed', { execution: x, message: 'File not found' }),
     ],
   );
-  await page.click('#v-today .attn .chip.warn');
+  await unfold(page, 'attd');
+  await page.click('#v-today .attn [data-xdet]');
   const sheet = page.locator('#sheet .sheetbox');
   await expect(sheet.locator('#sheettitle')).toHaveText('Weekly report');
   await expect(sheet.locator('.xhead')).toContainText('Failed');
@@ -143,13 +147,14 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
     'ms-powerautomate:/console/flow/run?x=1',
   );
   await page.click('#sheet [data-xcopy]');
-  await page.click('#v-today .attn .chip.warn');
+  await unfold(page, 'attd');
+  await page.click('#v-today .attn [data-xdet]');
   await page.click('#sheet [data-xinbox]');
   let s = await app.state();
   expect(s.inbox[0].text).toBe('Flow failed: Weekly report');
   expect(s.inbox[0].node.notes).toContain('File not found');
   expect(s.execs[0].ack).toBe(1);
-  await expect(page.locator('#v-today .attn .chip.warn')).toHaveCount(0); // (acknowledged by that)
+  await expect(page.locator('#v-today [data-xdet]')).toHaveCount(0); // (acknowledged by that)
   // Run again from the details: a new launch, requested, the old record kept.
   await page.evaluate(() => {
     document.querySelector('#v-today a[data-flow="f1"]').click();

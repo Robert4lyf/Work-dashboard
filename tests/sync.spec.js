@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { unfold } = require('./fixtures');
 
 // A stand-in for Supabase, shared by several "devices" (browser contexts): the cockpit_items rows
 // live in the test, and each page reaches them through exposed functions. Supports the calls the
@@ -1257,6 +1258,7 @@ test('a launch on one device, reports from a script: both devices show the same 
     () => (addEventListener('click', e => e.target.closest('a[data-flow]') && e.preventDefault()), 0),
   );
   await a.page.click('nav [data-v=today]');
+  await unfold(a.page, 'flowsd');
   await a.page.click('#v-today a[data-flow="f1"]');
   await a.page.waitForTimeout(20);
   await settle(a, b);
@@ -1290,16 +1292,23 @@ test('a launch on one device, reports from a script: both devices show the same 
   expect((await report(b, { token, flow: 'f1', status: 'done' })).error.message).toContain('status');
   // A failure: both devices flag it; acknowledging on one clears it on the other.
   await a.page.click('nav [data-v=today]');
+  await unfold(a.page, 'flowsd');
   await a.page.click('#v-today a[data-flow="f1"]');
   await a.page.waitForTimeout(20);
   await settle(a, b);
   await report(a, { token, flow: 'f1', status: 'failed', message: 'Step 4: file not found' });
   await settle(a, b);
-  for (const d of [a, b]) await expect(d.page.locator('#v-today .attn .chip.warn')).toHaveText('Flow failed');
-  await b.page.click('#v-today .attn .chip.warn');
+  // Both devices count the same failure, once.
+  for (const d of [a, b]) await expect(d.page.locator('#attd')).toContainText('Needs attention 1');
+  for (const d of [a, b])
+    await expect(d.page.locator('#v-today .attn [data-xdet]')).toContainText('Flow failed');
+  await unfold(b.page, 'attd');
+  await b.page.click('#v-today .attn [data-xdet]');
   await b.page.click('#sheet [data-xack]');
   await settle(a, b);
-  for (const d of [a, b]) await expect(d.page.locator('#v-today .attn .chip.warn')).toHaveCount(0);
+  for (const d of [a, b]) await expect(d.page.locator('#v-today [data-xdet]')).toHaveCount(0);
+  for (const d of [a, b])
+    await expect(d.page.locator('#v-today .attn')).toContainText('Nothing needs attention');
   // Revoked: reports stop; the records stay.
   await a.page.click('nav [data-v=account]');
   await a.page.click('#xrevoke');
@@ -1333,6 +1342,7 @@ test('a report before the launch has synced, or with no launch at all, becomes a
     () => (addEventListener('click', e => e.target.closest('a[data-flow]') && e.preventDefault()), 0),
   );
   await a.page.click('nav [data-v=today]');
+  await unfold(a.page, 'flowsd');
   await a.page.click('#v-today a[data-flow="f1"]');
   await a.page.waitForTimeout(20);
   const r = await report(b, { token, flow: 'f1', status: 'succeeded', message: 'ok', run_ref: 'r1' });
