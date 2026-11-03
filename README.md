@@ -110,6 +110,75 @@ Invoke-RestMethod -Method Post -Uri $url -Headers @{ apikey = $key } -ContentTyp
 3. Wrap the main steps in **On block error** that runs `SendAlert` (or set a risky action's **On error** to run it).
 4. Run `SendAlert` once on its own to test. From a work PC, if it times out, the network is probably blocking `*.supabase.co`.
 
+## Automation execution tracking (optional)
+
+A flow's button can only ask Power Automate Desktop to run the flow: the app can't see whether it started, let alone finished. With tracking set up, the flow (or a PowerShell script) reports back, and each launch shows its real result: **Launched, no word yet**, **Running**, **Succeeded**, **Failed** (with the message), **Cancelled**, or **Unconfirmed** after a day of silence. A tap is never shown as a success.
+
+1. Run the updated `supabase-setup.sql` once (it adds the execution tables and functions; nothing is changed or removed).
+2. In the app: **Settings > Flows and automations > Create execution token**. Copy the **Report URL**, the **apikey** and the **token**, and note each flow's id (listed there and under Knowledge > Flows). Creating a token turns tracking on for the account: from then on every tap on a flow's button records a launch, on every device.
+3. Make the flow (or script) report its status (below). Test it: tap the flow's button, then send a report by hand; the chip on Today and the row under Knowledge > Flows show the result within a few seconds.
+
+**What the token can do:** add a status report for your account, at most 120 an hour. Nothing else: it can't read anything, and it can't change quests, notes or articles. **New token** replaces it (the old one stops working at once); **Revoke** turns reporting off. The token is kept on the device that made it, like the capture token; other devices see tracking as on and can make a new one if they need to see it. Keep it in the flow's variables or the script, never in the repository.
+
+**How a report finds its launch:** a report names the flow (`flow`) and, if the script knows it, the execution (`execution`). Without one, the server pairs the report with the newest launch of that flow still waiting to hear (tapped within the last 24 hours and not yet finished). A flow launched by its `ms-powerautomate:` link can't be given the execution id, so this pairing is the normal case: tap, then run, one at a time. Reports with the same `run_ref` (the script's own run id) always stay together. A report that matches no launch (the flow was started outside the app, or the app hadn't synced the tap yet) becomes an execution of its own, marked as reported by the flow rather than launched here. A result (succeeded, failed, cancelled) is final for a launch: a "running" arriving late never undoes it, and a later result replaces an earlier one. Reports arrive on every device through sync (and live within a second), folded in the same order everywhere, so the records agree.
+
+**A failure** sends a notification (if notifications are set up), shows a **Flow failed** chip at the top of Today, and marks the flow's chip. Tap it for the reported message and what happened, then **Run again** (a deliberate tap; nothing is retried on its own), **Add to the Inbox** to look into it later, **Copy a summary** for whoever maintains the flow, or **Acknowledge** to clear the chip while keeping the record. Offline, every status is shown as last synced, and says so.
+
+**Reporting from Power Automate Desktop**
+
+Make one reusable subflow, `ReportStatus`, with input variables `Status` (text) and `Message` (text), and three flow variables set at the top of the main flow: `DashReportURL` (the Report URL), `DashKey` (the apikey) and `DashToken` (the token), plus `DashFlow` (this flow's id from Settings).
+
+1. In `ReportStatus`: **Set variable** `Report` to `%{ 'token': DashToken, 'flow': DashFlow, 'status': Status, 'message': Message }%`, then **Convert custom object to JSON** into `ReportJson` (this copes with quotes and line breaks in a message).
+2. **Invoke web service**: URL `%DashReportURL%`, method POST, accept and content type `application/json`, custom headers `apikey: %DashKey%`, request body `%ReportJson%`, "Encode request body" off. Set this action's own **On error** to continue: a network problem while reporting must never hide the flow's real outcome or stop the flow.
+3. In the main flow: call `ReportStatus` with `running` and an empty message as the first action. Wrap the main steps in **On block error** that runs `ReportStatus` with `failed` and `%LastError.Message%` (use **Get last error** first) and then re-throws or stops the flow as it did before. After the last step, call `ReportStatus` with `succeeded` and a short message (a count, a file name; never the data itself).
+4. If the flow is cancelled by hand, report `cancelled` from the cancel path where the flow has one; otherwise the launch shows as unconfirmed after a day, which is the honest state.
+
+Keep messages short and plain: an error's text, a count. Report contents and personal information don't belong in a status.
+
+**Reporting from PowerShell**
+
+```powershell
+$url = 'https://YOUR-PROJECT.supabase.co/rest/v1/rpc/cockpit_exec_report'
+$key = 'YOUR-APIKEY'; $token = 'YOUR-EXEC-TOKEN'; $flow = 'YOUR-FLOW-ID'
+$run = [guid]::NewGuid().ToString('N')  # keeps this run's reports together
+function Report($status, $message = '') {
+  try {
+    Invoke-RestMethod -Method Post -Uri $url -Headers @{ apikey = $key } -ContentType 'application/json' `
+      -Body (@{ token = $token; flow = $flow; status = $status; message = "$message"; run_ref = $run } | ConvertTo-Json) | Out-Null
+  } catch { Write-Warning "Couldn't report $status to the Dashboard: $_" }  # never hides the real error
+}
+Report 'running'
+try {
+  # ... the work ...
+  Report 'succeeded' 'Report sent, 3 files'
+} catch {
+  Report 'failed' $_.Exception.Message
+  throw
+}
+```
+
+The function answers `{"execution":"<id or empty>","event":<n>}`; an unknown or revoked token, a status other than running/succeeded/failed/cancelled, or more than 120 reports in an hour are refused with a message. For scripts the app itself starts, the same pairing applies: tap the flow's button in the app first (so the launch is recorded), then run the script.
+
+## Deep links and Android shortcuts
+
+A link with a route opens a place in the app: from a home-screen shortcut, a bookmark, Automate, Tasker, HTTP Shortcuts, or an NFC card through one of them. **Settings > Shortcuts and deep links** builds one for a chosen place and copies it. Opening a link only navigates: nothing is ticked, started, launched or sent, and a link can carry no secrets.
+
+| Route | Opens |
+| --- | --- |
+| `#/today` | Today, with the Top 3 |
+| `#/continue` | the quest with the newest saved place, else the one Next up is in |
+| `#/inbox` · `#/inbox/triage` | the Inbox · Process inbox |
+| `#/q/<id>` | a quest or step (on Upcoming it opens that list; in the Inbox, that item) |
+| `#/kb/<id>` · `#/kb/<id>/run` | an article · a procedure, started or resumed |
+| `#/waiting` · `#/waiting/<id>` | the Waiting Centre · one item, marked |
+| `#/focus` · `#/review` | the Focus tab (no session is started or changed) · the weekly review |
+
+The link works with the app open, from a fresh launch, from the installed app, and offline for anything already on the device. A target not on the device yet (made elsewhere, not synced) is looked for again after the first sync, then the app says so and opens the nearest list. A deleted or unknown target, or an id that isn't one, gets the same plain message. The route is cleared from the address once followed, so a reload or the back gesture doesn't replay it, and the back gesture steps back through the app as usual.
+
+**Android.** HTTP Shortcuts: a shortcut of type "Open URL" (or a browser shortcut) with the link. Tasker: an action **Net > Browse URL** with the link; for an NFC card, a profile with the **NFC Tag** plugin (or Tasker's own NFC event on supported phones) running that task. Automate: an **NFC read** block (or any trigger) followed by **App start** with the link, or an **Open URL** block. The app itself can't read NFC: the automation app recognises the card and opens the link, and the installed app opens at that place. The home-screen app's long-press menu also offers **Capture**, **Process inbox** and **Continue work**. Nothing can run a flow or change work from a link: those take a tap in the app.
+
+**Which link for what:** a deep link opens a place; the capture link (Settings > Advanced) adds an Inbox item or sends an alert from a script; the execution token (Settings > Flows and automations) reports a flow's status. Each does only its one thing.
+
 ## Suggest steps with AI (optional)
 
 A **Suggest steps (AI)** link on a quest's page asks Claude for a few next steps, offered as a list to tick; only the ticked ones are added. It sends the quest's name and its steps' names, and nothing else (no notes, other quests, or anything from Knowledge). The first time on each device it says so and asks before sending. Check your organisation allows this for work information before turning it on.
@@ -132,6 +201,7 @@ If you set up the function before summaries were added, paste the updated `supab
 
 - Each quest, inbox item, focus session and so on is stored as its own row, so devices only exchange what changed. Changes save instantly on the device, sync about a second later, and reach your other open devices within a second or two (live updates).
 - Edits on two devices at the same time (or offline) are all kept, as long as they're to different items. If the _same_ quest was changed on both, the newer edit wins. Focus time from every device adds up.
+- Follow-ups on waiting items, procedure runs and flow executions are rows of their own (`follow:`, `run:`, `exec:`), appended rather than edited, so two devices adding one each keep both and a quest's row stays small. Flow status reports live in a separate append-only table (`cockpit_exec_events`) written only by the report function; each device pulls them and folds them into the execution records in the same order, so the records agree.
 - A quest's resources and saved place are part of its row, so they sync with it (and the newer edit of the quest wins, as for any other change to it). The Top 3 is a record of its own (`meta:top3`): choosing on two devices at once, the newer choice wins; clearing it deletes the record. The day's reset clears a Top 3 from an earlier day as of midnight, so a choice already made today on another device still wins. No database changes are needed for any of this: the rows are the same table, and the new fields are ignored by older copies of the app and kept as they are.
 - A copy of everything is saved on the server every few hours (the newest 200 are kept). If something goes missing, open **Settings > Previous versions** and restore one.
 
@@ -149,8 +219,10 @@ If you set up the function before summaries were added, paste the updated `supab
 - **Scratchpad (Knowledge > Scratchpad):** one free-text space, saved as you type and synced to your other devices. Handy for moving a phone number or a link from one device to another. Pictures can be pasted into the notes (or added from a file): they're shrunk to at most 1600 pixels across, shown below the text, and synced too. All of the app's data is kept in the browser's database (IndexedDB), pictures one by one and everything else as one saved copy, with room for far more than the old storage (pictures can take up to about 22 MB); the app asks the phone to keep its storage, so it isn't cleared when space runs low. Data saved by an earlier version moves over on the first run. An article holds up to 30 pictures and 50,000 characters. Tap one to see it full size.
 - **Search:** the search icon in the header (or the / key) searches everything at once: quests and their steps (notes and waiting details too), Upcoming, the Inbox, Notes, Knowledge articles, flows and what you've finished. Tap a result to go to it.
 - **Back gesture (Android):** steps back through the app (a picture shown full size, an article, the article editor, a quest's page, other tabs back to Today) and only leaves the app from Today's list. An article being written is kept if you leave the app, and comes back if it was closed before you saved.
+- **Procedures (Knowledge):** an article can hold ordered steps, each with notes and, optionally, an article to open, a flow to run, a web link, and whether the result needs checking: add them in the article's editor (**Add step**, move up and down, tap one to edit). The article reads as before, with its steps listed; **Start** follows it one step at a time (**Done, next**, **Back**, tap a step to jump), with each step's action a tap away: a flow runs only when its button is tapped, and tapping Run never ticks the step. Each time through is a run of its own with its own ticks (the article is the definition; **Start afresh** leaves an unfinished run behind); an unfinished run is resumed with **Resume**, and finished ones are listed under **Previous runs** for a while. A quest that links a procedure (Resources) shows how far its run has got and starts or resumes it from there, with **Back to the quest** at the end; finishing a procedure never finishes the quest.
+- **Waiting Centre:** opens from Today's "to chase" chip or **Also waiting on others**. Every waiting item, grouped by urgency (**To chase**: overdue or today, or a promised reply overdue; **Due soon**; **Reply promised**; **Chased recently**; **Chase later**; **No chase date**) or by **Person**. A waiting item keeps who, what for, when asked, the chase date, and optionally when a reply was promised and when it was last chased; its ⋯ offers **Record a follow-up** (a note and the next chase date), **Response received**, **Change the next chase date**, **Copy a follow-up message** (a short, editable message with the ask and the latest follow-up) and Open. Follow-ups are kept as a short history on the step's page ("Followed up 3 Nov: emailed Sam"; asked, reply promised, resolved, reopened), and **Got it** resolves the item (the step is back on your list; **Set waiting** again reopens it, history kept). People are grouped by the name as typed: use "Sam (Finance)" and "Sam (Legal)" to keep two Sams apart. The weekly review's Waiting step puts what's overdue to chase and promised replies that slipped first, with **Follow up** on each.
 - **Knowledge:** reference articles (step-by-step guides, who manages what, links to tools) filed in categories and sub-categories, shown as tiles with counts: open one for its sub-categories, articles and actions (**+ Article**, **+ Sub-category**, **Rename**, **Move**, **Delete**). Search looks through every article. Web links in an article are clickable. Articles can have pictures (paste a screenshot into the article while writing it, or use **Add picture**). Naming and renaming use a small sheet at the bottom of the screen.
-- **Flows:** one chip per Power Automate Desktop flow, at the top of Today (Knowledge > **Manage flows** to add one with its Run URL: in Power Automate Desktop, the flow's Properties, then Details). A chip runs the flow on the computer it's tapped on, which needs Power Automate Desktop installed; it may ask you to confirm each run. Each chip shows when it was last tapped (the app can't tell whether the flow then ran).
+- **Flows:** one chip per Power Automate Desktop flow, at the top of Today (Knowledge > **Manage flows** to add one with its Run URL: in Power Automate Desktop, the flow's Properties, then Details). A chip runs the flow on the computer it's tapped on, which needs Power Automate Desktop installed; it may ask you to confirm each run. Each chip shows when it was last tapped; with tracking set up (Settings > Flows and automations, and "Automation execution tracking" above) it also shows the last reported result, and Knowledge > Flows has each flow's latest result with **Details** and **History**.
 - **Alarms (folded at the foot of Today; the header's alarm opens them):** **+ Alarm**, set the time and an optional label, and switch it **On**. Several can be on at once, and the header shows the next one. When one goes off it rings until you **Dismiss** it (or **Snooze 5 min**):
   - with the app open on that device, it shows a full-screen alarm and keeps sounding (browsers only allow sound once the app has been tapped since it was opened, so tap it once after opening);
   - otherwise it sends a notification that sounds and vibrates again every minute for 10 minutes (it needs notifications set up, above; Android's silent or Do Not Disturb modes can still mute it).

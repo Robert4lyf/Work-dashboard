@@ -46,6 +46,8 @@ function normKnowledge() {
     title: okText(a.title, 200) || 'Untitled',
     body: okText(a.body, KB_BODY),
     edited: typeof a.edited === 'number' ? a.edited : 0,
+    // (a procedure's steps, only when it has any: plain articles read the same as before)
+    ...(cleanSteps(a.steps).length ? { steps: cleanSteps(a.steps) } : {}),
     imgs: (Array.isArray(a.imgs) ? a.imgs : [])
       // (no cap here: two devices adding at once can go past it, and dropping the extras here
       // would delete them everywhere; the editor stops adding past KB_IMGS)
@@ -117,7 +119,10 @@ function renderKnowledge() {
     kbEdit.cat = $('#kbc').value;
   }
   let h;
+  const run = kbRun && S.runs.find(r => r.id === kbRun);
+  if (!run) kbRun = null;
   if (kbEdit) h = kbEditor();
+  else if (run) h = kbRunView(run);
   else if (kbArt && S.kb.some(a => a.id === kbArt)) h = kbArticle(S.kb.find(a => a.id === kbArt));
   else {
     kbArt = null;
@@ -134,7 +139,7 @@ function kbFlows() {
   h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage flows' : 'Add a flow'}</summary>`;
   flows.forEach(
     f =>
-      (h += `<div class="tagrow"><input class="fld" data-flowname="${f.id}" value="${esc(f.name)}" maxlength="60" aria-label="Flow name"><button class="x" data-delflow="${f.id}" aria-label="Delete flow ${esc(f.name)}">×</button></div>`),
+      (h += `<div class="tagrow"><input class="fld" data-flowname="${f.id}" value="${esc(f.name)}" maxlength="60" aria-label="Flow name"><button class="x" data-delflow="${f.id}" aria-label="Delete flow ${esc(f.name)}">×</button></div><p class="hint flowline">${flowStatusLine(f)}${S.execs.some(x => x.flow === f.id) ? ` <button class="linkbtn" data-xhist="${f.id}">History</button>` : ''}</p>`),
   );
   h += `<form id="flowform"><label class="f" for="flowname">Button name</label><input class="fld" id="flowname" maxlength="60" autocomplete="off" required>
     <label class="f" for="flowurl">Run URL</label><input class="fld" id="flowurl" placeholder="ms-powerautomate:/console/flow/run?..." autocomplete="off" required>
@@ -231,8 +236,8 @@ function kbArticle(a) {
   return `<button class="linkbtn" data-kbback="1">‹ ${kbReturn && path.length ? 'Back to the quest' : 'Knowledge'}</button>
     <p class="hint kbtrail">${esc(trail.join(' › ') || 'Uncategorised')}</p>
     <h2 class="kbtitle">${esc(a.title)}</h2>
-    <div class="kbtext box">${a.body ? kbLinkify(a.body) : a.imgs.length ? '' : '<span class="hint">Nothing written yet.</span>'}</div>
-    ${kbImgGrid(a.imgs, false)}${kbImgFull(a.imgs)}
+    <div class="kbtext box">${a.body ? kbLinkify(a.body) : a.imgs.length || (a.steps && a.steps.length) ? '' : '<span class="hint">Nothing written yet.</span>'}</div>
+    ${a.steps && a.steps.length ? procSection(a) : ''}${kbImgGrid(a.imgs, false)}${kbImgFull(a.imgs)}
     <div class="acts"><button class="btn blue" data-kbedit="${a.id}">Edit</button><button class="btn" data-kbdel="${a.id}">Delete</button></div>`;
 }
 // An article's pictures as thumbnails: tap one for full size (reading), or remove it (editing).
@@ -268,11 +273,13 @@ function kbCatOptions(sel, skip) {
 function kbEditor() {
   const a = (kbEdit.id && S.kb.find(x => x.id === kbEdit.id)) || { title: '', body: '', cat: kbEdit.cat };
   if (!kbEdit.imgs) kbEdit.imgs = [...(a.imgs || [])]; // (changed here, kept only on Save)
+  if (!kbEdit.steps) kbEdit.steps = (a.steps || []).map(s => ({ ...s })); // (its procedure's steps, likewise)
   if (kbEdit.title === undefined) Object.assign(kbEdit, { title: a.title, body: a.body, cat: a.cat });
   return `<h2>${kbEdit.id ? 'Edit article' : 'New article'}</h2><form id="kbform">
     <label class="f" for="kbt">Title</label><input class="fld" id="kbt" maxlength="200" value="${esc(kbEdit.title)}" autocomplete="off" required>
     <label class="f" for="kbc">Category</label><select class="fld" id="kbc">${kbCatOptions(kbEdit.cat)}</select>
     <label class="f" for="kbb">Article</label><textarea class="fld kbbody" id="kbb" maxlength="${KB_BODY}" placeholder="Steps, contacts, links... Web links become clickable. Paste a screenshot to add it below.">${esc(kbEdit.body)}</textarea>
+    <div class="sechead kbimghead"><h2>Steps <small class="hint">(a procedure, optional)</small></h2><button class="btn sm" type="button" id="pstepadd">Add step</button></div><div id="psteps">${stepsEditList()}</div>
     <div class="sechead kbimghead"><h2>Pictures</h2><button class="btn sm" type="button" id="kbimgadd">Add picture</button></div><input type="file" id="kbimgfile" accept="image/*" multiple hidden aria-hidden="true"><div id="kbimgs">${kbImgGrid(kbEdit.imgs, true)}</div>
     <div class="acts"><button class="btn green">Save</button><button class="btn" type="button" data-kbcancel="1">Cancel</button></div></form>`;
 }
@@ -309,6 +316,7 @@ function restoreKbDraft() {
     title: String(d.title || ''),
     body: String(d.body || ''),
     ...(okId(d.fromInbox) ? { fromInbox: d.fromInbox } : {}),
+    ...(Array.isArray(d.steps) ? { steps: cleanSteps(d.steps) } : {}),
     imgs: Array.isArray(d.imgs)
       ? d.imgs
           .filter(m => m && okId(m.id) && okImg(m.src))
@@ -392,6 +400,9 @@ function kbSave() {
     imgs: kbEdit.imgs || a.imgs || [],
     edited: Date.now(),
   });
+  const steps = cleanSteps(kbEdit.steps || []);
+  if (steps.length) a.steps = steps;
+  else delete a.steps;
   kbEdit = null;
   clearKbDraft();
   kbArt = a.id;
@@ -471,6 +482,9 @@ document.addEventListener(
       f = a && S.flows.find(x => x.id === a.dataset.flow);
     if (!f) return;
     f.last = Date.now();
+    // Tracked (Settings > Flows and automations): the tap is an execution, requested, until the
+    // flow reports back. Nothing else runs it: only this tap.
+    startExec(f.id, a.dataset.q || '');
     save();
     setTimeout(renderView, 0); // (after the link has been followed; the chips are on Today)
   },

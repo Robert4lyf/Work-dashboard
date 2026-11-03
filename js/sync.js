@@ -350,7 +350,11 @@ async function sync() {
         norm(null);
         persistLocal();
         // (nothing of the other account's left open: an article being written, a search...)
-        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = null;
+        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = null;
+        execToken = '';
+        try {
+          localStorage.removeItem(EXEC_KEY);
+        } catch (e) {}
         kbReturn = false;
         resQuery = '';
         notesDirty = false;
@@ -376,8 +380,10 @@ async function sync() {
     await pushDirty();
     await saveSnapshot();
     await syncNotices();
+    await pullExecEvents();
     lastSync = Date.now();
     syncStats = [...syncStats, { ...tally, ms: Math.round(performance.now() - t0), at: lastSync }].slice(-10);
+    retryRoute(); // (a deep link whose target wasn't here before this sync)
     askMerge = false; // (only the sync straight after a sign-in may ask)
     setSync('ok');
     // After the first sync, so a new device never writes before it has the server's copy.
@@ -385,6 +391,7 @@ async function sync() {
   } catch (e) {
     console.warn('sync failed', e);
     setSync(navigator.onLine ? 'error' : 'offline');
+    retryRoute(true); // (a deep link waiting on this sync: as far as it can be followed)
     // Couldn't hear from the server: the new day still starts, on what's here.
     if (S.day !== today()) {
       rollover();
@@ -412,6 +419,20 @@ function listen() {
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'cockpit_items', filter: 'user_id=eq.' + session.user.id },
+      () => {
+        clearTimeout(pushT);
+        pushT = setTimeout(sync, 300);
+      },
+    )
+    // (a flow's report too: its result shows within a second)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'cockpit_exec_events',
+        filter: 'user_id=eq.' + session.user.id,
+      },
       () => {
         clearTimeout(pushT);
         pushT = setTimeout(sync, 300);
@@ -570,6 +591,8 @@ function renderAccount() {
     '<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
   // Notifications, then the rarely-needed bits folded away.
   if (sb && session) h += renderNotifySettings();
+  h += renderShortcuts();
+  if (sb && session) h += renderExecSettings();
   h += `<details id="advd" class="more"${panels.advd ? ' open' : ''}><summary>Advanced: capture link, health check</summary>${sb && session ? renderCapture() : ''}${renderHealth()}</details>`;
   setHTML($('#v-account'), h);
 }

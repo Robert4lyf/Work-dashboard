@@ -23,6 +23,14 @@ const test = base.test.extend({
       page,
       errors,
       open: async () => {
+        // A flow's link (ms-powerautomate:) would hand the page to another app; headless
+        // Chromium then swallows later clicks. The tap is still seen by the app's own handlers.
+        await page.addInitScript(() =>
+          addEventListener('click', e => {
+            const a = e.target.closest && e.target.closest('a[href^="ms-powerautomate:"]');
+            if (a) e.preventDefault();
+          }),
+        );
         await page.goto('/');
         await page.waitForFunction(() => window.appReady === true);
       },

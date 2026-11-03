@@ -144,7 +144,19 @@ function fix(n) {
   cleanId(n);
   n.children = (n.children || []).map(fix);
   if (n.start) n.start = cleanDay(n.start);
-  if (n.wait) n.wait.due = cleanDay(n.wait.due);
+  if (n.wait && typeof n.wait === 'object') {
+    const w = n.wait;
+    // (keys as they are: a record from before mustn't change shape, only its values be sound)
+    if (typeof w.who === 'string') w.who = cleanText(w.who).slice(0, 60);
+    if (typeof w.note === 'string') w.note = cleanText(w.note).slice(0, 160);
+    w.due = cleanDay(w.due);
+    // (Release B: when a reply was promised, and the latest follow-up; only kept when set)
+    ['expect', 'last'].forEach(k => {
+      const v = cleanDay(w[k]);
+      if (v) w[k] = v;
+      else delete w[k];
+    });
+  } else if (n.wait) delete n.wait;
   if (n.since) n.since = cleanDay(n.since);
   n.tag = cleanText(n.tag || ''); // (a tag's name is part of its record's key: see LISTS)
   n.project = n.project || '';
@@ -203,6 +215,9 @@ function norm(s) {
       flows: [],
       noteImgs: [],
       kbimgLoose: [],
+      follows: [],
+      runs: [],
+      execs: [],
     },
     s || {},
   );
@@ -215,6 +230,19 @@ function norm(s) {
     device: okId({ id: a.device }) ? a.device : '',
   }));
   S.devices = S.devices.filter(okId);
+  // Follow-ups on waiting items (Release B): append-only records, only well-formed ones.
+  S.follows = (Array.isArray(S.follows) ? S.follows : [])
+    .filter(f => okId(f) && okRef(f.n) && FOLLOW_KINDS.includes(f.k) && Number.isFinite(+f.t))
+    .map(f => ({
+      id: f.id,
+      n: f.n,
+      t: +f.t,
+      d: cleanDay(f.d) || fmt(new Date(+f.t)),
+      k: f.k,
+      note: cleanText(typeof f.note === 'string' ? f.note : '').slice(0, FOLLOW_MAX),
+    }));
+  normRuns();
+  normExecs();
   // Finished items go into lists as they are: each needs its trail (the steps above it).
   if (!Array.isArray(S.log)) S.log = [];
   S.log = S.log
@@ -401,6 +429,9 @@ function save() {
   for (const o of [S.oldDaily, S.oldPdaily, S.daily, S.pdaily]) for (const d in o) if (d < dcut) delete o[d];
   S.log = S.log.filter(x => x.d >= lcut);
   S.interrupts = S.interrupts.filter(x => x.t > Date.now() - 120 * 864e5);
+  S.follows = S.follows.filter(x => x.t > Date.now() - 180 * 864e5);
+  pruneRuns();
+  pruneExecs();
   stampSince();
   S.editedAt = Date.now();
   dropUndo();

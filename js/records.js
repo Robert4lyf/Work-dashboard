@@ -19,6 +19,9 @@ const LISTS = {
   kb: ['kb', x => x.id],
   flow: ['flows', x => x.id],
   noteimg: ['noteImgs', x => x.id],
+  follow: ['follows', x => x.id],
+  run: ['runs', x => x.id],
+  exec: ['execs', x => x.id],
 };
 function toRecords(s) {
   const m = new Map();
@@ -54,6 +57,7 @@ function toRecords(s) {
     pushKey: s.pushKey || '',
     reviewed: s.reviewed || '',
     dayEnd: s.dayEnd || '',
+    ...(s.track ? { track: true } : {}),
   });
   // Its own record too, so a prefs change on a device that hadn't yet heard of new keys can't
   // bring the old ones back. (Still in prefs for older versions.)
@@ -98,6 +102,9 @@ function fromRecords(m, day) {
     kbimgLoose: (by.kbimg || []).filter(p => !(by.kb || []).some(a => a.id === p.art)),
     flows: by.flow || [],
     noteImgs: by.noteimg || [],
+    follows: (by.follow || []).sort((a, b) => a.t - b.t),
+    runs: by.run || [],
+    execs: by.exec || [],
     notes: (m.get('meta:notes') || {}).text || '',
     top3: m.get('meta:top3') || null,
     ...(m.get('meta:prefs') || {}),
