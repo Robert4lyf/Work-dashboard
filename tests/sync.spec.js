@@ -1488,3 +1488,181 @@ test('review fix: a device still on the previous version doesn’t strip procedu
   expect((await b.state()).kb[0].steps).toBeUndefined();
   for (const d of [a, b]) expect(d.errors).toEqual([]);
 });
+
+test('Release C: a recurring workflow’s run is made once across devices, a run moved on here shows there, a rule fires once', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.track = true;
+    S.flows = [{ id: 'f1', name: 'SSRS report', url: 'ms-powerautomate:/x', last: 0 }];
+    S.workflows = [
+      {
+        id: 'w1',
+        name: 'Thursday reporting',
+        ver: 1,
+        days: [0, 1, 2, 3, 4, 5, 6],
+        monthDay: 0,
+        stages: [
+          { id: 's1', type: 'manual', title: 'Prepare' },
+          { id: 's2', type: 'flow', title: 'Run SSRS', flow: 'f1' },
+          { id: 's3', type: 'verify', title: 'Check', checks: ['Right period'] },
+        ],
+      },
+    ];
+    S.rules = [
+      {
+        id: 'r1',
+        name: 'On failure',
+        on: { k: 'wrun_failed' },
+        do: { k: 'inbox', text: 'Look at {name}: {err}' },
+        enabled: true,
+      },
+      { id: 'r2', name: 'Ready', on: { k: 'wf_due' }, do: { k: 'quest', text: 'Do {name}' }, enabled: true },
+    ];
+    S.cap = [0, 240, 240, 240, 240, 240, 0];
+    S.pins = [{ k: 'wf', id: 'w1' }];
+    save();
+  });
+  await a.sync();
+  const b = await device(browser, srv);
+  // Both devices roll the day over: one ready run (same id), one quest from the rule, and the
+  // rule's log says so once.
+  for (const d of [a, b])
+    await d.page.evaluate(() => {
+      S.day = shift(today(), -1);
+      rollover();
+    });
+  await settle(a, b);
+  const day = await a.page.evaluate(() => today());
+  for (const d of [a, b]) {
+    const s = await d.state();
+    expect(s.wruns.map(r => [r.id, r.status])).toEqual([['w1-' + day, 'ready']]);
+    expect(s.quests.filter(q => q.byRule).map(q => q.text)).toEqual(['Do Thursday reporting']);
+    expect(s.rlog.filter(l => l.r === 'r2')).toHaveLength(1);
+    expect(s.cap).toEqual([0, 240, 240, 240, 240, 240, 0]);
+    expect(s.pins).toEqual([{ k: 'wf', id: 'w1' }]);
+  }
+  // A starts the run and finishes the first stage; B sees it at the second.
+  await a.page.evaluate(() => {
+    beginRun(S.wruns[0]);
+    completeStage(S.wruns[0], 's1');
+    save();
+  });
+  await settle(a, b);
+  expect((await b.state()).wruns[0]).toMatchObject({
+    status: 'awaiting_user',
+    cur: 's2',
+    st: { s1: { o: 'done' } },
+  });
+  // B launches the flow; the script's failure report reaches both: the run fails once, the
+  // rule makes one Inbox item (same id on both), and a retry on A is a new execution.
+  await b.page.evaluate(
+    () => (addEventListener('click', e => e.target.closest('a[data-flow]') && e.preventDefault()), 0),
+  );
+  await b.page.evaluate(() => openWorkflowRun(S.wruns[0].id));
+  await b.page.click('#v-knowledge a[data-flow="f1"]');
+  await b.page.waitForTimeout(20);
+  await settle(a, b);
+  const x1 = (await b.state()).wruns[0].live.exec;
+  expect(x1).toBeTruthy();
+  expect((await a.state()).wruns[0].live.exec).toBe(x1);
+  const token = await a.page.evaluate(async () => (await sb.rpc('cockpit_new_exec_token')).data);
+  await report(a, { token, flow: 'f1', execution: x1, status: 'failed', message: 'Login failed' });
+  await settle(a, b);
+  for (const d of [a, b]) {
+    const s = await d.state();
+    expect(s.wruns[0]).toMatchObject({ status: 'failed', err: 'Flow failed: Login failed' });
+    expect(s.inbox.map(i => i.text)).toEqual(['Look at Thursday reporting: Flow failed: Login failed']);
+    expect(s.rlog.filter(l => l.r === 'r1' && l.out === 'done')).toHaveLength(1);
+  }
+  await a.page.evaluate(() => {
+    retryStage(S.wruns[0], 's2');
+    save();
+  });
+  await settle(a, b);
+  expect((await b.state()).wruns[0]).toMatchObject({ status: 'awaiting_user', live: { tries: 1 } });
+  expect((await b.state()).execs).toHaveLength(1); // (the failed attempt is kept)
+  // Nothing left to send back and forth: both hold the same records.
+  const h = await Promise.all(
+    [a, b].map(d =>
+      d.page.evaluate(() =>
+        [...toRecords(S).keys()]
+          .filter(k => /^(wrun|rlog|inbox|quest):/.test(k))
+          .sort()
+          .map(k => k + ':' + hashOf(toRecords(S).get(k))),
+      ),
+    ),
+  );
+  expect(h[0]).toEqual(h[1]);
+  const before = srv.writes;
+  await settle(a, b);
+  expect(srv.writes - before).toBe(0);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('Release C: a device on the previous version leaves workflow, rule, capacity and pin rows alone', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.workflows = [
+      {
+        id: 'w1',
+        name: 'W',
+        ver: 1,
+        days: [],
+        monthDay: 0,
+        stages: [{ id: 's1', type: 'manual', title: 'A' }],
+      },
+    ];
+    S.rules = [{ id: 'r1', name: 'R', on: { k: 'quest_done' }, do: { k: 'note', text: 'x' }, enabled: true }];
+    S.cap = [0, 1, 2, 3, 4, 5, 0];
+    S.pins = [{ k: 'wf', id: 'w1' }];
+    S.quests = [fix({ id: 'q1', text: 'Q', est: 30 })];
+    save();
+  });
+  await a.sync();
+  for (const k of ['workflow:w1', 'rule:r1', 'meta:cap', 'meta:pins']) expect(srv.rows.get(k)).toBeTruthy();
+  // The older copy doesn't know these kinds: `knownKey` is false for them, so a sync from it
+  // neither reads nor deletes them (as Release B's test shows for kbsteps). It does rewrite
+  // the quest from the keys it knows, keeping fields it doesn't understand (est) as data.
+  expect(
+    await a.page.evaluate(() =>
+      ['workflow:w1', 'rule:r1', 'rlog:x', 'wrun:y', 'meta:cap', 'meta:pins'].map(knownKey),
+    ),
+  ).toEqual([true, true, true, true, true, true]);
+  const q = srv.rows.get('quest:q1');
+  srv.rows.set('quest:q1', {
+    ...q,
+    data: { ...q.data, text: 'Q renamed' },
+    edited_at: Date.now() + 10,
+    seq: ++srv.seq,
+  });
+  await a.sync();
+  const s = await a.state();
+  expect(s.quests[0]).toMatchObject({ text: 'Q renamed', est: 30 });
+  expect(s.workflows).toHaveLength(1);
+  expect(s.rules).toHaveLength(1);
+  // A fresh device reads everything the same way.
+  const b = await device(browser, srv);
+  const sb2 = await b.state();
+  expect(sb2.workflows[0].stages).toEqual([{ id: 's1', type: 'manual', title: 'A' }]);
+  expect(sb2.rules[0].do).toEqual({ k: 'note', text: 'x' });
+  expect(sb2.cap).toEqual([0, 1, 2, 3, 4, 5, 0]);
+  expect(sb2.pins).toEqual([{ k: 'wf', id: 'w1' }]);
+  // Clearing the pins and capacity deletes their rows.
+  await a.page.evaluate(() => {
+    S.pins = [];
+    S.cap = null;
+    save();
+  });
+  await settle(a, b);
+  expect(srv.rows.get('meta:pins').deleted).toBe(true);
+  expect(srv.rows.get('meta:cap').deleted).toBe(true);
+  expect((await b.state()).pins).toEqual([]);
+  expect((await b.state()).cap).toBeNull();
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});

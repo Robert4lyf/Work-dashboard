@@ -148,7 +148,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   // The quest is blocked: Next up moves on; Today says 0 to chase yet.
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#hnow')).toContainText('Other work');
-  await expect(page.locator('#v-today .attn')).toHaveCount(0);
+  await expect(page.locator('#v-today .attn .chip:not(.ops)')).toHaveCount(0); // (the Command Centre chip is always there)
   // 3-4. The chase date arrives: Today's chip, the Centre's "To chase", the 9am notice.
   await page.clock.setSystemTime(new Date(2026, 10, 4, 9));
   await page.reload();

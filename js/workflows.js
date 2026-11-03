@@ -361,9 +361,10 @@ function emitRun(r) {
       name: r.name,
     });
   if (r.status === 'failed')
+    // (named by the stage and the attempt, not the time: the same on every device)
     emitEvent({
       k: 'wrun_failed',
-      key: 'wrun:' + r.id + ':failed:' + r.at,
+      key: 'wrun:' + r.id + ':failed:' + r.cur + ':' + (r.live.tries || 0),
       wrun: r.id,
       wf: r.wf,
       name: r.name,

@@ -16,7 +16,12 @@ test('five tabs; History sits under Review; Focus opens from the header', async 
     'Settings',
   ]);
   await page.click('nav [data-v=review]');
-  await expect(page.locator('#v-review .rtabs button')).toHaveText(['Week', 'History']);
+  await expect(page.locator('#v-review .rtabs button')).toHaveText([
+    'Week',
+    'Forecast',
+    'Insights',
+    'History',
+  ]);
   await page.click('[data-rsub="log"]');
   await expect(page.locator('#v-log')).toBeVisible();
   await expect(page.locator('nav [data-v=review]')).toHaveAttribute('aria-current', 'page');
