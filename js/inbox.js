@@ -34,7 +34,8 @@ function clearInbox(id) {
   });
 }
 function renderInbox() {
-  let h = '<h2>Inbox</h2>';
+  if (triage) return setHTML($('#v-inbox'), renderTriage());
+  let h = `<div class="sechead"><h2>Inbox</h2>${S.inbox.length ? '<button class="linkbtn" data-triagestart="1">Process inbox</button>' : ''}</div>`;
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
   if (!S.inbox.length)
     h +=
@@ -105,6 +106,7 @@ function receiveShare() {
   S.inbox.unshift(item);
   save();
   renderAll();
+  triage = null; // (a walk under way would hide what just arrived)
   if (!focusLocked()) go('inbox'); // (mid-session, single-task mode stays: the toast says)
   toast('Added to inbox');
 }

@@ -88,7 +88,7 @@ test('a ringing alarm takes the keyboard: Dismiss is focused, shortcuts and the 
   expect(await page.evaluate(() => document.querySelector('.wrap').inert)).toBe(false);
 });
 
-test('the header keeps keyboard focus through its minute refresh; Delete arms on the first tap with a row menu open', async ({
+test('the header keeps keyboard focus through its minute refresh; Delete arms on the first tap after a row menu', async ({
   page,
 }) => {
   await page.focus('#hnow .go');
@@ -102,7 +102,8 @@ test('the header keeps keyboard focus through its minute refresh; Delete arms on
     save();
     renderAll();
   });
-  await page.click('[data-xopen="q1"]');
+  await page.click('[data-qact="q1"]');
+  await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   await page.click('[data-dellater="L1"]');
   await expect(page.locator('[data-dellater="L1"]')).toHaveText('Delete?');
 });
@@ -251,9 +252,13 @@ test('round 5: the keyboard stays in the view after an action; Restore backup is
   await page.focus('#hnow [data-toggle]');
   await page.keyboard.press('Space');
   expect(await page.evaluate(() => document.activeElement.closest('#hnow') !== null)).toBe(true);
-  await page.focus('[data-xopen="k3"]');
+  // A row's actions sheet: closing it gives the keyboard back to the ⋯ that opened it.
+  await page.focus('[data-qact="k3"]');
   await page.keyboard.press('Enter');
-  expect(await page.evaluate(() => document.activeElement.closest('#v-today') !== null)).toBe(true);
+  await expect(page.locator('#sheet .sheetbox')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sheet')).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement.dataset.qact)).toBe('k3');
 
   await app.go('account');
   await page.focus('#impbtn');
@@ -333,14 +338,25 @@ test('round 6: a saved template with the same name is left alone by Repeat; a fi
   expect(r).toEqual({ savedSteps: 1, done: false });
 });
 
-test('round 6: adding a step while a row’s × menu is open still adds it', async ({ app, page }) => {
+test('round 6: a step’s ⋯ offers its own actions; adding a step after closing it still adds it', async ({
+  app,
+  page,
+}) => {
   await page.evaluate(() => {
     S.quests = [fix({ id: 'm1', text: 'Menu quest', children: [fix({ id: 'm1a', text: 'Step' })] })];
     save();
     renderAll();
   });
   await app.openQuest('Menu quest');
-  await page.click('[data-xopen="m1a"]');
+  await page.click('[data-qact="m1a"]');
+  await expect(page.locator('#sheet .qact')).toHaveText([
+    'Open',
+    'Focus on this',
+    'Save my place',
+    'Mark done',
+    'DeleteWith Undo',
+  ]);
+  await page.keyboard.press('Escape');
   await page.fill('#sin', 'Another step');
   await page.press('#sin', 'Enter');
   expect(await page.evaluate(() => S.quests[0].children.map(c => c.text))).toEqual(['Step', 'Another step']);

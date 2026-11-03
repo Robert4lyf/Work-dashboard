@@ -317,8 +317,8 @@ test('deletions reach other devices', async ({ browser }) => {
   await a.add('Remove me');
   await a.sync();
   const b = await device(browser, srv);
-  await a.page.click('[aria-label="Remove Remove me"]');
-  await a.page.click('#v-today [data-delnow]');
+  await a.page.click('[aria-label="Actions: Remove me"]');
+  await a.page.click('#sheet [data-delnow]');
   await settle(a, b);
   expect(texts(await b.state())).toEqual(['Keep']);
   expect(srv.rows.get([...srv.rows.keys()].find(k => srv.rows.get(k).deleted)).deleted).toBe(true);
@@ -1028,4 +1028,154 @@ test('round 5: a repeat’s copy deleted just before the day’s reset stays del
   expect((await a.state()).quests.some(q => q.id === id)).toBe(false);
   expect(srv.rows.get('quest:' + id).deleted).toBe(true);
   expect(a.errors).toEqual([]);
+});
+
+/* Release A: the top 3, saved places and resources across devices */
+test('the top 3 syncs as one record: chosen on one device, shown on the other; the newer choice wins', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Alpha');
+  await a.add('Beta');
+  await a.add('Gamma');
+  await a.sync();
+  const b = await device(browser, srv);
+  const ids = (await a.state()).quests.map(q => q.id);
+  await a.page.evaluate(ids => setTop3([ids[0], ids[1]]), ids);
+  await a.sync();
+  await expect
+    .poll(async () => (await b.state()).top3 && (await b.state()).top3.ids)
+    .toEqual([ids[0], ids[1]]);
+  expect(srv.rows.has('meta:top3')).toBe(true);
+  await expect(b.page.locator('#v-today .top3 .t3row')).toHaveCount(2);
+  // Both choose while offline: the newer choice wins on both, and nothing else is touched.
+  await a.ctx.setOffline(true);
+  await b.ctx.setOffline(true);
+  await a.page.evaluate(ids => setTop3([ids[2]]), ids);
+  await a.page.waitForTimeout(20);
+  await b.page.evaluate(ids => setTop3([ids[1], ids[2], ids[0]]), ids);
+  await b.page.evaluate(() => {
+    S.mins = 45;
+    save();
+  });
+  await b.ctx.setOffline(false);
+  await b.sync();
+  await a.ctx.setOffline(false);
+  await settle(a, b);
+  for (const d of [a, b]) {
+    const s = await d.state();
+    expect(s.top3.ids).toEqual([ids[1], ids[2], ids[0]]);
+    expect(s.mins).toBe(45);
+    expect(texts(s)).toEqual(['Alpha', 'Beta', 'Gamma']);
+  }
+  // Cleared on one device: the record is deleted, and the other device shows none.
+  await a.page.evaluate(() => setTop3([]));
+  await settle(a, b);
+  expect(srv.rows.get('meta:top3').deleted).toBe(true);
+  expect((await b.state()).top3).toBeNull();
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('a new day: one device’s reset clears yesterday’s top 3, a choice made today elsewhere still wins', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Alpha');
+  await a.add('Beta');
+  await a.sync();
+  const ids = (await a.state()).quests.map(q => q.id);
+  const b = await device(browser, srv);
+  // Yesterday's choice, made yesterday.
+  await a.page.evaluate(ids => setTop3([ids[0]]), ids);
+  await settle(a, b);
+  srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 86400e3));
+  for (const d of [a, b])
+    await d.page.evaluate(() => {
+      S.day = shift(today(), -1);
+      S.top3.day = shift(today(), -1);
+      persistLocal();
+    });
+  // B chooses for today before A's reset runs; A's reset (as of midnight) mustn't undo it.
+  await b.page.evaluate(() => {
+    S.day = today();
+    setTop3(S.quests.map(q => q.id).slice(1, 2));
+  });
+  await b.sync();
+  await a.page.evaluate(() => rollover());
+  await settle(a, b);
+  for (const d of [a, b]) expect((await d.state()).top3.ids).toEqual([ids[1]]);
+});
+
+test('a saved place and resources travel with the quest’s row; the newer edit of either wins', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.add('Reconcile');
+  await a.sync();
+  const b = await device(browser, srv);
+  await a.page.click('[aria-label="Actions: Reconcile"]');
+  await a.page.click('#sheet [data-saveplace]');
+  await a.page.fill('#sheetin', 'Check the credits');
+  await a.page.click('#sheetok');
+  await a.sync();
+  await expect.poll(async () => ((await b.state()).quests[0].resume || {}).note).toBe('Check the credits');
+  await expect(b.page.locator('#v-today .row .tag.place')).toHaveText('Saved place');
+  // B links an article it just wrote; both arrive on A, and A's place is kept.
+  await b.page.evaluate(() => {
+    S.kbcats = [{ id: 'c1', name: 'Docs', parent: '' }];
+    S.kb = [{ id: 'a1', cat: 'c1', title: 'Credits how-to', body: '', edited: 1, imgs: [] }];
+    save();
+  });
+  await b.page.click('.open >> text=Reconcile');
+  await b.page.evaluate(() => (document.querySelector('#resd').open = true));
+  await b.page.click('[data-resadd="kb"]');
+  await b.page.click('#sheet [data-linkkb="a1"]');
+  await settle(a, b);
+  const sa = await a.state();
+  expect(sa.quests[0].links).toEqual([{ id: expect.any(String), kind: 'kb', ref: 'a1' }]);
+  expect(sa.quests[0].resume.note).toBe('Check the credits');
+  await a.page.click('.open >> text=Reconcile');
+  await expect(a.page.locator('#resd .resrow')).toContainText('Credits how-to');
+  // Cleared on A while B updates it offline: B's newer note wins everywhere.
+  await b.ctx.setOffline(true);
+  await a.page.click('#placecard [data-clearplace]');
+  await a.sync();
+  await b.page.waitForTimeout(20);
+  await b.page.click('#placecard [data-saveplace]');
+  await b.page.fill('#sheetin', 'Credits checked, now April');
+  await b.page.click('#sheetok');
+  await b.ctx.setOffline(false);
+  await settle(a, b);
+  for (const d of [a, b]) expect((await d.state()).quests[0].resume.note).toBe('Credits checked, now April');
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('triage on one device while the other device moves the item: the walk goes on without it', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  for (const t of ['One', 'Two', 'Three']) {
+    await a.page.click('nav [data-v=inbox]');
+    await a.page.fill('#iin', t);
+    await a.page.press('#iin', 'Enter');
+  }
+  await a.sync();
+  const b = await device(browser, srv);
+  await a.page.click('[data-triagestart]');
+  await expect(a.page.locator('#v-inbox .tcard .ttitle')).toHaveText('Three');
+  // B promotes "Three" to Today: A's card moves on to the next, and its count counts it.
+  await b.page.click('nav [data-v=inbox]');
+  await b.page.click('#v-inbox [data-promote] >> nth=0');
+  await settle(a, b);
+  await expect(a.page.locator('#v-inbox .tcard .ttitle')).toHaveText('Two');
+  await expect(a.page.locator('#v-inbox .tprog')).toHaveText('1 of 3 processed');
+  await a.page.click('[data-tdo="today"]');
+  await settle(a, b);
+  expect(texts(await b.state())).toEqual(['Three', 'Two']);
+  expect((await b.state()).inbox.map(i => i.text)).toEqual(['One']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
 });

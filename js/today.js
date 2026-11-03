@@ -1,13 +1,19 @@
 /* today / drill-down */
 let path = [],
   reorder = false,
-  pending = null,
-  xOpen = null; // the row whose × is showing its two choices
+  pending = null;
 const panels = {}; // which <details> panels are expanded, so re-renders keep them open
 const tick =
   '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1D2B53" d="M5 1h1v1H5zM4 2h1v1H4zM3 3h1v1H3zM0 3h1v1H0zM1 4h1v1H1zM2 4h1v1H2z"/></svg>';
 const chevron =
   '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 0h2v1H1zM2 1h2v1H2zM3 2h2v2H3zM2 4h2v1H2zM1 5h2v1H1z"/></svg>';
+const dots =
+  '<svg viewBox="0 0 8 2" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 0h2v2H0zM3 0h2v2H3zM6 0h2v2H6z"/></svg>';
+// A row's (or tile's) ⋯: its quick actions, in a sheet (see actions.js).
+const moreBtn = n =>
+  `<button class="qmore" data-qact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button>`;
+// A quest with a saved place (see resume.js): a quiet mark on its row.
+const placeMark = n => (n.resume && !isDone(n) ? '<span class="tag place">Saved place</span>' : '');
 function dueTag(n) {
   if (!n.due || isDone(n)) return '';
   const t = today(),
@@ -34,6 +40,7 @@ function row(n, i, len, sib) {
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
+    placeMark(n) +
     (nx
       ? 'Next: ' + esc(nx.text)
       : needsNext(n)
@@ -41,9 +48,7 @@ function row(n, i, len, sib) {
         : '');
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
-    : xOpen === n.id
-      ? `<span class="xchoice"><button class="chip" data-toinbox="${n.id}">Inbox</button><button class="chip del" data-delnow="${n.id}">Delete</button></span>`
-      : `<button class="x" data-xopen="${n.id}" aria-label="Remove ${esc(n.text)}">×</button>`;
+    : moreBtn(n);
   return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
 }
 // A quest's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
@@ -115,8 +120,9 @@ function tile(n) {
       (!d && !n.wait ? stepWaitBadge(n) : '') +
       waitBadge(n) +
       dueTag(n) +
+      placeMark(n) +
       (nx ? `<span class="qtnext">Next: ${esc(nx.text)}</span>` : '');
-  return `<div class="qtile${d ? ' done' : ''}" data-qid="${n.id}">${kids ? '' : `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`}<button class="qtopen" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? `<small>${meta}</small>` : ''}${kids ? stepBar(n) : ''}</button></div>`;
+  return `<div class="qtile${d ? ' done' : ''}" data-qid="${n.id}">${kids ? '' : `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`}<button class="qtopen" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? `<small>${meta}</small>` : ''}${kids ? stepBar(n) : ''}</button>${moreBtn(n)}</div>`;
 }
 function board(ns) {
   const by = {};
@@ -175,7 +181,7 @@ function drawToday() {
   path = ok;
   if (path.length) return renderNode(find(path[path.length - 1]));
   const qs = S.quests;
-  let h = renderAttention() + quickActions() + renderCarried();
+  let h = renderAttention() + quickActions() + renderTop3() + renderCarried();
   const soon = dueSoon().filter(s => s.t.length > 1); // top-level quests show their deadline in the list
   if (soon.length) {
     h += '<div class="soon box"><h2>Due soon</h2>';
@@ -315,14 +321,13 @@ function schedule(kind, id, date) {
 function renderNode({ n, parents }) {
   const d = isDone(n),
     kids = n.children.length,
-    top = !parents.length;
+    top = !parents.length,
+    q = parents[0] || n; // (the quest: a step's page shares its resources and saved place)
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
-  // The facts: what's set on this quest, each a tap to change.
+  // The facts: what's set on this quest, each a tap to change. First what you're here for: how
+  // far it's got and what's next.
   h += `</div><div class="node box facts"><h1>${esc(n.text)}</h1>`;
-  // Its summary, under its name: where it's at, written by you (or drafted by Claude, on asking).
-  if (top)
-    h += `<label class="f" for="fsum">Summary and updates <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="4" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>${summaryBox(n)}`;
   if (kids) {
     const req = n.children.filter(c => !c.opt),
       set = req.length ? req : n.children,
@@ -335,8 +340,22 @@ function renderNode({ n, parents }) {
       (n.opt ? '<span class="tag opt">Optional</span>' : '') +
       dueTag(n) +
       (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
+      (!d && !n.wait && kids ? stepWaitBadge(n) : '') +
       (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '');
   if (meta) h += `<div class="factsrow">${meta}</div>`;
+  // The next step (the first to do, in order), or where it stands.
+  const nx = !d && kids ? nextLeaf(n) : null;
+  if (nx) h += `<p class="qnext"><small>Next</small><b>${esc(nx.text)}</b></p>`;
+  else if (d) h += `<p class="qnext"><b>${kids ? 'Finished' : 'Done'}</b></p>`;
+  else if (kids && needsNext(n))
+    h += `<p class="qnext"><small>Next</small><b>Every step is ticked: what's next?</b></p>`;
+  else if (kids && onlyWaiting(n))
+    h += `<p class="qnext"><small>Next</small><b>Nothing until you hear back</b></p>`;
+  // Where you left off (the quest's; on a step's page, when it's this step or no step).
+  if (q.resume && !isDone(q) && placeFits(q, n)) h += placeCard(q);
+  // Its summary, under its name: where it's at, written by you (or drafted by Claude, on asking).
+  if (top)
+    h += `<label class="f" for="fsum">Summary and updates <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="4" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>${summaryBox(n)}`;
   // Its tag, folded to the one it has (tap to change).
   if (top)
     h += `<details id="tagd" class="tagd"${panels.tagd ? ' open' : ''}><summary>Tag: ${n.tag ? tagBadge(n.tag) : '<span class="hint">none</span>'}</summary>${tagPicker('q', n.id, n.tag)}</details>`;
@@ -345,6 +364,8 @@ function renderNode({ n, parents }) {
   // Every step ticked: what's next? (Add it below, or finish the quest.)
   if (top && needsNext(n))
     h += `<div class="ask box nextask"><p><b>Every step is ticked.</b> What's next? Add it below, or finish the quest.</p><div class="acts"><button class="btn green" data-finish="${n.id}">Finish quest</button><button class="btn" data-unsure="${n.id}">Not sure yet</button></div></div>`;
+  // What the work needs: articles, flows, web pages (see links.js). A step shares its quest's.
+  h += top ? renderLinks(n) : renderInheritedLinks(q);
   // The steps come first: they're what you work through. (A quest has steps; a step doesn't.)
   if (top) {
     h += listHead('Subquests', n.children);
@@ -376,12 +397,15 @@ function renderNode({ n, parents }) {
   }
   h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this quest</button></div>`;
   h += '</details>';
-  // The two things you do with a quest, always to hand.
+  // Always to hand: the one thing to do next (see primaryAction), a tick for a step or a quest
+  // without steps, and the rest of its actions.
+  const pa = primaryAction(n, parents);
   h += '<div class="qfoot acts">';
-  if (!kids)
-    h += `<button class="btn ${d ? '' : 'green'}" data-toggle="${n.id}">${d ? 'Mark not done' : 'Mark done'}</button>`;
-  else if (top && d) h += `<button class="btn" data-reopen="${n.id}">Reopen quest</button>`;
-  h += `${d ? '' : `<button class="btn blue" data-focuson="${n.id}">Focus on this</button>`}</div>`;
+  // (the tick beside Focus; with another primary action it's in the actions, a tap away)
+  if (!kids && !d && (!pa || pa.attrs.startsWith('data-zen')))
+    h += `<button class="btn green" data-toggle="${n.id}">Mark done</button>`;
+  h += actionBtn(pa);
+  h += `<button class="btn qmore" data-qact="${n.id}" aria-label="More actions" aria-haspopup="dialog">${dots}</button></div>`;
   setHTML($('#v-today'), h);
 }
 

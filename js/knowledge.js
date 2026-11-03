@@ -5,7 +5,8 @@ let kbArt = null, // the article being read
   kbQuery = '', // what's typed in the search box
   kbMoving = null, // the category being moved (its "Move to" choice is showing)
   kbCatOpen = null, // the category being looked at ('' or null: the top level; 'lost': the uncategorised)
-  kbImgShown = null; // an article's picture shown full size
+  kbImgShown = null, // an article's picture shown full size
+  kbReturn = false; // the article was opened from a quest's page: its ‹ goes back there
 const byName = (a, b) =>
   a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) || (a < b ? -1 : a > b ? 1 : 0);
 // A flow's Run URL (Power Automate Desktop: the flow's Properties > Details). Only that kind of
@@ -227,7 +228,7 @@ function kbResults() {
 }
 function kbArticle(a) {
   const trail = kbTrail(a.cat);
-  return `<button class="linkbtn" data-kbback="1">‹ Knowledge</button>
+  return `<button class="linkbtn" data-kbback="1">‹ ${kbReturn && path.length ? 'Back to the quest' : 'Knowledge'}</button>
     <p class="hint kbtrail">${esc(trail.join(' › ') || 'Uncategorised')}</p>
     <h2 class="kbtitle">${esc(a.title)}</h2>
     <div class="kbtext box">${a.body ? kbLinkify(a.body) : a.imgs.length ? '' : '<span class="hint">Nothing written yet.</span>'}</div>
@@ -307,6 +308,7 @@ function restoreKbDraft() {
     cat: okId(d.cat) && kbCat(d.cat) ? d.cat : (kbKids('')[0] || {}).id || '',
     title: String(d.title || ''),
     body: String(d.body || ''),
+    ...(okId(d.fromInbox) ? { fromInbox: d.fromInbox } : {}),
     imgs: Array.isArray(d.imgs)
       ? d.imgs
           .filter(m => m && okId(m.id) && okImg(m.src))
@@ -377,6 +379,10 @@ function kbSave() {
     cat = $('#kbc').value,
     body = cleanText($('#kbb').value.replace(/\s+$/, ''));
   if (!title) return;
+  // Written from an Inbox item (triage's Reference): the item goes once the article is saved,
+  // and Undo brings it back (and takes the article away again).
+  const fromInbox = kbEdit.fromInbox,
+    snap = fromInbox ? JSON.stringify(S) : null;
   let a = kbEdit.id && S.kb.find(x => x.id === kbEdit.id);
   if (!a) S.kb.push((a = { id: uid() }));
   Object.assign(a, {
@@ -391,7 +397,17 @@ function kbSave() {
   kbArt = a.id;
   kbImgShown = null;
   kbReveal(cat);
-  save();
+  if (fromInbox) {
+    S.inbox = S.inbox.filter(x => x.id !== fromInbox);
+    save();
+    undoSnap = snap;
+    toast('Saved to Knowledge', true);
+    if (triage) {
+      kbArt = null;
+      renderKnowledge();
+      return triageReturn(true);
+    }
+  } else save();
   renderKnowledge();
   window.scrollTo(0, 0);
 }
@@ -483,6 +499,11 @@ function kbClick(d, b) {
     const a = S.kb.find(x => x.id === kbArt);
     if (a) kbCatOpen = kbCat(a.cat) ? a.cat : kbLost().includes(a) ? 'lost' : null;
     kbArt = null;
+    if (kbReturn) {
+      kbReturn = false;
+      renderKnowledge();
+      if (path.length) return go('today');
+    }
     renderKnowledge();
   }
   if (d.kbnew) {
@@ -502,9 +523,11 @@ function kbClick(d, b) {
     window.scrollTo(0, 0);
   }
   if (d.kbcancel) {
+    const back = kbEdit && kbEdit.fromInbox && triage;
     kbEdit = null;
     clearKbDraft();
     renderKnowledge();
+    if (back) triageReturn(false); // (the item's still in the Inbox, as it was)
   }
   if (d.kbdel && arm(b, 'Delete?')) kbDelete(d.kbdel);
   if (d.kbsub) {

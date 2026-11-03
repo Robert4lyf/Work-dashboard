@@ -27,6 +27,9 @@ function toRecords(s) {
   // Only once there are notes: a device that never had any mustn't send an empty copy that
   // could win over real notes from another device. (Clearing them deletes the record.)
   if (s.notes) m.set('meta:notes', { text: s.notes });
+  // Today's top 3, its own record (not in prefs: choosing it mustn't fight a prefs change made
+  // elsewhere). Only while there is one; clearing it deletes the record.
+  if (s.top3) m.set('meta:top3', { day: s.top3.day, ids: s.top3.ids });
   // An article's pictures are records of their own, so editing its text doesn't send them again.
   // (The article keeps an empty list in their place: that's how a device from before this reads
   // it, so the two don't keep rewriting it back and forth.)
@@ -96,6 +99,7 @@ function fromRecords(m, day) {
     flows: by.flow || [],
     noteImgs: by.noteimg || [],
     notes: (m.get('meta:notes') || {}).text || '',
+    top3: m.get('meta:top3') || null,
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),
     timer: (m.get('meta:timer') || {}).timer || null,
@@ -144,7 +148,7 @@ function saveSyncState() {
 }
 // Record kinds this version knows. Rows of other kinds (from a newer version on another
 // device) are left alone, never deleted for being missing here.
-const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy'];
+const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy', 'top3'];
 const knownKey = k =>
   k.slice(0, k.indexOf(':')) in LISTS ||
   k.startsWith('kbimg:') ||

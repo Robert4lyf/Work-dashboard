@@ -77,6 +77,7 @@ function settle(before) {
     if (q.done && q.children.length && !stepsDone(q)) q.done = false;
     if (needsNext(q)) q.asked = 1;
   });
+  dropDonePlaces(); // (a finished quest has nothing to come back to)
   sinkDone(S.quests);
   const after = snapshot();
   let gain = 0;
@@ -160,12 +161,15 @@ function dueSoon() {
   })(S.quests, []);
   return out.sort((a, b) => (a.n.due < b.n.due ? -1 : a.n.due > b.n.due ? 1 : 0)).slice(0, 5);
 }
+// (Its resources repeat with it: a weekly report needs its procedure every week. A saved place
+// doesn't: that's this time's, like waiting.)
 const strip = n => ({
   text: n.text,
   tag: n.tag,
   project: n.project,
   opt: n.opt,
   notes: n.notes,
+  ...(n.links ? { links: n.links } : {}),
   children: n.children.filter(c => !c.wait).map(strip), // (waiting is this time's, not every time's)
 });
 const inst = t =>
@@ -176,6 +180,7 @@ const inst = t =>
     project: t.project,
     opt: t.opt,
     notes: t.notes,
+    ...(t.links ? { links: t.links.map(l => ({ ...l })) } : {}),
     children: t.children.map(inst),
   });
 
@@ -202,6 +207,7 @@ function setRepeat(n, fn) {
   }
   n.tpl = t.id;
   Object.assign(t, strip(n));
+  if (!n.links) delete t.links; // (assigning can't take a key away)
   fn(t);
   if (t.auto && !repeats(t)) {
     S.templates = S.templates.filter(x => x !== t);
@@ -211,38 +217,79 @@ function setRepeat(n, fn) {
 }
 
 /* a small panel at the bottom of the screen, for a one-line answer or a yes/no, in place of the
-   browser's own pop-ups. One at a time; Escape, the back gesture or the backdrop close it. */
-let sheetCb = null;
+   browser's own pop-ups. One at a time; Escape, the back gesture or the backdrop close it.
+   (popSheet, in actions.js, mounts other panels the same way: a list of actions, a picker.) */
+let sheetCb = null,
+  sheetOpener = null; // the control that opened it: the keyboard goes back there on closing
 // extra: more answers, as [key, label, class] buttons (answering { pick: key }).
+// multiline: a few lines of text rather than one (a note).
 function sheet(
-  { title, label, value = '', ok = 'OK', cancel = 'Cancel', danger = false, text = '', extra = [] },
+  {
+    title,
+    label,
+    value = '',
+    ok = 'OK',
+    cancel = 'Cancel',
+    danger = false,
+    text = '',
+    extra = [],
+    multiline = false,
+    maxlength = 120,
+    placeholder = '',
+  },
   cb,
 ) {
-  closeSheet();
+  popSheet(
+    `<form id="sheetform"><h2 id="sheettitle">${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ''}${
+      label !== undefined
+        ? `<label class="f" for="sheetin">${esc(label)}</label>` +
+          (multiline
+            ? `<textarea class="fld" id="sheetin" maxlength="${maxlength}" rows="3" placeholder="${esc(placeholder)}">${esc(value)}</textarea>`
+            : `<input class="fld" id="sheetin" maxlength="${maxlength}" value="${esc(value)}" placeholder="${esc(placeholder)}" autocomplete="off">`)
+        : ''
+    }<div class="acts"><button class="btn ${danger ? 'pink' : 'green'}" id="sheetok">${esc(ok)}</button><button class="btn" type="button" data-sheetclose="1">${esc(cancel)}</button></div>${
+      extra.length
+        ? `<div class="acts">${extra.map(([k, l, c]) => `<button class="btn ${c || ''}" type="button" data-sheetans="${esc(k)}">${esc(l)}</button>`).join('')}</div>`
+        : ''
+    }</form>`,
+    { labelledBy: 'sheettitle' },
+  );
   sheetCb = cb;
-  const el = document.createElement('div');
-  el.id = 'sheet';
-  el.innerHTML = `<div class="sheetback" data-sheetclose="1"></div><form class="sheetbox box" id="sheetform" role="dialog" aria-modal="true" aria-labelledby="sheettitle"><h2 id="sheettitle">${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ''}${
-    label !== undefined
-      ? `<label class="f" for="sheetin">${esc(label)}</label><input class="fld" id="sheetin" maxlength="120" value="${esc(value)}" autocomplete="off">`
-      : ''
-  }<div class="acts"><button class="btn ${danger ? 'pink' : 'green'}" id="sheetok">${esc(ok)}</button><button class="btn" type="button" data-sheetclose="1">${esc(cancel)}</button></div>${
-    extra.length
-      ? `<div class="acts">${extra.map(([k, l, c]) => `<button class="btn ${c || ''}" type="button" data-sheetans="${esc(k)}">${esc(l)}</button>`).join('')}</div>`
-      : ''
-  }</form>`;
-  document.body.appendChild(el);
   const i = $('#sheetin');
   if (i) {
     i.focus();
-    i.select();
+    if (!multiline) i.select();
+    else i.setSelectionRange(i.value.length, i.value.length);
   } else $('#sheetok').focus();
+}
+// Any panel at the bottom of the screen: `html` goes inside the box. Buttons in it act through
+// the usual click handler by their data attributes; the sheet closes first (see below).
+function popSheet(html, { labelledBy = '', label = '' } = {}) {
+  closeSheet();
+  // (by its data attributes too: the action may have redrawn the page, replacing the control)
+  sheetOpener = { el: document.activeElement, sel: focusSel(document.activeElement) };
+  const el = document.createElement('div');
+  el.id = 'sheet';
+  el.innerHTML = `<div class="sheetback" data-sheetclose="1"></div><div class="sheetbox box" role="dialog" aria-modal="true"${labelledBy ? ` aria-labelledby="${labelledBy}"` : ''}${label ? ` aria-label="${esc(label)}"` : ''}>${html}</div>`;
+  document.body.appendChild(el);
+  const f = el.querySelector('[autofocus], .qact, input, textarea, select, button');
+  if (f) f.focus();
 }
 function closeSheet(answer) {
   const el = $('#sheet'),
-    cb = sheetCb;
+    cb = sheetCb,
+    back = sheetOpener;
   sheetCb = null;
-  if (el) el.remove();
+  sheetOpener = null;
+  if (el) {
+    el.remove();
+    // The keyboard goes back to what opened it, if that's still on the page (and nothing else
+    // has it: the action may have moved it on).
+    const f =
+      back && (back.el && back.el.isConnected ? back.el : back.sel && document.querySelector(back.sel));
+    if (f && (!document.activeElement || document.activeElement === document.body))
+      f.focus({ preventScroll: true });
+  }
   if (cb && answer !== undefined) cb(answer);
 }
 document.addEventListener('submit', e => {
@@ -264,6 +311,10 @@ document.addEventListener(
       e.stopImmediatePropagation();
       closeSheet({ pick: ans.dataset.sheetans });
     }
+    // An action chosen from a sheet (see actionSheet): the sheet goes, then the click handler
+    // runs the action as it would from anywhere else. (A control marked data-stay keeps it up.)
+    const act = e.target.closest && e.target.closest('#sheet .qact:not([data-stay])');
+    if (act) closeSheet();
   },
   true,
 );
@@ -316,6 +367,8 @@ const COMPOSE = [
   'kbcatin',
   'flowname',
   'flowurl',
+  'twho',
+  'tdue',
 ];
 // (Not the waiting panel's Who and For what: they show the saved details, which a sync may
 // have changed; while being typed in, they're kept like any field being edited.)

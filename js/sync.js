@@ -350,7 +350,9 @@ async function sync() {
         norm(null);
         persistLocal();
         // (nothing of the other account's left open: an article being written, a search...)
-        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = null;
+        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = null;
+        kbReturn = false;
+        resQuery = '';
         notesDirty = false;
         notesBase = null;
         clearKbDraft();
