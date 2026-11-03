@@ -125,9 +125,9 @@ test('Scenario B: month-end workload: estimates against capacity show the crunch
     S.cap = [0, 240, 240, 240, 240, 240, 0];
     S.quests = [
       fix({ id: 'q1', text: 'Reconcile ledgers', est: 720, due: '2026-11-27' }),
-      fix({ id: 'q2', text: 'Accruals', est: 180, due: '2026-11-27' }),
+      fix({ id: 'q2', text: 'Accruals', est: 240, due: '2026-11-27' }),
       fix({ id: 'q3', text: 'Board pack', est: 240, due: '2026-11-30' }),
-      fix({ id: 'q4', text: 'Intercompany', est: 240, due: '2026-11-27' }),
+      fix({ id: 'q4', text: 'Intercompany', est: 180, due: '2026-11-27' }),
       fix({ id: 'q5', text: 'Tidy the shared drive' }),
     ];
     S.later = [fix({ id: 'q6', text: 'Close the month', est: 120, start: '2026-11-30', due: '2026-11-30' })];
@@ -153,7 +153,7 @@ test('Scenario B: month-end workload: estimates against capacity show the crunch
   expect(f.recs[0]).toMatch(/^Fri 27 Nov is over by/);
   expect(f.recs[0]).toContain('planned against 4h 0m');
   expect(f.none).toEqual(['Tidy the shared drive']);
-  await expect(page.locator('.rday.over')).toHaveCount(1);
+  await expect(page.locator('.rday.over')).toHaveCount(2); // (Friday, and the 30th: board pack and close)
   await expect(page.locator('.rec.over').first()).toContainText('Moving');
   const before = await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
   await page.click('.rec.over [data-fmove]');
@@ -163,7 +163,7 @@ test('Scenario B: month-end workload: estimates against capacity show the crunch
   await page.click('.rec.over [data-fmove]');
   await page.click('#sheetok');
   expect((await app.state()).later.length).toBe(2);
-  await expect(page.locator('.rday.over')).toHaveCount(0);
+  await expect(page.locator('.rday.over')).toHaveCount(1); // (Friday eased; the 30th is still yours to decide)
   // The Command Centre's Coming up shows the week's load.
   await page.evaluate(() => go('ops'));
   await expect(page.locator('#v-ops .opsec').nth(3)).toContainText('planned of 4h 0m');

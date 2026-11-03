@@ -251,7 +251,7 @@ function renderForecast() {
         const r = day.cap ? day.load / day.cap : day.load ? 2 : 0,
           cls = !day.load ? 'none' : r > 1 ? 'over' : r > 0.8 ? 'tight' : 'ok',
           hgt = Math.min(100, Math.round(r * 60));
-        return `<button class="rday ${cls}" data-fday="${day.d}" title="${esc(dayLabel(day.d))}: ${hm(day.load)} of ${hm(day.cap)}"><span class="rbar" style="height:${hgt}%"></span><small>${WD[new Date(day.d + 'T12:00').getDay()].slice(0, forecastSpan > 7 ? 1 : 3)}</small></button>`;
+        return `<button class="rday ${cls}" data-fday="${day.d}" title="${esc(dayLabel(day.d))}: ${hm(day.load)} of ${hm(day.cap)}"><span class="rbar" style="height:${hgt}%"></span><small>${forecastSpan > 14 ? (new Date(day.d + 'T12:00').getDay() === 1 ? 'M' : '') : WD[new Date(day.d + 'T12:00').getDay()].slice(0, forecastSpan > 7 ? 1 : 3)}</small></button>`;
       })
       .join('')}</div>`;
   h += `<h2>What to do about it</h2><ul class="recs">${recs

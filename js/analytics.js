@@ -17,7 +17,7 @@ const daysWord = n => (n === 1 ? '1 day' : n + ' days');
 // "12 quests finished, against 9 the period before (up 33%)". The same words every time.
 function trendLine(now, before, what, fmt = String) {
   const w = n => (Array.isArray(what) ? (n === 1 ? what[0] : what[1]) : what);
-  if (!now && !before) return `No ${w(0)} in either period.`;
+  if (!now && !before) return `No ${w(0).replace(/^of /, '')} in either period.`;
   if (!before) return `${fmt(now)} ${w(now)} this period, none the period before.`;
   const d = (now - before) / before;
   const how =

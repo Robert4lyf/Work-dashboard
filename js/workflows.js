@@ -827,8 +827,8 @@ function wfEditor() {
   const w = wfEdit,
     st = (k, l, p) => `<button class="chip" data-wfpreset="${k}" aria-pressed="${p}">${l}</button>`;
   let h = `<h2>${w.id ? 'Edit workflow' : 'New workflow'}</h2><form id="wfform">
-    <label class="f" for="wfname">Name</label><input class="fld" id="wfname" maxlength="120" value="${esc(w.name)}" autocomplete="off" required>
-    <label class="f" for="wfdesc">What it is for <small class="hint">(optional)</small></label><textarea class="fld" id="wfdesc" rows="2" maxlength="600">${esc(w.desc)}</textarea>
+    <label class="f" for="wfname">Name</label><input class="fld" id="wfname" maxlength="120" value="${esc(w.name || '')}" autocomplete="off" required>
+    <label class="f" for="wfdesc">What it is for <small class="hint">(optional)</small></label><textarea class="fld" id="wfdesc" rows="2" maxlength="600">${esc(w.desc || '')}</textarea>
     <div class="sechead kbimghead"><h2>Stages</h2><button class="btn sm" type="button" id="wfstageadd">Add stage</button></div><div id="wfstages">${wfStagesList()}</div>
     <details id="wfrep"${w.days.length || w.monthDay ? ' open' : ''}><summary>Repeat: ${w.days.length || w.monthDay ? esc(repLabel({ days: w.days, monthDay: w.monthDay })) : 'off'}</summary>
       <p class="hint">On its days a run is made ready for you (never started on its own).</p>
