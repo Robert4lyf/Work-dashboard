@@ -92,4 +92,12 @@ const test = base.test.extend({
   },
 });
 
-module.exports = { test, expect: base.expect };
+// Opens folded sections of a page by id (Today's Needs attention 'attd', Flows 'flowsd'...): their
+// contents are there either way, only hidden.
+const unfold = (page, ...ids) =>
+  page.evaluate(
+    ids => ids.forEach(id => document.getElementById(id) && (document.getElementById(id).open = true)),
+    ids,
+  );
+
+module.exports = { test, expect: base.expect, unfold };

@@ -129,7 +129,8 @@ test('record a follow-up: history, next chase date, promised reply; the copied m
     'Hi Sarah,\n\nFollowing up on: Budget approval (for Q3 report).\nAsked 1 Nov; reply expected by 8 Nov.\nLast follow-up 5 Nov: Emailed Sarah, awaiting approval.\n\nCould you let me know where this stands?\n\nThanks',
   );
   // The step's page shows the history; Got it resolves (history kept), Set waiting reopens.
-  await page.click('#v-waiting .row', { hasText: 'Budget approval' }).catch(() => {});
+  // (the row itself, not its buttons: "Reply received" is one of them)
+  await page.locator('#v-waiting .row', { hasText: 'Budget approval' }).locator('.open').click();
   await app.go('today');
   await app.openQuest('Q3 report');
   await page.click('#v-today .open >> text="Budget approval"');

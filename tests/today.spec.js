@@ -38,7 +38,7 @@ test('subquests: next step, sinking, and header tick', async ({ app, page }) => 
   await app.openQuest('Report');
   await app.addSub('Draft');
   await app.addSub('Review');
-  await expect(page.locator('#hnow')).toContainText('Next up in Report');
+  await expect(page.locator('#hnow')).toContainText('Next task · Report');
   await page.click('header .check');
   await expect(page.locator('#hnow b')).toHaveText('Review');
   expect(await app.order()).toEqual(['Review', 'Draft']);

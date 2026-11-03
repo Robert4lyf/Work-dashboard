@@ -60,66 +60,108 @@ function opsSyncLine() {
   const age = Date.now() - lastSync;
   return `${age > 3600e3 ? '<span class="tag due">Stale</span> ' : ''}Synced ${esc(whenLabel(lastSync))}.`;
 }
-/* the five lists */
-function opsAttention() {
+/* what needs attention: one list, the same on Today (its summary) and here, so the counts agree.
+   Each item says what it is, how urgent (sev: 0 a failure, 1 overdue or unconfirmed, 2 for today,
+   3 a reminder) and where to act on it. One incident is one item: a flow execution that a
+   workflow run launched is part of that run (its failure is the run's failed stage, its details
+   a tap away there), found by the run's own reference to it, never by matching names. Opening the
+   list acknowledges nothing: an item goes when it's resolved, or acknowledged where it's dealt with. */
+const ATT_SEV = ['Failed', 'Overdue', 'Today', 'Reminder'];
+// The workflow run an execution belongs to (it launched it), if any.
+function execRun(x) {
+  return S.wruns.find(
+    r => (r.live && r.live.exec === x.id) || Object.values(r.st || {}).some(o => o.exec === x.id),
+  );
+}
+function attentionItems() {
   const t = today(),
-    rows = [];
-  (function w(ns, trail) {
+    rows = [],
+    add = (sev, text, sub, act, attrs) => rows.push({ sev, text, sub, act, attrs });
+  S.wruns
+    .filter(r => r.status === 'failed' && !r.ack)
+    .forEach(r => add(0, r.name, 'Workflow failed: ' + r.err, 'Open failed stage', `data-wfopen="${r.id}"`));
+  execFailures()
+    .filter(x => !execRun(x))
+    .forEach(x =>
+      add(
+        0,
+        (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
+        'Flow failed' + (x.msg ? ': ' + x.msg : ''),
+        'Open execution details',
+        `data-xdet="${x.id}"`,
+      ),
+    );
+  S.execs
+    .filter(x => execStale(x) && !x.ack)
+    .forEach(x => {
+      const r = execRun(x),
+        when = 'Launched ' + whenLabel(x.at) + ', no word since';
+      if (r && !WRUN_FINAL.includes(r.status))
+        add(1, r.name, when + ' from its automation', 'Open workflow', `data-wfopen="${r.id}"`);
+      else if (!r)
+        add(
+          1,
+          (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
+          when,
+          'Open execution details',
+          `data-xdet="${x.id}"`,
+        );
+    });
+  const today2 = [];
+  (function w(ns) {
     ns.forEach(n => {
       if (isDone(n)) return;
       if (n.due && n.due < t)
-        rows.push({ k: 'late', text: n.text, sub: 'Overdue, due ' + niceDate(n.due), open: n.id });
-      else if (n.due === t) rows.push({ k: 'due', text: n.text, sub: 'Due today', open: n.id });
+        add(1, n.text, 'Overdue, due ' + niceDate(n.due), 'Open quest', `data-open="${n.id}"`);
+      else if (n.due === t) today2.push([n.text, 'Due today', 'Open quest', `data-open="${n.id}"`]);
       w(n.children);
     });
   })(S.quests);
-  S.wruns
-    .filter(r => r.status === 'failed' && !r.ack)
-    .forEach(r => rows.push({ k: 'late', text: r.name, sub: 'Workflow failed: ' + r.err, wfopen: r.id }));
-  execFailures().forEach(x =>
-    rows.push({
-      k: 'late',
-      text: (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
-      sub: 'Flow failed' + (x.msg ? ': ' + x.msg : ''),
-      xdet: x.id,
-    }),
-  );
   waitingNodes()
     .filter(x => x.n.wait.due && x.n.wait.due <= t)
-    .forEach(x =>
-      rows.push({
-        k: 'due',
-        text: x.n.text,
-        sub:
-          'Chase ' +
-          (x.n.wait.who || 'someone') +
-          (x.n.wait.due < t ? ', was due ' + niceDate(x.n.wait.due) : ' today'),
-        waiting: x.n.id,
-      }),
-    );
+    .forEach(x => {
+      const who = x.n.wait.who || 'someone';
+      if (x.n.wait.due < t)
+        add(
+          1,
+          x.n.text,
+          `Chase ${who}, was due ${niceDate(x.n.wait.due)}`,
+          'Open in Waiting',
+          `data-wgo="${x.n.id}"`,
+        );
+      else today2.push([x.n.text, `Chase ${who} today`, 'Open in Waiting', `data-wgo="${x.n.id}"`]);
+    });
+  today2.forEach(r => add(2, ...r));
   S.wruns
     .filter(r => r.status === 'ready')
-    .forEach(r => rows.push({ k: 'ready', text: r.name, sub: 'Workflow ready to start', wfopen: r.id }));
-  S.execs
-    .filter(x => execStale(x) && !x.ack)
-    .forEach(x =>
-      rows.push({
-        k: 'due',
-        text: (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
-        sub: 'Launched ' + whenLabel(x.at) + ', no word since',
-        xdet: x.id,
-      }),
-    );
+    .forEach(r => add(2, r.name, 'Workflow ready to start', 'Start workflow', `data-wfopen="${r.id}"`));
   if (S.inbox.length >= 10)
-    rows.push({
-      k: 'due',
-      text: plural(S.inbox.length, 'Inbox item'),
-      sub: 'Waiting to be processed',
-      goto: 'inbox',
-    });
+    add(
+      3,
+      plural(S.inbox.length, 'Inbox item'),
+      'Waiting to be processed',
+      'Process the Inbox',
+      'data-goto="inbox"',
+    );
   if (typeof reviewDue === 'function' && reviewDue())
-    rows.push({ k: 'due', text: 'Weekly review', sub: 'Due this weekend', rsub: 'week' });
-  return rows;
+    add(3, 'Weekly review', 'Due this weekend', 'Open review', 'data-rsub="week"');
+  return rows.sort((a, b) => a.sev - b.sev);
+}
+// (the name the routines and the day's summary use)
+const opsAttention = attentionItems;
+// A line saying what the items are: "1 failed · 2 overdue · 1 today".
+function attentionCounts(items) {
+  const n = [0, 0, 0, 0];
+  items.forEach(i => n[i.sev]++);
+  return ['failed', 'overdue', 'today', n[3] === 1 ? 'reminder' : 'reminders']
+    .map((w, i) => (n[i] ? `${n[i]} ${w}` : ''))
+    .filter(Boolean)
+    .join(' · ');
+}
+// One item as a row: what it is, why, and (on the right) what tapping it does.
+function attentionRow(i) {
+  // (not a .row in a .list: those are Today's quests)
+  return `<div class="attrow sev${i.sev}"><button class="open" ${i.attrs}><span>${esc(i.text)}</span><small>${esc(i.sub)}</small><em class="attgo">${esc(i.act)} &rsaquo;</em></button></div>`;
 }
 function opsProgress() {
   const rows = [];
@@ -196,8 +238,10 @@ function opsComing() {
 function opsOutcomes() {
   const rows = [],
     t = today();
+  // (A failure still needing attention is in Needs attention, not here; a workflow run's own flow
+  // execution is part of the run.)
   S.wruns
-    .filter(r => WRUN_FINAL.includes(r.status))
+    .filter(r => WRUN_FINAL.includes(r.status) && !(r.status === 'failed' && !r.ack))
     .forEach(r =>
       rows.push({
         t: r.fin || r.at,
@@ -208,7 +252,7 @@ function opsOutcomes() {
       }),
     );
   S.execs
-    .filter(x => EXEC_TERMINAL.includes(x.status))
+    .filter(x => EXEC_TERMINAL.includes(x.status) && !execRun(x) && !(x.status === 'failed' && !x.ack))
     .forEach(x =>
       rows.push({
         t: x.upd,
@@ -293,33 +337,42 @@ function renderPins() {
 }
 function renderOps() {
   if (!$('#v-ops')) return;
-  const att = opsAttention(),
+  const att = attentionItems(),
     prog = opsProgress(),
     coming = opsComing(),
     out = opsOutcomes();
-  let h = `<button class="linkbtn" data-goto="today">&lsaquo; Today</button><h2 class="opshead">Command Centre</h2><div class="acts"><button class="btn sm" data-routine="start">Start workday</button><button class="btn sm" data-routine="finish">Finish workday</button></div><p class="hint opsync">${opsSyncLine()}</p>`;
-  h += opsSection('Needs attention', att, 'Nothing needs you right now.');
-  h += opsSection('In progress', prog, 'Nothing under way.');
+  let h = `<button class="linkbtn" data-goto="today">&lsaquo; Today</button><h2 class="opshead">Command Centre</h2><p class="hint opsync">${opsSyncLine()}</p>`;
+  // Operations first (what needs you, then what's under way); with neither, one quiet line.
+  if (att.length)
+    h += `<section class="opsec"><div class="sechead"><h2>Needs attention <small>${att.length}</small></h2></div><div class="attlist box">${att.map(attentionRow).join('')}</div></section>`;
+  if (prog.length) h += opsSection('In progress', prog, '');
+  if (!att.length && !prog.length)
+    h += '<p class="slot opsquiet">All clear: nothing needs you and nothing is running.</p>';
   h += `<section class="opsec"><div class="sechead"><h2>Quick launch</h2></div>${renderPins()}</section>`;
-  h += opsSection(
-    'Coming up',
-    coming,
-    'Nothing planned in the next six days.',
-    `<button class="linkbtn" data-rsub="forecast">Forecast</button>`,
-  );
-  h += opsSection(
-    'Recent outcomes',
-    out,
-    'Nothing finished lately.',
-    `<button class="linkbtn" data-rsub="insights">Insights</button>`,
-  );
+  if (out.length)
+    h += opsSection(
+      'Recent results',
+      out,
+      '',
+      `<button class="linkbtn" data-rsub="insights">Insights</button>`,
+    );
+  // What's coming, briefly: the Forecast has the rest.
+  if (coming.length)
+    h += opsSection(
+      'Coming up',
+      coming.slice(0, 3),
+      '',
+      `<button class="linkbtn" data-rsub="forecast">${coming.length > 3 ? `All ${coming.length} days in Forecast` : 'Forecast'}</button>`,
+    );
+  // The two checklists: lists of things to open, one tap each (nothing runs on its own).
+  h += `<section class="opsec"><div class="sechead"><h2>Checklists</h2></div><div class="acts opsroutines"><button class="btn sm" data-routine="start">Morning checklist</button><button class="btn sm" data-routine="finish">End-of-day checklist</button></div></section>`;
   setHTML($('#v-ops'), h);
 }
 function routineSheet(kind) {
   const t = today(),
     f = allocate(7),
     att = opsAttention(),
-    nx = nextStep(),
+    nx = recommend(),
     ids = typeof top3Ids === 'function' ? top3Ids() : [];
   let items;
   if (kind === 'start')
@@ -355,7 +408,7 @@ function routineSheet(kind) {
     ];
   }
   popSheet(
-    `<h2 id="sheettitle">${kind === 'start' ? 'Start the workday' : 'Finish the workday'}</h2><p class="hint">Each is a button; nothing happens on its own.</p><div class="qalist">${items
+    `<h2 id="sheettitle">${kind === 'start' ? 'Morning checklist' : 'End-of-day checklist'}</h2><p class="hint">Work down the list: each item opens when you tap it. Nothing runs on its own.</p><div class="qalist">${items
       .filter(Boolean)
       .map(
         ([l, a, note]) =>

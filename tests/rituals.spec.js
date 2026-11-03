@@ -103,7 +103,8 @@ test('waiting is on a subquest: set from the quest, shown on Today and the Waiti
   await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
   // It's blocked, so Next up moves on to the next quest.
   await expect(page.locator('#hnow')).toContainText('Write report');
-  await expect(page.locator('#v-today .attn')).toContainText('1 to chase');
+  await expect(page.locator('#attd > summary')).toContainText('1 today');
+  await expect(page.locator('#attd [data-wgo]')).toContainText('Chase Sam today');
 
   await app.go('waiting');
   const v = page.locator('#v-waiting');

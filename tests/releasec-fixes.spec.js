@@ -1,5 +1,5 @@
 // Release C: regression tests for the defects the adversarial passes found.
-const { test, expect } = require('./fixtures');
+const { test, expect, unfold } = require('./fixtures');
 
 const seed = () => {
   // (a definition with a flow stage, made in the page)
@@ -154,6 +154,7 @@ test('audit 3: opening a run from Today asks before discarding an article being 
     go('knowledge');
   });
   await app.go('today');
+  await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   await expect(page.locator('#sheettitle')).toHaveText('Leave this article?');
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');

@@ -3070,3 +3070,122 @@ details.more > details {
 .pins.editing .pinwrap small {
   grid-column: 1 / -1;
 }
+
+/* Today, Phase 1: one "Needs attention" line (opening to the items), the way to the Command
+   Centre beside it, and the secondary sections folded at the end. */
+.attn {
+  position: relative;
+  margin: 0 0 14px;
+}
+.attn.attnone {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 15px;
+  min-height: 40px;
+}
+.attsum {
+  margin: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+.attsum > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 10px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 9px 162px 9px 12px;
+  border: 3px solid var(--edge);
+  background: var(--panel);
+}
+.attsum > summary small {
+  font-weight: 400;
+  font-size: 14px;
+}
+.attsum.sev0 > summary {
+  background: var(--pink);
+  color: var(--on-accent);
+}
+.attsum.sev1 > summary {
+  background: var(--orange);
+  color: var(--on-accent);
+}
+.attsum[open] > summary {
+  border-bottom-width: 0;
+}
+.attlist {
+  margin: 0 0 14px;
+}
+.attsum > .attlist {
+  margin: 0;
+}
+.attrow {
+  display: flex;
+  padding: 6px 12px;
+}
+.attlist > * + * {
+  border-top: 1.5px solid var(--line);
+}
+.attn .attcc {
+  position: absolute;
+  top: 7px;
+  right: 8px;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 14px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 2px solid var(--edge);
+  text-decoration: none;
+}
+.attn.attnone .attcc {
+  position: static;
+}
+.attrow .open > small {
+  margin-top: 2px;
+}
+.attrow .attgo {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+}
+.attrow.sev0 .open > span {
+  color: var(--pink-ink);
+}
+.todaymore {
+  margin-top: 18px;
+}
+#soond .soon {
+  padding: 0;
+  margin: 0;
+  background: none;
+  border: 0;
+}
+#flowsd .flows {
+  margin-top: 8px;
+}
+/* the Command Centre: an all-clear line in place of empty sections; the checklists last */
+.opsquiet {
+  margin: 0 0 14px;
+}
+.opsroutines {
+  margin-top: 0;
+}
+.attsum > summary::before {
+  content: '▸';
+  margin-right: 2px;
+}
+.attsum[open] > summary::before {
+  content: '▾';
+}
+.attsum > summary::-webkit-details-marker {
+  display: none;
+}

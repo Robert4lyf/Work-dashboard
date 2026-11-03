@@ -1044,11 +1044,7 @@ function appBack() {
     kbRunClick({ runback: '1' }, {});
     return true;
   }
-  if (view === 'knowledge' && wfOpen) {
-    wfOpen = null;
-    renderKnowledge();
-    return true;
-  }
+  if (view === 'knowledge' && wfOpen) return (closeWorkflowRun(), true);
   if (view === 'knowledge' && kbArt) {
     kbClick({ kbback: '1' }, {});
     return true;

@@ -29,11 +29,11 @@ const timerLabel = t => {
   const q = t.q && find(t.q);
   return [t.tag, q && q.n.text].filter(Boolean).join(': ');
 };
-// What the next session is for: the quest picked here, else the header's "Next up".
+// What the next session is for: the quest picked here, else the header's recommendation.
 function focusTarget() {
   if (S.focusQ === 'none') return null;
   if (S.focusQ && find(S.focusQ) && !isDone(find(S.focusQ).n)) return S.focusQ;
-  const nx = nextStep();
+  const nx = recommend();
   return nx ? nx.n.id : null;
 }
 // The id of a session already due when the server is being asked whether it was stopped
