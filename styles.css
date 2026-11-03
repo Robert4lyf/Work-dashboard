@@ -3100,7 +3100,7 @@ details.more > details {
   gap: 0 10px;
   min-height: 48px;
   box-sizing: border-box;
-  padding: 11px 138px 11px 12px;
+  padding: 11px 150px 11px 12px;
   border: 3px solid var(--edge);
   background: var(--panel);
 }
@@ -3139,6 +3139,13 @@ details.more > details {
   position: absolute;
   top: 4px;
   right: 6px;
+  /* a fixed width, and the summary keeps that much (and a gap) clear: whatever the font, the
+     summary's words wrap rather than run under it */
+  width: 136px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   min-height: 40px;
   padding: 4px 6px;
   font-size: 13px;
