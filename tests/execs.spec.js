@@ -98,7 +98,7 @@ test('reports fold in: running then a result; duplicates and out-of-order report
   s = await app.state();
   expect(s.execs[0]).toMatchObject({ status: 'failed', msg: 'Step 4 failed' });
   await page.evaluate(() => renderAll());
-  await expect(page.locator('#attd [data-xdet]')).toContainText('Flow failed');
+  await expect(page.locator('#v-today .attn [data-xdet]')).toContainText('Flow failed');
   await expect(page.locator('#v-today a[data-flow="f1"] .xst')).toHaveText('✗');
   // A report with no execution of its own: an execution made for it, marked as not launched here.
   await fold([ev(5, 'f2', 'succeeded')]);
@@ -136,7 +136,7 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
     ],
   );
   await unfold(page, 'attd');
-  await page.click('#attd [data-xdet]');
+  await page.click('#v-today .attn [data-xdet]');
   const sheet = page.locator('#sheet .sheetbox');
   await expect(sheet.locator('#sheettitle')).toHaveText('Weekly report');
   await expect(sheet.locator('.xhead')).toContainText('Failed');
@@ -148,7 +148,7 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
   );
   await page.click('#sheet [data-xcopy]');
   await unfold(page, 'attd');
-  await page.click('#attd [data-xdet]');
+  await page.click('#v-today .attn [data-xdet]');
   await page.click('#sheet [data-xinbox]');
   let s = await app.state();
   expect(s.inbox[0].text).toBe('Flow failed: Weekly report');

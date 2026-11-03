@@ -161,7 +161,7 @@ function attentionCounts(items) {
 // One item as a row: what it is, why, and (on the right) what tapping it does.
 function attentionRow(i) {
   // (not a .row in a .list: those are Today's quests)
-  return `<div class="attrow sev${i.sev}"><button class="open" ${i.attrs}><span>${esc(i.text)}</span><small>${esc(i.sub)}</small><em class="attgo">${esc(i.act)} &rsaquo;</em></button></div>`;
+  return `<div class="attrow sev${i.sev}"><button class="open" ${i.attrs}><span>${esc(i.text)}</span><small>${esc(i.sub)} · <em class="attgo">${esc(i.act)} &rsaquo;</em></small></button></div>`;
 }
 function opsProgress() {
   const rows = [];

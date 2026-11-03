@@ -730,6 +730,7 @@ nav button[aria-current='page'] {
   margin-right: 10px;
 }
 .viewsw .chip {
+  min-height: 40px;
   padding: 6px 10px;
   font-size: 15px;
   border-width: 2px;
@@ -3091,26 +3092,30 @@ details.more > details {
   border-top: 0;
   padding-top: 0;
 }
-.attsum > summary {
+.attsum > summary,
+.attsum > .attsumline {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0 10px;
-  min-height: 44px;
+  min-height: 48px;
   box-sizing: border-box;
-  padding: 9px 162px 9px 12px;
+  padding: 11px 138px 11px 12px;
   border: 3px solid var(--edge);
   background: var(--panel);
 }
-.attsum > summary small {
+.attsum > summary small,
+.attsumline small {
   font-weight: 400;
   font-size: 14px;
 }
-.attsum.sev0 > summary {
+.attsum.sev0 > summary,
+.attsum.sev0 > .attsumline {
   background: var(--pink);
   color: var(--on-accent);
 }
-.attsum.sev1 > summary {
+.attsum.sev1 > summary,
+.attsum.sev1 > .attsumline {
   background: var(--orange);
   color: var(--on-accent);
 }
@@ -3125,18 +3130,18 @@ details.more > details {
 }
 .attrow {
   display: flex;
-  padding: 6px 12px;
+  padding: 2px 12px;
 }
 .attlist > * + * {
   border-top: 1.5px solid var(--line);
 }
 .attn .attcc {
   position: absolute;
-  top: 7px;
-  right: 8px;
-  min-height: 32px;
-  padding: 4px 8px;
-  font-size: 14px;
+  top: 4px;
+  right: 6px;
+  min-height: 40px;
+  padding: 4px 6px;
+  font-size: 13px;
   background: var(--panel);
   color: var(--ink);
   border: 2px solid var(--edge);
@@ -3149,8 +3154,7 @@ details.more > details {
   margin-top: 2px;
 }
 .attrow .attgo {
-  display: block;
-  margin-top: 4px;
+  white-space: nowrap;
   font-style: normal;
   font-size: 14px;
   font-weight: 600;
@@ -3179,13 +3183,19 @@ details.more > details {
 .opsroutines {
   margin-top: 0;
 }
-.attsum > summary::before {
-  content: '▸';
-  margin-right: 2px;
+.attsum > summary > b::before {
+  content: '▸ ';
 }
-.attsum[open] > summary::before {
-  content: '▾';
+.attsum[open] > summary > b::before {
+  content: '▾ ';
 }
 .attsum > summary::-webkit-details-marker {
   display: none;
+}
+.attfail {
+  margin: 0;
+  border-top-width: 0;
+}
+.attsum[open] + .attfail {
+  border-top-width: 1.5px;
 }

@@ -61,7 +61,7 @@ test('Scenario A: Thursday SSRS reporting: a run made ready by the day, the flow
   // The day made one run, ready; the Command Centre and Today both say so; nothing started.
   let s = await app.state();
   expect(s.wruns.map(r => [r.id, r.status])).toEqual([['w1-2026-11-05', 'ready']]);
-  await expect(page.locator('#attd [data-wfopen]')).toContainText('Workflow ready to start');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Workflow ready to start');
   await page.click('#v-today .attcc');
   await expect(page.locator('#v-ops .opsec').first()).toContainText('Workflow ready to start');
   await page.click('#v-ops [data-wfopen="w1-2026-11-05"]');
@@ -205,9 +205,9 @@ test('Scenario C: an automation fails mid-run: the error, a retry as a new attem
   await expect(page.locator('#v-knowledge .runprog')).toContainText('Failed');
   await app.go('today');
   // One incident, one item: the run's failed stage (the flow's failure is its detail).
-  await expect(page.locator('#attd [data-wfopen]')).toContainText('Workflow failed');
-  await expect(page.locator('#attd [data-wfopen]')).toContainText('Share not reachable');
-  await expect(page.locator('#attd [data-xdet]')).toHaveCount(0);
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Workflow failed');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Share not reachable');
+  await expect(page.locator('#v-today .attn [data-xdet]')).toHaveCount(0);
   await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   await page.click('[data-wfact="retry"]');

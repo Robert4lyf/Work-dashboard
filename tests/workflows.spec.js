@@ -173,7 +173,7 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   expect(r.err).toBe('Flow failed: Timeout');
   await expect(page.locator('.werr')).toContainText('Timeout');
   await app.go('today');
-  await expect(page.locator('#attd [data-wfopen]')).toContainText('Workflow failed');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Workflow failed');
   await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   // Retry: asks first (the flow may have done its work), then a fresh attempt.
@@ -359,7 +359,7 @@ test('a recurring workflow gets one ready run per day, the same id on every devi
     rollover();
     renderAll();
   });
-  await expect(page.locator('#attd [data-wfopen]')).toContainText('Thursday report');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Thursday report');
   await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Ready to start');

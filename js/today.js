@@ -235,13 +235,21 @@ function renderWaitingSection() {
 
 // What needs attention: one line at the top of Today, saying how many and of what kind, that
 // opens to the items themselves (the same list as the Command Centre's, so the counts agree).
-// Beside it, the way to the Command Centre. Opening it acknowledges nothing.
+// Failures needing intervention are shown under it straight away (one tap to the failed stage);
+// the rest are folded in it. Beside it, the way to the Command Centre. Opening it acknowledges
+// nothing.
 function renderAttention() {
   const items = attentionItems(),
     cc = '<button class="linkbtn attcc" data-goto="ops">Command Centre &rsaquo;</button>';
   if (!items.length) return `<div class="attn attnone"><span>Nothing needs attention</span>${cc}</div>`;
-  const worst = items[0].sev;
-  return `<div class="attn"><details id="attd" class="attsum sev${worst}"${panels.attd ? ' open' : ''}><summary><b>Needs attention <span class="attn-n">${items.length}</span></b><small>${attentionCounts(items)}</small></summary><div class="attlist box">${items.map(attentionRow).join('')}</div></details>${cc}</div>`;
+  const fails = items.filter(i => i.sev === 0),
+    rest = items.filter(i => i.sev > 0);
+  const sum = `<b>Needs attention <span class="attn-n">${items.length}</span></b><small>${attentionCounts(items)}</small>`;
+  return `<div class="attn">${
+    rest.length
+      ? `<details id="attd" class="attsum sev${items[0].sev}"${panels.attd ? ' open' : ''}><summary>${sum}</summary><div class="attlist box">${rest.map(attentionRow).join('')}</div></details>`
+      : `<div id="attd" class="attsum sev0"><div class="attsumline">${sum}</div></div>`
+  }${fails.length ? `<div class="attlist box attfail">${fails.map(attentionRow).join('')}</div>` : ''}${cc}</div>`;
 }
 
 /* carried over: quests on Today for STALE days or more get a decision each morning */

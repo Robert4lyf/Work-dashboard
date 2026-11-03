@@ -1299,8 +1299,9 @@ test('a launch on one device, reports from a script: both devices show the same 
   await report(a, { token, flow: 'f1', status: 'failed', message: 'Step 4: file not found' });
   await settle(a, b);
   // Both devices count the same failure, once.
-  for (const d of [a, b]) await expect(d.page.locator('#attd > summary')).toContainText('Needs attention 1');
-  for (const d of [a, b]) await expect(d.page.locator('#attd [data-xdet]')).toContainText('Flow failed');
+  for (const d of [a, b]) await expect(d.page.locator('#attd')).toContainText('Needs attention 1');
+  for (const d of [a, b])
+    await expect(d.page.locator('#v-today .attn [data-xdet]')).toContainText('Flow failed');
   await unfold(b.page, 'attd');
   await b.page.click('#v-today .attn [data-xdet]');
   await b.page.click('#sheet [data-xack]');

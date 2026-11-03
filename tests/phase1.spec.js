@@ -44,12 +44,17 @@ test('busy day: one attention summary, ordered by urgency; a workflow and its ow
   await expect(sum).toContainText('Needs attention 7');
   await expect(sum).toContainText('2 failed · 3 overdue · 2 today');
   await expect(page.locator('#attd')).toHaveClass(/sev0/);
-  // Closed by default: the work comes first. Opened, every item says what tapping it does.
+  // Failures are shown straight away (one tap to act); the rest are folded until opened. Every
+  // item says what tapping it does.
+  await expect(page.locator('.attfail .attrow')).toHaveCount(2);
+  await expect(page.locator('.attfail .attrow').first()).toBeVisible();
   await expect(page.locator('#attd .attrow').first()).toBeHidden();
   await sum.click();
-  expect(await attRows(page, '#attd')).toEqual([
+  expect(await attRows(page, '.attfail')).toEqual([
     ['Month-end report', 'Open failed stage'],
     ['Tidy downloads', 'Open execution details'],
+  ]);
+  expect(await attRows(page, '#attd')).toEqual([
     ['Fletcher Way', 'Open quest'],
     ['Review', 'Open quest'],
     ['Hear back on figures', 'Open in Waiting'],
@@ -57,7 +62,7 @@ test('busy day: one attention summary, ordered by urgency; a workflow and its ow
     ['Floor plan sign-off', 'Open in Waiting'],
   ]);
   // (Export report's failure is the Month-end run's failed stage: not a second emergency.)
-  await expect(page.locator('#attd')).not.toContainText('Export report');
+  await expect(page.locator('#v-today .attn')).not.toContainText('Export report');
   // The Command Centre shows the same items: the same count.
   await page.click('#v-today .attcc');
   expect(await attRows(page, '#v-ops')).toEqual(
@@ -78,7 +83,7 @@ test('acting on items: the failed stage opens; acknowledging or resolving update
 }) => {
   await busy(app, page);
   await page.click('#attd > summary');
-  await page.click('#attd [data-wfopen="r1"]');
+  await page.click('.attfail [data-wfopen="r1"]');
   await expect(page.locator('.werr')).toContainText('Timed out logging in');
   // Back returns to Today (where it was opened from), not to the workflow list.
   await expect(page.locator('[data-wfback]')).toHaveText('‹ Today');
@@ -142,11 +147,8 @@ test('a flow failure of its own stays its own item; a stale launch inside a run 
     ];
   });
   await page.reload();
-  await page.click('#attd > summary');
-  expect(await attRows(page, '#attd')).toEqual([
-    ['Export report', 'Open execution details'],
-    ['Report run', 'Open workflow'],
-  ]);
+  expect(await attRows(page, '.attfail')).toEqual([['Export report', 'Open execution details']]);
+  expect(await attRows(page, '#attd')).toEqual([['Report run', 'Open workflow']]);
 });
 
 test('the header follows one rule: saved place today, else Top 3, else list order; nothing reordered', async ({
