@@ -14,7 +14,7 @@ const median = xs => {
   return s[Math.floor(s.length / 2)];
 };
 const daysWord = n => (n === 1 ? '1 day' : n + ' days');
-// "12 quests finished, against 9 the period before (up 33%)". The same words every time.
+// "12 tasks finished, against 9 the period before (up 33%)". The same words every time.
 function trendLine(now, before, what, fmt = String) {
   const w = n => (Array.isArray(what) ? (n === 1 ? what[0] : what[1]) : what);
   if (!now && !before) return `No ${w(0).replace(/^of /, '')} in either period.`;
@@ -197,7 +197,7 @@ function insightLines(x) {
   L.push([
     'Productivity',
     [
-      trendLine(x.prod.done, x.prod.doneBefore, ['quest finished', 'quests finished']),
+      trendLine(x.prod.done, x.prod.doneBefore, ['task finished', 'tasks finished']),
       trendLine(x.prod.focusNow, x.prod.focusBefore, 'of focus time', hm) +
         (x.prod.focusNow ? ` About ${hm(Math.round(x.prod.focusNow / x.span))} a day.` : ''),
       trendLine(x.prod.inter, x.prod.interBefore, ['interruption noted', 'interruptions noted']),
@@ -205,11 +205,11 @@ function insightLines(x) {
   ]);
   const w = x.wf.now;
   L.push([
-    'Workflows',
+    'Processes',
     [
       w.n
         ? `${plural(w.n, 'run')} started: ${w.ok} succeeded, ${w.failed} failed, ${w.cancelled} cancelled, ${w.open} still under way. Success rate ${x.wf.rate}% of the ${plural(x.wf.withOutcome, 'run')} with an outcome (cancelled and unfinished runs aren't counted).`
-        : 'No workflow runs started this period.',
+        : 'No process runs started this period.',
       trendLine(w.n, x.wf.prev.n, ['run started', 'runs started']),
       ...x.wf.table.map(
         t =>
@@ -222,8 +222,8 @@ function insightLines(x) {
     'Automation',
     [
       a.n
-        ? `${a.n === 1 ? '1 flow launch' : a.n + ' flow launches'}: ${a.ok} verified succeeded, ${a.failed} verified failed, ${a.cancelled} cancelled, ${a.unconfirmed} unconfirmed (no word after a day), ${a.running} awaiting a result. Success rate ${a.rate}% of the ${plural(a.verified, 'verified result')}.${x.auto.lag ? ` A first report typically arrives ${hm(Math.max(1, Math.round(x.auto.lag / 60000)))} after the launch.` : ''}`
-        : 'No flow launches this period.',
+        ? `${a.n === 1 ? '1 automation launch' : a.n + ' automation launches'}: ${a.ok} verified succeeded, ${a.failed} verified failed, ${a.cancelled} cancelled, ${a.unconfirmed} unconfirmed (no word after a day), ${a.running} awaiting a result. Success rate ${a.rate}% of the ${plural(a.verified, 'verified result')}.${x.auto.lag ? ` A first report typically arrives ${hm(Math.max(1, Math.round(x.auto.lag / 60000)))} after the launch.` : ''}`
+        : 'No automation launches this period.',
       trendLine(a.n, x.auto.prev.n, ['launch', 'launches']),
       ...x.auto.table.map(
         t =>
@@ -331,7 +331,7 @@ function renderInsights() {
   insightLines(x).forEach(([head, lines], i) => {
     h += `<h2>${esc(head)}</h2>`;
     if (i === 0)
-      h += `<p class="hint ilabel">Quests finished, each day</p>${bars('done', max, 'Quests finished')}<p class="hint ilabel">Focus time, each day</p>${bars('focus', fmax, 'Focus minutes')}`;
+      h += `<p class="hint ilabel">Tasks finished, each day</p>${bars('done', max, 'Tasks finished')}<p class="hint ilabel">Focus time, each day</p>${bars('focus', fmax, 'Focus minutes')}`;
     h += `<ul class="ilines">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`;
   });
   h += `<div class="acts"><button class="btn" data-iexport="text">Copy as text</button><button class="btn" data-iexport="csv">Save CSV</button></div><p class="hint">Exports hold these counts only: no tokens, keys or account details.</p>`;

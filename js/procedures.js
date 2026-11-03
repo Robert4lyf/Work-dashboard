@@ -2,7 +2,7 @@
    notes, and optionally an article, a flow or a web link to use, and whether it needs checking.
    Following it is a run (S.runs, kind 'run': { id, art, q, started, at, done: [step ids], cur,
    fin }): the article is the definition, each run is one time through it, with its own ticks,
-   so following it again starts fresh. A run can belong to a quest (q), which then shows how far
+   so following it again starts fresh. A run can belong to a task (q), which then shows how far
    it's got. Runs are small and few: finished ones are kept for a while, then dropped. */
 const PROC_STEPS = 60,
   PROC_TITLE = 120,
@@ -67,7 +67,7 @@ function pruneRuns() {
   S.runs = S.runs.filter(r => !r.fin || keep.has(r.id));
 }
 const procOf = id => S.kb.find(a => a.id === id && a.steps && a.steps.length) || null;
-// The unfinished run of an article (for a quest, or on its own).
+// The unfinished run of an article (for a task, or on its own).
 const openRunFor = (art, q = '') =>
   S.runs.find(r => r.art === art && (r.q || '') === (q || '') && !r.fin) || null;
 const runProgress = r => {
@@ -101,7 +101,7 @@ function openRun(art, q) {
   kbImgShown = null;
   wfOpen = null; // (a workflow run being followed gives way; its ‹ isn't this run's)
   kbRunBackWf = null;
-  if (q && view === 'today' && path.length) kbReturn = true; // (the article's ‹ goes back to the quest)
+  if (q && view === 'today' && path.length) kbReturn = true; // (the article's ‹ goes back to the task)
   if (view !== 'knowledge') go('knowledge');
   else renderKnowledge();
   window.scrollTo(0, 0);
@@ -126,7 +126,7 @@ function stepActions(s, q) {
     out.push(
       f
         ? `<a class="btn sm blue" href="${esc(f.url)}" data-flow="${f.id}"${q ? ` data-q="${q}"` : ''}>&#9654; Run: ${esc(f.name)}</a>`
-        : '<span class="tag gone">Flow removed</span>',
+        : '<span class="tag gone">Automation removed</span>',
     );
   }
   if (s.url)
@@ -139,7 +139,7 @@ function stepActions(s, q) {
 function procSection(a) {
   const open = openRunFor(a.id, ''),
     runs = S.runs.filter(r => r.art === a.id && r.fin).sort((x, y) => y.fin - x.fin);
-  let h = `<div class="sechead pshead"><h2>Procedure <small>${a.steps.length} steps</small></h2><button class="btn sm blue" data-runstart="${a.id}">${open ? 'Resume' : 'Start'}</button></div>`;
+  let h = `<div class="sechead pshead"><h2>Guide <small>${a.steps.length} steps</small></h2><button class="btn sm blue" data-runstart="${a.id}">${open ? 'Resume' : 'Start'}</button></div>`;
   h += `<ol class="plist">${a.steps
     .map(
       s =>
@@ -151,7 +151,7 @@ function procSection(a) {
     h += `<details id="prund"${panels.prund ? ' open' : ''}><summary>Previous runs <small>${runs.length}</small></summary><ul class="flist">${runs
       .map(
         r =>
-          `<li><small>${esc(dayLabel(fmt(new Date(r.fin))))}</small><span>${esc(runLine(r))}${r.q ? ' · ' + esc((find(r.q) || find(r.q, S.later) || { n: { text: 'a quest' } }).n.text) : ''}</span></li>`,
+          `<li><small>${esc(dayLabel(fmt(new Date(r.fin))))}</small><span>${esc(runLine(r))}${r.q ? ' · ' + esc((find(r.q) || find(r.q, S.later) || { n: { text: 'a task' } }).n.text) : ''}</span></li>`,
       )
       .join('')}</ul></details>`;
   return h;
@@ -161,13 +161,13 @@ function kbRunView(r) {
   const a = procOf(r.art);
   if (!a) {
     kbRun = null;
-    return kbIndex() + kbFlows();
+    return kbTabs() + (kbView === 'proc' ? kbProcesses() : kbIndex());
   }
   const p = runProgress(r),
     s = runStep(r),
     q = r.q && (find(r.q) || find(r.q, S.later)),
     i = s ? a.steps.indexOf(s) : a.steps.length;
-  let h = `<button class="linkbtn" data-runback="1">‹ ${kbRunBackWf && wrunById(kbRunBackWf) ? 'Back to the workflow' : esc(a.title)}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
+  let h = `<button class="linkbtn" data-runback="1">‹ ${kbRunBackWf && wrunById(kbRunBackWf) ? 'Back to the process' : esc(a.title)}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(a.title)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div><p class="hint runprog">${
       s ? `Step ${i + 1} of ${p.total}` : `All ${p.total} steps done`
     }${r.fin ? ' · finished' : ''}</p>`;
@@ -176,7 +176,7 @@ function kbRunView(r) {
     h += `<div class="pstep box"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.text ? `<p class="ptext">${kbLinkify(s.text)}</p>` : ''}${stepActions(s, r.q)}${xs ? `<p class="hint xline">${execLine(xs)}</p>` : ''}${s.verify ? '<p class="hint pverify">Check the result yourself before moving on.</p>' : ''}
       <div class="acts"><button class="btn" data-runprev="${r.id}"${i === 0 ? ' disabled' : ''}>Back</button><button class="btn green" data-rundone="${r.id}" data-step="${s.id}">${s.verify ? 'Verified, next' : 'Done, next'}</button></div></div>`;
   } else
-    h += `<div class="pstep box done"><h3>Every step is done.</h3><div class="acts">${r.fin ? '' : `<button class="btn green" data-runfinish="${r.id}">Finish</button>`}${q ? `<button class="btn blue" data-open="${q.n.id}">Back to the quest</button>` : ''}</div></div>`;
+    h += `<div class="pstep box done"><h3>Every step is done.</h3><div class="acts">${r.fin ? '' : `<button class="btn green" data-runfinish="${r.id}">Finish</button>`}${q ? `<button class="btn blue" data-open="${q.n.id}">Back to the task</button>` : ''}</div></div>`;
   h += `<ol class="plist runlist">${a.steps
     .map(st => {
       const d = r.done.includes(st.id);
@@ -196,7 +196,7 @@ function kbRenderSteps() {
 function stepsEditList() {
   const ss = kbEdit.steps || [];
   if (!ss.length)
-    return '<p class="hint">No steps: a plain article. Add steps to make it a procedure to follow.</p>';
+    return '<p class="hint">No steps: a plain article. Add steps to make it a guide you can follow.</p>';
   return `<ol class="plist editlist">${ss
     .map(
       (s, i) =>
@@ -222,7 +222,7 @@ function openProcStep(id) {
       s.kb,
       'None',
     )}</select>
-    <label class="f" for="psflow">Flow to run</label><select class="fld" id="psflow">${opt(
+    <label class="f" for="psflow">Desktop automation to run</label><select class="fld" id="psflow">${opt(
       [...S.flows].sort((a, b) => byName(a.name, b.name)).map(f => [f.id, f.name]),
       s.flow,
       'None',
@@ -320,7 +320,7 @@ function kbRunClick(d, b) {
     if (kbRunBackWf && wrunById(kbRunBackWf))
       kbRunClick({ runback: '1' }, {}); // (back to the workflow)
     else renderKnowledge();
-    toast('Procedure finished');
+    toast('Guide finished');
   }
   if (d.runfresh) {
     const old = openRunFor(d.runfresh, d.q || '');
@@ -348,7 +348,7 @@ function kbRunClick(d, b) {
     kbRenderSteps();
   }
 }
-// On a quest's page: a linked procedure's progress and a way in.
+// On a task's page: a linked procedure's progress and a way in.
 function procLinkLine(artId, qid) {
   const a = procOf(artId);
   if (!a) return '';

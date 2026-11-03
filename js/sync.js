@@ -154,13 +154,13 @@ function applyRows(rows, firstSync, keep, holdCursor) {
   if (changed) {
     dropUndo();
     norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt }));
-    // The quest on screen went (in the rows, not through the day's reset or a chosen replace).
+    // The task on screen went (in the rows, not through the day's reset or a chosen replace).
     const open = !firstSync && path.length && !find(path[path.length - 1]);
     if (!persistLocal()) toast("Couldn't save: this device is out of storage", false, 4000);
     rollover();
     markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
     inBackground(renderAll);
-    if (open) toast('The quest you had open was removed on another device', false, 4000);
+    if (open) toast('The task you had open was removed on another device', false, 4000);
   }
   saveSyncState();
 }
@@ -351,7 +351,7 @@ async function sync() {
         norm(null);
         persistLocal();
         // (nothing of the other account's left open: an article being written, a search...)
-        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = wfOpen = wfEdit = null;
+        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = wfOpen = wfEdit = wfView = null;
         execToken = '';
         try {
           localStorage.removeItem(EXEC_KEY);
@@ -536,7 +536,7 @@ function renderHistory() {
         hour: '2-digit',
         minute: '2-digit',
       });
-    h += `<div class="soonrow" style="cursor:default"><span>${esc(when)}<br><small class="hint">${(d.quests || []).length} quests, ${(d.inbox || []).length} inbox</small></span><button class="btn" data-hist="${r.id}" style="padding:6px 10px">Restore</button></div>`;
+    h += `<div class="soonrow" style="cursor:default"><span>${esc(when)}<br><small class="hint">${(d.quests || []).length} tasks, ${(d.inbox || []).length} inbox</small></span><button class="btn" data-hist="${r.id}" style="padding:6px 10px">Restore</button></div>`;
   });
   return h;
 }
@@ -575,7 +575,7 @@ function renderAccount() {
     h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p>${syncStatsLine()}<div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}`;
   }
   if (pending)
-    h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'quest')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced (notification keys and device names are kept).</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
+    h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'task')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced (notification keys and device names are kept).</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
   const opt = (k, v, label) =>
     `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>

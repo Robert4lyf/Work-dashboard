@@ -46,7 +46,7 @@ test('a tap records a launch (never a result); without tracking it is only remem
     'title',
     /Launched, no word yet/,
   );
-  // From a quest's resources: the launch belongs to the quest.
+  // From a task's resources: the launch belongs to the task.
   await app.openQuest('Reporting');
   await page.click('#resd a[data-flow="f1"]');
   await page.clock.runFor(10);
@@ -98,7 +98,7 @@ test('reports fold in: running then a result; duplicates and out-of-order report
   s = await app.state();
   expect(s.execs[0]).toMatchObject({ status: 'failed', msg: 'Step 4 failed' });
   await page.evaluate(() => renderAll());
-  await expect(page.locator('#v-today .attn [data-xdet]')).toContainText('Flow failed');
+  await expect(page.locator('#v-today .attn [data-xdet]')).toContainText('Automation failed');
   await expect(page.locator('#v-today a[data-flow="f1"] .xst')).toHaveText('✗');
   // A report with no execution of its own: an execution made for it, marked as not launched here.
   await fold([ev(5, 'f2', 'succeeded')]);
@@ -151,7 +151,7 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
   await page.click('#v-today .attn [data-xdet]');
   await page.click('#sheet [data-xinbox]');
   let s = await app.state();
-  expect(s.inbox[0].text).toBe('Flow failed: Weekly report');
+  expect(s.inbox[0].text).toBe('Automation failed: Weekly report');
   expect(s.inbox[0].node.notes).toContain('File not found');
   expect(s.execs[0].ack).toBe(1);
   await expect(page.locator('#v-today [data-xdet]')).toHaveCount(0); // (acknowledged by that)
@@ -165,7 +165,7 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
   expect(s.execs[1].status).toBe('requested');
   expect(s.execs[0].status).toBe('failed');
   // Knowledge > Flows: the latest result, details and history.
-  await app.go('knowledge');
+  await app.processes();
   await page.evaluate(() => (document.querySelector('#kbflows').open = true));
   await expect(page.locator('#v-knowledge .flowline').nth(1)).toContainText('Launched, no word yet'); // (flows by name: Archive, Weekly report)
   await page.click('#v-knowledge [data-xhist="f1"]');

@@ -73,7 +73,7 @@ test('a run walks every kind of stage: flow result verified by report, checks, a
 }) => {
   await app.open();
   await page.evaluate(seed);
-  await app.go('knowledge');
+  await app.processes();
   await expect(page.locator('#v-knowledge')).toContainText('Thursday report');
   await page.click('[data-wfstart="w1"]');
   await expect(stage(page)).toHaveText('Prepare');
@@ -98,7 +98,11 @@ test('a run walks every kind of stage: flow result verified by report, checks, a
   });
   r = await run(page);
   expect(r.cur).toBe('s3');
-  expect(r.st.s2).toMatchObject({ o: 'done', exec: r.live.exec || r.st.s2.exec, note: 'Flow: Done in 4s' });
+  expect(r.st.s2).toMatchObject({
+    o: 'done',
+    exec: r.live.exec || r.st.s2.exec,
+    note: 'Automation: Done in 4s',
+  });
   // A late "running" for that execution changes nothing (the result is final).
   await report(page, r.st.s2.exec, 'running', 3);
   expect((await run(page)).cur).toBe('s3');
@@ -113,10 +117,10 @@ test('a run walks every kind of stage: flow result verified by report, checks, a
   await expect(stage(page)).toHaveText('Extract');
   await page.click('[data-wfact="procedure"]');
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Extract procedure');
-  await expect(page.locator('[data-runback]')).toHaveText('‹ Back to the workflow');
+  await expect(page.locator('[data-runback]')).toHaveText('‹ Back to the process');
   await page.click('[data-runback]');
   await expect(stage(page)).toHaveText('Extract');
-  await expect(page.locator('[data-wfact="procedure"]')).toHaveText('Resume procedure');
+  await expect(page.locator('[data-wfact="procedure"]')).toHaveText('Continue the guide');
   await page.click('[data-wfact="procedure"]');
   await page.click('[data-rundone]');
   await page.click('[data-rundone]');
@@ -145,8 +149,8 @@ test('a run walks every kind of stage: flow result verified by report, checks, a
   expect(r.status).toBe('succeeded');
   expect(r.fin).toBeGreaterThan(0);
   expect(Object.keys(r.st).sort()).toEqual(['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8']);
-  await expect(page.locator('#v-knowledge')).toContainText('Succeeded');
-  // The quest page lists nothing running; the summary copies.
+  await expect(page.locator('#v-knowledge')).toContainText('Completed');
+  // The task page lists nothing running; the summary copies.
   expect(app.errors).toEqual([]);
 });
 
@@ -156,7 +160,7 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
 }) => {
   await app.open();
   await page.evaluate(seed);
-  await app.go('knowledge');
+  await app.processes();
   await page.click('[data-wfstart="w1"]');
   await page.click('[data-wfact="done"]');
   await page.click('#v-knowledge a[data-flow="f1"]');
@@ -170,15 +174,15 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   });
   r = await run(page);
   expect(r.status).toBe('failed');
-  expect(r.err).toBe('Flow failed: Timeout');
+  expect(r.err).toBe('Automation failed: Timeout');
   await expect(page.locator('.werr')).toContainText('Timeout');
   await app.go('today');
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Workflow failed');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Process failed');
   await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   // Retry: asks first (the flow may have done its work), then a fresh attempt.
   await page.click('[data-wfact="retry"]');
-  await expect(page.locator('#sheettitle')).toHaveText('Launch the flow again?');
+  await expect(page.locator('#sheettitle')).toHaveText('Launch the automation again?');
   await page.click('#sheetok');
   r = await run(page);
   expect(r.status).toBe('awaiting_user');
@@ -213,9 +217,9 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   // Skip isn't offered for a stage that can't be: Check can't, Prepare could.
   await expect(page.locator('[data-wfact="skip"]')).toHaveCount(0);
   await page.click('[data-wfact="inbox"]');
-  expect(await page.evaluate(() => S.inbox[0].text)).toBe('Workflow failed: Thursday report');
+  expect(await page.evaluate(() => S.inbox[0].text)).toBe('Process failed: Thursday report');
   expect((await run(page)).ack).toBe(1);
-  expect(await page.evaluate(() => renderAttention())).not.toContain('Workflow failed');
+  expect(await page.evaluate(() => renderAttention())).not.toContain('Process failed');
   await page.click('[data-wfact="retry"]');
   expect((await run(page)).status).toBe('awaiting_user');
   await page.click('[data-wfact="cancel"]');
@@ -252,14 +256,14 @@ test('skipping needs a reason and is kept as skipped, not done; tracking off ask
     S.track = false;
     save();
   });
-  await app.go('knowledge');
+  await app.processes();
   await page.click('[data-wfstart="w1"]');
   await page.click('[data-wfact="skip"]');
   await page.fill('#sheetin', 'Done yesterday');
   await page.click('#sheetok');
   let r = await run(page);
   expect(r.st.s1).toMatchObject({ o: 'skipped', note: 'Done yesterday' });
-  await expect(page.locator('#v-knowledge')).toContainText('Execution tracking is off');
+  await expect(page.locator('#v-knowledge')).toContainText('Result tracking is off');
   await page.click('#v-knowledge a[data-flow="f1"]');
   await page.evaluate(() => new Promise(r => setTimeout(r, 20)));
   r = await run(page);
@@ -279,9 +283,11 @@ test('a definition edited later is a new version; a run under way keeps its own 
 }) => {
   await app.open();
   await page.evaluate(seed);
-  await app.go('knowledge');
+  await app.processes();
   await page.click('[data-wfstart="w1"]');
   await page.click('[data-wfback]');
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.fill('#wfname', 'Thursday report v2');
   await page.click('[data-wfdel="s1"]');
@@ -292,10 +298,14 @@ test('a definition edited later is a new version; a run under way keeps its own 
   expect(s.wruns[0]).toMatchObject({ ver: 1, name: 'Thursday report', cur: 's1' });
   expect(s.wruns[0].def).toHaveLength(8);
   // A save without a change isn't a version.
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.click('#wfform .btn.green');
   expect((await app.state()).workflows[0].ver).toBe(2);
   // The editor's stage sheet: a flow stage must name a flow; a procedure one, a procedure.
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.click('#wfstageadd');
   await page.selectOption('#wstype', 'flow');
@@ -313,15 +323,19 @@ test('a definition edited later is a new version; a run under way keeps its own 
   expect(w.stages[7].title).toBe('Another flow');
   expect(w.stages.map(x => x.id).slice(0, 2)).toEqual(['s3', 's2']);
   // Back (Android) leaves the editor without saving.
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.fill('#wfname', 'Unsaved');
   await page.evaluate(() => history.back());
   await expect(page.locator('#wfform')).toHaveCount(0);
   expect((await app.state()).workflows[0].name).toBe('Thursday report v2');
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.click('[data-wfarchive="w1"]');
   await expect(page.locator('[data-wfedit="w1"]')).toHaveCount(0);
-  await expect(page.locator('#v-knowledge')).toContainText('1 archived workflow');
+  await expect(page.locator('#v-knowledge')).toContainText('1 archived process');
   expect(app.errors).toEqual([]);
 });
 
@@ -400,9 +414,9 @@ test('deep links open the list and a run (opening never moves a run on); junk is
     1,
   ]);
   await cold('#/workflows');
-  await expect(page.locator('#v-knowledge h2.wfhead')).toBeVisible();
+  await expect(page.locator('#wfhead')).toBeVisible();
   await cold('#/wrun/nope');
-  await expect.poll(() => page.locator('#toast').textContent()).toContain("workflow run isn't here");
+  await expect.poll(() => page.locator('#toast').textContent()).toContain("process run isn't here");
   await cold('#/wrun');
   await expect.poll(() => page.locator('#toast').textContent()).toContain("isn't one the Dashboard knows");
   await app.go('account');
@@ -457,7 +471,7 @@ test('junk records are dropped or trimmed; old runs are pruned but open failures
   expect(j.status).toBe('ready');
   expect(j.cur).toBe('');
   expect(j.st).toEqual({});
-  await app.go('knowledge');
+  await app.processes();
   expect(await page.evaluate(() => $('#v-knowledge').innerHTML.includes('<b>x</b>'))).toBe(false);
   expect(app.errors).toEqual([]);
 });

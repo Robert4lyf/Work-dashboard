@@ -176,7 +176,7 @@ test('a run goes step by step; a flow step runs only when tapped and is never ti
   await expect(page.locator('#v-knowledge .pstep')).toHaveCount(0);
 });
 
-test('a quest’s linked procedure: start from the quest, progress on the quest, back to the quest; the quest is never finished for it', async ({
+test('a task’s linked procedure: start from the task, progress on the task, back to the task; the task is never finished for it', async ({
   app,
   page,
 }) => {
@@ -189,7 +189,7 @@ test('a quest’s linked procedure: start from the quest, progress on the quest,
   await page.reload();
   await app.openQuest('Weekly reporting');
   const row = page.locator('#resd .resrow');
-  await expect(row.locator('small').first()).toHaveText('Procedure');
+  await expect(row.locator('small').first()).toHaveText('Guide');
   await expect(row.locator('.procline')).toContainText('Not started');
   await page.click('#resd [data-runstart="a1"]');
   await expect(page.locator('#v-knowledge .kbtrail')).toContainText('For: Weekly reporting');
@@ -200,7 +200,7 @@ test('a quest’s linked procedure: start from the quest, progress on the quest,
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await expect(row.locator('.procline')).toContainText('1 of 2 steps');
   await expect(row.locator('[data-runstart]')).toHaveText('Resume');
-  // A run on its own (no quest) is separate from the quest's. (Knowledge still shows the run
+  // A run on its own (no task) is separate from the task's. (Knowledge still shows the run
   // left open; the article is a step back.)
   await page.evaluate(() => {
     kbArt = 'a1';
@@ -212,15 +212,15 @@ test('a quest’s linked procedure: start from the quest, progress on the quest,
   expect(s.runs).toHaveLength(2);
   expect(s.runs.map(r => r.q).sort()).toEqual(['', 'q1']);
   await page.click('[data-runback]');
-  // Finish the quest's run: the quest stays open, its row says done. (Today still shows the
-  // quest's page, as left: back to the list first.)
+  // Finish the task's run: the task stays open, its row says done. (Today still shows the
+  // task's page, as left: back to the list first.)
   await app.go('today');
   await page.evaluate(() => openPath([]));
   await app.openQuest('Weekly reporting');
   await page.click('#resd [data-runstart="a1"]');
   await page.click('#v-knowledge [data-rundone]');
   await page.click('[data-runfinish]');
-  await expect(page.locator('#v-knowledge .pstep.done [data-open="q1"]')).toHaveText('Back to the quest');
+  await expect(page.locator('#v-knowledge .pstep.done [data-open="q1"]')).toHaveText('Back to the task');
   await page.click('#v-knowledge .pstep.done [data-open="q1"]');
   s = await app.state();
   expect(s.quests[0].done).toBe(false);
@@ -237,7 +237,7 @@ test('a quest’s linked procedure: start from the quest, progress on the quest,
     kbRun = S.runs[0].id;
     go('knowledge');
   });
-  await expect(page.locator('#v-knowledge .kbhead')).toBeVisible();
+  await expect(page.locator('#v-knowledge .kbtabs')).toBeVisible();
   expect(await page.evaluate(() => kbRun)).toBeNull();
 });
 
@@ -305,7 +305,7 @@ test('steps from a synced row or backup are checked; junk never reaches the page
   ).toBe(0);
 });
 
-test('review fixes: an article opened from a run shows the article and its ‹ returns to the run; a quest-less run shows only its own launches', async ({
+test('review fixes: an article opened from a run shows the article and its ‹ returns to the run; a task-less run shows only its own launches', async ({
   app,
   page,
 }) => {
@@ -322,7 +322,7 @@ test('review fixes: an article opened from a run shows the article and its ‹ r
         q: 'q1',
         at: Date.now() - 1000,
         status: 'succeeded',
-        msg: 'from the quest',
+        msg: 'from the task',
         upd: Date.now() - 1000,
         ref: '',
         ev: [],
@@ -337,10 +337,10 @@ test('review fixes: an article opened from a run shows the article and its ‹ r
   await page.click('[data-runstart="a1"]');
   await page.click('#v-knowledge .pstep [data-sart="a2"]');
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Ledger checks');
-  await expect(page.locator('#v-knowledge [data-kbback]')).toHaveText('‹ Back to the procedure');
+  await expect(page.locator('#v-knowledge [data-kbback]')).toHaveText('‹ Back to the guide');
   await page.click('#v-knowledge [data-kbback]');
   await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Read the checks');
-  // The run has no quest: the quest's execution of the same flow isn't shown as its own.
+  // The run has no quest: the task's execution of the same flow isn't shown as its own.
   await page.click('#v-knowledge [data-rundone]');
   await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Run');
   await expect(page.locator('#v-knowledge .pstep .xline')).toHaveCount(0);

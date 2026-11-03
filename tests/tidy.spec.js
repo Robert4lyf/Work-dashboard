@@ -1,4 +1,4 @@
-// The tidy-up: quests have steps and steps don't; fewer controls on screen.
+// The tidy-up: tasks have steps and steps don't; fewer controls on screen.
 const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ app }) => {
@@ -45,7 +45,7 @@ test('steps under a step move up beside it, named with it, ticks and waiting kep
   expect((await app.state()).quests[0].children.map(c => c.text)).toEqual(kids.map(c => c.text));
 });
 
-test("a step's page has no subquests of its own; a quest's tag and do-later are folded away", async ({
+test("a step's page has no steps of its own; a task's tag and do-later are folded away", async ({
   app,
   page,
 }) => {
@@ -91,7 +91,7 @@ test('flattening keeps what a grouping step meant: optional, finished, deadline,
     s.quests = [
       {
         id: 'q',
-        text: 'Done quest',
+        text: 'Done task',
         children: [
           {
             id: 'a',
@@ -117,7 +117,7 @@ test('flattening keeps what a grouping step meant: optional, finished, deadline,
         ],
       },
     ];
-    s.log = [{ id: 'q', d: today(), text: 'Done quest', trail: [] }]; // (finished: it was logged)
+    s.log = [{ id: 'q', d: today(), text: 'Done task', trail: [] }]; // (finished: it was logged)
   });
   await page.reload();
   const s = await app.state(),
@@ -129,10 +129,7 @@ test('flattening keeps what a grouping step meant: optional, finished, deadline,
   expect(r.children.map(c => c.id)).toEqual(['g1', 'n', 'n1']);
 });
 
-test("History's Done list puts subquests under their quest (also in the copied text)", async ({
-  app,
-  page,
-}) => {
+test("History's Done list puts steps under their task (also in the copied text)", async ({ app, page }) => {
   await app.setState(s => {
     const d = today();
     s.log = [
@@ -190,7 +187,7 @@ test('a record only converted (flattened, or waiting moved to a step) is dated j
   expect(r.edit).toBeGreaterThan(r.now - 60000);
 });
 
-test('old saved templates are removed; repeating quests keep theirs', async ({ app, page }) => {
+test('old saved templates are removed; repeating tasks keep theirs', async ({ app, page }) => {
   await app.setState(s => {
     s.templates = [
       { id: 't1', text: 'Saved one', children: [], days: [], monthDay: 0 },

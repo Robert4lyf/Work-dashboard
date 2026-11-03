@@ -1,5 +1,5 @@
 /* tree helpers */
-// A quest with steps is finished when you say so (its own done), with every step that counts
+// A task with steps is finished when you say so (its own done), with every step that counts
 // ticked. Ticking its last step doesn't finish it: more steps often turn up, so it asks what's next.
 // (Except a repeating one: a checklist done the same way each time, finished by its last tick.)
 function isDone(n) {
@@ -60,8 +60,8 @@ function snapshot() {
   })(S.quests, []);
   return m;
 }
-// Finished quests sink below open ones at every level; open ones keep their order,
-// so the top open quest is always "Next up".
+// Finished tasks sink below open ones at every level; open ones keep their order,
+// so the top open task is always "Next up".
 function sinkDone(ns) {
   const open = ns.filter(n => !isDone(n)),
     done = ns.filter(isDone);
@@ -69,7 +69,7 @@ function sinkDone(ns) {
   ns.forEach(n => sinkDone(n.children));
 }
 function settle(before) {
-  // A finished quest with a step to do again (added, or un-ticked) isn't finished any more:
+  // A finished task with a step to do again (added, or un-ticked) isn't finished any more:
   // ticking that step asks what's next, rather than finishing it again.
   // One left asking what's next is marked so, so it isn't taken for one finished before this
   // version (see norm).
@@ -77,7 +77,7 @@ function settle(before) {
     if (q.done && q.children.length && !stepsDone(q)) q.done = false;
     if (needsNext(q)) q.asked = 1;
   });
-  dropDonePlaces(); // (a finished quest has nothing to come back to)
+  dropDonePlaces(); // (a finished task has nothing to come back to)
   sinkDone(S.quests);
   const after = snapshot();
   let gain = 0;
@@ -121,7 +121,7 @@ function settle(before) {
     addXP(gain);
     if (gain > 0) beep([659, 988]);
   }
-  // A quest's last step just ticked here (not one removed): ask what's next.
+  // A task's last step just ticked here (not one removed): ask what's next.
   let ask = null;
   after.forEach((v, id) => {
     const b = before.get(id);
@@ -131,8 +131,8 @@ function settle(before) {
   renderAll();
   if (ask && S.quests.some(q => q.id === ask)) askNext(ask);
 }
-// The last step's ticked: add the next one, add a reminder to work it out, or finish the quest.
-// (Closed without an answer, the quest stays on Today asking, until you add a step or finish it.)
+// The last step's ticked: add the next one, add a reminder to work it out, or finish the task.
+// (Closed without an answer, the task stays on Today asking, until you add a step or finish it.)
 function askNext(id) {
   const r = find(id);
   if (!r) return;
@@ -145,7 +145,7 @@ function askNext(id) {
       cancel: 'Later',
       extra: [
         ['unsure', 'Not sure yet'],
-        ['finish', 'Finish quest', 'blue'],
+        ['finish', 'Finish task', 'blue'],
       ],
     },
     a => nextAnswer(id, a),
@@ -207,7 +207,7 @@ const inst = t =>
     children: t.children.map(inst),
   });
 
-/* repeating quests: a quest repeats through a template linked by n.tpl */
+/* repeating quests: a task repeats through a template linked by n.tpl */
 const repeats = t => !!t && (t.days.length > 0 || t.monthDay > 0);
 const tplFor = n => (n.tpl ? S.templates.find(t => t.id === n.tpl) : null);
 const ord = n => n + ([11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
@@ -220,9 +220,9 @@ function repLabel(t) {
   if (t.monthDay) p.push('Monthly on the ' + ord(t.monthDay));
   return p.join(', ');
 }
-// Change how a quest repeats. The repeat copies the quest as it is now, subquests included.
+// Change how a task repeats. The repeat copies the task as it is now, steps included.
 function setRepeat(n, fn) {
-  const bf = snapshot(); // (a repeating quest with every step ticked is finished: see isDone)
+  const bf = snapshot(); // (a repeating task with every step ticked is finished: see isDone)
   let t = tplFor(n) || S.templates.find(x => x.auto && x.text === n.text); // (never a saved one)
   if (!t) {
     t = { id: uid(), days: [], monthDay: 0, auto: true };
@@ -423,7 +423,7 @@ function setHTML(el, html) {
     el.innerHTML = html;
     if (inside) {
       let f = (sel && el.querySelector(sel)) || el;
-      // (the control may now be folded away, say a quest just ticked into "Done today": the
+      // (the control may now be folded away, say a task just ticked into "Done today": the
       // keyboard stays in the view rather than falling to the top of the page)
       if (f !== el && f.closest('details:not([open])')) f = el;
       if (f === el) el.tabIndex = -1;
@@ -520,5 +520,5 @@ function arm(b, label) {
   }, 3000);
   return false;
 }
-// "1 quest", "2 quests".
+// "1 task", "2 tasks".
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;

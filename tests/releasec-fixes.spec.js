@@ -55,7 +55,7 @@ test('audit 1: a flow result that synced in as the execution’s row (no report 
   });
   const r = (await app.state()).wruns[0];
   expect(r.cur).toBe('s2');
-  expect(r.st.s1).toMatchObject({ o: 'done', exec: 'x1', note: 'Flow: Sent' });
+  expect(r.st.s1).toMatchObject({ o: 'done', exec: 'x1', note: 'Automation: Sent' });
   // Folding the same report now changes nothing (already there).
   expect(
     await page.evaluate(() =>
@@ -91,7 +91,7 @@ test('audit 1: a flow result that synced in as the execution’s row (no report 
     norm(S);
   });
   const r2 = (await app.state()).wruns[1];
-  expect(r2).toMatchObject({ status: 'failed', err: 'Flow failed: boom' });
+  expect(r2).toMatchObject({ status: 'failed', err: 'Automation failed: boom' });
   expect(r2.log.filter(l => l.k === 'failed')).toHaveLength(1);
   expect(app.errors).toEqual([]);
 });
@@ -106,7 +106,9 @@ test('audit 2: the workflow editor keeps typed fields over a day toggle, a backg
     S.workflows = [wf()];
     save();
   });
-  await app.go('knowledge');
+  await app.processes();
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.fill('#wfname', 'Typed');
   await page.fill('#wfdesc', 'Desc');
@@ -132,10 +134,11 @@ test('audit 2: the workflow editor keeps typed fields over a day toggle, a backg
     days: [1, 2, 3, 4, 5, 6],
   });
   // A template's flow stage can't be saved without a flow.
+  await app.processes();
   await page.click('[data-wftpl="0"]');
   await page.fill('#wfname', 'Weekly');
   await page.click('#wfform .btn.green');
-  await expect(page.locator('#toast')).toContainText('Choose the flow for “Run the report flow”');
+  await expect(page.locator('#toast')).toContainText('Choose the automation for “Run the report automation”');
   expect((await app.state()).workflows).toHaveLength(1);
   expect(app.errors).toEqual([]);
 });
@@ -162,7 +165,7 @@ test('audit 3: opening a run from Today asks before discarding an article being 
   expect(app.errors).toEqual([]);
 });
 
-test('audit 4/6: a repeating quest keeps its estimate on every copy and counts in the forecast; what’s beyond the view is not an overrun', async ({
+test('audit 4/6: a repeating task keeps its estimate on every copy and counts in the forecast; what’s beyond the view is not an overrun', async ({
   app,
   page,
 }) => {
@@ -187,7 +190,7 @@ test('audit 4/6: a repeating quest keeps its estimate on every copy and counts i
     };
   });
   expect(f.days.slice(1).every(d => d[0] >= 15)).toBe(true); // (the repeat on every later day)
-  expect(f.days.every(d => d[1] === 0)).toBe(true); // (no overrun: the big quest isn't due)
+  expect(f.days.every(d => d[1] === 0)).toBe(true); // (no overrun: the big task isn't due)
   expect(f.beyond).toEqual([['Big undated', 1440 - (700 - 15 - 6 * 15)]]);
   expect(f.recs.join('\n')).toContain('Big undated (');
   expect(f.recs.join('\n')).toContain('past the 7 days in view');
@@ -224,7 +227,7 @@ test('audit 5: yesterday’s never-started run gives way to today’s; Resume ta
     ['w1-' + (await page.evaluate(() => shift(today(), -7))), 'cancelled'],
     ['w1-' + (await page.evaluate(() => today())), 'ready'],
   ]);
-  await app.go('knowledge');
+  await app.processes();
   await page.click('[data-wfstart="w1"]');
   expect(await page.evaluate(() => wfOpen)).toBe('w1-' + (await page.evaluate(() => today())));
   expect((await app.state()).wruns).toHaveLength(2);
@@ -256,7 +259,7 @@ test('audit 7: a waiting stage’s item taken to Today still resolves the stage;
   let r = (await app.state()).wruns[0];
   expect(r.status).toBe('waiting');
   const item = r.live.wait;
-  // Taken to Today (triage's Today): the waiting moves to a step of the new quest.
+  // Taken to Today (triage's Today): the waiting moves to a step of the new task.
   await page.evaluate(id => {
     const it = S.inbox.find(x => x.id === id);
     S.inbox = S.inbox.filter(x => x !== it);
@@ -313,7 +316,9 @@ test('audit 9/17: rule-made runs don’t trigger rules; a duplicate’s decision
     save();
   });
   expect((await app.state()).quests.find(q => q.text === 'Rule made').byRule).toBe(1);
-  await app.go('knowledge');
+  await app.processes();
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.click('[data-wfdup="w1"]');
   s = await app.state();

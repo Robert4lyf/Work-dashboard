@@ -1,4 +1,4 @@
-// Bug hunt after moving waiting to subquests: every place a waiting step can be.
+// Bug hunt after moving waiting to steps: every place a waiting step can be.
 const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ page, app }) => {
@@ -12,7 +12,7 @@ test.beforeEach(async ({ page, app }) => {
   });
 });
 
-test('waiting steps on Upcoming quests and on quests back in the Inbox are listed and chased', async ({
+test('waiting steps on Upcoming tasks and on tasks back in the Inbox are listed and chased', async ({
   app,
   page,
 }) => {
@@ -48,7 +48,7 @@ test('waiting steps on Upcoming quests and on quests back in the Inbox are liste
   expect(s.later[0].children[0].wait).toBeUndefined();
 });
 
-test('finished quests set waiting reopen properly', async ({ app, page }) => {
+test('finished tasks set waiting reopen properly', async ({ app, page }) => {
   await app.setState(s => {
     s.quests = [q('a', 'Budget', [], { est: 60 }), q('b', 'Report', [q('b1', 'Draft')])];
   });
@@ -58,7 +58,7 @@ test('finished quests set waiting reopen properly', async ({ app, page }) => {
   await page.evaluate(() => {
     const bf = snapshot();
     find('b1').n.done = true;
-    find('b').n.done = true; // (finished, as Finish quest does)
+    find('b').n.done = true; // (finished, as Finish task does)
     settle(bf);
   });
   expect((await app.state()).log.map(x => x.text)).toContain('Report');
@@ -67,7 +67,7 @@ test('finished quests set waiting reopen properly', async ({ app, page }) => {
   expect(s.quests[1].children.map(c => c.text).sort()).toEqual(['Draft', 'Sign-off']); // (done ones sink)
   expect(s.log.map(x => x.text)).not.toContain('Report');
 
-  // A finished quest with no steps: set waiting reopens it with a waiting step (not nothing).
+  // A finished task with no steps: set waiting reopens it with a waiting step (not nothing).
   await app.setState(s => (s.quests = [q('c', 'Invoice', [], { done: true })]));
   await page.evaluate(() => setWaiting('c', { who: 'Finance', note: '', due: '' }));
   s = await app.state();
@@ -75,7 +75,7 @@ test('finished quests set waiting reopen properly', async ({ app, page }) => {
   expect(s.quests[0].children[0]).toMatchObject({ text: 'Hear back', wait: { who: 'Finance' } });
 });
 
-test("a repeat's template leaves out waiting steps; the week summary heads groups with their quest", async ({
+test("a repeat's template leaves out waiting steps; the week summary heads groups with their task", async ({
   app,
   page,
 }) => {
@@ -106,7 +106,7 @@ test("a repeat's template leaves out waiting steps; the week summary heads group
   );
 });
 
-test('a waiting Inbox item given a subquest there still gets one waiting step on Today', async ({
+test('a waiting Inbox item given a step there still gets one waiting step on Today', async ({
   app,
   page,
 }) => {

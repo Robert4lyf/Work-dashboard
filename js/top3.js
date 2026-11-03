@@ -1,9 +1,9 @@
-/* today's top 3: up to three of Today's quests, chosen each day, shown at the top of Today in
-   the order chosen. They point at the quests themselves (S.top3 = { day, ids }: nothing is
+/* today's top 3: up to three of Today's tasks, chosen each day, shown at the top of Today in
+   the order chosen. They point at the tasks themselves (S.top3 = { day, ids }: nothing is
    copied, and the list below isn't reordered). A new day starts with none; yesterday's aren't
    carried over. Synced as one small record of its own (see toRecords): the newer choice wins when
-   two devices choose at once, and the quests are untouched either way. */
-// The chosen quests still on Today, in order (a deleted or moved one simply isn't shown).
+   two devices choose at once, and the tasks are untouched either way. */
+// The chosen tasks still on Today, in order (a deleted or moved one simply isn't shown).
 const top3Ids = () =>
   (S.top3 && S.top3.day === today() ? S.top3.ids : []).filter(id => S.quests.some(q => q.id === id));
 const inTop3 = id => top3Ids().includes(id);
@@ -26,7 +26,7 @@ function toggleTop3(id) {
     toast('Added to Top 3');
   }
 }
-// A compact label of how far a quest has got.
+// A compact label of how far a task has got.
 function progressLine(n) {
   if (isDone(n)) return 'Done';
   const w = showsWaiting(n) ? stepWaitBadge(n) || waitBadge(n) : '';
@@ -65,7 +65,7 @@ function renderTop3() {
     .join('');
   return `<section class="top3 box" aria-label="Top 3 today"><div class="sechead"><h2>Top 3</h2><button class="linkbtn" data-top3pick="1">Change</button></div><div class="t3list">${rows}</div></section>`;
 }
-/* choosing: a sheet listing Today's open quests; tap to add or take out, in order; the chosen
+/* choosing: a sheet listing Today's open tasks; tap to add or take out, in order; the chosen
    ones can be moved up and down. Each tap is saved as it's made. */
 function openTop3Picker(hint) {
   popSheet(top3PickerHtml(hint), { labelledBy: 'sheettitle' });
@@ -75,7 +75,7 @@ function top3PickerHtml(hint) {
     chosen = ids.map(id => S.quests.find(q => q.id === id)),
     rest = S.quests.filter(q => !isDone(q) && !ids.includes(q.id)),
     full = ids.length >= TOP3_MAX;
-  let h = `<h2 id="sheettitle">Top 3 for today</h2><p class="hint qahint">${esc(hint || "Up to three of Today's quests, most important first. Tap to choose.")}</p><div class="t3pick">`;
+  let h = `<h2 id="sheettitle">Top 3 for today</h2><p class="hint qahint">${esc(hint || "Up to three of Today's tasks, most important first. Tap to choose.")}</p><div class="t3pick">`;
   chosen.forEach((q, i) => {
     h += `<div class="t3prow"><button class="qact on" type="button" data-stay="1" data-t3tog="${q.id}" aria-pressed="true"><span class="t3n" aria-hidden="true">${i + 1}</span>${esc(q.text)}</button><button class="mv" type="button" data-stay="1" data-t3up="${q.id}" aria-label="Move up: ${esc(q.text)}"${i === 0 ? ' disabled' : ''}>&#9650;</button><button class="mv" type="button" data-stay="1" data-t3down="${q.id}" aria-label="Move down: ${esc(q.text)}"${i === chosen.length - 1 ? ' disabled' : ''}>&#9660;</button></div>`;
   });

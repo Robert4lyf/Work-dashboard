@@ -61,9 +61,9 @@ test('Scenario A: Thursday SSRS reporting: a run made ready by the day, the flow
   // The day made one run, ready; the Command Centre and Today both say so; nothing started.
   let s = await app.state();
   expect(s.wruns.map(r => [r.id, r.status])).toEqual([['w1-2026-11-05', 'ready']]);
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Workflow ready to start');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Process ready to start');
   await page.click('#v-today .attcc');
-  await expect(page.locator('#v-ops .opsec').first()).toContainText('Workflow ready to start');
+  await expect(page.locator('#v-ops .opsec').first()).toContainText('Process ready to start');
   await page.click('#v-ops [data-wfopen="w1-2026-11-05"]');
   await page.click('[data-wfact="begin"]');
   await expect(stage(page)).toHaveText('Check the source data');
@@ -83,11 +83,11 @@ test('Scenario A: Thursday SSRS reporting: a run made ready by the day, the flow
   await page.click('[data-wfact="done"]');
   await expect(stage(page)).toHaveText('Send to the team');
   await page.click('[data-wfact="done"]');
-  await expect(page.locator('#v-knowledge')).toContainText('Succeeded');
+  await expect(page.locator('#v-knowledge')).toContainText('Completed');
   s = await app.state();
   expect(s.wruns[0]).toMatchObject({
     status: 'succeeded',
-    st: { s2: { o: 'done', exec: s.execs[0].id, note: 'Flow: Report emailed' } },
+    st: { s2: { o: 'done', exec: s.execs[0].id, note: 'Automation: Report emailed' } },
   });
   // The day rolled again (a reload, another device's reset): still one run, done.
   await page.evaluate(() => {
@@ -102,7 +102,7 @@ test('Scenario A: Thursday SSRS reporting: a run made ready by the day, the flow
     renderAll();
   });
   await page.evaluate(() => go('ops'));
-  await expect(page.locator('#v-ops .opsec').nth(3)).toContainText('workflows: Thursday SSRS reporting');
+  await expect(page.locator('#v-ops .opsec').nth(3)).toContainText('processes: Thursday SSRS reporting');
   await page.evaluate(() => {
     reviewSub = 'insights';
     go('review');
@@ -110,7 +110,7 @@ test('Scenario A: Thursday SSRS reporting: a run made ready by the day, the flow
   await expect(page.locator('#v-review')).toContainText(
     '1 run started: 1 succeeded, 0 failed, 0 cancelled, 0 still under way. Success rate 100% of the 1 run with an outcome',
   );
-  await expect(page.locator('#v-review')).toContainText('1 flow launch: 1 verified succeeded');
+  await expect(page.locator('#v-review')).toContainText('1 automation launch: 1 verified succeeded');
   expect(app.errors).toEqual([]);
 });
 
@@ -196,22 +196,22 @@ test('Scenario C: an automation fails mid-run: the error, a retry as a new attem
     save();
     renderAll();
   });
-  await app.go('knowledge');
+  await app.processes();
   await page.click('[data-wfstart="w1"]');
   await flowTap(page);
   const x1 = (await app.state()).execs[0].id;
   await report(page, x1, 'failed', 1, 'Share not reachable');
-  await expect(page.locator('.werr')).toContainText('Flow failed: Share not reachable');
+  await expect(page.locator('.werr')).toContainText('Automation failed: Share not reachable');
   await expect(page.locator('#v-knowledge .runprog')).toContainText('Failed');
   await app.go('today');
   // One incident, one item: the run's failed stage (the flow's failure is its detail).
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Workflow failed');
+  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Process failed');
   await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Share not reachable');
   await expect(page.locator('#v-today .attn [data-xdet]')).toHaveCount(0);
   await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wfopen]');
   await page.click('[data-wfact="retry"]');
-  await expect(page.locator('#sheettitle')).toHaveText('Launch the flow again?');
+  await expect(page.locator('#sheettitle')).toHaveText('Launch the automation again?');
   await page.click('#sheetok');
   await flowTap(page);
   const s = await app.state();
@@ -242,7 +242,7 @@ test('Scenario C: an automation fails mid-run: the error, a retry as a new attem
     go('review');
   });
   await expect(page.locator('#v-review')).toContainText(
-    '2 flow launches: 2 verified succeeded, 0 verified failed',
+    '2 automation launches: 2 verified succeeded, 0 verified failed',
   );
   await expect(page.locator('#v-review')).toContainText('1 run started: 1 succeeded');
   expect(app.errors).toEqual([]);
@@ -337,7 +337,7 @@ test('Scenario E: an approval stage waits in the Inbox, is chased by a rule on i
     save();
     renderAll();
   });
-  await app.go('knowledge');
+  await app.processes();
   await page.click('[data-wfstart="w1"]');
   await page.click('[data-wfact="done"]');
   await expect(stage(page)).toHaveText('Approval');

@@ -98,8 +98,8 @@ function renderWeek() {
   }</div>`;
   return h;
 }
-// A plain-text summary of the week, grouped by quest (steps under their quest's title).
-// (A finished quest is its group's heading; one with no steps done this week goes under Other.)
+// A plain-text summary of the week, grouped by task (steps under their task's title).
+// (A finished task is its group's heading; one with no steps done this week goes under Other.)
 function weekText() {
   const by = {},
     other = [],

@@ -42,7 +42,7 @@ const alloc = (page, span) =>
     };
   }, span);
 
-test('estimates: steps replace the quest’s, what’s left is the estimate less focus time, junk is dropped', async ({
+test('estimates: steps replace the task’s, what’s left is the estimate less focus time, junk is dropped', async ({
   app,
   page,
 }) => {
@@ -74,7 +74,7 @@ test('estimates: steps replace the quest’s, what’s left is the estimate less
     320,
     '7h 0m · 5h 20m left',
   ]);
-  // The chip on the quest page sets it (a preset, or typed); the steps' parent says to set theirs.
+  // The chip on the task page sets it (a preset, or typed); the steps' parent says to set theirs.
   await app.openQuest('Small');
   await expect(page.locator('[data-estpick="q2"]')).toHaveText('Estimate 30m');
   await page.click('[data-estpick="q2"]');
@@ -119,12 +119,12 @@ test('the forecast is the same every time: due first, split across days, overrun
   expect(d1[2]).toBe(overrun > 0 ? overrun : 0);
   expect(f.none).toEqual(['No estimate']);
   expect(f.load).toBe(420 + 30 + 60 + 120 + 15 * 6);
-  expect(f.recs.join('\n')).toContain('1 quest without an estimate is left out');
+  expect(f.recs.join('\n')).toContain('1 task without an estimate is left out');
   if (overrun > 0) expect(f.recs[0]).toMatch(/^Tomorrow is over by/);
   // Twice the same.
   expect(await alloc(page, 7)).toEqual(f);
   expect(await alloc(page, 14)).toEqual(await alloc(page, 14));
-  // Later quests from their start day; nothing before.
+  // Later tasks from their start day; nothing before.
   const f14 = await alloc(page, 14);
   expect(f14.days.slice(0, 3).some(d => d[3].some(x => x.startsWith('Later')))).toBe(false);
   expect(f14.days.slice(3).some(d => d[3].some(x => x.startsWith('Later')))).toBe(true);
@@ -193,7 +193,7 @@ test('capacity is assumed until set, then synced as its own record; accuracy com
   expect(s.cap).toEqual([0, 120, 300, 300, 300, 300, 0]);
   expect(await page.evaluate(() => toRecords(S).has('meta:cap'))).toBe(true);
   await expect(page.locator('#v-review')).not.toContainText('capacity assumed');
-  // Finishing a quest with an estimate records it with the focus time on it.
+  // Finishing a task with an estimate records it with the focus time on it.
   await page.evaluate(() => {
     S.sessions.push({ tag: 'work', mins: 90, t: Date.now(), q: 'q1', p: '' });
     const bf = snapshot();
@@ -204,7 +204,7 @@ test('capacity is assumed until set, then synced as its own record; accuracy com
   expect(log[0]).toMatchObject({ id: 'q1', est: 60, m: 90 });
   await page.click('#accd summary');
   await expect(page.locator('#accd')).toContainText(
-    '1 finished quest with an estimate took 1h 30m of focus time against 1h 0m estimated; the typical quest took 1.5× its estimate, and 0 of 1 came within a quarter of it. Estimates tend to run low.',
+    '1 finished task with an estimate took 1h 30m of focus time against 1h 0m estimated; the typical task took 1.5× its estimate, and 0 of 1 came within a quarter of it. Estimates tend to run low.',
   );
   // Junk capacity is dropped.
   await page.evaluate(() => {

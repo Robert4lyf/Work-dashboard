@@ -1,7 +1,7 @@
 const KEY = 'work-cockpit-v1';
 const SUMMARY_MAX = 600;
 const RESUME_MAX = 400; // a saved place's note
-const LINKS_MAX = 20; // resources linked to a quest
+const LINKS_MAX = 20; // resources linked to a task
 const TOP3_MAX = 3;
 const TAGS = [
   ['Design', 'var(--pink)'],
@@ -58,7 +58,7 @@ const okRef = v => typeof v === 'string' && /^[\w-]{1,40}$/.test(v);
 // A web link behind a tap: only http(s). A synced row or a backup mustn't be able to put a
 // javascript: (or any other) address behind one.
 const okUrl = v => typeof v === 'string' && v.length <= 2000 && /^https?:\/\/[^\s<>"'`\\]+$/i.test(v);
-// A quest's resources: Knowledge articles and flows by id (never copied, so a renamed article
+// A task's resources: Knowledge articles and flows by id (never copied, so a renamed article
 // stays linked and a deleted one is simply gone), web links by address. Only well-formed ones.
 function cleanLinks(ls) {
   if (!Array.isArray(ls)) return [];
@@ -84,8 +84,8 @@ function cleanLinks(ls) {
   }
   return out;
 }
-// Where work on a quest stopped: a note (what was found, what to do next), when, and the step
-// it was on. One per quest; only kept while it says something.
+// Where work on a task stopped: a note (what was found, what to do next), when, and the step
+// it was on. One per task; only kept while it says something.
 function cleanResume(r) {
   if (!r || typeof r !== 'object') return null;
   const note = cleanText(typeof r.note === 'string' ? r.note : '')
@@ -96,9 +96,9 @@ function cleanResume(r) {
   if ((!note && !step) || !Number.isFinite(at) || at <= 0) return null;
   return { note, at, step };
 }
-// Quests are titles; the waiting is on their subquests. A quest set waiting (before this, or on an
+// Tasks are titles; the waiting is on their steps. A task set waiting (before this, or on an
 // older copy of the app) gets a step of its own, named for what it's waiting for, that carries it.
-// The step's id comes from the quest's, so two devices converting the same quest make the same step.
+// The step's id comes from the task's, so two devices converting the same task make the same step.
 // Record keys changed by a conversion in norm, not by an edit: see markDirty.
 const converted = new Set();
 function waitToStep(q) {
@@ -134,7 +134,7 @@ function cleanWait(n) {
     else delete w[k];
   });
 }
-// A quest has steps; a step doesn't (before, steps could have steps of their own). Steps under a
+// A task has steps; a step doesn't (before, steps could have steps of their own). Steps under a
 // step move up beside it, named with it ("Contract: Draft"); a step that only grouped them goes.
 // One with anything of its own (waiting, notes) stays, as a step, finished if its steps were.
 // An optional group's steps are optional, and they take its deadline if they have none. Ids and
@@ -171,13 +171,13 @@ function fix(n) {
   n.project = n.project || '';
   n.opt = !!n.opt;
   n.notes = n.notes || '';
-  // A quest's summary: where it's at, shown under its name. (Only kept when there is one, so
-  // quests without one, and copies from before, stay as they were.)
+  // A task's summary: where it's at, shown under its name. (Only kept when there is one, so
+  // tasks without one, and copies from before, stay as they were.)
   if (n.summary && typeof n.summary === 'string') n.summary = cleanText(n.summary).slice(0, SUMMARY_MAX);
   else delete n.summary;
   n.due = cleanDay(n.due);
   n.done = !!n.done;
-  // Resources and a saved place: only kept when there are any, so quests without stay as they
+  // Resources and a saved place: only kept when there are any, so tasks without stay as they
   // were (and copies from before this version read the same).
   const links = cleanLinks(n.links);
   if (links.length) n.links = links;
@@ -187,8 +187,8 @@ function fix(n) {
   else delete n.resume;
   return n;
 }
-// Today's top 3: up to three of Today's quests, by id, for one calendar day. (Its own synced
-// record: see toRecords. Shown only on its day; the quests themselves aren't changed.)
+// Today's top 3: up to three of Today's tasks, by id, for one calendar day. (Its own synced
+// record: see toRecords. Shown only on its day; the tasks themselves aren't changed.)
 function cleanTop3(t) {
   if (!t || typeof t !== 'object') return null;
   const day = cleanDay(t.day),
@@ -281,7 +281,7 @@ function norm(s) {
   S.pins = cleanPins(S.pins);
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
-  // (only objects, with a quest behind them only if that's an object too: a synced row or a
+  // (only objects, with a task behind them only if that's an object too: a synced row or a
   // backup could hold anything)
   S.inbox = S.inbox
     .filter(i => i && typeof i === 'object')
@@ -290,7 +290,7 @@ function norm(s) {
       delete i.node;
       return cleanId(i);
     });
-  // Waiting details on an Inbox item live on the item (older versions left them on its quest).
+  // Waiting details on an Inbox item live on the item (older versions left them on its task).
   S.inbox.forEach(cleanWait);
   S.inbox.forEach(i => {
     if (i.node && i.node.wait && !i.wait) i.wait = i.node.wait;
@@ -330,7 +330,7 @@ function norm(s) {
   S.later.forEach(q => flat('later', q, q));
   S.inbox.forEach(i => flat('inbox', i, i.node));
   S.templates.forEach(t => flat('template', t, t));
-  // Before, ticking a quest's last step finished it. One finished that way (it's in the log) is
+  // Before, ticking a task's last step finished it. One finished that way (it's in the log) is
   // marked finished, as finishing it now does; one never finished asks what's next. (Not one this
   // version has already asked about, marked asked: its log entry is from an earlier finish.)
   S.quests.forEach(q =>
@@ -345,7 +345,7 @@ function norm(s) {
         (q.done = true),
     ),
   );
-  // Saved templates (a removed feature) go; only repeating quests' templates stay. Everywhere
+  // Saved templates (a removed feature) go; only repeating tasks' templates stay. Everywhere
   // alike, so their removal is a conversion too (a repeat set up elsewhere meanwhile still wins).
   S.templates = S.templates.filter(t => {
     if (t.days.length || t.monthDay) return true;
@@ -370,7 +370,7 @@ function norm(s) {
     S.oldPdaily = minus(keptP, S.pdaily);
   }
   rebuildTotals();
-  if (hadPromises) save(); // store and sync the converted quests
+  if (hadPromises) save(); // store and sync the converted tasks
 }
 function sessionTotals() {
   S.sessions.forEach(x => {
@@ -394,7 +394,7 @@ const daysBetween = (a, b) => {
     [y2, m2, d2] = b.split('-').map(Number);
   return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 864e5);
 };
-// Each quest on Today remembers the day it arrived, so ones carried over for days stand out.
+// Each task on Today remembers the day it arrived, so ones carried over for days stand out.
 function stampSince() {
   S.quests.forEach(q => {
     if (!q.since) q.since = today();
@@ -491,14 +491,14 @@ function rollover() {
   dropUndo(); // (an undo from yesterday would bring back yesterday, and its reset again)
   // (not one finished today on another device, whose reset came first: it's done today)
   S.quests = S.quests.filter(q => !isDone(q) || S.log.some(x => x.id === q.id && x.d === today()));
-  // A repeating quest is on Today only on the day it's for: one from an earlier day goes, finished
+  // A repeating task is on Today only on the day it's for: one from an earlier day goes, finished
   // or not (today's copy, made by another device's reset first, stays).
   S.quests = S.quests.filter(q => !repeats(tplFor(q)) || q.id === q.tpl + '-' + today());
   S.day = today();
   // Yesterday's top 3 is over: today's is chosen afresh. (Back-dated to midnight like the rest
   // of the reset, so a choice already made today on another device wins over this.)
   if (S.top3 && S.top3.day !== today()) S.top3 = null;
-  // Today's copies of repeating quests. (Days the app wasn't opened aren't caught up: their
+  // Today's copies of repeating tasks. (Days the app wasn't opened aren't caught up: their
   // day has gone.)
   {
     const d = today(),
@@ -524,7 +524,7 @@ function rollover() {
   // A recurring workflow's run for today, ready to start (the same id on every device).
   rolloverWorkflows(today());
   rolloverRules(today());
-  // Scheduled quests whose day has come join the end of Today's list.
+  // Scheduled tasks whose day has come join the end of Today's list.
   S.later = S.later.filter(n => {
     if (n.start > today()) return true;
     delete n.start;

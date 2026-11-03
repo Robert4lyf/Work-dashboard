@@ -10,7 +10,7 @@ const setDay = async (page, y, m, d) => {
   await page.reload();
 };
 
-test('a quest scheduled for Tomorrow leaves Today and comes back on the day', async ({ app, page }) => {
+test('a task scheduled for Tomorrow leaves Today and comes back on the day', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.addQuest('Email');
   await app.openQuest('Report');
@@ -56,7 +56,7 @@ test('Next Mon, date picker, reschedule, bring back and delete', async ({ app, p
   expect((await app.state()).later.map(n => n.text)).toEqual(['A']);
 });
 
-test('subquests cannot be scheduled on their own', async ({ app, page }) => {
+test('steps cannot be scheduled on their own', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await app.addSub('Draft');

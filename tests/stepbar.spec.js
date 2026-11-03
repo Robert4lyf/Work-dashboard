@@ -1,4 +1,4 @@
-// Today shows each quest's steps as a bar, a block per step.
+// Today shows each task's steps as a bar, a block per step.
 const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ page, app }) => {
@@ -17,7 +17,7 @@ const bars = page =>
     }),
   );
 
-test("each quest with steps shows a bar: done, next, waiting, to do, and what's next", async ({
+test("each task with steps shows a bar: done, next, waiting, to do, and what's next", async ({
   app,
   page,
 }) => {
@@ -64,7 +64,7 @@ test("each quest with steps shows a bar: done, next, waiting, to do, and what's 
   await expect(page.locator('#v-today .stepbar')).toHaveCount(4);
 });
 
-test('a finished quest shows its full bar under Done today', async ({ app, page }) => {
+test('a finished task shows its full bar under Done today', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await app.addSub('Draft');

@@ -4,7 +4,7 @@ test.beforeEach(async ({ app }) => {
   await app.open();
 });
 
-test('search finds quests, steps, inbox, notes, knowledge, flows and done items, and opens them', async ({
+test('search finds tasks, steps, inbox, notes, knowledge, flows and done items, and opens them', async ({
   app,
   page,
 }) => {
@@ -37,8 +37,8 @@ test('search finds quests, steps, inbox, notes, knowledge, flows and done items,
     'Upcoming 1',
     'Inbox 1',
     'Notes 1',
-    'Knowledge 1',
-    'Flows 1',
+    'Reference 1',
+    'Desktop automations 1',
     'Done 1',
   ]);
   await expect(page.locator('#sres mark').first()).toHaveText('budget');

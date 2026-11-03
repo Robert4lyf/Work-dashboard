@@ -3206,3 +3206,54 @@ details.more > details {
 .attsum[open] + .attfail {
   border-top-width: 1.5px;
 }
+
+/* Phase 2: Knowledge in two views, the "+ New" sheet, the process overview */
+.kbtabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.kbtabs .viewsw {
+  margin: 0;
+}
+.kbsec {
+  margin: 0 0 18px;
+}
+.kbsec .kbhead {
+  margin-top: 0;
+}
+.kbsec .sechead .kbhead {
+  margin: 0;
+}
+.newlist .qact b {
+  display: block;
+}
+.newlist .qact small {
+  display: block;
+  color: var(--muted);
+  white-space: normal;
+}
+.kbdesc {
+  margin: 0 0 8px;
+}
+.kbsub {
+  margin: 16px 0 6px;
+  font-size: 1em;
+}
+.wfstate {
+  margin: 8px 0 12px;
+}
+.wfstate p {
+  margin: 0 0 8px;
+}
+.wfstate.w-failed {
+  border-color: var(--pink);
+}
+.wprev li {
+  padding: 4px 0;
+}
+.wfacts {
+  margin-top: 14px;
+}

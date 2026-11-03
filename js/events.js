@@ -349,7 +349,7 @@ document.addEventListener('click', e => {
   if (!b) return;
   const d = b.dataset;
   if (waitMark && !b.closest('#sheet')) waitMark = ''; // (seen: the mark goes with the next redraw)
-  // A quest's quick actions (its ⋯), from a row or tile on a list, or from its page.
+  // A task's quick actions (its ⋯), from a row or tile on a list, or from its page.
   if (d.qact) openQuestActions(d.qact, !b.closest('.qfoot'));
   if (d.saveplace) savePlace(d.saveplace);
   if (d.resume) resumeWork(d.resume);
@@ -365,6 +365,7 @@ document.addEventListener('click', e => {
   forecastClick(d, b);
   insightClick(d);
   opsClick(d, b);
+  createClick(d, b);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -373,7 +374,7 @@ document.addEventListener('click', e => {
     }
   }
   if (d.v && b.closest('header, #v-waiting, #waitsec')) {
-    if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open quest)
+    if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open task)
     if (b.classList.contains('halarm')) alarmsOpen = true; // (the alarms, unfolded)
     go(d.v);
     if (b.classList.contains('halarm') && $('#alarmd')) $('#alarmd').scrollIntoView({ block: 'nearest' });
@@ -856,7 +857,7 @@ function closeImgs() {
 }
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'i or n capture (n on a quest: subquest) · / search · t today · o command centre · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: step) · / search · t today · o command centre · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (!window.appReady) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1023,7 +1024,7 @@ openPics().then(async db => {
   start(pics, kv);
 });
 // Android's back gesture: one history entry stands for "in the app". Going back runs the app's
-// own back step (close a picture, leave an article or a quest's page, back to Today...) and
+// own back step (close a picture, leave an article or a task's page, back to Today...) and
 // puts the entry back; only from Today's list does it leave the app.
 function appBack() {
   if (!$('#v-alarm').hidden) return true; // (an alarm is ringing: its buttons only)
@@ -1045,6 +1046,11 @@ function appBack() {
     return true;
   }
   if (view === 'knowledge' && wfOpen) return (closeWorkflowRun(), true);
+  if (view === 'knowledge' && wfView) {
+    wfView = null;
+    renderKnowledge();
+    return true;
+  }
   if (view === 'knowledge' && kbArt) {
     kbClick({ kbback: '1' }, {});
     return true;

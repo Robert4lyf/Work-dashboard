@@ -51,14 +51,14 @@ test('busy day: one attention summary, ordered by urgency; a workflow and its ow
   await expect(page.locator('#attd .attrow').first()).toBeHidden();
   await sum.click();
   expect(await attRows(page, '.attfail')).toEqual([
-    ['Month-end report', 'Open failed stage'],
-    ['Tidy downloads', 'Open execution details'],
+    ['Month-end report', 'Open the failed step'],
+    ['Tidy downloads', 'Open automation details'],
   ]);
   expect(await attRows(page, '#attd')).toEqual([
-    ['Fletcher Way', 'Open quest'],
-    ['Review', 'Open quest'],
+    ['Fletcher Way', 'Open task'],
+    ['Review', 'Open task'],
     ['Hear back on figures', 'Open in Waiting'],
-    ['Filbert Close', 'Open quest'],
+    ['Filbert Close', 'Open task'],
     ['Floor plan sign-off', 'Open in Waiting'],
   ]);
   // (Export report's failure is the Month-end run's failed stage: not a second emergency.)
@@ -91,7 +91,7 @@ test('acting on items: the failed stage opens; acknowledging or resolving update
   await expect(page.locator('#v-today')).toBeVisible();
   await expect(page.locator('#attd')).toHaveAttribute('open', '');
   // Changes from another device arrive as a background redraw: acknowledged run, flow and an
-  // overdue quest finished. The panel stays open and the counts agree everywhere.
+  // overdue task finished. The panel stays open and the counts agree everywhere.
   await page.evaluate(() => {
     S.wruns.find(r => r.id === 'r1').ack = 1;
     S.execs.find(x => x.id === 'x2').ack = 1;
@@ -106,7 +106,7 @@ test('acting on items: the failed stage opens; acknowledging or resolving update
   await expect(page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 4');
   // Acknowledged failures are results now.
   await expect(page.locator('#v-ops')).toContainText('Recent results');
-  await expect(page.locator('#v-ops')).toContainText('Workflow failed');
+  await expect(page.locator('#v-ops')).toContainText('Process failed');
 });
 
 test('a flow failure of its own stays its own item; a stale launch inside a run is the run', async ({
@@ -147,8 +147,8 @@ test('a flow failure of its own stays its own item; a stale launch inside a run 
     ];
   });
   await page.reload();
-  expect(await attRows(page, '.attfail')).toEqual([['Export report', 'Open execution details']]);
-  expect(await attRows(page, '#attd')).toEqual([['Report run', 'Open workflow']]);
+  expect(await attRows(page, '.attfail')).toEqual([['Export report', 'Open automation details']]);
+  expect(await attRows(page, '#attd')).toEqual([['Report run', 'Open process']]);
 });
 
 test('the header follows one rule: saved place today, else Top 3, else list order; nothing reordered', async ({
@@ -160,7 +160,7 @@ test('the header follows one rule: saved place today, else Top 3, else list orde
   // A place saved an hour ago comes first, with Resume.
   await expect(head).toContainText('Pick up where you left off · Q4 budget report');
   await expect(page.locator('#hact [data-resume="q4"]')).toHaveText('Resume');
-  // An older saved place doesn't take over: Top 3's first quest with a step to do does.
+  // An older saved place doesn't take over: Top 3's first task with a step to do does.
   await page.evaluate(() => {
     S.quests[4].resume.at = Date.now() - 3 * 864e5;
     renderAll();
@@ -181,7 +181,7 @@ test('the header follows one rule: saved place today, else Top 3, else list orde
     S.quests[9].done = true;
     renderAll();
   });
-  // No Top 3 quest with a step left: list order, as before.
+  // No Top 3 task with a step left: list order, as before.
   await expect(head).toContainText('Next task · Walsingham sale');
   const order = await app.order();
   expect(order[0]).toBe('Walsingham sale');
@@ -225,7 +225,7 @@ test("Today's order: attention, Top 3, the work; secondary sections folded at th
   // Overdue and due-today work is in Needs attention, not repeated in Steps due soon.
   await more.locator('#soond > summary').click();
   await expect(more.locator('#soond')).not.toContainText('Overdue');
-  // The first quest of the list is on the first screen of a phone.
+  // The first task of the list is on the first screen of a phone.
   const top = await page
     .locator('#v-today > .list .row')
     .first()

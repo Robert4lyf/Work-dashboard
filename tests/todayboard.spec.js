@@ -1,4 +1,4 @@
-// Today as a board: lanes by stage, a tile per quest; the choice is the device's own.
+// Today as a board: lanes by stage, a tile per task; the choice is the device's own.
 const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ page, app }) => {
@@ -51,7 +51,7 @@ test('switch to the board: lanes by stage; the choice is kept over a reload, and
   ]);
 });
 
-test('on the board: a tile opens its quest, back returns to the board; one without steps is ticked there', async ({
+test('on the board: a tile opens its task, back returns to the board; one without steps is ticked there', async ({
   app,
   page,
 }) => {

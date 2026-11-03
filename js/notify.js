@@ -252,7 +252,7 @@ function wantedNotices(now = Date.now()) {
         key: 'chase:' + n.id + ':' + w.due,
         at: at9(w.due),
         title: 'Time to chase',
-        body: [...trail, n.text].join(' / ') + (w.who ? ' (' + w.who + ')' : ''), // (the quest, and its step)
+        body: [...trail, n.text].join(' / ') + (w.who ? ' (' + w.who + ')' : ''), // (the task, and its step)
       });
   });
   return out.concat(alarmNotices(now));

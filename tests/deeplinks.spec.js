@@ -80,7 +80,7 @@ test('every destination opens from a cold launch, and the address is cleaned up'
     expect(ok(w), h + ' -> ' + JSON.stringify(w)).toBe(true);
     expect(w.hash, h).toBe('');
   }
-  // The marked waiting item, and a quest on Upcoming or in the Inbox shown where it is.
+  // The marked waiting item, and a task on Upcoming or in the Inbox shown where it is.
   await cold(page, '#/waiting/s2');
   await expect(page.locator('#v-waiting .row.marked')).toContainText('Sign-off');
   await cold(page, '#/q/L1');
@@ -142,7 +142,7 @@ test('missing, invalid or hostile targets fail plainly, change nothing, and neve
   const canonState = () => page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
   const before = await canonState();
   for (const [h, msg, view] of [
-    ['#/q/nope', "quest isn't here", 'today'],
+    ['#/q/nope', "task isn't here", 'today'],
     ['#/kb/nope', "article isn't here", 'knowledge'],
     ['#/waiting/s1', "waiting item isn't here", 'waiting'], // (s1 isn't waiting)
     ['#/kb/a2/run', 'no steps to follow', 'knowledge'],

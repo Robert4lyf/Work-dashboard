@@ -25,7 +25,7 @@ test.describe('desktop', () => {
     await expect(page.locator('#hnow b')).toHaveText('C');
   });
 
-  test('a waiting quest (shown lower down) can only be dropped among the waiting ones', async ({
+  test('a waiting task (shown lower down) can only be dropped among the waiting ones', async ({
     app,
     page,
   }) => {

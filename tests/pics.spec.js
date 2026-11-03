@@ -94,17 +94,17 @@ test('Android back: steps back through the app, and only leaves it from Today’
   page,
 }) => {
   await page.evaluate(() => {
-    S.quests = [fix({ id: 'q', text: 'Quest', children: [fix({ id: 's', text: 'Step' })] })];
+    S.quests = [fix({ id: 'q', text: 'Task', children: [fix({ id: 's', text: 'Step' })] })];
     save();
     renderAll();
   });
-  await app.openQuest('Quest');
+  await app.openQuest('Task');
   await app.go('inbox');
   await page.goBack();
   await expect(page.locator('#v-today')).toBeVisible();
   await expect(page.locator('#v-today .crumbs, #v-today [data-crumb]').first()).toBeVisible();
   await page.goBack();
-  await expect(page.locator('#v-today .open >> text="Quest"')).toBeVisible();
+  await expect(page.locator('#v-today .open >> text="Task"')).toBeVisible();
   // A picture shown full size closes first.
   await page.evaluate(() => {
     S.noteImgs = [{ id: 'm', src: 'data:image/png;base64,iVBORw0KGgo=', at: 1 }];

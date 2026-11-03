@@ -46,8 +46,8 @@ const seed = () => {
       at: now - day,
       fin: 0,
       status: 'failed',
-      err: 'Flow failed',
-      st: { s2: { o: 'failed', at: now - day, note: 'Flow failed' } },
+      err: 'Automation failed',
+      st: { s2: { o: 'failed', at: now - day, note: 'Automation failed' } },
       log: [],
       live: {},
     },
@@ -142,22 +142,22 @@ test('the sentences are the same every time and say what each rate is a rate of'
   const lines = await page.evaluate(() => insightLines(insights(7)).map(([h, ls]) => [h, ls]));
   const by = Object.fromEntries(lines);
   expect(by.Productivity).toEqual([
-    '3 quests finished this period, up 200% on the period before (1).',
+    '3 tasks finished this period, up 200% on the period before (1).',
     '2h 0m of focus time this period, down 50% on the period before (4h 0m). About 17m a day.',
     '1 interruption noted this period, none the period before.',
   ]);
-  expect(by.Workflows[0]).toBe(
+  expect(by.Processes[0]).toBe(
     '4 runs started: 1 succeeded, 1 failed, 1 cancelled, 1 still under way. Success rate 50% of the 2 runs with an outcome (cancelled and unfinished runs aren’t counted).'.replace(
       '’',
       "'",
     ),
   );
-  expect(by.Workflows[1]).toBe('4 runs started this period, none the period before.');
-  expect(by.Workflows[2]).toBe(
+  expect(by.Processes[1]).toBe('4 runs started this period, none the period before.');
+  expect(by.Processes[2]).toBe(
     'Weekly report: 4 runs, 1 succeeded, 1 failed, a successful run typically takes 1h 0m; most failed stage: Run the flow (1).',
   );
   expect(by.Automation[0]).toBe(
-    '5 flow launches: 1 verified succeeded, 1 verified failed, 1 cancelled, 1 unconfirmed (no word after a day), 1 awaiting a result. Success rate 50% of the 2 verified results. A first report typically arrives 2m after the launch.',
+    '5 automation launches: 1 verified succeeded, 1 verified failed, 1 cancelled, 1 unconfirmed (no word after a day), 1 awaiting a result. Success rate 50% of the 2 verified results. A first report typically arrives 2m after the launch.',
   );
   expect(by.Automation[1]).toBe('5 launches this period, up 400% on the period before (1).');
   expect(by.Automation.slice(2)).toEqual([
@@ -171,7 +171,7 @@ test('the sentences are the same every time and say what each rate is a rate of'
     'Dana: 1 open item, waiting up to 1 day.',
   ]);
   expect(by.Estimates[0]).toContain(
-    '2 finished quests with an estimate took 1h 30m of focus time against 2h 0m estimated; the typical quest took 1.0× its estimate, and 1 of 2 came within a quarter of it. Estimates are about right.',
+    '2 finished tasks with an estimate took 1h 30m of focus time against 2h 0m estimated; the typical task took 1.0× its estimate, and 1 of 2 came within a quarter of it. Estimates are about right.',
   );
   expect(by.Rules).toEqual(['Rules fired 1 time, held back by a daily cap 1 time, with 0 errors.']);
   // Twice the same; a wider period counts the older run and launch too.
@@ -180,7 +180,7 @@ test('the sentences are the same every time and say what each rate is a rate of'
   );
   const wide = await page.evaluate(() => insightLines(insights(30)));
   expect(wide[1][1][0]).toContain('5 runs started: 2 succeeded');
-  expect(wide[2][1][0]).toContain('6 flow launches: 2 verified succeeded');
+  expect(wide[2][1][0]).toContain('6 automation launches: 2 verified succeeded');
   expect(app.errors).toEqual([]);
 });
 
@@ -200,7 +200,7 @@ test('the page shows the period, charts and sentences; exports carry the numbers
   await expect(page.locator('[data-ispan="30"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#v-review h2')).toHaveText([
     'Productivity',
-    'Workflows',
+    'Processes',
     'Automation',
     'Waiting',
     'Estimates',
@@ -210,7 +210,7 @@ test('the page shows the period, charts and sentences; exports carry the numbers
   await expect(page.locator('.ibars').first().locator('.ibar')).toHaveCount(30);
   await page.click('[data-ispan="7"]');
   await expect(page.locator('.ibars').first().locator('.ibar')).toHaveCount(7);
-  await expect(page.locator('.ilines').first()).toContainText('3 quests finished this period');
+  await expect(page.locator('.ilines').first()).toContainText('3 tasks finished this period');
   const text = await page.evaluate(() => insightsText(insights(7))),
     csv = await page.evaluate(() => insightsCsv(insights(7)));
   expect(text).toContain('Insights, ');
@@ -244,10 +244,10 @@ test('empty records give plain sentences, no errors', async ({ app, page }) => {
   await app.open();
   await app.go('review');
   await page.click('[data-rsub="insights"]');
-  await expect(page.locator('#v-review')).toContainText('No quests finished in either period.');
-  await expect(page.locator('#v-review')).toContainText('No workflow runs started this period.');
-  await expect(page.locator('#v-review')).toContainText('No flow launches this period.');
+  await expect(page.locator('#v-review')).toContainText('No tasks finished in either period.');
+  await expect(page.locator('#v-review')).toContainText('No process runs started this period.');
+  await expect(page.locator('#v-review')).toContainText('No automation launches this period.');
   await expect(page.locator('#v-review')).toContainText('No rules fired this period.');
-  await expect(page.locator('#v-review')).toContainText('No finished quests with an estimate yet');
+  await expect(page.locator('#v-review')).toContainText('No finished tasks with an estimate yet');
   expect(app.errors).toEqual([]);
 });

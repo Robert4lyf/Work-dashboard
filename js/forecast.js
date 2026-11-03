@@ -1,16 +1,16 @@
-/* workload forecasting (Release C): estimates on quests and steps, how much time each day has,
+/* workload forecasting (Release C): estimates on tasks and steps, how much time each day has,
    and a forecast of the next 7, 14 or 30 days worked out the same way every time (below).
    Nothing here moves a quest: a recommendation is a button, and the move is yours.
-   Estimates: n.est, minutes. A quest's estimate is the sum of its steps' estimates when any
+   Estimates: n.est, minutes. A task's estimate is the sum of its steps' estimates when any
    step has one (its own is then ignored: no double counting), else its own. What's left of it
    is the estimate less the focus time spent on it (never below zero), which is a guess from
    two measured things, and said so.
    Capacity: S.cap, minutes for each weekday (Sunday first); until set, CAP_DEFAULT, shown as
-   assumed. The forecast (allocate) fills days in order: quests sorted by due date (undated
+   assumed. The forecast (allocate) fills days in order: tasks sorted by due date (undated
    last), today's top 3 first, then list order; each takes the first days with room between its
    start and its due date, split across days when bigger than a day's room; what doesn't fit by
-   its due date lands on that day as an overrun. Repeating quests count on their days with the
-   template's estimate and don't move. Quests without an estimate are counted, not planned. */
+   its due date lands on that day as an overrun. Repeating tasks count on their days with the
+   template's estimate and don't move. Tasks without an estimate are counted, not planned. */
 const EST_MAX = 1440,
   CAP_DEFAULT = [0, 300, 300, 300, 300, 300, 0],
   FORECAST_SPANS = [7, 14, 30];
@@ -95,7 +95,7 @@ function forecastItems(span) {
       later: true,
     });
   });
-  // Repeating quests on their days (after today: today's copy is on the list already).
+  // Repeating tasks on their days (after today: today's copy is on the list already).
   S.templates.forEach(tp => {
     const min = effEst(tp);
     if (!repeats(tp) || !min) return;
@@ -173,7 +173,7 @@ function allocate(span = forecastSpan) {
   return { days, items, none, cap, load, assumed: !S.cap };
 }
 // Recommendations, each with why, in a fixed order: overruns (earliest day first), then what's
-// unplanned. A move is offered only where a later day has room before the quest is due.
+// unplanned. A move is offered only where a later day has room before the task is due.
 function recommendations(f) {
   const out = [];
   if (f.assumed)
@@ -190,7 +190,7 @@ function recommendations(f) {
       text: `${dayLabel(day.d)} is over by ${hm(over)}: ${hm(day.load)} planned against ${hm(day.cap)} (${names}).`,
     };
     // Everything placed by then is due by then (that's the order), so something has to slip: the
-    // smallest quest that didn't fit, to the first later day with room for all of it. Said
+    // smallest task that didn't fit, to the first later day with room for all of it. Said
     // plainly that it's past its due date; the move is a button, not done here.
     const slip = day.items.filter(x => x.over && !x.fixed && !x.later).sort((a, b) => a.min - b.min)[0];
     if (slip) {
@@ -211,7 +211,7 @@ function recommendations(f) {
   if (f.none.length)
     out.push({
       k: 'none',
-      text: `${plural(f.none.length, 'quest')} without an estimate ${f.none.length === 1 ? 'is' : 'are'} left out of the plan.`,
+      text: `${plural(f.none.length, 'task')} without an estimate ${f.none.length === 1 ? 'is' : 'are'} left out of the plan.`,
       ids: f.none.slice(0, 6).map(q => [q.id, q.text]),
     });
   if (!out.length)
@@ -221,7 +221,7 @@ function recommendations(f) {
     });
   return out;
 }
-// How estimates have compared with the focus time on finished quests (last 30 days).
+// How estimates have compared with the focus time on finished tasks (last 30 days).
 function estimateAccuracy(days = 30) {
   const cut = shift(today(), -(days - 1)),
     rows = S.log.filter(l => l.d >= cut && l.est > 0 && Number.isFinite(l.m));
@@ -235,14 +235,14 @@ function estimateAccuracy(days = 30) {
 }
 function accuracyText(a) {
   if (!a.n)
-    return 'No finished quests with an estimate yet: finish a few with an estimate set and the comparison appears here.';
+    return 'No finished tasks with an estimate yet: finish a few with an estimate set and the comparison appears here.';
   const word =
     a.median > 1.25
       ? 'Estimates tend to run low.'
       : a.median < 0.75
         ? 'Estimates tend to run high.'
         : 'Estimates are about right.';
-  return `Over the last ${a.days} days, ${plural(a.n, 'finished quest')} with an estimate took ${hm(a.m)} of focus time against ${hm(a.est)} estimated; the typical quest took ${a.median.toFixed(1)}× its estimate, and ${a.within} of ${a.n} came within a quarter of it. ${word} (Focus time is what the timer measured; work done without the timer isn't counted.)`;
+  return `Over the last ${a.days} days, ${plural(a.n, 'finished task')} with an estimate took ${hm(a.m)} of focus time against ${hm(a.est)} estimated; the typical task took ${a.median.toFixed(1)}× its estimate, and ${a.within} of ${a.n} came within a quarter of it. ${word} (Focus time is what the timer measured; work done without the timer isn't counted.)`;
 }
 /* the Review tab's Forecast page */
 function renderForecast() {
@@ -250,7 +250,7 @@ function renderForecast() {
     recs = recommendations(f),
     pct = f.cap ? Math.round((f.load / f.cap) * 100) : 0;
   let h = `<div class="chips">${FORECAST_SPANS.map(s => `<button class="chip" data-fspan="${s}" aria-pressed="${s === forecastSpan}">${s} days</button>`).join('')}</div>
-    <h2>Workload radar</h2><p class="hint">${hm(f.load)} planned of ${hm(f.cap)} capacity (${pct}%)${f.assumed ? ' · capacity assumed' : ''}${f.none.length ? ` · ${plural(f.none.length, 'quest')} unestimated` : ''}</p>
+    <h2>Workload radar</h2><p class="hint">${hm(f.load)} planned of ${hm(f.cap)} capacity (${pct}%)${f.assumed ? ' · capacity assumed' : ''}${f.none.length ? ` · ${plural(f.none.length, 'task')} unestimated` : ''}</p>
     <div class="radar${forecastSpan > 14 ? ' tight' : ''}" role="img" aria-label="Planned time against capacity, each day">${f.days
       .map(day => {
         const r = day.cap ? day.load / day.cap : day.load ? 2 : 0,
@@ -276,12 +276,12 @@ function renderForecast() {
         ? `<ul class="flist">${open.items.map(x => `<li><small>${hm(x.take)}${x.over ? ' over' : ''}</small><span>${x.fixed ? esc(x.text) + ' <small>(repeats)</small>' : `<button class="linkbtn" data-open="${x.id}">${esc(x.text)}</button>`}${x.due ? ` <small>due ${esc(dayLabel(x.due))}</small>` : ''}</span></li>`).join('')}</ul>`
         : '<p class="hint">Nothing planned.</p>'
     }</div>`;
-  h += `<details id="capd"${panels.capd ? ' open' : ''}><summary>Capacity per weekday${f.assumed ? ' <small>(assumed)</small>' : ''}</summary><p class="hint">Minutes of quest time you can plan each day.</p><div class="capgrid">${WEEK.map(
+  h += `<details id="capd"${panels.capd ? ' open' : ''}><summary>Capacity per weekday${f.assumed ? ' <small>(assumed)</small>' : ''}</summary><p class="hint">Minutes of task time you can plan each day.</p><div class="capgrid">${WEEK.map(
     wd =>
       `<label><span>${WD[wd]}</span><input class="fld" type="number" min="0" max="960" step="15" value="${capacity()[wd]}" data-cap="${wd}" aria-label="Capacity ${WD[wd]}, minutes"></label>`,
   ).join('')}</div></details>`;
   h += `<details id="accd"${panels.accd ? ' open' : ''}><summary>Estimates against focus time</summary><p class="hint">${esc(accuracyText(estimateAccuracy()))}</p></details>`;
-  h += `<details id="howd"${panels.howd ? ' open' : ''}><summary>How the forecast is worked out</summary><p class="hint">Each day has its capacity. Quests are taken in order of due date (undated last), today's top 3 first, then list order, and each takes the first days with room between its start and its due date, split across days when it's bigger than a day's room. A quest that can't fit by its due date is placed on that day anyway and shown as an overrun. Repeating quests count on their days with the template's estimate and don't move. A quest's estimate is its steps' estimates when any step has one, else its own; what's left is the estimate less focus time on it. Quests without an estimate are counted but not planned. Nothing is moved for you: each move is a button.</p></details>`;
+  h += `<details id="howd"${panels.howd ? ' open' : ''}><summary>How the forecast is worked out</summary><p class="hint">Each day has its capacity. Tasks are taken in order of due date (undated last), today's top 3 first, then list order, and each takes the first days with room between its start and its due date, split across days when it's bigger than a day's room. A task that can't fit by its due date is placed on that day anyway and shown as an overrun. Repeating tasks count on their days with the template's estimate and don't move. A task's estimate is its steps' estimates when any step has one, else its own; what's left is the estimate less focus time on it. Tasks without an estimate are counted but not planned. Nothing is moved for you: each move is a button.</p></details>`;
   return h;
 }
 let forecastDay = '';
@@ -297,7 +297,7 @@ function forecastClick(d, b) {
   }
   if (d.fmove) {
     const r = find(d.fmove);
-    if (!r || r.parents.length) return toast("That quest isn't on Today any more", false, 3000);
+    if (!r || r.parents.length) return toast("That task isn't on Today any more", false, 3000);
     const date = d.fdate;
     sheet(
       {

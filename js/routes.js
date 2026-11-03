@@ -4,7 +4,7 @@
      #/today            Today (the list, with the top 3)
      #/inbox            the Inbox
      #/inbox/triage     Process inbox
-     #/q/<id>           a quest or a step (on Today; one on Upcoming or in the Inbox is shown there)
+     #/q/<id>           a task or a step (on Today; one on Upcoming or in the Inbox is shown there)
      #/kb/<id>          a Knowledge article (a procedure shows its steps)
      #/kb/<id>/run      a procedure, started or resumed
      #/waiting          the Waiting Centre
@@ -15,7 +15,7 @@
      #/workflows        the workflows (Knowledge)
      #/ops              the Command Centre
      #/wrun/<id>        one workflow run (opened, never started or moved on)
-   Followed at start once the saved copy is in; a target not here yet (a quest made on another
+   Followed at start once the saved copy is in; a target not here yet (a task made on another
    device) is looked for again after the first sync. The hash is cleared once followed, so a
    reload or the back gesture doesn't replay it. Ids go through the same checks as everything
    else from outside; anything unknown is refused with a plain message. Opening a link never
@@ -77,7 +77,7 @@ function takeRoute() {
   followRoute(r, true);
   return true;
 }
-// Where a quest or step is: on Today (its path), on Upcoming, or in the Inbox.
+// Where a task or step is: on Today (its path), on Upcoming, or in the Inbox.
 function locate(id) {
   const t = find(id);
   if (t) return { where: 'today', r: t };
@@ -119,7 +119,7 @@ function followRoute(r, first) {
       return;
     case 'q': {
       const at = locate(r.id);
-      if (!at) return miss('quest', 'today');
+      if (!at) return miss('task', 'today');
       if (at.where === 'today') {
         openPath([...at.r.parents.map(p => p.id), at.r.n.id]);
         go('today');
@@ -171,14 +171,13 @@ function followRoute(r, first) {
       return;
     case 'workflows':
       return leaveEditor(() => {
-        kbArt = kbRun = wfOpen = wfEdit = null;
+        kbArt = kbRun = wfOpen = wfEdit = wfView = null;
         kbCatOpen = null;
+        kbView = 'proc';
         go('knowledge');
-        const el = $('#wfhead');
-        if (el) el.scrollIntoView({ block: 'start' });
       });
     case 'wrun': {
-      if (!wrunById(r.id)) return miss('workflow run', 'knowledge');
+      if (!wrunById(r.id)) return miss('process run', 'knowledge');
       return leaveEditor(() => {
         kbArt = kbRun = wfEdit = null;
         openWorkflowRun(r.id);
@@ -189,7 +188,7 @@ function followRoute(r, first) {
       go('review');
       return;
     case 'continue': {
-      // The quest with the newest saved place, else the one Next up is in, else Today.
+      // The task with the newest saved place, else the one Next up is in, else Today.
       const placed = S.quests
           .filter(q => q.resume && !isDone(q))
           .sort((a, b) => b.resume.at - a.resume.at)[0],
@@ -220,10 +219,10 @@ const SHORTCUTS = [
   ['triage', 'Process inbox', ''],
   ['inbox', 'Inbox', ''],
   ['waiting', 'Waiting Centre', ''],
-  ['q', 'A quest', 'quest'],
-  ['kb', 'A Knowledge article', 'article'],
-  ['run', 'A procedure, to follow', 'procedure'],
-  ['workflows', 'Workflows', ''],
+  ['q', 'A task', 'quest'],
+  ['kb', 'A reference article', 'article'],
+  ['run', 'A guide, to follow', 'procedure'],
+  ['workflows', 'Processes', ''],
   ['ops', 'Command Centre', ''],
   ['focus', 'Focus', ''],
   ['review', 'Weekly review', ''],

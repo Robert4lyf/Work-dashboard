@@ -2,8 +2,8 @@
 function logDays(since) {
   return [...new Set(S.log.filter(x => x.d >= since).map(x => x.d))].sort().reverse();
 }
-// A day's finished items grouped under their quests, in the order they were first finished:
-// [{ title, done (the quest itself finished that day), steps: [text] }].
+// A day's finished items grouped under their tasks, in the order they were first finished:
+// [{ title, done (the task itself finished that day), steps: [text] }].
 function logGroups(d) {
   const out = [],
     by = {};
@@ -45,7 +45,7 @@ function renderLog() {
   days.forEach(d => {
     const f = Object.values(S.daily[d] || {}).reduce((a, b) => a + b, 0);
     h += `<div class="logday box"><h2><span>${dayLabel(d)}</span>${f ? `<small>${hm(f)} focus</small>` : ''}</h2><ul>`;
-    // Each quest, with the steps finished that day under it (a quest not yet finished is muted).
+    // Each task, with the steps finished that day under it (a task not yet finished is muted).
     logGroups(d).forEach(
       g =>
         (h += `<li class="${g.done ? '' : 'open'}">${esc(g.title)}${g.steps.length ? `<ul>${g.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}</li>`),

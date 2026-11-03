@@ -9,22 +9,22 @@
    Rule: { id, name, on: { k, ...filter }, do: { k, ...what }, enabled, at }.
    Log: { id (rule + event key), r, t, k, key, out: done|dup|limit|err, m }. */
 const RULE_ON = {
-  quest_done: 'A quest is finished',
-  exec_failed: 'A flow reports a failure',
-  exec_succeeded: 'A flow reports success',
-  wrun_failed: 'A workflow run fails',
-  wrun_succeeded: 'A workflow run succeeds',
-  wf_due: 'A recurring workflow’s run is ready',
-  proc_finished: 'A procedure is finished',
+  quest_done: 'A task is finished',
+  exec_failed: 'A desktop automation reports a failure',
+  exec_succeeded: 'A desktop automation reports success',
+  wrun_failed: 'A process fails',
+  wrun_succeeded: 'A process completes',
+  wf_due: 'A recurring process is due',
+  proc_finished: 'A guide is finished',
   wait_resolved: 'A waiting item is resolved',
   wait_due: 'A waiting item’s chase date comes',
   day: 'The app is opened on a day of the week',
 };
 const RULE_DO = {
   inbox: 'Add an Inbox item',
-  quest: 'Add a quest to Today',
+  quest: 'Add a task to Today',
   wait: 'Add a waiting item (Inbox)',
-  wrun: 'Prepare a workflow run (ready, not started)',
+  wrun: 'Prepare a process (ready, not started)',
   notify: 'Show a notification on this device',
   note: 'Only note it in the rule’s log',
 };
@@ -106,7 +106,7 @@ function ruleMatches(r, ev) {
   if (o.k === 'day' && !(o.days || []).includes(ev.wd)) return false;
   return true;
 }
-// The words in a rule's text: {name} (the quest, flow or workflow), {err}, {day}, {who}.
+// The words in a rule's text: {name} (the task, flow or workflow), {err}, {day}, {who}.
 function ruleFill(t, ev) {
   const name = ev.name || ev.text || '',
     err = ev.err || ev.msg || '';
@@ -180,7 +180,7 @@ function ruleAct(r, ev, id) {
   }
   if (a.k === 'wrun') {
     const w = wfById(a.wf);
-    if (!w || w.archived || !w.stages.length) throw new Error('that workflow is gone');
+    if (!w || w.archived || !w.stages.length) throw new Error('that process is gone');
     const rid = w.id + '-r' + id;
     if (S.wruns.some(x => x.id === rid) || (sync2.gone && sync2.gone['wrun:' + rid])) return 'already there';
     S.wruns.push(makeRun(w, { id: rid, prepared: true, byRule: true }));
@@ -202,7 +202,7 @@ function rolloverRules(d) {
         node: x.n.id,
         text: x.n.text,
         who: w.who,
-        name: x.trail[0] || x.n.text, // (the quest, for a waiting step)
+        name: x.trail[0] || x.n.text, // (the task, for a waiting step)
       });
   });
 }
@@ -235,15 +235,15 @@ const ruleOnLine = r => {
   if (o.k === 'day') s = 'The app is opened on ' + ((o.days || []).map(d => WD[d]).join(', ') || 'no day');
   const f = [];
   if (o.match) f.push(`named like “${o.match}”`);
-  if (o.top) f.push('a top-level quest');
-  if (o.flow) f.push('flow: ' + ((S.flows.find(x => x.id === o.flow) || {}).name || 'removed'));
-  if (o.wf) f.push('workflow: ' + ((wfById(o.wf) || {}).name || 'removed'));
-  if (o.art) f.push('procedure: ' + ((S.kb.find(x => x.id === o.art) || {}).title || 'removed'));
+  if (o.top) f.push('a top-level task');
+  if (o.flow) f.push('automation: ' + ((S.flows.find(x => x.id === o.flow) || {}).name || 'removed'));
+  if (o.wf) f.push('process: ' + ((wfById(o.wf) || {}).name || 'removed'));
+  if (o.art) f.push('guide: ' + ((S.kb.find(x => x.id === o.art) || {}).title || 'removed'));
   return s + (f.length ? ' (' + f.join(', ') + ')' : '');
 };
 const ruleDoLine = r => {
   const a = r.do;
-  if (a.k === 'wrun') return 'prepare a run of ' + ((wfById(a.wf) || {}).name || 'a removed workflow');
+  if (a.k === 'wrun') return 'prepare a run of ' + ((wfById(a.wf) || {}).name || 'a removed process');
   if (a.k === 'wait')
     return `add a waiting item on ${a.who || 'someone'}: “${a.text}” (chase in ${plural(a.days, 'day')})`;
   return RULE_DO[a.k].toLowerCase() + (a.text ? `: “${a.text}”` : '');
@@ -297,13 +297,13 @@ function ruleForm() {
     arts = S.kb.filter(x => x.steps && x.steps.length).map(x => [x.id, x.title]);
   let onFields = '';
   if (o.k === 'quest_done')
-    onFields = `<label class="f" for="rlmatch">Only quests named like <small class="hint">(optional)</small></label><input class="fld" id="rlmatch" maxlength="80" value="${esc(o.match || '')}" autocomplete="off"><label class="optbox"><input type="checkbox" id="rltop"${o.top ? ' checked' : ''}>Only top-level quests</label>`;
+    onFields = `<label class="f" for="rlmatch">Only tasks named like <small class="hint">(optional)</small></label><input class="fld" id="rlmatch" maxlength="80" value="${esc(o.match || '')}" autocomplete="off"><label class="optbox"><input type="checkbox" id="rltop"${o.top ? ' checked' : ''}>Only top-level tasks</label>`;
   if (o.k === 'exec_failed' || o.k === 'exec_succeeded')
-    onFields = `<label class="f" for="rlflow">Which flow</label>${sel('rlflow', flows, o.flow || '', 'Any flow')}`;
+    onFields = `<label class="f" for="rlflow">Which automation</label>${sel('rlflow', flows, o.flow || '', 'Any automation')}`;
   if (['wrun_failed', 'wrun_succeeded', 'wf_due'].includes(o.k))
-    onFields = `<label class="f" for="rlwf">Which workflow</label>${sel('rlwf', wfs, o.wf || '', 'Any workflow')}`;
+    onFields = `<label class="f" for="rlwf">Which process</label>${sel('rlwf', wfs, o.wf || '', 'Any process')}`;
   if (o.k === 'proc_finished')
-    onFields = `<label class="f" for="rlart">Which procedure</label>${sel('rlart', arts, o.art || '', 'Any procedure')}`;
+    onFields = `<label class="f" for="rlart">Which guide</label>${sel('rlart', arts, o.art || '', 'Any guide')}`;
   if (o.k === 'wait_resolved' || o.k === 'wait_due')
     onFields = `<label class="f" for="rlmatch">Only items named like <small class="hint">(optional)</small></label><input class="fld" id="rlmatch" maxlength="80" value="${esc(o.match || '')}" autocomplete="off">`;
   if (o.k === 'day')
@@ -316,7 +316,7 @@ function ruleForm() {
   if (a.k === 'wait')
     doFields += `<label class="f" for="rlwho">Waiting on whom</label><input class="fld" id="rlwho" maxlength="60" value="${esc(a.who || '')}" list="wholist" autocomplete="off">${whoList()}<label class="f" for="rldays">Chase after, days</label><input class="fld" id="rldays" type="number" min="0" max="60" value="${a.days === undefined ? 2 : a.days}">`;
   if (a.k === 'wrun')
-    doFields = `<label class="f" for="rlwrun">Which workflow</label>${sel('rlwrun', wfs, a.wf || '', wfs.length ? 'Choose' : 'No workflows yet')}`;
+    doFields = `<label class="f" for="rlwrun">Which process</label>${sel('rlwrun', wfs, a.wf || '', wfs.length ? 'Choose' : 'No processes yet')}`;
   return `<form id="ruleform" data-id="${r.id}"><h2 id="sheettitle">${r.id ? 'Edit rule' : 'New rule'}</h2>
     <label class="f" for="rlname">Name</label><input class="fld" id="rlname" maxlength="80" value="${esc(r.name)}" autocomplete="off" required>
     <label class="f" for="rlon">When</label>${sel('rlon', Object.entries(RULE_ON), o.k)}${onFields}
@@ -370,7 +370,7 @@ function saveRuleForm() {
   const r = cleanRule({ ...ruleEdit, id: ruleEdit.id || uid(), at: Date.now() });
   if (!r) return toast("That rule isn't complete", false, 3000);
   if (!ruleEdit.name.trim()) return toast('Give the rule a name', false, 3000);
-  if (r.do.k === 'wrun' && !r.do.wf) return toast('Choose the workflow to prepare', false, 3000);
+  if (r.do.k === 'wrun' && !r.do.wf) return toast('Choose the process to prepare', false, 3000);
   if (['inbox', 'quest', 'wait'].includes(r.do.k) && !r.do.text) return toast('Say what to add', false, 3000);
   if (r.on.k === 'day' && !r.on.days.length) return toast('Choose at least one day', false, 3000);
   const cur = ruleById(r.id);

@@ -33,7 +33,7 @@ test('suggest steps: asks once what is sent, offers the steps to tick, adds the 
   await page.evaluate(() => renderToday());
   await page.click('[data-suggest]');
   // First time on this device: what goes to Claude, before anything is sent.
-  await expect(page.locator('#sheetform')).toContainText("quest's name and its steps' names");
+  await expect(page.locator('#sheetform')).toContainText("task's name and its steps' names");
   expect(await page.evaluate(() => window.sent.length)).toBe(0);
   await page.click('#sheetok');
   await expect(page.locator('.suggest .optbox')).toHaveText([
@@ -73,7 +73,7 @@ test('suggest steps: a failure says so and adds nothing; steps have no button', 
   await expect(page.locator('[data-suggest]')).toHaveCount(0);
 });
 
-test('suggest steps: ticks survive a sync redraw; an answer for a quest deleted meanwhile adds nothing', async ({
+test('suggest steps: ticks survive a sync redraw; an answer for a task deleted meanwhile adds nothing', async ({
   app,
   page,
 }) => {
@@ -95,7 +95,7 @@ test('suggest steps: ticks survive a sync redraw; an answer for a quest deleted 
   await page.click('[data-sugadd]');
   expect((await app.state()).quests[0].children.map(c => c.text)).toEqual(['Outline']);
 
-  // Slow answer; the quest goes (another device) before it comes.
+  // Slow answer; the task goes (another device) before it comes.
   await page.evaluate(() => {
     sb.functions.invoke = () => new Promise(r => (window.answer = () => r({ data: { steps: ['Late'] } })));
   });

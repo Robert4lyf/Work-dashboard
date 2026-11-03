@@ -1,7 +1,7 @@
 // Release B: the three journeys the features are for, end to end.
 const { test, expect, unfold } = require('./fixtures');
 
-test('Workflow A: recurring report: quest → procedure → flow launched by hand → verified result → back to the quest, still open', async ({
+test('Workflow A: recurring report: task → procedure → flow launched by hand → verified result → back to the task, still open', async ({
   app,
   page,
 }) => {
@@ -20,7 +20,7 @@ test('Workflow A: recurring report: quest → procedure → flow launched by han
         imgs: [],
         steps: [
           { id: 'p1', title: 'Pull the extract' },
-          { id: 'p2', title: 'Run the report flow', flow: 'f1' },
+          { id: 'p2', title: 'Run the report automation', flow: 'f1' },
           { id: 'p3', title: 'Check the totals', verify: true },
         ],
       },
@@ -42,15 +42,15 @@ test('Workflow A: recurring report: quest → procedure → flow launched by han
     save();
     renderAll();
   });
-  // 1-3. The quest links its procedure and flow; open the procedure from the quest.
+  // 1-3. The task links its procedure and flow; open the procedure from the task.
   await app.openQuest('Weekly reporting');
   await expect(page.locator('#resd .resrow')).toHaveCount(2);
   await page.click('#resd [data-runstart="a1"]');
   await expect(page.locator('#v-knowledge .kbtrail')).toContainText('For: Weekly reporting');
   // 4. The preparation step.
   await page.click('#v-knowledge [data-rundone]');
-  await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Run the report flow');
-  // 5-6. The flow is launched by a tap, and only by a tap: an execution, requested, for this quest.
+  await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Run the report automation');
+  // 5-6. The flow is launched by a tap, and only by a tap: an execution, requested, for this task.
   let s = await app.state();
   expect(s.execs).toHaveLength(0);
   await page.click('#v-knowledge .pstep a[data-flow="f1"]');
@@ -91,7 +91,7 @@ test('Workflow A: recurring report: quest → procedure → flow launched by han
   await expect(page.locator('#v-knowledge .pstep .pverify')).toBeVisible();
   await page.click('#v-knowledge [data-rundone]');
   await page.click('[data-runfinish]');
-  // 10. Back to the quest: the procedure done, the flow verified, the quest still yours to finish.
+  // 10. Back to the quest: the procedure done, the flow verified, the task still yours to finish.
   await page.click('#v-knowledge .pstep.done [data-open="q1"]');
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await expect(page.locator('#resd .procline')).toContainText('Done Today');
@@ -121,7 +121,7 @@ test('Workflow A: recurring report: quest → procedure → flow launched by han
   await expect(page.locator('#resd [data-runstart]')).toHaveText('Start');
 });
 
-test('Workflow B: chasing an approval: waiting step → chase date → follow-up → reply → resolved, quest actionable', async ({
+test('Workflow B: chasing an approval: waiting step → chase date → follow-up → reply → resolved, task actionable', async ({
   app,
   page,
 }) => {
@@ -131,7 +131,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   await app.addQuest('Q3 report');
   await app.addQuest('Other work');
   await app.openQuest('Q3 report');
-  // 1-2. A waiting subquest with the chase date and the expected reply.
+  // 1-2. A waiting step with the chase date and the expected reply.
   await page.click('#waitd summary');
   await page.fill('#wwho', 'Sarah');
   await page.fill('#wnote', 'Budget approval');
@@ -145,7 +145,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
     wait: { who: 'Sarah', due: '2026-11-04', expect: '2026-11-06' },
   });
   expect(s.follows.map(f => f.k)).toEqual(['start']);
-  // The quest is blocked: Next up moves on; Today says 0 to chase yet.
+  // The task is blocked: Next up moves on; Today says 0 to chase yet.
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#hnow')).toContainText('Other work');
   await expect(page.locator('#v-today .attn')).toContainText('Nothing needs attention');
@@ -180,8 +180,8 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
         .filter(k => k.startsWith('chase:')),
     ),
   ).toEqual(['chase:' + (await step()).id + ':2026-11-09']);
-  // 8-10. The reply arrives: resolved from the Centre; the quest's step is back on the list, and
-  // the quest is Next up again; the history says what happened.
+  // 8-10. The reply arrives: resolved from the Centre; the task's step is back on the list, and
+  // the task is Next up again; the history says what happened.
   await page.click('#v-waiting [data-waitclear]');
   s = await app.state();
   expect((await step()).wait).toBeUndefined();
@@ -199,7 +199,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   ]);
 });
 
-test('Workflow C: an NFC card opens Today: top 3 → quest workspace → resume deliberately, nothing run by the link', async ({
+test('Workflow C: an NFC card opens Today: top 3 → task workspace → resume deliberately, nothing run by the link', async ({
   app,
   page,
 }) => {
@@ -232,7 +232,7 @@ test('Workflow C: an NFC card opens Today: top 3 → quest workspace → resume 
   expect(s.execs).toHaveLength(0);
   expect(s.timer).toBeNull();
   expect(s.flows[0].last).toBe(0);
-  // 5-6. The quest opens with its resources and saved place.
+  // 5-6. The task opens with its resources and saved place.
   await page.click('.t3row[data-t3="q1"] .open');
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await expect(page.locator('#placecard')).toContainText('Check the supplier credits');
@@ -245,7 +245,7 @@ test('Workflow C: an NFC card opens Today: top 3 → quest workspace → resume 
   await page.click('[data-zstart]');
   s = await app.state();
   expect(s.timer.q).toBe('s1');
-  // The "Continue" shortcut, too, goes straight to that quest.
+  // The "Continue" shortcut, too, goes straight to that task.
   await page.click('#v-zen [data-pause]');
   await page.keyboard.press('Escape');
   await page.evaluate(() => storeDone());

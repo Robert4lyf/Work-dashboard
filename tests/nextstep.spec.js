@@ -1,4 +1,4 @@
-// Steps turn up as a quest goes: ticking its last step asks what's next instead of finishing it.
+// Steps turn up as a task goes: ticking its last step asks what's next instead of finishing it.
 const { test, expect } = require('./fixtures');
 
 const setDay = async (page, y, m, d) => {
@@ -15,7 +15,7 @@ test.beforeEach(async ({ page, app }) => {
   await app.addSub('Draft');
 });
 
-test('ticking the last step asks; Later keeps the quest open, on Today and the next day', async ({
+test('ticking the last step asks; Later keeps the task open, on Today and the next day', async ({
   app,
   page,
 }) => {
@@ -23,10 +23,10 @@ test('ticking the last step asks; Later keeps the quest open, on Today and the n
   await expect(page.locator('#sheettitle')).toHaveText("What's next?");
   let s = await app.state();
   expect(s.quests[0].done).toBe(false);
-  expect(s.log.map(x => x.text)).toEqual(['Draft']); // (the step, not the quest)
+  expect(s.log.map(x => x.text)).toEqual(['Draft']); // (the step, not the task)
   await page.click('#sheet button:has-text("Later")');
   await expect(sheet(page)).toHaveCount(0);
-  // The quest's page asks too; Today's row says so, and the header points at it.
+  // The task's page asks too; Today's row says so, and the header points at it.
   await expect(page.locator('.nextask')).toBeVisible();
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#v-today .row .tag.asknext')).toBeVisible();
@@ -37,7 +37,7 @@ test('ticking the last step asks; Later keeps the quest open, on Today and the n
   expect(s.quests.map(q => q.text)).toEqual(['Contract']);
 });
 
-test('the sheet adds the next step, a reminder to work it out, or finishes the quest', async ({
+test('the sheet adds the next step, a reminder to work it out, or finishes the task', async ({
   app,
   page,
 }) => {
@@ -70,7 +70,7 @@ test('the sheet adds the next step, a reminder to work it out, or finishes the q
   expect((await app.state()).quests).toHaveLength(0);
 });
 
-test("the quest page's buttons; un-ticking or adding a step reopens a finished quest", async ({
+test("the task page's buttons; un-ticking or adding a step reopens a finished task", async ({
   app,
   page,
 }) => {
@@ -112,12 +112,12 @@ test("the quest page's buttons; un-ticking or adding a step reopens a finished q
   expect(s.log.map(x => x.text)).not.toContain('Contract');
 });
 
-test('the back gesture closes the sheet and leaves the quest asking', async ({ app, page }) => {
+test('the back gesture closes the sheet and leaves the task asking', async ({ app, page }) => {
   await page.click('[aria-label="Mark done: Draft"]');
   await expect(sheet(page)).toHaveCount(1);
   await page.evaluate(() => history.back());
   await expect(sheet(page)).toHaveCount(0);
-  await expect(page.locator('.nextask')).toBeVisible(); // (still on the quest's page)
+  await expect(page.locator('.nextask')).toBeVisible(); // (still on the task's page)
   expect((await app.state()).quests[0].done).toBe(false);
 });
 
@@ -139,7 +139,7 @@ test('a change from elsewhere while the sheet is up: its answer applies only if 
   expect(s.quests[0].children.map(c => c.text).sort()).toEqual(['Draft', 'From phone']);
 });
 
-test('repeating quests still finish on their last tick', async ({ app, page }) => {
+test('repeating tasks still finish on their last tick', async ({ app, page }) => {
   await page.click('#mored > summary');
   await page.click('#rptd summary');
   await page.click('[data-rpreset="daily"]');
@@ -148,7 +148,7 @@ test('repeating quests still finish on their last tick', async ({ app, page }) =
   expect(await page.evaluate(() => isDone(S.quests[0]))).toBe(true);
 });
 
-test('upgrading: a quest finished by its last tick before stays finished; others ask', async ({
+test('upgrading: a task finished by its last tick before stays finished; others ask', async ({
   app,
   page,
 }) => {
@@ -168,7 +168,7 @@ test('upgrading: a quest finished by its last tick before stays finished; others
   await expect(sheet(page)).toHaveCount(0); // (asks on the list, not with a sheet)
 });
 
-test('a quest left asking stays open over reloads, after an earlier finish (via Inbox or Upcoming)', async ({
+test('a task left asking stays open over reloads, after an earlier finish (via Inbox or Upcoming)', async ({
   app,
   page,
 }) => {
@@ -217,7 +217,7 @@ test('a quest left asking stays open over reloads, after an earlier finish (via 
   ]);
 });
 
-test('turning on a repeat for a quest with every step ticked finishes it properly', async ({ app, page }) => {
+test('turning on a repeat for a task with every step ticked finishes it properly', async ({ app, page }) => {
   await page.click('[aria-label="Mark done: Draft"]');
   await page.click('#sheet button:has-text("Later")');
   await page.click('#mored > summary');
@@ -231,7 +231,7 @@ test('turning on a repeat for a quest with every step ticked finishes it properl
   expect(await page.evaluate(() => needsNext(S.quests[0]))).toBe(true);
 });
 
-test('single-task mode asks what\'s next for a quest with every step ticked, not "Nothing left to do"', async ({
+test('single-task mode asks what\'s next for a task with every step ticked, not "Nothing left to do"', async ({
   app,
   page,
 }) => {
