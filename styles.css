@@ -2998,3 +2998,75 @@ details.more > details {
 .ilines li {
   margin: 4px 0;
 }
+
+/* Release C: command centre */
+.chip.ops {
+  font-weight: 700;
+}
+.chip.ops small {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  text-align: center;
+}
+.opsync {
+  margin: 0 0 12px;
+}
+.opsec {
+  margin: 0 0 14px;
+}
+.oprow.late .open > span {
+  color: var(--pink-ink);
+}
+.oprow.over .open > span {
+  color: var(--pink-ink);
+}
+.oprow.bad .open > small {
+  color: var(--pink-ink);
+}
+.pins {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+}
+.pins.editing {
+  grid-template-columns: 1fr;
+}
+.pinwrap {
+  display: grid;
+  gap: 2px;
+}
+.pinwrap small {
+  color: var(--muted);
+  font-size: 0.7em;
+}
+.pin {
+  display: block;
+  padding: 10px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+}
+.pin.gone {
+  opacity: 0.6;
+  box-shadow: none;
+  cursor: default;
+}
+.pins.editing .pinwrap {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+.pins.editing .pinwrap small {
+  grid-column: 1 / -1;
+}

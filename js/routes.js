@@ -13,6 +13,7 @@
      #/continue         the work most recently left: the newest saved place, else what's next
      #/review           the weekly review
      #/workflows        the workflows (Knowledge)
+     #/ops              the Command Centre
      #/wrun/<id>        one workflow run (opened, never started or moved on)
    Followed at start once the saved copy is in; a target not here yet (a quest made on another
    device) is looked for again after the first sync. The hash is cleared once followed, so a
@@ -33,6 +34,7 @@ const ROUTES = [
   'review',
   'workflows',
   'wrun',
+  'ops',
 ];
 let pendingRoute = null, // a route whose target isn't here yet, tried again after a sync
   routeGiveUp = null,
@@ -56,7 +58,7 @@ function parseRoute(hash) {
   if (sub) return null;
   if (!ROUTES.includes(kind) || kind === 'triage' || kind === 'run') return null;
   if (['q', 'kb', 'wrun'].includes(kind) && !id) return null;
-  if (['today', 'inbox', 'focus', 'continue', 'review', 'workflows'].includes(kind) && id) return null;
+  if (['today', 'inbox', 'focus', 'continue', 'review', 'workflows', 'ops'].includes(kind) && id) return null;
   return { kind, id };
 }
 // The URL's route, taken and cleared. Returns whether there was one.
@@ -164,6 +166,9 @@ function followRoute(r, first) {
     case 'focus':
       go('focus');
       return;
+    case 'ops':
+      go('ops');
+      return;
     case 'workflows':
       return leaveEditor(() => {
         kbArt = kbRun = wfOpen = wfEdit = null;
@@ -219,6 +224,7 @@ const SHORTCUTS = [
   ['kb', 'A Knowledge article', 'article'],
   ['run', 'A procedure, to follow', 'procedure'],
   ['workflows', 'Workflows', ''],
+  ['ops', 'Command Centre', ''],
   ['focus', 'Focus', ''],
   ['review', 'Weekly review', ''],
 ];

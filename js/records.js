@@ -39,6 +39,8 @@ function toRecords(s) {
   if (s.top3) m.set('meta:top3', { day: s.top3.day, ids: s.top3.ids });
   // Capacity per weekday (Release C): its own record, only once set.
   if (s.cap) m.set('meta:cap', { days: s.cap });
+  // Quick-launch pins (Release C): their own record, only once there are any.
+  if (s.pins && s.pins.length) m.set('meta:pins', { pins: s.pins });
   // An article's pictures are records of their own, so editing its text doesn't send them again.
   // (The article keeps an empty list in their place: that's how a device from before this reads
   // it, so the two don't keep rewriting it back and forth.)
@@ -121,6 +123,7 @@ function fromRecords(m, day) {
     notes: (m.get('meta:notes') || {}).text || '',
     top3: m.get('meta:top3') || null,
     cap: (m.get('meta:cap') || {}).days || null,
+    pins: (m.get('meta:pins') || {}).pins || [],
     ...(m.get('meta:prefs') || {}),
     ...(m.get('meta:score') || {}),
     timer: (m.get('meta:timer') || {}).timer || null,
@@ -170,7 +173,19 @@ function saveSyncState() {
 }
 // Record kinds this version knows. Rows of other kinds (from a newer version on another
 // device) are left alone, never deleted for being missing here.
-const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy', 'top3', 'track', 'cap'];
+const META_KEYS = [
+  'notes',
+  'order',
+  'prefs',
+  'pushkey',
+  'timer',
+  'score',
+  'legacy',
+  'top3',
+  'track',
+  'cap',
+  'pins',
+];
 const knownKey = k =>
   k.slice(0, k.indexOf(':')) in LISTS ||
   k.startsWith('kbimg:') ||

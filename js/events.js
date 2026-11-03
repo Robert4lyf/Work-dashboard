@@ -24,6 +24,7 @@ function renderView(v = view) {
     knowledge: renderKnowledge,
     search: renderSearch,
     account: renderAccount,
+    ops: renderOps,
   }[v];
   if (r) r();
 }
@@ -51,9 +52,19 @@ function go(v) {
     if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
-  ['today', 'inbox', 'waiting', 'notes', 'knowledge', 'search', 'review', 'focus', 'log', 'account'].forEach(
-    k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)),
-  );
+  [
+    'today',
+    'inbox',
+    'waiting',
+    'notes',
+    'knowledge',
+    'search',
+    'review',
+    'focus',
+    'log',
+    'account',
+    'ops',
+  ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
@@ -353,6 +364,7 @@ document.addEventListener('click', e => {
   ruleClick(d, b);
   forecastClick(d, b);
   insightClick(d);
+  opsClick(d, b);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -705,6 +717,7 @@ document.addEventListener('click', e => {
         wruns: S.wruns,
         rules: S.rules,
         rlog: S.rlog,
+        pins: S.pins,
       },
       keptLoose = S.kbimgLoose,
       was = JSON.stringify(S);
@@ -721,11 +734,21 @@ document.addEventListener('click', e => {
     S.kbimgLoose = [...S.kbimgLoose, ...keptLoose.filter(p => !S.kbimgLoose.some(q => q.id === p.id))];
     // A copy from before the Knowledge tab (or Release B's records) has none of it: what's
     // here stays.
-    ['kb', 'kbcats', 'flows', 'follows', 'runs', 'execs', 'workflows', 'wruns', 'rules', 'rlog'].forEach(
-      k => {
-        if (!Array.isArray(pending[k])) S[k] = kept[k];
-      },
-    );
+    [
+      'kb',
+      'kbcats',
+      'flows',
+      'follows',
+      'runs',
+      'execs',
+      'workflows',
+      'wruns',
+      'rules',
+      'rlog',
+      'pins',
+    ].forEach(k => {
+      if (!Array.isArray(pending[k])) S[k] = kept[k];
+    });
     S.kb.forEach(a => {
       if (!hadArtImgs.has(a.id) && artImgs.has(a.id)) a.imgs = artImgs.get(a.id);
     });
@@ -831,7 +854,7 @@ function closeImgs() {
 }
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'i or n capture (n on a quest: subquest) · / search · t today · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a quest: subquest) · / search · t today · o command centre · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (!window.appReady) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -882,6 +905,7 @@ document.addEventListener('keydown', e => {
     if (b) b.click();
   } else if (k === '?') toast(KEYS, false, 5000);
   else if (k === 's') go('account');
+  else if (k === 'o') go('ops');
   else if (k === 'z') setZen(!zen);
   else if (k === 'Escape') {
     if ($('#sheet')) closeSheet();

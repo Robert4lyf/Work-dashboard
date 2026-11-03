@@ -231,6 +231,7 @@ function norm(s) {
       wruns: [],
       rules: [],
       rlog: [],
+      pins: [],
     },
     s || {},
   );
@@ -277,6 +278,7 @@ function norm(s) {
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;
   S.top3 = cleanTop3(S.top3);
   S.cap = cleanCap(S.cap);
+  S.pins = cleanPins(S.pins);
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
   // (only objects, with a quest behind them only if that's an object too: a synced row or a

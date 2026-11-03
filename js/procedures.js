@@ -99,6 +99,8 @@ function openRun(art, q) {
   kbRun = r.id;
   kbArt = art;
   kbImgShown = null;
+  wfOpen = null; // (a workflow run being followed gives way; its ‹ isn't this run's)
+  kbRunBackWf = null;
   if (q && view === 'today' && path.length) kbReturn = true; // (the article's ‹ goes back to the quest)
   if (view !== 'knowledge') go('knowledge');
   else renderKnowledge();

@@ -252,6 +252,10 @@ function renderAttention() {
     c.push(
       `<button class="chip warn" data-xdet="${xf[xf.length - 1].id}">${xf.length === 1 ? 'Flow failed' : xf.length + ' flows failed'}</button>`,
     );
+  const nAtt = opsAttention().length;
+  c.unshift(
+    `<button class="chip ops" data-goto="ops">Command Centre${nAtt ? ` <small>${nAtt}</small>` : ''}</button>`,
+  );
   const wfl = S.wruns.filter(r => r.status === 'failed' && !r.ack),
     wfr = S.wruns.filter(r => r.status === 'ready');
   if (wfl.length)
