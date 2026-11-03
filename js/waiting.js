@@ -184,7 +184,15 @@ function setWaiting(id, w) {
       followsFor(target.id).some(f => f.k === 'resolve') ? 'reopen' : 'start',
       w.note || '',
     );
-  if (!w && had) addFollow(target.id, 'resolve');
+  if (!w && had) {
+    addFollow(target.id, 'resolve');
+    emitEvent({
+      k: 'wait_resolved',
+      key: 'wait:' + target.id + ':resolve:' + Date.now(),
+      node: target.id,
+      text: target.text,
+    });
+  }
   if (stepped) settle(bf);
   if (r.n.node) delete r.n.node.wait; // an Inbox item's own details are the ones that count
   save();

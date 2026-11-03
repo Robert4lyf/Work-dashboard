@@ -172,6 +172,19 @@ function foldExecEvent(ev) {
     x.msg = msg;
     x.upd = Math.max(x.upd, t);
     if (status === 'failed') delete x.ack;
+    // A result: the workflow stage waiting on this execution moves on, and rules hear of it.
+    if (EXEC_TERMINAL.includes(status)) {
+      const f = S.flows.find(y => y.id === flow);
+      emitEvent({
+        k: 'exec_' + status,
+        key: 'exec:' + xid + ':' + status + ':' + id,
+        exec: xid,
+        flow,
+        name: f ? f.name : flow,
+        msg,
+        q: x.q,
+      });
+    }
   }
   pruneExecs();
   return true;

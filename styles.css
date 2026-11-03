@@ -2809,3 +2809,64 @@ details.more > details {
   color: var(--muted);
   border-style: dashed;
 }
+
+/* Release C: workflows */
+.wst {
+  font-weight: 600;
+}
+.w-succeeded {
+  color: var(--green);
+}
+.w-failed,
+.w-cancelled {
+  color: var(--pink-ink);
+}
+.w-awaiting_user,
+.w-ready {
+  color: var(--blue);
+}
+.w-awaiting_automation,
+.w-waiting,
+.w-paused {
+  color: var(--muted);
+}
+.werr {
+  margin: 8px 0;
+}
+.pstep.failed {
+  border-color: var(--pink);
+}
+.pstep .ptype {
+  margin: -4px 0 6px;
+}
+.wchecks {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 10px;
+}
+.wacts {
+  flex-wrap: wrap;
+}
+.wlist li.skipped .pjump,
+.wlist li.failed .pjump {
+  opacity: 0.7;
+}
+.wlist li.failed .pjump {
+  color: var(--pink-ink);
+}
+.wlist .pjump small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+}
+.kbhead {
+  margin-top: 18px;
+}
+
+/* Release C: rules */
+.rulerow.off .open {
+  opacity: 0.6;
+}
+.rlprev {
+  margin: 10px 0 4px;
+}

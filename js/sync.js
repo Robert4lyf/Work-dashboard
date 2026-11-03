@@ -350,7 +350,7 @@ async function sync() {
         norm(null);
         persistLocal();
         // (nothing of the other account's left open: an article being written, a search...)
-        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = null;
+        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = wfOpen = wfEdit = null;
         execToken = '';
         try {
           localStorage.removeItem(EXEC_KEY);
@@ -594,6 +594,7 @@ function renderAccount() {
   // Notifications, then the rarely-needed bits folded away.
   if (sb && session) h += renderNotifySettings();
   h += renderShortcuts();
+  h += renderRuleSettings();
   if (sb && session) h += renderExecSettings();
   h += `<details id="advd" class="more"${panels.advd ? ' open' : ''}><summary>Advanced: capture link, health check</summary>${sb && session ? renderCapture() : ''}${renderHealth()}</details>`;
   setHTML($('#v-account'), h);

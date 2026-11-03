@@ -122,12 +122,16 @@ function renderKnowledge() {
   let h;
   const run = kbRun && S.runs.find(r => r.id === kbRun);
   if (!run) kbRun = null;
+  const wrun = wfOpen && wrunById(wfOpen);
+  if (!wrun) wfOpen = null;
   if (kbEdit) h = kbEditor();
+  else if (wfEdit) h = wfEditor();
+  else if (wrun) h = wfRunView(wrun);
   else if (run) h = kbRunView(run);
   else if (kbArt && S.kb.some(a => a.id === kbArt)) h = kbArticle(S.kb.find(a => a.id === kbArt));
   else {
     kbArt = null;
-    h = kbIndex() + kbFlows();
+    h = kbIndex() + kbWorkflows() + kbFlows();
   }
   setHTML($('#v-knowledge'), h);
 }
@@ -485,7 +489,8 @@ document.addEventListener(
     f.last = Date.now();
     // Tracked (Settings > Flows and automations): the tap is an execution, requested, until the
     // flow reports back. Nothing else runs it: only this tap.
-    startExec(f.id, a.dataset.q || '');
+    const x = startExec(f.id, a.dataset.q || '');
+    if (a.dataset.wrun) wfLaunched(a.dataset.wrun, a.dataset.wstage || '', x);
     save();
     setTimeout(renderView, 0); // (after the link has been followed; the chips are on Today)
   },

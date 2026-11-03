@@ -90,6 +90,18 @@ function settle(before) {
     if (v.done && !was) {
       gain += pts;
       S.log.push({ id, d: today(), text: v.text, trail: v.trail, p: projectOf(id) });
+      {
+        const rr = find(id) || find(id, S.later);
+        emitEvent({
+          k: 'quest_done',
+          key: 'quest:' + id + ':done:' + today(),
+          id,
+          text: v.text,
+          top: !!v.top,
+          p: projectOf(id),
+          byRule: !!(rr && rr.n.byRule),
+        });
+      }
     }
     if (!v.done && was) {
       gain -= pts;

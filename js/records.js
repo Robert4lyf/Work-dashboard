@@ -22,6 +22,10 @@ const LISTS = {
   follow: ['follows', x => x.id],
   run: ['runs', x => x.id],
   exec: ['execs', x => x.id],
+  workflow: ['workflows', x => x.id],
+  wrun: ['wruns', x => x.id],
+  rule: ['rules', x => x.id],
+  rlog: ['rlog', x => x.id],
 };
 function toRecords(s) {
   const m = new Map();
