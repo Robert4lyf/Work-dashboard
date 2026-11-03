@@ -214,5 +214,80 @@ test('bad follow-up records are dropped; old ones are pruned; a resolved item’
   const s = await app.state();
   expect(s.follows.map(f => f.id).sort()).toEqual(['nodate', 'ok']);
   expect(s.follows.find(f => f.id === 'nodate').note).toBe('');
-  expect(s.quests[0].children[0].wait).toEqual({ who: 7, note: ['x'], due: '', since: '2026-11-01' });
+  expect(s.quests[0].children[0].wait).toEqual({ who: '', note: '', due: '', since: '2026-11-01' }); // (unsound values emptied, keys kept)
+});
+
+test('review fixes: an Inbox item’s waiting details are checked; history follows the item to Today and back', async ({
+  app,
+  page,
+}) => {
+  // A crafted synced Inbox row: nothing from it reaches an attribute unescaped, and a number
+  // where a name belongs doesn't break the Centre.
+  await app.setState(s => {
+    s.inbox = [
+      {
+        id: 'i1',
+        text: 'Crafted',
+        wait: {
+          who: 7,
+          note: { x: 1 },
+          due: '9" autofocus onfocus="window.__x=1',
+          expect: '2026-12-01"><b>',
+          since: 'x',
+        },
+      },
+      { id: 'i2', text: 'Plain', wait: { who: 'Sam', note: '', due: '', since: '2026-11-01' } },
+    ];
+  });
+  await page.reload();
+  const s0 = await app.state();
+  expect(s0.inbox[0].wait).toEqual({ who: '', note: '', due: '', since: '' });
+  await app.go('waiting');
+  await expect(page.locator('#v-waiting .row')).toHaveCount(6); // (the four steps, and both items)
+  await page.click('#v-waiting [data-wact="i1"]');
+  await page.click('#sheet [data-chase]');
+  await expect(page.locator('#funote')).toBeVisible();
+  expect(await page.evaluate(() => window.__x)).toBeUndefined();
+  await page.keyboard.press('Escape');
+  // The history of an item added waiting in the Centre goes with it to Today (a step of its own).
+  await page.click('#v-waiting [data-wact="i2"]');
+  await page.click('#sheet [data-chase]');
+  await page.fill('#funote', 'Pinged Sam');
+  await page.click('#sheetok');
+  await app.go('inbox');
+  await page.click('[data-promote="i2"]');
+  let s = await app.state();
+  const step = s.quests.find(q => q.text === 'Plain').children[0];
+  expect(step.wait).toMatchObject({ who: 'Sam', last: '2026-11-05' });
+  expect(s.follows.filter(f => f.n === step.id).map(f => f.k)).toEqual(['chase']);
+  expect(s.follows.some(f => f.n === 'i2')).toBe(false);
+  // And back to the Inbox: the step's history stays with the step (the wait is the step's).
+  await app.go('today');
+  await page.click('[aria-label="Actions: Plain"]');
+  await page.click('#sheet [data-toinbox]');
+  s = await app.state();
+  expect(s.inbox[0].node.children[0].id).toBe(step.id);
+  expect(s.follows.filter(f => f.n === step.id)).toHaveLength(1);
+  // Setting an item waiting from the Inbox, or in triage, starts its history like the Centre.
+  // (the crafted item still counts as waiting, on no one: clearing it resolves, setting it starts)
+  await app.go('inbox');
+  await page.click('[data-steps="i1"]');
+  const iwait = async who => {
+    await page.fill('[data-iwait="i1"]', who);
+    await page.dispatchEvent('[data-iwait="i1"]', 'change');
+    return (await app.state()).follows.filter(f => f.n === 'i1').map(f => f.k);
+  };
+  expect(await iwait('')).toEqual(['resolve']);
+  expect(await iwait('Dana')).toEqual(['resolve', 'reopen']);
+  expect(await iwait('')).toEqual(['resolve', 'reopen', 'resolve']);
+  // No empty expect key is written (it would only be stripped elsewhere and sent back).
+  await app.go('today');
+  await app.openQuest('Q3 report');
+  await page.click('#v-today .open >> text="Budget approval"');
+  await page.evaluate(() => (document.querySelector('#waitd').open = true));
+  await page.fill('#wnote', 'changed');
+  await page.press('#wnote', 'Tab');
+  expect('expect' in (await app.state()).quests.find(q => q.text === 'Q3 report').children[0].wait).toBe(
+    false,
+  );
 });

@@ -2549,7 +2549,8 @@ details.more > details {
   outline: 3px dashed var(--yellow);
   outline-offset: -3px;
 }
-.row .qmore {
+#v-waiting .row .qmore,
+#waitsec .row .qmore {
   margin-left: -6px;
 }
 .flist {

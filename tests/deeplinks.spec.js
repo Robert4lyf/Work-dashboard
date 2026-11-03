@@ -187,3 +187,24 @@ test('Settings builds the links; app-icon shortcuts carry routes', async ({ app,
     './index.html#/continue',
   ]);
 });
+
+test('review fix: after a cold launch at a route, back steps through the app once and never replays the route', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await page.evaluate(seed);
+  await cold(page, '#/q/s1');
+  await expect(page.locator('#v-today h1')).toHaveText('Reconcile');
+  expect(await page.evaluate(() => [location.hash, history.state && history.state.app])).toEqual(['', 'in']);
+  await page.goBack();
+  await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
+  await page.goBack();
+  await expect(page.locator('#v-today .row')).toHaveCount(2);
+  await expect(page.locator('#v-today h1')).toHaveCount(0); // (not reopened by a replayed route)
+  await cold(page, '#/inbox/triage');
+  await expect(page.locator('#v-inbox .tcard')).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('#iform')).toBeVisible(); // (triage left, not restarted)
+  expect(await page.evaluate(() => location.hash)).toBe('');
+});

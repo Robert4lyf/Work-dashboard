@@ -118,7 +118,7 @@ A flow's button can only ask Power Automate Desktop to run the flow: the app can
 2. In the app: **Settings > Flows and automations > Create execution token**. Copy the **Report URL**, the **apikey** and the **token**, and note each flow's id (listed there and under Knowledge > Flows). Creating a token turns tracking on for the account: from then on every tap on a flow's button records a launch, on every device.
 3. Make the flow (or script) report its status (below). Test it: tap the flow's button, then send a report by hand; the chip on Today and the row under Knowledge > Flows show the result within a few seconds.
 
-**What the token can do:** add a status report for your account, at most 120 an hour. Nothing else: it can't read anything, and it can't change quests, notes or articles. **New token** replaces it (the old one stops working at once); **Revoke** turns reporting off. The token is kept on the device that made it, like the capture token; other devices see tracking as on and can make a new one if they need to see it. Keep it in the flow's variables or the script, never in the repository.
+**What the token can do:** add a status report for your account, at most 120 an hour (a `failed` report also queues the "Flow failed" notification, with the report's message). Nothing else: it can't read anything, and it can't change quests, notes or articles. **New token** replaces it (the old one stops working at once); **Revoke** turns reporting off. The token is kept on the device that made it, like the capture token; other devices see tracking as on and can make a new one if they need to see it. Keep it in the flow's variables or the script, never in the repository.
 
 **How a report finds its launch:** a report names the flow (`flow`) and, if the script knows it, the execution (`execution`). Without one, the server pairs the report with the newest launch of that flow still waiting to hear (tapped within the last 24 hours and not yet finished). A flow launched by its `ms-powerautomate:` link can't be given the execution id, so this pairing is the normal case: tap, then run, one at a time. Reports with the same `run_ref` (the script's own run id) always stay together. A report that matches no launch (the flow was started outside the app, or the app hadn't synced the tap yet) becomes an execution of its own, marked as reported by the flow rather than launched here. A result (succeeded, failed, cancelled) is final for a launch: a "running" arriving late never undoes it, and a later result replaces an earlier one. Reports arrive on every device through sync (and live within a second), folded in the same order everywhere, so the records agree.
 
@@ -161,17 +161,17 @@ The function answers `{"execution":"<id or empty>","event":<n>}`; an unknown or 
 
 ## Deep links and Android shortcuts
 
-A link with a route opens a place in the app: from a home-screen shortcut, a bookmark, Automate, Tasker, HTTP Shortcuts, or an NFC card through one of them. **Settings > Shortcuts and deep links** builds one for a chosen place and copies it. Opening a link only navigates: nothing is ticked, started, launched or sent, and a link can carry no secrets.
+A link with a route opens a place in the app: from a home-screen shortcut, a bookmark, Automate, Tasker, HTTP Shortcuts, or an NFC card through one of them. **Settings > Shortcuts and deep links** builds one for a chosen place and copies it. Opening a link only navigates: nothing is ticked, launched or sent, and a link can carry no secrets. (Two links do what their place does on arrival: `#/inbox/triage` begins the walk through the Inbox, and `#/kb/<id>/run` resumes the procedure's unfinished run or starts a fresh one, a small record of its own; neither changes a quest or runs a flow.)
 
-| Route | Opens |
-| --- | --- |
-| `#/today` | Today, with the Top 3 |
-| `#/continue` | the quest with the newest saved place, else the one Next up is in |
-| `#/inbox` · `#/inbox/triage` | the Inbox · Process inbox |
-| `#/q/<id>` | a quest or step (on Upcoming it opens that list; in the Inbox, that item) |
-| `#/kb/<id>` · `#/kb/<id>/run` | an article · a procedure, started or resumed |
-| `#/waiting` · `#/waiting/<id>` | the Waiting Centre · one item, marked |
-| `#/focus` · `#/review` | the Focus tab (no session is started or changed) · the weekly review |
+| Route                          | Opens                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------- |
+| `#/today`                      | Today, with the Top 3                                                     |
+| `#/continue`                   | the quest with the newest saved place, else the one Next up is in         |
+| `#/inbox` · `#/inbox/triage`   | the Inbox · Process inbox                                                 |
+| `#/q/<id>`                     | a quest or step (on Upcoming it opens that list; in the Inbox, that item) |
+| `#/kb/<id>` · `#/kb/<id>/run`  | an article · a procedure, started or resumed                              |
+| `#/waiting` · `#/waiting/<id>` | the Waiting Centre · one item, marked                                     |
+| `#/focus` · `#/review`         | the Focus tab (no session is started or changed) · the weekly review      |
 
 The link works with the app open, from a fresh launch, from the installed app, and offline for anything already on the device. A target not on the device yet (made elsewhere, not synced) is looked for again after the first sync, then the app says so and opens the nearest list. A deleted or unknown target, or an id that isn't one, gets the same plain message. The route is cleared from the address once followed, so a reload or the back gesture doesn't replay it, and the back gesture steps back through the app as usual.
 

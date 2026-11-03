@@ -304,3 +304,46 @@ test('steps from a synced row or backup are checked; junk never reaches the page
     await page.evaluate(() => document.querySelectorAll('#v-knowledge a[href^="javascript"]').length),
   ).toBe(0);
 });
+
+test('review fixes: an article opened from a run shows the article and its ‹ returns to the run; a quest-less run shows only its own launches', async ({
+  app,
+  page,
+}) => {
+  await app.setState(s => {
+    s.kb[0].steps = [
+      { id: 'p1', title: 'Read the checks', kb: 'a2' },
+      { id: 'p2', title: 'Run', flow: 'f1' },
+    ];
+    s.track = true;
+    s.execs = [
+      {
+        id: 'e-q',
+        flow: 'f1',
+        q: 'q1',
+        at: Date.now() - 1000,
+        status: 'succeeded',
+        msg: 'from the quest',
+        upd: Date.now() - 1000,
+        ref: '',
+        ev: [],
+      },
+    ];
+  });
+  await page.reload();
+  await page.evaluate(() => {
+    kbArt = 'a1';
+    go('knowledge');
+  });
+  await page.click('[data-runstart="a1"]');
+  await page.click('#v-knowledge .pstep [data-sart="a2"]');
+  await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Ledger checks');
+  await expect(page.locator('#v-knowledge [data-kbback]')).toHaveText('‹ Back to the procedure');
+  await page.click('#v-knowledge [data-kbback]');
+  await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Read the checks');
+  // The run has no quest: the quest's execution of the same flow isn't shown as its own.
+  await page.click('#v-knowledge [data-rundone]');
+  await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Run');
+  await expect(page.locator('#v-knowledge .pstep .xline')).toHaveCount(0);
+  await page.click('#v-knowledge .pstep a[data-flow="f1"]');
+  await expect(page.locator('#v-knowledge .pstep .xline')).toContainText('Launched, no word yet');
+});

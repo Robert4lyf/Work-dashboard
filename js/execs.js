@@ -90,11 +90,12 @@ function execLine(x) {
     when = x.status === 'requested' ? x.at : x.upd;
   return `<span class="xst x-${st}">${EXEC_GLYPH[st]} ${EXEC_WORD[st]}</span> ${esc(whenLabel(when))}${x.msg ? ': ' + esc(x.msg) : ''}`;
 }
-// The newest execution of a flow (for a quest, if given; since a time, if given).
-function latestExec(flow, q, since = 0) {
+// The newest execution of a flow (for a quest, if given; since a time, if given). `exact`:
+// only executions with that quest (none, when q is empty), rather than any.
+function latestExec(flow, q, since = 0, exact = false) {
   return (
     S.execs
-      .filter(x => x.flow === flow && (!q || x.q === q) && x.at >= since)
+      .filter(x => x.flow === flow && (exact ? x.q === (q || '') : !q || x.q === q) && x.at >= since)
       .sort((a, b) => b.at - a.at)[0] || null
   );
 }
@@ -104,21 +105,24 @@ const execFailures = () => S.execs.filter(x => x.status === 'failed' && !x.ack);
 /* reports from the server: pulled after each sync, folded in by row id */
 async function pullExecEvents() {
   if (!sb || !session || !sb.from) return;
-  let changed = false;
+  let changed = false,
+    last = 0;
   try {
-    const from = sync2.execSeq || 0;
+    // A first pull on this device starts after the reports already folded into the records
+    // it has (from other devices): older ones would only make records of their own again for
+    // executions long pruned.
+    if (!sync2.execSeq) sync2.execSeq = Math.max(0, ...S.execs.flatMap(x => x.ev.map(e => e.i)));
     const { data, error } = await sb
       .from('cockpit_exec_events')
       .select('id,execution,flow,status,message,run_ref,reported_at')
-      .gt('id', from)
+      .gt('id', sync2.execSeq)
       .order('id')
       .limit(500);
     if (error || !Array.isArray(data)) return; // (the table isn't set up yet, or offline)
     for (const ev of data) {
       if (foldExecEvent(ev)) changed = true;
-      sync2.execSeq = Math.max(sync2.execSeq || 0, Number(ev.id));
+      last = Math.max(last, Number(ev.id));
     }
-    if (data.length) saveSyncState();
   } catch (e) {
     return;
   }
@@ -126,6 +130,12 @@ async function pullExecEvents() {
     save();
     inBackground(renderAll);
     if (execFailures().length) beep([330, 220]);
+  }
+  // The cursor moves only once what was folded is saved: a save that failed (no room) leaves
+  // the reports to be fetched again.
+  if (last && (!changed || localSaved)) {
+    sync2.execSeq = Math.max(sync2.execSeq || 0, last);
+    saveSyncState();
   }
 }
 // One report into the records. Returns whether anything changed. The rules: a report already
@@ -180,6 +190,7 @@ async function newExecToken() {
   S.track = true;
   panels.xsetup = true;
   save();
+  if (typeof listen === 'function' && !liveExec) listen(); // (reports arrive live from now on)
   renderAccount();
 }
 async function revokeExecToken() {

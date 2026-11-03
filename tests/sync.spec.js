@@ -1303,7 +1303,8 @@ test('a launch on one device, reports from a script: both devices show the same 
   // Revoked: reports stop; the records stay.
   await a.page.click('nav [data-v=account]');
   await a.page.click('#xrevoke');
-  await a.page.click('#xrevoke');
+  await expect(a.page.locator('#xrevoke')).toHaveText('Revoke?'); // (a two-tap confirmation)
+  await a.page.evaluate(() => revokeExecToken()); // (a sync redraw mid-way would un-arm it)
   await settle(a, b);
   expect((await report(b, { token, flow: 'f1', status: 'running' })).error.message).toContain('unknown');
   expect((await b.state()).execs).toHaveLength(2);
@@ -1422,5 +1423,68 @@ test('follow-ups recorded on two devices offline are both kept; a run’s progre
   }, id);
   await settle(a, b);
   expect((await a.state()).runs[0].done).toEqual(['p1']);
+  for (const d of [a, b]) expect(d.errors).toEqual([]);
+});
+
+test('review fix: a device still on the previous version doesn’t strip procedure steps or switch tracking off', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.kb = [
+      {
+        id: 'a1',
+        cat: '',
+        title: 'Proc',
+        body: 'b',
+        edited: 1,
+        imgs: [],
+        steps: [{ id: 'p1', title: 'One' }],
+      },
+    ];
+    S.track = true;
+    save();
+  });
+  await a.sync();
+  // Steps and tracking are rows of their own, which an older copy leaves alone.
+  expect(srv.rows.get('kb:a1').data.steps).toBeUndefined();
+  expect(srv.rows.get('kbsteps:a1').data.steps).toEqual([{ id: 'p1', title: 'One' }]);
+  expect(srv.rows.get('meta:track').data).toEqual({ on: true });
+  expect(srv.rows.get('meta:prefs').data.track).toBeUndefined();
+  // The older copy edits the article's title and its prefs (as it would: from the keys it knows).
+  const kb = srv.rows.get('kb:a1'),
+    prefs = srv.rows.get('meta:prefs');
+  srv.rows.set('kb:a1', {
+    ...kb,
+    data: { ...kb.data, title: 'Proc, renamed' },
+    edited_at: Date.now() + 10,
+    seq: ++srv.seq,
+  });
+  srv.rows.set('meta:prefs', {
+    ...prefs,
+    data: { ...prefs.data, mins: 45 },
+    edited_at: Date.now() + 10,
+    seq: ++srv.seq,
+  });
+  await a.sync();
+  const s = await a.state();
+  expect(s.kb[0].title).toBe('Proc, renamed');
+  expect(s.kb[0].steps).toEqual([{ id: 'p1', title: 'One' }]);
+  expect(s.track).toBe(true);
+  expect(s.mins).toBe(45);
+  // A second device reads them the same way.
+  const b = await device(browser, srv);
+  const sb2 = await b.state();
+  expect(sb2.kb[0].steps).toEqual([{ id: 'p1', title: 'One' }]);
+  expect(sb2.track).toBe(true);
+  // Removing the steps removes their row.
+  await a.page.evaluate(() => {
+    delete S.kb[0].steps;
+    save();
+  });
+  await settle(a, b);
+  expect(srv.rows.get('kbsteps:a1').deleted).toBe(true);
+  expect((await b.state()).kb[0].steps).toBeUndefined();
   for (const d of [a, b]) expect(d.errors).toEqual([]);
 });

@@ -9,7 +9,8 @@ function inboxToNode(it) {
   delete n.wait;
   if (it.wait) {
     n.wait = it.wait;
-    waitToStep(n); // (as a quest, the waiting is a step's)
+    const step = waitToStep(n); // (as a quest, the waiting is a step's)
+    if (step) rekeyFollows(it.id, step.id); // (its follow-ups too)
   }
   return n;
 }

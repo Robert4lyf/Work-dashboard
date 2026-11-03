@@ -390,6 +390,7 @@ begin
     raise exception 'too many reports: at most 120 an hour';
   end if;
   delete from cockpit_exec_events e where e.user_id = u and e.reported_at < now() - interval '90 days';
+  delete from cockpit_notices n where n.user_id = u and n.key like 'exec:%' and n.sent_at < now() - interval '30 days';
   -- Which execution this is about: the caller's say, else the run it reported before (an
   -- earlier report with no execution of its own stands for one, named 'u' + its row id, as the
   -- app names it), else the newest launch of this flow still waiting to hear (requested or

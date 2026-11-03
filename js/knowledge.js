@@ -6,7 +6,8 @@ let kbArt = null, // the article being read
   kbMoving = null, // the category being moved (its "Move to" choice is showing)
   kbCatOpen = null, // the category being looked at ('' or null: the top level; 'lost': the uncategorised)
   kbImgShown = null, // an article's picture shown full size
-  kbReturn = false; // the article was opened from a quest's page: its ‹ goes back there
+  kbReturn = false, // the article was opened from a quest's page: its ‹ goes back there
+  kbRunBack = null; // the article was opened from a run being followed: its ‹ goes back to it
 const byName = (a, b) =>
   a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) || (a < b ? -1 : a > b ? 1 : 0);
 // A flow's Run URL (Power Automate Desktop: the flow's Properties > Details). Only that kind of
@@ -233,7 +234,7 @@ function kbResults() {
 }
 function kbArticle(a) {
   const trail = kbTrail(a.cat);
-  return `<button class="linkbtn" data-kbback="1">‹ ${kbReturn && path.length ? 'Back to the quest' : 'Knowledge'}</button>
+  return `<button class="linkbtn" data-kbback="1">‹ ${kbRunBack && S.runs.some(r => r.id === kbRunBack) ? 'Back to the procedure' : kbReturn && path.length ? 'Back to the quest' : 'Knowledge'}</button>
     <p class="hint kbtrail">${esc(trail.join(' › ') || 'Uncategorised')}</p>
     <h2 class="kbtitle">${esc(a.title)}</h2>
     <div class="kbtext box">${a.body ? kbLinkify(a.body) : a.imgs.length || (a.steps && a.steps.length) ? '' : '<span class="hint">Nothing written yet.</span>'}</div>
@@ -513,6 +514,15 @@ function kbClick(d, b) {
     const a = S.kb.find(x => x.id === kbArt);
     if (a) kbCatOpen = kbCat(a.cat) ? a.cat : kbLost().includes(a) ? 'lost' : null;
     kbArt = null;
+    if (kbRunBack && S.runs.some(r => r.id === kbRunBack)) {
+      kbRun = kbRunBack;
+      kbRunBack = null;
+      kbArt = S.runs.find(r => r.id === kbRun).art;
+      renderKnowledge();
+      window.scrollTo(0, 0);
+      return;
+    }
+    kbRunBack = null;
     if (kbReturn) {
       kbReturn = false;
       renderKnowledge();

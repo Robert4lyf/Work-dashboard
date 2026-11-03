@@ -99,6 +99,7 @@ function openRun(art, q) {
   kbRun = r.id;
   kbArt = art;
   kbImgShown = null;
+  if (q && view === 'today' && path.length) kbReturn = true; // (the article's ‹ goes back to the quest)
   if (view !== 'knowledge') go('knowledge');
   else renderKnowledge();
   window.scrollTo(0, 0);
@@ -169,10 +170,8 @@ function kbRunView(r) {
       s ? `Step ${i + 1} of ${p.total}` : `All ${p.total} steps done`
     }${r.fin ? ' · finished' : ''}</p>`;
   if (s) {
-    const xs = s.flow ? latestExec(s.flow, r.q, r.started) : null;
-    h += `<div class="pstep box"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.text ? `<p class="ptext">${kbLinkify(s.text)}</p>` : ''}${stepActions(s, r.q)}${
-      xs ? `<p class="hint xline">${execLine(xs)}${lastSync || !sb ? '' : ''}</p>` : ''
-    }${s.verify ? '<p class="hint pverify">Check the result yourself before moving on.</p>' : ''}
+    const xs = s.flow ? latestExec(s.flow, r.q, r.started, true) : null;
+    h += `<div class="pstep box"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.text ? `<p class="ptext">${kbLinkify(s.text)}</p>` : ''}${stepActions(s, r.q)}${xs ? `<p class="hint xline">${execLine(xs)}</p>` : ''}${s.verify ? '<p class="hint pverify">Check the result yourself before moving on.</p>' : ''}
       <div class="acts"><button class="btn" data-runprev="${r.id}"${i === 0 ? ' disabled' : ''}>Back</button><button class="btn green" data-rundone="${r.id}" data-step="${s.id}">${s.verify ? 'Verified, next' : 'Done, next'}</button></div></div>`;
   } else
     h += `<div class="pstep box done"><h3>Every step is done.</h3><div class="acts">${r.fin ? '' : `<button class="btn green" data-runfinish="${r.id}">Finish</button>`}${q ? `<button class="btn blue" data-open="${q.n.id}">Back to the quest</button>` : ''}</div></div>`;

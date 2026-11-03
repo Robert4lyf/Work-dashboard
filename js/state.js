@@ -114,6 +114,26 @@ function waitToStep(q) {
   q.children.push(c);
   return c;
 }
+// Waiting details (on a step, or on an Inbox item): only sound values, keys as they are (a record
+// from before mustn't change shape). `who` and `note` go into attributes and text; a number or
+// an object in their place (a crafted row) would throw or slip through unescaped.
+function cleanWait(n) {
+  if (!n.wait || typeof n.wait !== 'object') {
+    if ('wait' in n) delete n.wait;
+    return;
+  }
+  const w = n.wait;
+  if ('who' in w) w.who = typeof w.who === 'string' ? cleanText(w.who).slice(0, 60) : '';
+  if ('note' in w) w.note = typeof w.note === 'string' ? cleanText(w.note).slice(0, 160) : '';
+  w.due = cleanDay(w.due);
+  if ('since' in w) w.since = cleanDay(w.since);
+  // (Release B: when a reply was promised, and the latest follow-up; only kept when set)
+  ['expect', 'last'].forEach(k => {
+    const v = cleanDay(w[k]);
+    if (v) w[k] = v;
+    else delete w[k];
+  });
+}
 // A quest has steps; a step doesn't (before, steps could have steps of their own). Steps under a
 // step move up beside it, named with it ("Contract: Draft"); a step that only grouped them goes.
 // One with anything of its own (waiting, notes) stays, as a step, finished if its steps were.
@@ -144,19 +164,7 @@ function fix(n) {
   cleanId(n);
   n.children = (n.children || []).map(fix);
   if (n.start) n.start = cleanDay(n.start);
-  if (n.wait && typeof n.wait === 'object') {
-    const w = n.wait;
-    // (keys as they are: a record from before mustn't change shape, only its values be sound)
-    if (typeof w.who === 'string') w.who = cleanText(w.who).slice(0, 60);
-    if (typeof w.note === 'string') w.note = cleanText(w.note).slice(0, 160);
-    w.due = cleanDay(w.due);
-    // (Release B: when a reply was promised, and the latest follow-up; only kept when set)
-    ['expect', 'last'].forEach(k => {
-      const v = cleanDay(w[k]);
-      if (v) w[k] = v;
-      else delete w[k];
-    });
-  } else if (n.wait) delete n.wait;
+  cleanWait(n);
   if (n.since) n.since = cleanDay(n.since);
   n.tag = cleanText(n.tag || ''); // (a tag's name is part of its record's key: see LISTS)
   n.project = n.project || '';
@@ -273,6 +281,7 @@ function norm(s) {
       return cleanId(i);
     });
   // Waiting details on an Inbox item live on the item (older versions left them on its quest).
+  S.inbox.forEach(cleanWait);
   S.inbox.forEach(i => {
     if (i.node && i.node.wait && !i.wait) i.wait = i.node.wait;
     if (i.node) delete i.node.wait;

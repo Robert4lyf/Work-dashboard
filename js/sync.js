@@ -407,6 +407,7 @@ async function sync() {
 }
 // Live updates: another device's change arrives within a second instead of at the next poll.
 let live = null,
+  liveExec = null,
   liveFor = '',
   askMerge = false;
 function listen() {
@@ -442,7 +443,8 @@ function listen() {
 }
 function unlisten() {
   if (live && sb.removeChannel) sb.removeChannel(live);
-  live = null;
+  if (liveExec && sb.removeChannel) sb.removeChannel(liveExec);
+  live = liveExec = null;
   liveStatus = '';
 }
 async function signIn() {

@@ -211,8 +211,12 @@ document.addEventListener('change', e => {
     const it = S.inbox.find(x => x.id === el.dataset.iwait),
       who = el.value.trim();
     if (it) {
+      const had = !!it.wait;
       if (who) it.wait = { note: '', due: '', since: today(), ...it.wait, who };
       else delete it.wait;
+      // (its history, as the Waiting Centre keeps it)
+      if (who && !had) addFollow(it.id, followsFor(it.id).some(f => f.k === 'resolve') ? 'reopen' : 'start');
+      if (!who && had) addFollow(it.id, 'resolve');
     }
     save();
     renderAll();
@@ -353,6 +357,8 @@ document.addEventListener('click', e => {
   if (b.id === 'searchBtn') openSearch();
   if (d.sart)
     leaveEditor(() => {
+      kbRunBack = kbRun; // (opened from a run being followed: the article's ‹ goes back to it)
+      kbRun = null;
       kbArt = d.sart;
       kbImgShown = null;
       kbReturn = view === 'today' && path.length > 0; // (opened from a quest: back goes to it)
@@ -676,7 +682,7 @@ document.addEventListener('click', e => {
       hadArtImgs = new Set(
         (Array.isArray(pending.kb) ? pending.kb : []).filter(a => a && Array.isArray(a.imgs)).map(a => a.id),
       ),
-      kept = { kb: S.kb, kbcats: S.kbcats, flows: S.flows },
+      kept = { kb: S.kb, kbcats: S.kbcats, flows: S.flows, follows: S.follows, runs: S.runs, execs: S.execs },
       keptLoose = S.kbimgLoose,
       was = JSON.stringify(S);
     try {
@@ -690,8 +696,9 @@ document.addEventListener('click', e => {
     if (imgs) S.noteImgs = imgs;
     // (pictures still waiting for their article: kept too, or they'd be deleted everywhere)
     S.kbimgLoose = [...S.kbimgLoose, ...keptLoose.filter(p => !S.kbimgLoose.some(q => q.id === p.id))];
-    // A copy from before the Knowledge tab has none of it: what's here stays.
-    ['kb', 'kbcats', 'flows'].forEach(k => {
+    // A copy from before the Knowledge tab (or Release B's records) has none of it: what's
+    // here stays.
+    ['kb', 'kbcats', 'flows', 'follows', 'runs', 'execs'].forEach(k => {
       if (!Array.isArray(pending[k])) S[k] = kept[k];
     });
     S.kb.forEach(a => {
@@ -730,11 +737,13 @@ document.addEventListener('click', e => {
       })
       .then(() => {
         captureToken = '';
+        execToken = '';
         pushTest = null;
         health = null;
         try {
           localStorage.removeItem(CAPTURE_KEY);
           localStorage.removeItem(NOTICE_HASH);
+          localStorage.removeItem(EXEC_KEY);
         } catch (e) {}
       })
       .then(() => {
@@ -999,7 +1008,12 @@ function appBack() {
 try {
   // (after a reload the entries are already there)
   if (!(history.state && history.state.app === 'in')) {
-    history.replaceState({ app: 'root' }, '');
+    // A deep link's route is taken off the address first (kept for takeRoute): the entry under
+    // the app's own mustn't carry it, or the back gesture would replay it on the way out.
+    if (location.hash.startsWith('#/')) {
+      launchRoute = location.hash;
+      history.replaceState({ app: 'root' }, '', location.pathname + location.search);
+    } else history.replaceState({ app: 'root' }, '');
     history.pushState({ app: 'in' }, '');
   }
 } catch (e) {}

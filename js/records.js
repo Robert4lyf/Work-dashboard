@@ -36,10 +36,14 @@ function toRecords(s) {
   // An article's pictures are records of their own, so editing its text doesn't send them again.
   // (The article keeps an empty list in their place: that's how a device from before this reads
   // it, so the two don't keep rewriting it back and forth.)
+  // Likewise a procedure's steps (Release B): a copy of the app from before rebuilds an article
+  // from the keys it knows and would drop them; as a row of a kind it doesn't know, it leaves
+  // them alone.
   (s.kb || []).forEach(a => {
-    const { imgs, ...rest } = a;
+    const { imgs, steps, ...rest } = a;
     m.set('kb:' + a.id, { ...rest, imgs: [] });
     (imgs || []).forEach(p => m.set('kbimg:' + p.id, { id: p.id, art: a.id, src: p.src, at: p.at }));
+    if (steps && steps.length) m.set('kbsteps:' + a.id, { id: a.id, steps });
   });
   // Pictures whose article isn't here (yet): kept as they are, or they'd be deleted everywhere.
   (s.kbimgLoose || []).forEach(p => m.has('kbimg:' + p.id) || m.set('kbimg:' + p.id, p));
@@ -57,8 +61,9 @@ function toRecords(s) {
     pushKey: s.pushKey || '',
     reviewed: s.reviewed || '',
     dayEnd: s.dayEnd || '',
-    ...(s.track ? { track: true } : {}),
   });
+  // Execution tracking is on (Release B): its own record, for the same reason as the steps.
+  if (s.track) m.set('meta:track', { on: true });
   // Its own record too, so a prefs change on a device that hadn't yet heard of new keys can't
   // bring the old ones back. (Still in prefs for older versions.)
   if (s.pushKey) m.set('meta:pushkey', { key: s.pushKey });
@@ -96,8 +101,10 @@ function fromRecords(m, day) {
     // account has any pictures of their own (after that, an older device still sending them
     // mustn't bring back one that was removed).
     kb: (by.kb || []).map(a => {
-      const own = (by.kbimg || []).filter(p => p.art === a.id).sort((x, y) => (x.at || 0) - (y.at || 0));
-      return (by.kbimg || []).length || !a.imgs ? { ...a, imgs: own.map(({ art, ...p }) => p) } : a;
+      const own = (by.kbimg || []).filter(p => p.art === a.id).sort((x, y) => (x.at || 0) - (y.at || 0)),
+        st = m.get('kbsteps:' + a.id),
+        withImgs = (by.kbimg || []).length || !a.imgs ? { ...a, imgs: own.map(({ art, ...p }) => p) } : a;
+      return st && Array.isArray(st.steps) ? { ...withImgs, steps: st.steps } : withImgs;
     }),
     kbimgLoose: (by.kbimg || []).filter(p => !(by.kb || []).some(a => a.id === p.art)),
     flows: by.flow || [],
@@ -113,6 +120,7 @@ function fromRecords(m, day) {
     day,
   };
   if (m.get('meta:pushkey')) s.pushKey = m.get('meta:pushkey').key || '';
+  s.track = !!(m.get('meta:track') || {}).on;
   const legacy = m.get('meta:legacy') || {};
   s.oldDaily = legacy.daily || {};
   s.oldPdaily = legacy.pdaily || {};
@@ -155,10 +163,11 @@ function saveSyncState() {
 }
 // Record kinds this version knows. Rows of other kinds (from a newer version on another
 // device) are left alone, never deleted for being missing here.
-const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy', 'top3'];
+const META_KEYS = ['notes', 'order', 'prefs', 'pushkey', 'timer', 'score', 'legacy', 'top3', 'track'];
 const knownKey = k =>
   k.slice(0, k.indexOf(':')) in LISTS ||
   k.startsWith('kbimg:') ||
+  k.startsWith('kbsteps:') ||
   (k.startsWith('meta:') && META_KEYS.includes(k.slice(5)));
 // `now`: when the change counts as made (the daily reset back-dates its changes to midnight).
 function markDirty(now) {

@@ -15,10 +15,13 @@
    Followed at start once the saved copy is in; a target not here yet (a quest made on another
    device) is looked for again after the first sync. The hash is cleared once followed, so a
    reload or the back gesture doesn't replay it. Ids go through the same checks as everything
-   else from outside; anything unknown is refused with a plain message. */
+   else from outside; anything unknown is refused with a plain message. Opening a link never
+   ticks, launches or sends anything; #/inbox/triage begins the walk and #/kb/<id>/run starts or
+   resumes a run (a record of its own), which is what those places do on arrival. */
 const ROUTES = ['today', 'inbox', 'triage', 'q', 'kb', 'run', 'waiting', 'focus', 'continue', 'review'];
 let pendingRoute = null, // a route whose target isn't here yet, tried again after a sync
   routeGiveUp = null,
+  launchRoute = '', // the route the app was opened at (taken off the address at once: see events.js)
   waitMark = ''; // the waiting item a link pointed at, marked in the list once
 function parseRoute(hash) {
   const m = /^#\/([a-z]+)(?:\/([^/?#]+))?(?:\/([a-z]+))?\/?$/.exec(String(hash || ''));
@@ -43,7 +46,8 @@ function parseRoute(hash) {
 }
 // The URL's route, taken and cleared. Returns whether there was one.
 function takeRoute() {
-  const h = location.hash;
+  const h = launchRoute || location.hash;
+  launchRoute = '';
   if (!h || !h.startsWith('#/')) return false;
   try {
     history.replaceState({ app: 'in' }, '', location.pathname + location.search);

@@ -15,7 +15,10 @@ function moveToInbox(id) {
     x.children.forEach(undone);
   })(r.n);
   const it = { id: uid(), text: r.n.text, node: r.n, tag: r.n.tag, project: r.n.project };
-  if (r.n.wait) it.wait = r.n.wait; // still waiting (and chased) from the Inbox
+  if (r.n.wait) {
+    it.wait = r.n.wait; // still waiting (and chased) from the Inbox
+    rekeyFollows(r.n.id, it.id);
+  }
   delete r.n.wait; // (the item's are the ones that count)
   S.inbox.unshift(it);
   settle(bf);

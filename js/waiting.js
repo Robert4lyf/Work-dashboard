@@ -73,6 +73,14 @@ function addFollow(id, k, note = '') {
     note: cleanText(note).trim().slice(0, FOLLOW_MAX),
   });
 }
+// A waiting item's history goes with it when its wait moves to another node (an Inbox item
+// taken to Today waits through a step of its own; a quest moved to the Inbox the other way).
+function rekeyFollows(from, to) {
+  if (!from || !to || from === to) return;
+  S.follows.forEach(f => {
+    if (f.n === from) f.n = to;
+  });
+}
 const FOLLOW_LABEL = {
   start: 'Asked',
   chase: 'Followed up',
@@ -144,6 +152,7 @@ function saveWaitPanel(id, quiet) {
     return;
   if ((was.expect || '') !== w.expect && w.expect) addFollow(id, 'expect', 'by ' + niceDate(w.expect));
   r.n.wait = { ...was, ...w };
+  if (!w.expect) delete r.n.wait.expect; // (only kept when set: see cleanWait)
   save();
   const sum = $('#waitd > summary');
   if (sum) sum.textContent = 'Waiting' + (w.who ? ' on ' + w.who : '');
@@ -155,8 +164,10 @@ function setWaiting(id, w) {
   if (!r.n) return;
   const bf = snapshot(),
     had = !!r.n.wait;
-  if (w) r.n.wait = { since: (r.n.wait && r.n.wait.since) || today(), ...w };
-  else delete r.n.wait;
+  if (w) {
+    r.n.wait = { since: (r.n.wait && r.n.wait.since) || today(), ...w };
+    if (!r.n.wait.expect) delete r.n.wait.expect; // (only kept when set: see cleanWait)
+  } else delete r.n.wait;
   // A quest (not an Inbox item) waits through a step: one is added. One that was finished isn't
   // any more (settle takes back its "done"), like adding any other step.
   let stepped = null;
@@ -189,7 +200,7 @@ function openFollowUp(id, dateOnly) {
       dateOnly
         ? ''
         : `<label class="f" for="funote">What happened</label><textarea class="fld" id="funote" rows="2" maxlength="${FOLLOW_MAX}" placeholder="Emailed Sam, awaiting approval"></textarea>`
-    }<div class="prow2"><div><label class="f" for="fudue">Chase again on</label><input class="fld" type="date" id="fudue" value="${w.due && w.due > today() ? w.due : shift(today(), 2)}"></div><div><label class="f" for="fuexp">Reply expected by</label><input class="fld" type="date" id="fuexp" value="${w.expect || ''}"></div></div>
+    }<div class="prow2"><div><label class="f" for="fudue">Chase again on</label><input class="fld" type="date" id="fudue" value="${esc(w.due && w.due > today() ? w.due : shift(today(), 2))}"></div><div><label class="f" for="fuexp">Reply expected by</label><input class="fld" type="date" id="fuexp" value="${esc(w.expect || '')}"></div></div>
     <div class="acts"><button class="btn green" id="sheetok">Save</button><button class="btn" type="button" data-sheetclose="1">Cancel</button></div></form>`,
     { labelledBy: 'sheettitle' },
   );
@@ -211,7 +222,8 @@ function saveFollowUp(id) {
   }
   if (expect && expect !== (w.expect || '')) addFollow(id, 'expect', 'by ' + niceDate(expect));
   w.due = due;
-  w.expect = expect;
+  if (expect) w.expect = expect;
+  else delete w.expect;
   save();
   renderAll();
   toast(withNote ? 'Follow-up recorded' : 'Chase date changed');
