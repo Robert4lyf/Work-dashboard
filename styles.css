@@ -2870,3 +2870,100 @@ details.more > details {
 .rlprev {
   margin: 10px 0 4px;
 }
+
+/* Release C: forecast */
+.tag.estpick {
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8em;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+}
+.radar {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  height: 120px;
+  padding: 6px 0 0;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 6px;
+}
+.radar.tight {
+  gap: 2px;
+}
+.rday {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.rday .rbar {
+  display: block;
+  min-height: 2px;
+  border: 2px solid var(--ink);
+  border-bottom: 0;
+  background: var(--green);
+}
+.rday.tight .rbar {
+  background: var(--yellow, #ffec27);
+}
+.rday.over .rbar {
+  background: var(--pink);
+}
+.rday.none .rbar {
+  background: transparent;
+  border-color: var(--muted);
+}
+.rday small {
+  text-align: center;
+  font-size: 0.7em;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.radar.tight .rday small {
+  font-size: 0.6em;
+}
+.recs {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.rec {
+  border-left: 4px solid var(--blue);
+  padding: 2px 0 2px 10px;
+  margin: 8px 0;
+}
+.rec.over {
+  border-color: var(--pink);
+}
+.rec.ok {
+  border-color: var(--green);
+}
+.rec.none {
+  border-color: var(--muted);
+}
+.rec p {
+  margin: 0 0 6px;
+}
+.fday {
+  margin: 8px 0 12px;
+}
+.capgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+}
+.capgrid label {
+  display: grid;
+  gap: 2px;
+  font-size: 0.85em;
+}

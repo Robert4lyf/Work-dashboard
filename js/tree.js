@@ -89,9 +89,18 @@ function settle(before) {
     if (v.done && !was && v.kids < before.get(id).kids) return;
     if (v.done && !was) {
       gain += pts;
-      S.log.push({ id, d: today(), text: v.text, trail: v.trail, p: projectOf(id) });
       {
-        const rr = find(id) || find(id, S.later);
+        const rr = find(id) || find(id, S.later),
+          est = rr ? effEst(rr.n) : 0;
+        // (with its estimate and the focus time on it, for the comparison in Review)
+        S.log.push({
+          id,
+          d: today(),
+          text: v.text,
+          trail: v.trail,
+          p: projectOf(id),
+          ...(est ? { est, m: spent(rr.n) } : {}),
+        });
         emitEvent({
           k: 'quest_done',
           key: 'quest:' + id + ':done:' + today(),
@@ -193,6 +202,7 @@ const inst = t =>
     opt: t.opt,
     notes: t.notes,
     ...(t.links ? { links: t.links.map(l => ({ ...l })) } : {}),
+    ...(t.est ? { est: t.est } : {}),
     children: t.children.map(inst),
   });
 

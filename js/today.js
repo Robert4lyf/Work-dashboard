@@ -356,7 +356,10 @@ function renderNode({ n, parents }) {
       dueTag(n) +
       (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
       (!d && !n.wait && kids ? stepWaitBadge(n) : '') +
-      (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '');
+      (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '') +
+      (!d
+        ? `<button class="tag estpick" data-estpick="${n.id}">${effEst(n) ? 'Estimate ' + esc(estLabel(n)) : '+ Estimate'}</button>`
+        : '');
   if (meta) h += `<div class="factsrow">${meta}</div>`;
   // The next step (the first to do, in order), or where it stands.
   const nx = !d && kids ? nextLeaf(n) : null;

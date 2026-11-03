@@ -158,6 +158,7 @@ document.addEventListener('change', e => {
   const el = e.target;
   if (el.id === 'wstype') return wsShowKind();
   if (el.id === 'rlon' || el.id === 'rldo') return redrawRuleForm();
+  if (el.dataset && el.dataset.cap !== undefined) return capChange(el);
   if (el.dataset && el.dataset.wfact === 'check') return wfClick(el.dataset, el);
   // Committed. (Not a time: those change a part at a time and are still being typed.)
   // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
@@ -350,6 +351,7 @@ document.addEventListener('click', e => {
   execClick(d, b);
   wfClick(d, b);
   ruleClick(d, b);
+  forecastClick(d, b);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -520,7 +522,7 @@ document.addEventListener('click', e => {
   }
   if (d.rsub) {
     reviewSub = d.rsub;
-    go(d.rsub === 'week' ? 'review' : d.rsub);
+    go(d.rsub === 'log' ? 'log' : 'review');
   }
   if (d.rstep) {
     reviewStep += +d.rstep;

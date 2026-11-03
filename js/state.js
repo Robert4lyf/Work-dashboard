@@ -165,6 +165,7 @@ function fix(n) {
   n.children = (n.children || []).map(fix);
   if (n.start) n.start = cleanDay(n.start);
   cleanWait(n);
+  cleanEst(n);
   if (n.since) n.since = cleanDay(n.since);
   n.tag = cleanText(n.tag || ''); // (a tag's name is part of its record's key: see LISTS)
   n.project = n.project || '';
@@ -275,6 +276,7 @@ function norm(s) {
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;
   S.top3 = cleanTop3(S.top3);
+  S.cap = cleanCap(S.cap);
   S.quests = S.quests.map(fix);
   S.later = S.later.map(fix);
   // (only objects, with a quest behind them only if that's an object too: a synced row or a
