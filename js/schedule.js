@@ -87,7 +87,7 @@ function openScheduleSheet(id) {
   const n = r.n,
     s = n.scheduled || {};
   popSheet(
-    `<form id="schedform" data-id="${n.id}"><h2 id="sheettitle">Schedule</h2><p class="hint qahint">${esc(n.text)}: for a meeting or anything else that happens at a set time. It stays off your list of things to work on until you record how it went. (A deadline is set on the task's page; Do later just hides a task until a day.)</p>
+    `<form id="schedform" data-id="${n.id}"><h2 id="sheettitle">Schedule</h2><p class="hint qahint">${esc(n.text)}: a meeting or anything else that happens at a set time. Kept apart from your work until you mark it done.</p>
     <div class="schedflds"><div><label class="f" for="scheddate">Date</label><input class="fld" type="date" id="scheddate" required min="${today()}" value="${esc(s.date && s.date >= today() ? s.date : today())}"></div>
     <div><label class="f" for="schedtime">Time <small class="hint">(optional)</small></label><input class="fld" type="time" id="schedtime" value="${esc(s.time || '')}"></div></div>
     <div class="acts"><button class="btn green" id="sheetok">${n.scheduled ? 'Save' : 'Schedule'}</button><button class="btn" type="button" data-sheetclose="1">Cancel</button></div>${

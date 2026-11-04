@@ -3074,10 +3074,11 @@ details.more > details {
 }
 .schedrow .stime {
   flex: none;
-  min-width: 4.2em;
+  min-width: 3.3em;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--accent-ink);
+  font-size: var(--fs-sm);
 }
 .schedrow.sch-passed .stime,
 .schedrow.sch-past .stime {
@@ -3101,9 +3102,16 @@ details.more > details {
 .t3out {
   margin: 8px 0 0;
 }
+.schedflds .fld {
+  min-width: 0;
+  width: 100%;
+}
+.schedrow {
+  gap: 10px;
+}
 .schedflds {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0 12px;
 }
 /* Settings: the index of groups, a row each, opening its page */
