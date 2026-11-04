@@ -1041,7 +1041,12 @@ function start(pics, kv) {
   deferStart = !!sb && navigator.onLine;
   if (!deferStart) rollover();
   if (!deferStart && timerDue()) finishTimer(true);
-  else renderAll();
+  else {
+    // (the view itself and the header are drawn once, by go() below, not here as well: Release
+    // G, half of starting up on a heavy day)
+    syncRinging();
+    renderZen();
+  }
   heldAtStart = deferStart ? holdDue() : '';
   setTimeout(() => releaseHeld(heldAtStart), 20000); // (never held for long, whatever happens)
   // An article left half-written when the app was closed (or Android closed it) comes back.

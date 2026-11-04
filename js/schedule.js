@@ -181,15 +181,18 @@ function renderScheduledToday() {
 // Today's waiting steps, most urgent first, each with its task. A task with nothing else left to
 // do is shown only here; one with other steps to do stays in Today's tasks as well.
 function todayWaiting() {
+  // (each waiting step's task from one walk of Today, not a search per step; each one's urgency
+  // worked out once, not on every comparison: Release G, measured at 70ms on a heavy day)
+  const top = new Map(),
+    walk = (n, q) => {
+      top.set(n.id, q);
+      n.children.forEach(c => walk(c, q));
+    };
+  S.quests.forEach(q => walk(q, q));
+  const rank = new Map(BUCKETS.map(([k], i) => [k, i]));
   return openWaiting(S.quests)
-    .map(x => {
-      const r = find(x.n.id);
-      return { ...x, q: r ? r.parents[0] || r.n : null };
-    })
-    .sort((a, b) => {
-      const o = k => BUCKETS.findIndex(([x]) => x === waitBucket(k.n.wait));
-      return o(a) - o(b) || (a.n.wait.due || '9').localeCompare(b.n.wait.due || '9');
-    });
+    .map(x => ({ ...x, q: top.get(x.n.id) || null, o: rank.get(waitBucket(x.n.wait)) ?? -1 }))
+    .sort((a, b) => a.o - b.o || (a.n.wait.due || '9').localeCompare(b.n.wait.due || '9'));
 }
 function renderWaitingToday() {
   const ws = todayWaiting();
