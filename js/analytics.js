@@ -77,7 +77,15 @@ function workflowStats(p) {
     withOutcome = now.ok + now.failed,
     perWf = {};
   runs.forEach(r => {
-    const w = (perWf[r.wf] = perWf[r.wf] || { name: r.name, n: 0, ok: 0, failed: 0, durs: [], stages: {} });
+    const w = (perWf[r.wf] = perWf[r.wf] || {
+      id: r.wf,
+      name: r.name,
+      n: 0,
+      ok: 0,
+      failed: 0,
+      durs: [],
+      stages: {},
+    });
     w.n++;
     if (r.status === 'succeeded') {
       w.ok++;
@@ -123,7 +131,7 @@ function automationStats(p) {
     perFlow = {};
   xs.forEach(x => {
     const f = (perFlow[x.flow] = perFlow[x.flow] || {
-      name: (S.flows.find(y => y.id === x.flow) || {}).name || 'removed flow',
+      name: (S.flows.find(y => y.id === x.flow) || {}).name || 'removed automation',
       list: [],
     });
     f.list.push(x);
@@ -213,7 +221,7 @@ function insightLines(x) {
       trendLine(w.n, x.wf.prev.n, ['run started', 'runs started']),
       ...x.wf.table.map(
         t =>
-          `${t.name}: ${plural(t.n, 'run')}, ${t.ok} succeeded, ${t.failed} failed${t.med ? `, a successful run typically takes ${hm(Math.max(1, Math.round(t.med / 60000)))}` : ''}${t.worst ? `; most failed stage: ${t.worst[0]} (${t.worst[1]})` : ''}.`,
+          `${t.name}: ${plural(t.n, 'run')}, ${t.ok} succeeded, ${t.failed} failed${t.med ? `, a successful run typically takes ${hm(Math.max(1, Math.round(t.med / 60000)))}` : ''}${t.worst ? `; most failed step: ${t.worst[0]} (${t.worst[1]})` : ''}.`,
       ),
     ],
   ]);
@@ -346,7 +354,7 @@ function findings(x) {
   // 2. One step of a process failing again and again: the same step failed in 2 or more runs.
   x.wf.table.forEach(w => {
     if (w.worst && w.worst[1] >= 2) {
-      const wf = S.workflows.find(y => y.name === w.name);
+      const wf = wfById(w.id);
       out.push({
         sev: 0,
         n: w.worst[1],
@@ -441,10 +449,7 @@ function findings(x) {
       sev: 2,
       n: x.acc.n,
       at: 0,
-      title:
-        x.acc.median >= 1.5
-          ? `Tasks take about ${x.acc.median.toFixed(1)}× their estimate`
-          : `Tasks take about ${x.acc.median.toFixed(1)}× their estimate`,
+      title: `Tasks take about ${x.acc.median.toFixed(1)}× their estimate (${x.acc.median >= 1.5 ? 'estimates run low' : 'estimates run high'})`,
       why: `From ${plural(x.acc.n, 'finished task')} with an estimate and timer-measured focus time (work done without the timer isn't measured).`,
       act: ['Open the Forecast', 'data-rsub="forecast"'],
     });
@@ -464,7 +469,7 @@ function findings(x) {
   return out.sort((a, b) => a.sev - b.sev || b.n - a.n || b.at - a.at).slice(0, 3);
 }
 // How much there is to measure: with fewer than three recorded things in the period, the page
-// says what it can measure instead of showing empty sections (fewer than two recorded things).
+// says what it can measure instead of showing empty sections.
 const insightsSparse = x =>
   x.prod.done + x.wf.now.n + x.auto.now.n + x.wait.resolved + (x.prod.focusNow ? 1 : 0) < 2;
 /* the page: findings, the key numbers, two charts you can tap, then the detail folded */
@@ -493,7 +498,7 @@ function renderInsights() {
     h += `<div class="findings">${found
       .map(
         f =>
-          `<div class="finding sev${f.sev}"><b>${esc(f.title)}</b><p>${esc(f.why)}</p>${f.act ? `<button class="btn sm" ${f.act[1]}>${esc(f.act[0])}</button>` : ''}</div>`,
+          `<div class="finding sev${f.sev}"><small class="fsev">${['Needs action', 'Worth a look', 'Trend'][f.sev]}</small><b>${esc(f.title)}</b><p>${esc(f.why)}</p>${f.act ? `<button class="btn sm" ${f.act[1]}>${esc(f.act[0])}</button>` : ''}</div>`,
       )
       .join('')}</div>`;
   else if (sparse)
@@ -513,13 +518,13 @@ function renderInsights() {
     `<div class="ibars${x.span > 30 ? ' tight' : ''}" role="group" aria-label="${label}, each day">${x.prod.days
       .map(
         d =>
-          `<button class="ibar${insightPick && insightPick.key === key && insightPick.d === d.d ? ' picked' : ''}" data-ibar="${key}" data-d="${d.d}" aria-label="${esc(dayLabel(d.d))}: ${unit(d[key])}" style="height:${Math.round((d[key] / m) * 100)}%"></button>`,
+          `<button class="ibar${insightPick && insightPick.key === key && insightPick.d === d.d ? ' picked' : ''}" data-ibar="${key}" data-d="${d.d}" aria-label="${esc(dayLabel(d.d))}: ${unit(d[key])}" aria-pressed="${insightPick && insightPick.key === key && insightPick.d === d.d}"><span class="ifill" style="height:${Math.round((d[key] / m) * 100)}%"></span></button>`,
       )
       .join(
         '',
-      )}</div>${insightPick && insightPick.key === key ? `<p class="hint ipick" aria-live="polite">${esc(dayLabel(insightPick.d))}: ${unit((x.prod.days.find(d => d.d === insightPick.d) || {})[key] || 0)}</p>` : ''}`;
+      )}</div><p class="hint ipick" aria-live="polite">${insightPick && insightPick.key === key ? `${esc(dayLabel(insightPick.d))}: ${unit((x.prod.days.find(d => d.d === insightPick.d) || {})[key] || 0)}` : 'Tap a bar for its number.'}</p>`;
   h += `<h2>Trends</h2><p class="hint ilabel">Tasks finished, each day</p>${bars('done', max, 'Tasks finished', n => plural(n, 'task'))}<p class="hint ilabel">Focus time, each day (timer)</p>${bars('focus', fmax, 'Focus minutes', hm)}`;
-  h += `<details id="itable"${panels.itable ? ' open' : ''}><summary>As a table</summary><table class="itab"><thead><tr><th>Day</th><th>Finished</th><th>Focus</th></tr></thead><tbody>${
+  h += `<details id="itable"${panels.itable ? ' open' : ''}><summary>As a table</summary><table class="itab"><caption class="hint">Tasks finished and focus time, by day</caption><thead><tr><th scope="col">Day</th><th scope="col">Finished</th><th scope="col">Focus</th></tr></thead><tbody>${
     x.prod.days
       .filter(d => d.done || d.focus)
       .map(d => `<tr><td>${esc(dayLabel(d.d))}</td><td>${d.done}</td><td>${hm(d.focus)}</td></tr>`)

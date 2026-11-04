@@ -178,9 +178,11 @@ test('the charts answer a tap, the table reads the same numbers, and sparse data
   await expect(page.locator('.ibars').first().locator('.ibar')).toHaveCount(30);
   await expect(page.locator('.ibars .ibar').nth(29)).toHaveAttribute('aria-label', 'Today: 2 tasks');
   await page.click('.ibars >> nth=0 >> .ibar >> nth=29');
-  await expect(page.locator('.ipick')).toHaveText('Today: 2 tasks');
+  await expect(page.locator('.ipick').first()).toHaveText('Today: 2 tasks');
+  await expect(page.locator('.ibars >> nth=0 >> .ibar >> nth=29')).toHaveAttribute('aria-pressed', 'true');
   await page.click('.ibars >> nth=1 >> .ibar >> nth=29');
-  await expect(page.locator('.ipick')).toHaveText('Today: 45m');
+  await expect(page.locator('.ipick').nth(1)).toHaveText('Today: 45m');
+  await expect(page.locator('.ipick').first()).toHaveText('Tap a bar for its number.');
   await page.click('#itable summary');
   await expect(page.locator('.itab tbody tr')).toHaveText(['Yesterday10m', 'Today245m'].map(() => /.*/));
   await expect(page.locator('.itab tbody tr').last()).toContainText('Today');
@@ -210,8 +212,8 @@ test('the forecast headline separates estimated work, capacity, overloaded days 
   expect(await cov()).toMatchObject({ k: 'much', un: 3, total: 4, assumed: false });
   await app.go('review');
   await page.click('[data-rsub="forecast"]');
-  await expect(page.locator('.fhead .fhl b').nth(0)).toHaveText('2h 0m');
-  await expect(page.locator('.fhead .fhl').nth(3)).toHaveText('3tasks not estimated');
+  await expect(page.locator('.fchead .fhl b').nth(0)).toHaveText('2h 0m');
+  await expect(page.locator('.fchead .fhl').nth(3)).toHaveText('3tasks not estimated');
   await expect(page.locator('.fcov')).toContainText(
     'Much of the forecast is incomplete: 3 of 4 tasks have no estimate. Unestimated work is not spare capacity.',
   );
@@ -231,7 +233,7 @@ test('the forecast headline separates estimated work, capacity, overloaded days 
   await expect(page.locator('.fcov')).toHaveText(
     'All relevant work is estimated. Capacity uses assumed defaults.',
   );
-  await expect(page.locator('.fhead .fhl small').nth(1)).toHaveText('capacity (assumed)');
+  await expect(page.locator('.fchead .fhl small').nth(1)).toHaveText('capacity (assumed)');
   // A day's panel: estimated work, deadlines, capacity, what isn't counted.
   await page.evaluate(() => {
     delete S.quests[3].est;

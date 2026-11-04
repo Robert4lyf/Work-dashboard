@@ -67,10 +67,12 @@ test('Knowledge: Reference and Processes views; the "+ New" sheet opens the edit
   await page.click('[data-newsheet]');
   await page.click('[data-newkind="flow"]');
   await expect(page.locator('#flowname')).toBeFocused();
-  // Back from an article says Reference; a guide's row opens the article.
+  // A guide's row opens the article; its back link names the view it returns to.
   await page.click('[data-kbview="proc"]');
   await page.click('[data-kbart="a1"]');
-  await expect(page.locator('[data-kbback]')).toHaveText('‹ Reference');
+  await expect(page.locator('[data-kbback]')).toHaveText('‹ Processes');
+  await page.click('[data-kbback]');
+  await expect(page.locator('[data-kbview="proc"]')).toHaveAttribute('aria-pressed', 'true');
   expect(app.errors).toEqual([]);
 });
 

@@ -129,17 +129,16 @@ function rulePreview(r) {
   if (o.k === 'wait_resolved')
     S.follows.forEach(f => {
       if (f.t > cut && f.k === 'resolve') {
-        const n = findWaitable(f.n).n;
-        evs.push({ k: o.k, node: f.n, name: n ? n.text : 'a waiting item', text: n ? n.text : '' });
+        const n = findWaitable(f.n).n,
+          ev = { k: o.k, node: f.n, name: n ? n.text : 'a waiting item', text: n ? n.text : '' };
+        if (hit(ev)) evs.push(ev);
       }
     });
   if (o.k === 'wait_due')
-    waitingNodes().forEach(
-      x =>
-        x.n.wait.due &&
-        x.n.wait.due <= today() &&
-        evs.push({ k: o.k, node: x.n.id, name: x.trail[0] || x.n.text, who: x.n.wait.who }),
-    );
+    waitingNodes().forEach(x => {
+      const ev = { k: o.k, node: x.n.id, name: x.trail[0] || x.n.text, text: x.n.text, who: x.n.wait.who };
+      if (x.n.wait.due && x.n.wait.due <= today() && hit(ev)) evs.push(ev);
+    });
   if (o.k === 'day') (o.days || []).forEach(d => evs.push({ k: o.k, wd: d, name: WD[d] }));
   const a = r.do,
     made = ev =>
@@ -180,11 +179,18 @@ function cleanRule(r) {
     o = r.on,
     d = r.do,
     act = { k: d.k };
-  if (typeof o.match === 'string' && o.match.trim()) on.match = ruleTxt(o.match, 80);
-  if (o.top) on.top = true;
-  if (okRef(o.flow)) on.flow = o.flow;
-  if (okRef(o.wf)) on.wf = o.wf;
-  if (okRef(o.art)) on.art = o.art;
+  // (only the details the trigger uses: the editor's draft keeps the rest for switching back)
+  const k = on.k;
+  if (
+    ['quest_done', 'wait_resolved', 'wait_due'].includes(k) &&
+    typeof o.match === 'string' &&
+    o.match.trim()
+  )
+    on.match = ruleTxt(o.match, 80);
+  if (k === 'quest_done' && o.top) on.top = true;
+  if (['exec_failed', 'exec_succeeded'].includes(k) && okRef(o.flow)) on.flow = o.flow;
+  if (['wrun_failed', 'wrun_succeeded', 'wf_due'].includes(k) && okRef(o.wf)) on.wf = o.wf;
+  if (k === 'proc_finished' && okRef(o.art)) on.art = o.art;
   if (on.k === 'day')
     on.days = (Array.isArray(o.days) ? o.days : [])
       .map(Number)
@@ -231,12 +237,8 @@ const ruleById = id => S.rules.find(r => r.id === id) || null;
 function ruleMatches(r, ev) {
   const o = r.on;
   if (o.k !== ev.k) return false;
-  if (
-    o.match &&
-    !String(ev.text || ev.name || '')
-      .toLowerCase()
-      .includes(o.match.toLowerCase())
-  )
+  // (the name filter looks at the item and at the task it belongs to)
+  if (o.match && ![ev.text, ev.name].some(v => v && String(v).toLowerCase().includes(o.match.toLowerCase())))
     return false;
   if (o.top && !ev.top) return false;
   if (o.flow && ev.flow !== o.flow) return false;
@@ -363,8 +365,19 @@ function rulePreviewCount(r) {
     return S.wruns.filter(x => x.started > cut && x.id.startsWith(x.wf + '-20') && hit({ k: o.k, wf: x.wf }))
       .length;
   if (o.k === 'proc_finished') return S.runs.filter(x => x.fin > cut && hit({ k: o.k, art: x.art })).length;
-  if (o.k === 'wait_resolved') return S.follows.filter(f => f.t > cut && f.k === 'resolve').length;
-  if (o.k === 'wait_due') return waitingNodes().filter(x => x.n.wait.due && x.n.wait.due <= today()).length;
+  if (o.k === 'wait_resolved')
+    return S.follows.filter(f => {
+      if (f.t <= cut || f.k !== 'resolve') return false;
+      const n = findWaitable(f.n).n;
+      return hit({ k: o.k, text: n ? n.text : '', name: n ? n.text : '' });
+    }).length;
+  if (o.k === 'wait_due')
+    return waitingNodes().filter(
+      x =>
+        x.n.wait.due &&
+        x.n.wait.due <= today() &&
+        hit({ k: o.k, text: x.n.text, name: x.trail[0] || x.n.text }),
+    ).length;
   if (o.k === 'day') return (o.days || []).length * 4;
   return 0;
 }
@@ -518,10 +531,13 @@ function typedRuleForm() {
   if (p) p.innerHTML = rulePreviewLine(ruleEdit);
 }
 function redrawRuleForm() {
-  // (the "when it runs" line follows the trigger)
+  // (the "when it runs" line follows the trigger; the keyboard stays on the field it was on)
   readRuleForm();
-  const f = $('#ruleform');
+  const f = $('#ruleform'),
+    was = document.activeElement && document.activeElement.id;
   if (f) f.outerHTML = ruleForm();
+  const back = (was && $('#' + was)) || $('#rlon');
+  if (back) back.focus({ preventScroll: true });
 }
 function saveRuleForm() {
   if (!ruleEdit) return closeSheet();

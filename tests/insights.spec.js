@@ -110,7 +110,7 @@ const seed = () => {
     x('x2', 'f1', now - day, 'failed', now - day + 60e3),
     x('x3', 'f1', now - 2 * day, 'requested'), // (no word after a day: unconfirmed)
     x('x4', 'f2', now - 60e3, 'requested'), // (awaiting)
-    x('x5', 'f2', now - 60e3, 'cancelled', now - 30e3),
+    x('x5', 'f2', now - 360e3, 'cancelled', now - 60e3),
     x('x6', 'f1', now - 12 * day, 'succeeded', now - 12 * day + 60e3),
   ];
   S.follows = [
@@ -154,7 +154,7 @@ test('the sentences are the same every time and say what each rate is a rate of'
   );
   expect(by.Processes[1]).toBe('4 runs started this period, none the period before.');
   expect(by.Processes[2]).toBe(
-    'Weekly report: 4 runs, 1 succeeded, 1 failed, a successful run typically takes 1h 0m; most failed stage: Run the flow (1).',
+    'Weekly report: 4 runs, 1 succeeded, 1 failed, a successful run typically takes 1h 0m; most failed step: Run the flow (1).',
   );
   expect(by.Automation[0]).toBe(
     '5 automation launches: 1 verified succeeded, 1 verified failed, 1 cancelled, 1 unconfirmed (no word after a day), 1 awaiting a result. Success rate 50% of the 2 verified results. A first report typically arrives 2m after the launch.',

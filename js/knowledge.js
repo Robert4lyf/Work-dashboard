@@ -242,7 +242,7 @@ function kbResults() {
 }
 function kbArticle(a) {
   const trail = kbTrail(a.cat);
-  return `<button class="linkbtn" data-kbback="1">‹ ${kbRunBack && S.runs.some(r => r.id === kbRunBack) ? 'Back to the guide' : kbReturn && path.length ? 'Back to the task' : 'Reference'}</button>
+  return `<button class="linkbtn" data-kbback="1">‹ ${kbRunBack && S.runs.some(r => r.id === kbRunBack) ? 'Back to the guide' : kbReturn && path.length ? 'Back to the task' : kbView === 'proc' ? 'Processes' : 'Reference'}</button>
     <p class="hint kbtrail">${esc(trail.join(' › ') || 'Uncategorised')}</p>
     <h2 class="kbtitle">${esc(a.title)}</h2>
     <div class="kbtext box">${a.body ? kbLinkify(a.body) : a.imgs.length || (a.steps && a.steps.length) ? '' : '<span class="hint">Nothing written yet.</span>'}</div>

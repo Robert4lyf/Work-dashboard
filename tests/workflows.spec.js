@@ -335,7 +335,9 @@ test('a definition edited later is a new version; a run under way keeps its own 
   await page.click('[data-wfedit="w1"]');
   await page.click('[data-wfarchive="w1"]');
   await expect(page.locator('[data-wfedit="w1"]')).toHaveCount(0);
-  await expect(page.locator('#v-knowledge')).toContainText('1 archived process');
+  await expect(page.locator('#wfarchd summary')).toHaveText('Archived 1');
+  await page.click('#wfarchd summary');
+  await expect(page.locator('#wfarchd [data-wfarchive="w1"]')).toHaveText('Unarchive');
   expect(app.errors).toEqual([]);
 });
 

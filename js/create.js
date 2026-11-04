@@ -23,13 +23,16 @@ function hintOff(key) {
     localStorage.setItem(HINTS_KEY, JSON.stringify([...new Set([...hintsOff(), key])]));
   } catch (e) {}
   document.querySelectorAll(`[data-hint="${key}"]`).forEach(el => el.remove());
+  // (the keyboard was on the tip's ×: on to the first field of what the tip was about)
+  const next = $('#rlname') || $('#wfname') || $('[data-fspan][aria-pressed="true"]');
+  if (next) next.focus({ preventScroll: true });
 }
 const KB_VIEWS = [
   ['ref', 'Reference'],
   ['proc', 'Processes'],
 ];
 function kbTabs() {
-  return `<div class="kbtabs"><div class="chips viewsw" role="group" aria-label="Knowledge view">${KB_VIEWS.map(([k, l]) => `<button class="chip" data-kbview="${k}" aria-pressed="${kbView === k}">${l}</button>`).join('')}</div><button class="btn sm newbtn" data-newsheet="1" aria-haspopup="dialog">+ New</button></div>`;
+  return `<div class="kbtabs"><div class="chips viewsw" role="group" aria-label="Knowledge view">${KB_VIEWS.map(([k, l]) => `<button class="chip" data-kbview="${k}" aria-pressed="${kbView === k}">${l}</button>`).join('')}</div><button class="btn sm newbtn" data-newsheet="1" aria-haspopup="dialog" aria-label="New: a task, a process, an article or a desktop automation">+ New</button></div>`;
 }
 // Processes: what's under way first (one tap to continue), then the processes and guides you can
 // follow again, then the desktop automations. A guide is an article with steps: listed here
@@ -42,34 +45,42 @@ function kbProcesses() {
     arch = S.workflows.filter(w => w.archived).length;
   let h = '';
   if (runs.length || pruns.length)
-    h += `<section class="kbsec"><h2 class="kbhead" id="wfhead">In progress <small>${runs.length + pruns.length}</small></h2><div class="list box">${runs
+    h += `<section class="kbsec" aria-labelledby="wfhead"><h2 class="kbhead" id="wfhead">In progress <small>${runs.length + pruns.length}</small></h2><div class="list box">${runs
       .map(
         r =>
-          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${runWord(r)}</span>${runStage(r) ? ' · ' + esc(runStage(r).title) : ''} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm ${r.status === 'failed' ? 'pink' : 'green'}" data-wfopen="${r.id}">${r.status === 'failed' ? 'Fix' : r.status === 'ready' ? 'Start' : 'Continue'}</button></div>`,
+          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${runWord(r)}</span>${runStage(r) ? ' · ' + esc(runStage(r).title) : ''} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm ${r.status === 'failed' ? 'pink' : 'green'}" data-wfopen="${r.id}" aria-label="${r.status === 'failed' ? 'Fix' : r.status === 'ready' ? 'Start' : 'Continue'}: ${esc(r.name)}">${r.status === 'failed' ? 'Fix' : r.status === 'ready' ? 'Start' : 'Continue'}</button></div>`,
       )
       .join('')}${pruns
       .map(r => {
         const a = procOf(r.art);
-        return `<div class="row"><button class="open" data-runopen="${r.id}"><span>${esc(a.title)}</span><small>Guide · ${esc(runLine(r))} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm green" data-runopen="${r.id}">Continue</button></div>`;
+        return `<div class="row"><button class="open" data-runopen="${r.id}"><span>${esc(a.title)}</span><small>Guide · ${esc(runLine(r))} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm green" data-runopen="${r.id}" aria-label="Continue the guide: ${esc(a.title)}">Continue</button></div>`;
       })
       .join('')}</div></section>`;
-  h += `<section class="kbsec"><div class="sechead"><h2 class="kbhead"${runs.length || pruns.length ? '' : ' id="wfhead"'}>Processes</h2><button class="linkbtn" data-newproc="1">+ New process</button></div>`;
+  h += `<section class="kbsec" aria-labelledby="${runs.length || pruns.length ? 'wfprocs' : 'wfhead'}"><div class="sechead"><h2 class="kbhead" id="${runs.length || pruns.length ? 'wfprocs' : 'wfhead'}">Processes</h2><button class="linkbtn" data-newproc="1">+ New process</button></div>`;
   h += ws.length
     ? `<div class="list box">${ws.map(processRow).join('')}</div>`
     : '<p class="hint kbempty">A process is a checklist you can run again, with an automation, a guide, a check, a wait or a decision on any step that needs one. <button class="linkbtn" data-newproc="1">Make your first one</button>, from an example or from scratch.</p>';
-  if (arch) h += `<p class="hint">${plural(arch, 'archived process')} (restore from Settings > Backup).</p>`;
+  if (arch)
+    h += `<details id="wfarchd"${panels.wfarchd ? ' open' : ''}><summary>Archived <small>${arch}</small></summary><div class="list box">${S.workflows
+      .filter(w => w.archived)
+      .sort((a, b) => byName(a.name, b.name))
+      .map(
+        w =>
+          `<div class="row"><button class="open" data-wfview="${w.id}"><span>${esc(w.name)}</span><small>${plural(w.stages.length, 'step')} · archived</small></button><button class="btn sm" data-wfarchive="${w.id}">Unarchive</button></div>`,
+      )
+      .join('')}</div></details>`;
   h += '</section>';
-  h += `<section class="kbsec"><div class="sechead"><h2 class="kbhead">Guides</h2><button class="linkbtn" data-newguide="1">+ New guide</button></div>`;
+  h += `<section class="kbsec" aria-labelledby="wfguides"><div class="sechead"><h2 class="kbhead" id="wfguides">Guides</h2><button class="linkbtn" data-newguide="1">+ New guide</button></div>`;
   h += guides.length
     ? `<div class="list box">${guides
         .map(a => {
           const o = openRunFor(a.id, '');
-          return `<div class="row"><button class="open" data-kbart="${a.id}"><span>${esc(a.title)}</span><small>Guide · ${plural(a.steps.length, 'step')}${o ? ' · ' + esc(runLine(o)) : ''}</small></button><button class="btn sm ${o ? 'green' : 'blue'}" data-runstart="${a.id}">${o ? 'Continue' : 'Follow'}</button></div>`;
+          return `<div class="row"><button class="open" data-kbart="${a.id}"><span>${esc(a.title)}</span><small>Guide · ${plural(a.steps.length, 'step')}${o ? ' · ' + esc(runLine(o)) : ''}</small></button><button class="btn sm ${o ? 'green' : 'blue'}" data-runstart="${a.id}" aria-label="${o ? 'Continue' : 'Follow'} the guide: ${esc(a.title)}">${o ? 'Continue' : 'Follow'}</button></div>`;
         })
         .join('')}</div>`
     : '<p class="hint kbempty">A guide is a reference article with steps to follow one at a time. Add steps to any article to make one.</p>';
   h += '</section>';
-  h += `<section class="kbsec">${kbFlows()}</section>`;
+  h += `<section class="kbsec" aria-label="Desktop automations">${kbFlows()}</section>`;
   return h;
 }
 // One process in the list: its name opens its overview (what it's for, where it stands, start or
@@ -78,7 +89,7 @@ function processRow(w) {
   const o = wfOpenRun(w.id),
     runs = wfRuns(w.id),
     last = runs.find(r => r.fin);
-  return `<div class="row"><button class="open" data-wfview="${w.id}"><span>${esc(w.name)}</span><small>${plural(w.stages.length, 'step')}${w.days.length || w.monthDay ? ' · repeats ' + esc(repLabel({ days: w.days, monthDay: w.monthDay })) : ''}${o ? ` · <span class="wst w-${o.status}">${runWord(o)}</span>` : last ? ' · last ' + WRUN_WORD[last.status].toLowerCase() + ' ' + esc(dayLabel(fmt(new Date(last.fin)))) : ''}</small></button><button class="btn sm ${o ? (o.status === 'failed' ? 'pink' : 'green') : 'blue'}" data-wfstart="${w.id}">${o ? (o.status === 'failed' ? 'Fix' : o.status === 'ready' ? 'Start' : 'Continue') : 'Start'}</button></div>`;
+  return `<div class="row"><button class="open" data-wfview="${w.id}"><span>${esc(w.name)}</span><small>${plural(w.stages.length, 'step')}${w.days.length || w.monthDay ? ' · repeats ' + esc(repLabel({ days: w.days, monthDay: w.monthDay })) : ''}${o ? ` · <span class="wst w-${o.status}">${runWord(o)}</span>` : last ? ' · last ' + WRUN_WORD[last.status].toLowerCase() + ' ' + esc(dayLabel(fmt(new Date(last.fin)))) : ''}</small></button><button class="btn sm ${o ? (o.status === 'failed' ? 'pink' : 'green') : 'blue'}" data-wfstart="${w.id}" aria-label="${o ? (o.status === 'failed' ? 'Fix' : o.status === 'ready' ? 'Start' : 'Continue') : 'Start'}: ${esc(w.name)}">${o ? (o.status === 'failed' ? 'Fix' : o.status === 'ready' ? 'Start' : 'Continue') : 'Start'}</button></div>`;
 }
 /* "+ New": what do you need to do? One sheet, four answers, each opening the editor that fits. */
 function openNewSheet() {
@@ -115,7 +126,7 @@ function createClick(d, b) {
     kbEdit = { cat: d.cat || '' };
     if (d.newguide) kbEdit.guide = true; // (the editor opens with the steps section to hand)
     kbImgShown = null;
-    kbView = 'ref';
+    if (!d.newguide) kbView = 'ref';
     if (view !== 'knowledge') go('knowledge');
     else renderKnowledge();
     window.scrollTo(0, 0);

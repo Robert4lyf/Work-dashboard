@@ -943,32 +943,6 @@ const wfOpenRun = id =>
   S.wruns
     .filter(r => r.wf === id && !WRUN_OVER.includes(r.status))
     .sort((a, b) => b.started - a.started)[0] || null;
-function kbWorkflows() {
-  const ws = S.workflows.filter(w => !w.archived).sort((a, b) => byName(a.name, b.name)),
-    arch = S.workflows.filter(w => w.archived).length,
-    open = S.wruns.filter(r => !WRUN_OVER.includes(r.status)).sort((a, b) => b.at - a.at);
-  let h = `<h2 class="wfhead" id="wfhead">Processes</h2>`;
-  if (open.length)
-    h += `<div class="list box">${open
-      .map(
-        r =>
-          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${runWord(r)}</span>${runStage(r) ? ' · ' + esc(runStage(r).title) : ''} · ${esc(whenLabel(r.at))}</small></button></div>`,
-      )
-      .join('')}</div>`;
-  h += ws.length
-    ? `<div class="list box">${ws
-        .map(w => {
-          const o = wfOpenRun(w.id),
-            runs = wfRuns(w.id),
-            last = runs.find(r => r.fin);
-          return `<div class="row"><button class="open" data-wfedit="${w.id}"><span>${esc(w.name)}</span><small>${plural(w.stages.length, 'step')}${w.days.length || w.monthDay ? ' · repeats ' + esc(repLabel({ days: w.days, monthDay: w.monthDay })) : ''}${last ? ' · last ' + WRUN_WORD[last.status].toLowerCase() + ' ' + esc(dayLabel(fmt(new Date(last.fin)))) : ''}</small></button><button class="btn sm ${o ? 'green' : 'blue'}" data-wfstart="${w.id}">${o ? 'Resume' : 'Start'}</button></div>`;
-        })
-        .join('')}</div>`
-    : '<p class="hint">A process is a checklist you can run again: plain steps, and where it helps, a guide to follow, an automation to run, a check, a wait for someone or a decision. Start from an example or write your own.</p>';
-  h += `<div class="chips resadd"><button class="chip" data-wfnew="1">+ Process</button>${WF_TEMPLATES.map((t, i) => `<button class="chip" data-wftpl="${i}">+ ${esc(t.name)}</button>`).join('')}</div>`;
-  if (arch) h += `<p class="hint">${plural(arch, 'archived process')} (shown in Settings > Backup).</p>`;
-  return h;
-}
 /* a process's overview: what it's for, where it stands, and the one thing to do with it (start,
    continue or fix). Editing is a step further: the definition is for changing now and then, the
    overview for using. */
@@ -1007,8 +981,8 @@ function wfEditor() {
   let h = `<h2>${w.id ? 'Edit process' : 'New process'}</h2>${w.id ? '' : hintBox('proc', 'Write the steps as a checklist, one line each. Tap a step later to make it smarter: an automation to launch, a guide to follow, a check, a wait for someone or a decision.')}<form id="wfform">
     <label class="f" for="wfname">Name</label><input class="fld" id="wfname" maxlength="120" value="${esc(w.name || '')}" autocomplete="off" required>
     <label class="f" for="wfdesc">What it is for <small class="hint">(optional)</small></label><textarea class="fld" id="wfdesc" rows="2" maxlength="600">${esc(w.desc || '')}</textarea>
-    <div class="sechead kbimghead"><h2>Steps</h2>${w.stages.length ? `<button class="btn sm" type="button" id="wfstageadd">Add with options</button>` : ''}</div><div id="wfstages">${wfStagesList()}</div>
-    <div class="addrow wfaddrow"><input class="fld" id="wfstepin" maxlength="120" value="${esc(w.typing || '')}" placeholder="${w.stages.length ? 'Add another step' : 'Type the first step, e.g. Download the report'}" aria-label="New step" autocomplete="off"><button class="btn" type="button" id="wfstepgo">Add</button></div>
+    <div class="sechead kbimghead"><h3>Steps</h3>${w.stages.length ? `<button class="btn sm" type="button" id="wfstageadd">Add with options</button>` : ''}</div><div id="wfstages">${wfStagesList()}</div>
+    <div class="addrow wfaddrow"><input class="fld" id="wfstepin" maxlength="120" value="${esc(w.typing || '')}" placeholder="${w.stages.length ? 'Add another step' : 'Type the first step, e.g. Download the report'}" aria-label="New step" autocomplete="off"><button class="btn" type="button" id="wfstepgo" aria-label="Add step">Add</button></div>
     <p class="hint">Each step is a plain one until you make it smarter: tap a step to attach an automation, a guide, a check, a wait or a decision.</p>
     <details id="wfrep"${w.days.length || w.monthDay ? ' open' : ''}><summary>Repeat: ${w.days.length || w.monthDay ? esc(repLabel({ days: w.days, monthDay: w.monthDay })) : 'off'}</summary>
       <p class="hint">On its days a run is made ready for you (never started on its own).</p>
@@ -1058,13 +1032,25 @@ function readWfForm() {
   wfEdit.monthDay = +$('#wfmonth').value || 0;
   wfEdit.typing = $('#wfstepin') ? $('#wfstepin').value : '';
 }
-function wfRenderStages() {
+// (`focusId`: the step to leave the keyboard on, else the typed-step row, so a redraw of the list
+// doesn't drop focus to the page)
+function wfRenderStages(focusId) {
   const el = $('#wfstages');
-  if (el && wfEdit) el.innerHTML = wfStagesList();
+  if (!el || !wfEdit) return;
+  el.innerHTML = wfStagesList();
+  const f = (focusId && el.querySelector(`[data-wfstage="${focusId}"]`)) || $('#wfstepin');
+  if (f && (!document.activeElement || document.activeElement === document.body))
+    f.focus({ preventScroll: true });
 }
 function openStageForm(id) {
   if (!wfEdit) return;
-  const s = wfEdit.stages.find(x => x.id === id) || { id: '', type: 'manual', title: '', text: '' },
+  const s = wfEdit.stages.find(x => x.id === id) || {
+      id: '',
+      type: 'manual',
+      title: '',
+      text: '',
+      skip: true,
+    },
     opt = (list, cur, none) =>
       `<option value=""${cur ? '' : ' selected'}>${none}</option>` +
       list.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join(''),
@@ -1138,10 +1124,11 @@ function saveStageForm(id) {
     wfEdit.stages.push(s);
   }
   closeSheet();
-  wfRenderStages();
+  wfRenderStages(s.id);
 }
 function saveWorkflowForm() {
   if (!wfEdit) return;
+  if ($('#wfstepin') && $('#wfstepin').value.trim()) addTypedStep(); // (typed, not yet added: it counts)
   const name = txt($('#wfname').value, 120);
   if (!name) return;
   const w = cleanWorkflow({

@@ -298,7 +298,7 @@ function openExecDetail(id) {
   const f = S.flows.find(y => y.id === x.flow),
     st = execState(x);
   popSheet(
-    `<h2 id="sheettitle">${esc(f ? f.name : 'Automation ' + x.flow)}</h2><p class="xhead">${execLine(x)}</p><p class="hint qahint">Launched ${esc(whenLabel(x.at))}${x.unreq ? ' (reported by the flow, not launched here)' : ''}${x.q ? ' · for ' + esc(questName(x.q)) : ''}${
+    `<h2 id="sheettitle">${esc(f ? f.name : 'Automation ' + x.flow)}</h2><p class="xhead">${execLine(x)}</p><p class="hint qahint">Launched ${esc(whenLabel(x.at))}${x.unreq ? ' (reported by the automation, not launched here)' : ''}${x.q ? ' · for ' + esc(questName(x.q)) : ''}${
       st === 'unconfirmed'
         ? '. Nothing was reported: the automation may not have started, or its report never arrived.'
         : ''

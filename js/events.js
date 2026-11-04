@@ -861,7 +861,7 @@ function closeImgs() {
 }
 /* keyboard shortcuts (desktop) */
 const KEYS =
-  'i or n capture (n on a quest: step) · / search · t today · o command centre · l history · s settings · z single-task · p pause · Esc back';
+  'i or n capture (n on a task: step) · / search · t today · o command centre · l history · s settings · z single-task · p pause · Esc back';
 document.addEventListener('keydown', e => {
   if (!window.appReady) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1055,13 +1055,13 @@ function appBack() {
     return true;
   }
   if (view === 'knowledge' && wfOpen) return (closeWorkflowRun(), true);
+  if (view === 'knowledge' && kbArt) {
+    kbClick({ kbback: '1' }, {});
+    return true;
+  }
   if (view === 'knowledge' && wfView) {
     wfView = null;
     renderKnowledge();
-    return true;
-  }
-  if (view === 'knowledge' && kbArt) {
-    kbClick({ kbback: '1' }, {});
     return true;
   }
   if (view === 'knowledge' && kbCatOpen) {
