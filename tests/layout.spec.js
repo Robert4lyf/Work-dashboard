@@ -48,3 +48,60 @@ test('the page stays clear of the system bars (no viewport-fit=cover), so the ta
   await app.open();
   expect(await page.getAttribute('meta[name=viewport]', 'content')).not.toContain('viewport-fit=cover');
 });
+
+test.describe('a wide desktop: Today in two columns', () => {
+  const { eDay } = require('./releaseedata');
+  test.use({ viewport: { width: 1440, height: 900 } });
+  const box = (page, s) => page.locator(s).boundingBox();
+  async function day(app, page) {
+    await page.clock.install({ time: new Date(2026, 10, 4, 11, 0) });
+    await app.open();
+    await app.setState(eDay);
+    await page.reload();
+  }
+
+  test('the work runs on under the header; attention, scheduled and waiting run down the right', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await expect(page.locator('#v-today > .tside > *')).toHaveCount(3);
+    await expect(page.locator('#v-today > .tside > .attn')).toHaveCount(1);
+    await expect(page.locator('#v-today > .tside > .schedsec')).toHaveCount(1);
+    await expect(page.locator('#v-today > .tside > .waitsec2')).toHaveCount(1);
+    const h = await box(page, '.wrap > header'),
+      m = await box(page, '#v-today > .tmain'),
+      s = await box(page, '#v-today > .tside');
+    expect(Math.abs(h.x - m.x)).toBeLessThan(2);
+    expect(Math.abs(h.width - m.width)).toBeLessThan(2);
+    // (no gap between the header and the work under it, however long the right column is)
+    expect(m.y - (h.y + h.height)).toBeLessThan(30);
+    expect(s.x).toBeGreaterThan(m.x + m.width);
+    expect(Math.abs(s.y - h.y)).toBeLessThan(2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    // Narrower, one column in the phone's order; wider again, two.
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await expect(page.locator('#v-today > .tside')).toHaveCount(0);
+    expect(await page.$eval('#v-today > :first-child', e => e.className)).toContain('attn');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.locator('#v-today > .tside')).toHaveCount(1);
+    // A task's page isn't redrawn as Today by a resize.
+    await page.click('#v-today .list .row .open >> nth=0');
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(page.locator('#v-today .node')).toHaveCount(1);
+    await page.evaluate(() => history.back());
+    await expect(page.locator('#v-today > .tside')).toHaveCount(1);
+  });
+
+  test('a row gone from under the keyboard leaves it in Today, not on the page', async ({ app, page }) => {
+    await day(app, page);
+    await page.locator('.tside .schedrow [data-toggle]').first().focus();
+    await page.keyboard.press('Enter');
+    expect(
+      await page.evaluate(
+        () => document.activeElement !== document.body && !!document.activeElement.closest('#v-today'),
+      ),
+    ).toBe(true);
+  });
+});

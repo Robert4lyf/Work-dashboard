@@ -428,7 +428,12 @@ function setHTML(el, html) {
       // (the control may now be folded away, say a task just ticked into "Done today": the
       // keyboard stays in the view rather than falling to the top of the page)
       if (f !== el && f.closest('details:not([open])')) f = el;
-      if (f === el) el.tabIndex = -1;
+      // (a view laid out as its children alone, as Today in two columns, can't hold the keyboard:
+      // its first part does)
+      if (f === el) {
+        if (getComputedStyle(el).display === 'contents' && el.firstElementChild) f = el.firstElementChild;
+        f.tabIndex = -1;
+      }
       f.focus({ preventScroll: true });
     }
     return;
