@@ -177,6 +177,10 @@ function fix(n) {
   else delete n.summary;
   n.due = cleanDay(n.due);
   n.done = !!n.done;
+  // A scheduled time (Release E): only a real day (and time); tasks without one stay as they were.
+  const sc = cleanSched(n.scheduled);
+  if (sc) n.scheduled = sc;
+  else delete n.scheduled;
   // Resources and a saved place: only kept when there are any, so tasks without stay as they
   // were (and copies from before this version read the same).
   const links = cleanLinks(n.links);
@@ -493,7 +497,10 @@ function rollover() {
   S.quests = S.quests.filter(q => !isDone(q) || S.log.some(x => x.id === q.id && x.d === today()));
   // A repeating task is on Today only on the day it's for: one from an earlier day goes, finished
   // or not (today's copy, made by another device's reset first, stays).
-  S.quests = S.quests.filter(q => !repeats(tplFor(q)) || q.id === q.tpl + '-' + today());
+  // (one scheduled and not yet recorded stays: its outcome is still to be recorded)
+  S.quests = S.quests.filter(
+    q => !repeats(tplFor(q)) || q.id === q.tpl + '-' + today() || (q.scheduled && !isDone(q)),
+  );
   S.day = today();
   // Yesterday's top 3 is over: today's is chosen afresh. (Back-dated to midnight like the rest
   // of the reset, so a choice already made today on another device wins over this.)
@@ -509,8 +516,10 @@ function rollover() {
       const hit =
         t.days.includes(wd) || (t.monthDay && (t.monthDay === dd || (t.monthDay > end && dd === end)));
       const gone = sync2.gone && sync2.gone['quest:' + t.id + '-' + d]; // done and cleared elsewhere
+      // (an earlier day's scheduled copy, kept to be marked done, isn't today's)
+      const kept = q => q.scheduled && q.scheduled.date < d && q.id !== t.id + '-' + d;
       const has = // (a copy moved to Upcoming or the Inbox still counts, or it would come back doubled)
-        S.quests.some(q => q.tpl === t.id || q.text === t.text) ||
+        S.quests.some(q => (q.tpl === t.id || q.text === t.text) && !kept(q)) ||
         S.later.some(q => q.tpl === t.id) ||
         S.inbox.some(i => i.node && i.node.tpl === t.id);
       if (hit && !gone && !has) {

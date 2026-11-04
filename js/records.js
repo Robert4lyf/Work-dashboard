@@ -133,6 +133,17 @@ function fromRecords(m, day) {
     timer: (m.get('meta:timer') || {}).timer || null,
     day,
   };
+  // A task moved between Today and Upcoming is two records (one deleted, one made): an edit to the
+  // old one on another device can bring it back, leaving the task in both. One copy stays, the
+  // same on every device: a finished one; else the list the newest Today order says it's on.
+  const onToday = new Set(order.quests || []);
+  s.later = s.later.filter(l => {
+    const q = s.quests.find(x => x.id === l.id);
+    if (!q) return true;
+    const keepToday = q.done || (!l.done && onToday.has(l.id));
+    if (!keepToday) s.quests = s.quests.filter(x => x !== q);
+    return !keepToday;
+  });
   if (m.get('meta:pushkey')) s.pushKey = m.get('meta:pushkey').key || '';
   s.track = !!(m.get('meta:track') || {}).on;
   const legacy = m.get('meta:legacy') || {};

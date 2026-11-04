@@ -10,6 +10,7 @@ function moveToInbox(id) {
   r.arr.splice(r.arr.indexOf(r.n), 1);
   delete r.n.since; // it starts afresh if it comes back to Today
   delete r.n.kept;
+  delete r.n.scheduled; // (nor scheduled: the Inbox is for work still to be sorted)
   (function undone(x) {
     x.done = false;
     x.children.forEach(undone);

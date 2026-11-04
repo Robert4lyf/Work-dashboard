@@ -29,25 +29,29 @@ test('switch to the board: lanes by stage; the choice is kept over a reload, and
   await expect(page.locator('[data-tview="list"]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#v-today .blane')).toHaveCount(0);
   await page.click('[data-tview="board"]');
+  // (Release E: a task only waiting is under Waiting, beside the board as beside the list)
   expect(await lanes(page)).toEqual([
     ['doing', ['Walsingham']],
     ['ask', ['Megan queries']],
     ['todo', ['Filbert Close', 'Call the bank']],
-    ['wait', ['Fletcher Way']],
   ]);
+  await expect(page.locator('#v-today .wrow')).toHaveCount(1);
+  await expect(page.locator('#v-today .wrow')).toContainText('Fletcher Way');
   await expect(page.locator('#reorder')).toHaveCount(0); // (no Reorder on the board)
   await expect(page.locator('#v-today .list .row')).toHaveCount(0);
   await page.reload();
   await expect(page.locator('[data-tview="board"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#v-today .blane')).toHaveCount(4);
+  await expect(page.locator('#v-today .blane')).toHaveCount(3);
   await page.click('[data-tview="list"]');
   await expect(page.locator('#v-today .blane')).toHaveCount(0);
-  expect(await app.order()).toEqual([
+  expect(await app.order()).toEqual(['Walsingham', 'Filbert Close', 'Megan queries', 'Call the bank']);
+  // (its place in the order underneath is kept)
+  expect((await app.state()).quests.map(q => q.text)).toEqual([
     'Walsingham',
+    'Fletcher Way',
     'Filbert Close',
     'Megan queries',
     'Call the bank',
-    'Fletcher Way',
   ]);
 });
 
@@ -59,11 +63,11 @@ test('on the board: a tile opens its task, back returns to the board; one withou
   await page.click('.qtopen:has-text("Walsingham")');
   await expect(page.locator('.node h1')).toHaveText('Walsingham');
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .blane')).toHaveCount(4);
+  await expect(page.locator('#v-today .blane')).toHaveCount(3);
   // (and the back gesture)
   await page.click('.qtopen:has-text("Walsingham")');
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today .blane')).toHaveCount(4);
+  await expect(page.locator('#v-today .blane')).toHaveCount(3);
   await page.click('.qtile:has-text("Call the bank") .check');
   expect(await lanes(page)).toContainEqual(['done', ['Call the bank']]);
   expect((await app.state()).quests.find(q => q.id === 'q5').done).toBe(true);

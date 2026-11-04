@@ -32,7 +32,9 @@ const timerLabel = t => {
 // What the next session is for: the task picked here, else the header's recommendation.
 function focusTarget() {
   if (S.focusQ === 'none') return null;
-  if (S.focusQ && find(S.focusQ) && !isDone(find(S.focusQ).n)) return S.focusQ;
+  // (a chosen task since scheduled, or a step now waiting on someone, isn't one to focus on)
+  const f = S.focusQ && find(S.focusQ);
+  if (f && !(f.parents[0] || f.n).scheduled && actionLeaf(f.n)) return S.focusQ;
   const nx = recommend();
   return nx ? nx.n.id : null;
 }
@@ -85,7 +87,7 @@ function renderZen() {
     ? '<div class="zbody">'
     : '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
   // No step to do, but a task with every step ticked: what's next for it?
-  const ask = !r && !timeUpShown() && S.quests.find(q => needsNext(q) && !q.wait);
+  const ask = !r && !timeUpShown() && S.quests.find(q => needsNext(q) && !q.wait && !q.scheduled);
   if (ask)
     h += `<p class="ztrail">${esc(ask.text)}</p><p class="zt">Every step is ticked. What's next?</p><div class="acts"><button class="btn green" data-asknext="${ask.id}">What's next?</button></div>`;
   else if (!r) h += timeUpShown() ? '' : '<p class="zt">Nothing left to do.</p>';
@@ -139,7 +141,8 @@ function renderFocus() {
       opts = [];
     (function w(ns, trail) {
       ns.forEach(n => {
-        if (isDone(n)) return;
+        // (not a scheduled task, nor a step waiting on someone: nothing to focus on there now)
+        if (isDone(n) || n.scheduled || n.wait || (!trail.length && !canAct(n))) return;
         const tr = [...trail, n.text];
         opts.push([n.id, tr.join(' / ')]);
         w(n.children, tr);

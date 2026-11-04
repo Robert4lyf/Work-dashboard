@@ -262,6 +262,7 @@ document.addEventListener('change', e => {
     const n = S.later.find(x => x.id === el.dataset.restart);
     if (n && el.value > today()) {
       n.start = el.value;
+      if (n.scheduled) n.scheduled.date = el.value; // (a scheduled one moves with its day)
       S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
       save();
     }
@@ -505,6 +506,7 @@ document.addEventListener('click', e => {
         settle(bf);
       });
   }
+  schedClick(d);
   if (d.toinbox) moveToInbox(d.toinbox);
   if (d.sched) schedule(d.kind, d.sched, d.when);
   if (d.now) {
@@ -512,6 +514,7 @@ document.addEventListener('click', e => {
     if (i >= 0) {
       const n = S.later.splice(i, 1)[0];
       delete n.start;
+      if (n.scheduled) n.scheduled.date = today(); // (brought to today: it happens today)
       const bf = snapshot();
       S.quests.push(n);
       settle(bf);

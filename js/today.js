@@ -40,6 +40,7 @@ function row(n, i, len, sib) {
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
+    schedTag(n) +
     placeMark(n) +
     (nx
       ? 'Next: ' + esc(nx.text)
@@ -98,17 +99,17 @@ function setTodayView(v) {
   } catch (e) {}
   renderToday();
 }
+// (scheduled tasks and ones only waiting are in their own sections, above and below the board,
+// as they are around the list: the board holds the same tasks as the list)
 const LANES = [
   ['doing', 'In progress'],
   ['ask', "What's next?"],
   ['todo', 'Not started'],
-  ['wait', 'Waiting'],
   ['done', 'Done today'],
 ];
 function laneOf(n) {
   if (isDone(n)) return 'done';
   if (n.children.length && needsNext(n) && !nextLeaf(n)) return 'ask';
-  if (showsWaiting(n)) return 'wait';
   return n.children.some(isDone) ? 'doing' : 'todo';
 }
 function tile(n) {
@@ -180,12 +181,18 @@ function drawToday() {
   }
   path = ok;
   if (path.length) return renderNode(find(path[path.length - 1]));
-  const qs = S.quests;
-  // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. Today's work.
-  let h = renderAttention() + renderTop3() + renderCarried();
-  const asBoard = todayView === 'board' && qs.length;
+  const qs = S.quests,
+    // (what can be worked on, and what's finished today; scheduled tasks and ones only waiting
+    // have sections of their own. Reordering shows them all: it's the one order underneath.)
+    work = reorder ? qs : qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
+  // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. what's scheduled;
+  // 4. Today's work; 5. what it's waiting on.
+  let h = renderAttention() + renderTop3() + renderCarried() + renderScheduledToday();
+  const asBoard = todayView === 'board' && work.length;
   h += listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0);
-  h += asBoard ? board(qs) : list(qs, true);
+  h += asBoard ? board(work) : list(work, true);
+  if (qs.length && !work.length) h += '<p class="hint nowork">Nothing to act on now.</p>';
+  h += renderWaitingToday();
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
     h +=
@@ -260,8 +267,11 @@ const STALE = 3;
 const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
 // (Not one only waiting on others: every step left is waiting.)
 const onlyWaiting = q => q.children.length > 0 && !isDone(q) && !nextLeaf(q) && !needsNext(q);
+// (nor a scheduled one: it's waiting for its day, not being put off)
 const carried = () =>
-  S.quests.filter(q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today());
+  S.quests.filter(
+    q => !isDone(q) && !q.wait && !q.scheduled && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today(),
+  );
 function renderCarried() {
   // One line, folded: open it to decide on each (the weekly review asks too).
   const qs = carried();
@@ -292,7 +302,7 @@ function renderUpcoming() {
   let h = `<details id="upd"${panels.upd ? ' open' : ''}><summary>Upcoming (${S.later.length})</summary>`;
   S.later.forEach(n => {
     const c = count(n);
-    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}</div>
+    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}${n.scheduled ? ` <button class="linkbtn" data-schedset="${n.id}">Scheduled ${esc(schedWhen(n))}</button>` : ''}</div>
       <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
       <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
   });
@@ -315,6 +325,7 @@ function schedule(kind, id, date) {
     n = inboxToNode(it);
   }
   n.start = date;
+  if (n.scheduled) n.scheduled.date = date; // (a scheduled one put off moves its day with it)
   delete n.since;
   delete n.kept;
   S.later.push(n);
@@ -344,6 +355,9 @@ function renderNode({ n, parents }) {
     meta =
       (n.opt ? '<span class="tag opt">Optional</span>' : '') +
       dueTag(n) +
+      (isScheduled(n) && top
+        ? `<button class="tag sched schedpick" data-schedset="${n.id}" aria-label="Scheduled ${esc(schedWhen(n))}: change">Scheduled ${esc(schedWhen(n))}</button>`
+        : '') +
       (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
       (!d && !n.wait && kids ? stepWaitBadge(n) : '') +
       (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '') +

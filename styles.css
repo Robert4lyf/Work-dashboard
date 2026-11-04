@@ -1,37 +1,41 @@
 :root {
   /* Release D design tokens ("calm productivity"). Surfaces and text */
-  --bg: #f5f6f8; /* the page */
+  --bg: #ffffff; /* the page */
   --panel: #ffffff; /* cards, sheets, the tab bar */
-  --panel-2: #eef1f4; /* quiet fills: tracks, code, pressed rows */
-  --ink: #1f2a3d; /* text: 13:1 on the page */
-  --muted: #586274; /* secondary text: 5.7:1 on the page */
+  --panel-2: #f3f3f0; /* quiet fills: tracks, code, pressed rows */
+  --ink: #0a0a0a; /* text: 13:1 on the page */
+  --muted: #5a5a5a; /* secondary text: 5.7:1 on the page */
   /* lines */
-  --line: #e3e7ec; /* dividers between rows */
-  --edge: #d3d9e1; /* card and button outlines */
-  --edge-strong: #7f8a99; /* form fields: 3:1 against their surface */
+  --line: #0a0a0a; /* dividers between rows */
+  --edge: #0a0a0a; /* card and button outlines */
+  --edge-strong: #0a0a0a; /* form fields: 3:1 against their surface */
   /* actions: one accent, used for the primary action and the current selection */
-  --accent: #2c6e79;
-  --accent-hover: #245b64;
-  --accent-soft: #e2eff1;
-  --accent-ink: #235962; /* accent as text (links) */
-  --on-accent: #ffffff;
+  --accent: #0a0a0a;
+  --accent-hover: #262626;
+  --accent-soft: #ffd400;
+  --accent-ink: #0a0a0a; /* accent as text (links) */
+  --on-accent: #ffd400;
+  --grad: #ffd400;
+  --on-status: #ffffff; /* text on a solid status colour */
+  --signal: #ffd400; /* the one highlight, the same in both themes */
+  --on-signal: #0a0a0a;
   /* status: a text colour and a quiet fill each; always with a word or glyph, never colour alone */
-  --ok: #276d43;
-  --ok-soft: #e3f2e8;
-  --warn: #8a5a00;
-  --warn-soft: #fbf0d6;
-  --err: #b2443a;
-  --err-soft: #fbe8e5;
-  --wait: #a54a17;
-  --wait-soft: #fcebdf;
-  --info: #2f63a3;
-  --info-soft: #e5eef9;
+  --ok: #00703a;
+  --ok-soft: #d9f2e3;
+  --warn: #0a0a0a;
+  --warn-soft: #ffd400;
+  --err: #c8001a;
+  --err-soft: #ffe3e6;
+  --wait: #b84a00;
+  --wait-soft: #ffe8d6;
+  --info: #0047b3;
+  --info-soft: #e0ebff;
   /* tag swatches (a tag's colour is stored as one of these names): mid tones under dark text */
-  --pink: #f0a3bd;
-  --blue: #93c1ea;
-  --orange: #f3c07a;
-  --green: #9dd3ab;
-  --yellow: #f1d877;
+  --pink: #ff6fa5;
+  --blue: #5aa9ff;
+  --orange: #ff9a3d;
+  --green: #3fd17a;
+  --yellow: #ffd400;
   /* older names, kept for the rules still using them */
   --pink-ink: var(--err);
   --green-ink: var(--ok);
@@ -40,16 +44,16 @@
   --paper: var(--panel);
   --head-ink: var(--ink);
   --head-track: var(--panel-2);
-  --focus: #2c6e79;
+  --focus: #0a0a0a;
   color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   /* shape, depth */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-xs: 5px;
-  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-2: 0 10px 32px rgba(16, 24, 40, 0.18);
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-xs: 0px;
+  --shadow-1: none;
+  --shadow-2: 0 0 0 2px #0a0a0a, 8px 8px 0 #0a0a0a;
   /* type: the system's own UI font (no download, works offline, reads well at small sizes) */
-  --display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --display: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
   --body: var(--display);
   --fs: 16px; /* body text */
   --fs-sm: 14px; /* metadata */
@@ -63,61 +67,66 @@
 /* Dark: the same roles, lighter text on deep neutral surfaces. Set by the system, or chosen. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #12161c;
-    --panel: #1b2129;
-    --panel-2: #252c36;
-    --ink: #e7ebf0;
-    --muted: #a3adba;
-    --line: #2b333e;
-    --edge: #364050;
-    --edge-strong: #7a8596;
-    --accent: #5fb3bf;
-    --accent-hover: #7cc6d1;
-    --accent-soft: #1d3a3f;
-    --accent-ink: #7cc6d1;
-    --on-accent: #0b1a1d;
-    --ok: #6cc48f;
-    --ok-soft: #183325;
-    --warn: #e2b45a;
-    --warn-soft: #3a2e12;
-    --err: #f08a7e;
-    --err-soft: #3d1f1c;
-    --wait: #f0a06a;
-    --wait-soft: #3b2415;
-    --info: #8ab8ec;
-    --info-soft: #1b2b40;
-    --focus: #7cc6d1;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --bg: #0a0a0a;
+    --panel: #111111;
+    --panel-2: #1c1c1c;
+    --ink: #f5f5f5;
+    --muted: #a6a6a6;
+    --line: #f5f5f5;
+    --edge: #f5f5f5;
+    --edge-strong: #f5f5f5;
+    --accent: #ffd400;
+    --accent-hover: #ffe14d;
+    --accent-soft: #3a3000;
+    --accent-ink: #ffd400;
+    --on-accent: #0a0a0a;
+    --ok: #4ade80;
+    --ok-soft: #0f2a1a;
+    --warn: #ffd400;
+    --warn-soft: #3a3000;
+    --err: #ff6b5b;
+    --err-soft: #3a1210;
+    --wait: #ffa04d;
+    --wait-soft: #3a2210;
+    --info: #7cb8ff;
+    --info-soft: #10223a;
+    --grad: #ffd400;
+    --on-status: #0a0a0a;
+    --grad: linear-gradient(135deg, #4c1d95 0%, #3730a3 55%, #1e40af 100%);
+    --focus: #ffd400;
+    --shadow-1: none;
     --shadow-2: 0 10px 32px rgba(0, 0, 0, 0.55);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #12161c;
-  --panel: #1b2129;
-  --panel-2: #252c36;
-  --ink: #e7ebf0;
-  --muted: #a3adba;
-  --line: #2b333e;
-  --edge: #364050;
-  --edge-strong: #7a8596;
-  --accent: #5fb3bf;
-  --accent-hover: #7cc6d1;
-  --accent-soft: #1d3a3f;
-  --accent-ink: #7cc6d1;
-  --on-accent: #0b1a1d;
-  --ok: #6cc48f;
-  --ok-soft: #183325;
-  --warn: #e2b45a;
-  --warn-soft: #3a2e12;
-  --err: #f08a7e;
-  --err-soft: #3d1f1c;
-  --wait: #f0a06a;
-  --wait-soft: #3b2415;
-  --info: #8ab8ec;
-  --info-soft: #1b2b40;
-  --focus: #7cc6d1;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --bg: #0a0a0a;
+  --panel: #111111;
+  --panel-2: #1c1c1c;
+  --ink: #f5f5f5;
+  --muted: #a6a6a6;
+  --line: #f5f5f5;
+  --edge: #f5f5f5;
+  --edge-strong: #f5f5f5;
+  --accent: #ffd400;
+  --accent-hover: #ffe14d;
+  --accent-soft: #3a3000;
+  --accent-ink: #ffd400;
+  --on-accent: #0a0a0a;
+  --ok: #4ade80;
+  --ok-soft: #0f2a1a;
+  --warn: #ffd400;
+  --warn-soft: #3a3000;
+  --err: #ff6b5b;
+  --err-soft: #3a1210;
+  --wait: #ffa04d;
+  --wait-soft: #3a2210;
+  --info: #7cb8ff;
+  --info-soft: #10223a;
+  --grad: #ffd400;
+  --on-status: #0a0a0a;
+  --focus: #ffd400;
+  --shadow-1: none;
   --shadow-2: 0 10px 32px rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
@@ -148,7 +157,7 @@ body {
   line-height: 1.45;
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
-  font-family: var(--body);
+  font-family: var(--display);
 }
 button,
 input,
@@ -158,7 +167,7 @@ textarea {
   color: inherit;
 }
 :focus-visible {
-  outline: 2px solid var(--focus);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
@@ -174,15 +183,15 @@ section[tabindex='-1']:focus-visible {
 
 /* header */
 header {
-  background: var(--panel);
-  color: var(--ink);
-  border: 1px solid var(--edge);
-  box-shadow: var(--shadow-1);
+  background: var(--grad);
+  color: #0a0a0a;
+  border: 2px solid #0a0a0a;
+  box-shadow: none;
   padding: 10px 12px 8px;
   margin-bottom: 16px;
   border-radius: var(--radius);
 }
-.now {
+header .now {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -190,7 +199,9 @@ header {
   min-height: 34px;
 }
 .now .check {
-  border-color: var(--edge);
+  border-color: rgba(255, 255, 255, 0.7);
+  background: #ffffff;
+  border: 2px solid #0a0a0a;
 }
 .now .go {
   flex: 1;
@@ -199,7 +210,7 @@ header {
   background: none;
   border: 0;
   padding: 0;
-  color: var(--head-ink);
+  color: #0a0a0a;
   text-align: left;
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -211,7 +222,7 @@ header {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: var(--fs-xs);
-  color: var(--muted);
+  color: #0a0a0a;
 }
 .now .go b {
   display: -webkit-box;
@@ -233,13 +244,13 @@ header {
 .hprog {
   height: 3px;
   border: 0;
-  background: var(--head-track);
+  background: rgba(10, 10, 10, 0.15);
   border-radius: 2px;
   overflow: hidden;
 }
 .hprog div {
   height: 100%;
-  background: var(--accent);
+  background: #0a0a0a;
   transition: width 0.3s ease;
 }
 .hfoot {
@@ -259,6 +270,20 @@ header {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+/* controls on the gradient: white, the primary one solid */
+header .btn {
+  background: #ffffff;
+  color: #0a0a0a;
+  border-color: #0a0a0a;
+}
+header .btn.green {
+  background: #0a0a0a;
+  color: #ffd400;
+  border-color: #0a0a0a;
+}
+header .syncbtn[data-state='error'] {
+  color: #c8001a;
 }
 /* Compact (away from Today): one line, the current work as a way back to it, then the running
    timer's Pause if there is one, search and sync. The label stays for screen readers. */
@@ -301,8 +326,8 @@ header.compact .now .go {
 /* (only before the work itself: not before 'All done for today') */
 header.compact .now .go[data-open] b::before {
   content: 'Now: ';
-  color: var(--muted);
-  font-weight: 500;
+  color: #0a0a0a;
+  font-weight: 800;
 }
 header.compact .now .go b {
   -webkit-line-clamp: 1;
@@ -370,7 +395,7 @@ header.compact .now .go:has(.clk) small {
   background: none;
   border: 0;
   padding: 2px 0;
-  color: var(--muted);
+  color: #0a0a0a;
   cursor: pointer;
 }
 .hbtns {
@@ -390,7 +415,7 @@ header.compact .now .go:has(.clk) small {
   gap: 6px;
   background: none;
   border: 0;
-  color: var(--muted);
+  color: #0a0a0a;
   padding: 2px 0;
   font-size: var(--fs-sm);
   cursor: pointer;
@@ -433,10 +458,12 @@ label.btn {
 }
 
 h2 {
-  font-size: var(--fs-h);
+  font-size: var(--fs);
   line-height: 1.3;
   margin: 0 0 8px;
-  font-weight: 650;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .hint {
   color: var(--muted);
@@ -448,7 +475,7 @@ h2 {
 /* blocks */
 .box {
   background: var(--panel);
-  border: 1px solid var(--edge);
+  border: 2px solid var(--edge);
   border-radius: var(--radius);
   box-shadow: var(--shadow-1);
 }
@@ -461,11 +488,11 @@ h2 {
   min-height: 44px;
   background: var(--panel);
   color: var(--ink);
-  border: 1px solid var(--edge);
+  border: 2px solid var(--edge);
   border-radius: var(--radius-sm);
   padding: 9px 16px;
   cursor: pointer;
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--fs);
   line-height: 1.25;
   text-align: center;
@@ -482,8 +509,7 @@ h2 {
     border-color: var(--edge-strong);
   }
   .btn.green:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
+    filter: brightness(1.08);
   }
 }
 .btn[disabled] {
@@ -492,9 +518,9 @@ h2 {
   filter: none;
 }
 .btn.pink {
-  background: var(--err-soft);
-  color: var(--err);
-  border-color: transparent;
+  background: var(--err);
+  color: var(--on-status);
+  border-color: var(--err);
 }
 .btn.green {
   background: var(--accent);
@@ -502,17 +528,17 @@ h2 {
   border-color: var(--accent);
 }
 .btn.blue {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  border-color: transparent;
+  background: var(--signal);
+  color: var(--on-signal);
+  border-color: var(--on-signal);
 }
 /* A row's own action in a list is a quiet one: the filled accent is kept for a page's primary
    action, so a list of rows doesn't read as a wall of buttons. */
 .list .row > .btn.green,
 .t3row .btn.green {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  border-color: transparent;
+  background: var(--signal);
+  color: var(--on-signal);
+  border-color: var(--edge);
 }
 
 /* quests */
@@ -584,7 +610,7 @@ h2 {
   min-width: 0;
   padding: 10px 12px;
   background: var(--panel);
-  border: 1px solid var(--edge-strong);
+  border: 2px solid var(--edge);
   border-radius: var(--radius-sm);
   min-height: 44px;
 }
@@ -688,13 +714,13 @@ h2 {
   margin-bottom: 14px;
 }
 .chip {
-  border: 1px solid var(--edge);
-  border-radius: 999px;
+  border: 2px solid var(--edge);
+  border-radius: 0;
   background: var(--panel);
   color: var(--ink);
   padding: 7px 14px;
   font-size: var(--fs-sm);
-  font-weight: 500;
+  font-weight: 700;
   cursor: pointer;
   min-height: 40px;
 }
@@ -703,9 +729,9 @@ h2 {
   font-size: var(--fs-sm);
 }
 .chip[aria-pressed='true'] {
-  background: var(--c, var(--accent-soft));
-  border-color: var(--c, var(--accent));
-  color: var(--ink);
+  background: var(--c, var(--signal));
+  border-color: var(--edge);
+  color: var(--on-signal);
   font-weight: 600;
 }
 .clock {
@@ -738,7 +764,7 @@ h2 {
   height: 10px;
   background: var(--panel-2);
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   overflow: hidden;
 }
 .track div {
@@ -755,7 +781,7 @@ nav {
   right: 0;
   bottom: 0;
   background: var(--panel);
-  border-top: 1px solid var(--edge);
+  border-top: 2px solid var(--edge);
   padding: 6px 0 calc(6px + env(safe-area-inset-bottom, 0px));
 }
 /* Tabs keep their full labels; on narrow phones the strip scrolls sideways, and the edge with
@@ -805,19 +831,19 @@ nav button {
   white-space: nowrap;
 }
 nav button[aria-current='page'] {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--accent);
+  color: var(--on-accent);
 }
 .badge {
   display: inline-block;
   min-width: 20px;
   margin-left: 4px;
   padding: 0 6px;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: #c8001a;
+  color: #ffffff;
   border: 0;
   font-size: var(--fs-xs);
-  border-radius: 999px;
+  border-radius: 0;
   line-height: 20px;
   text-align: center;
 }
@@ -867,13 +893,15 @@ nav button[aria-current='page'] {
 .list {
   margin-bottom: 14px;
 }
-.row {
+.row,
+.secrow {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 6px 10px 12px;
 }
-.list > * + * {
+.list > * + *,
+.slist > * + * {
   border-top: 1px solid var(--line);
 }
 .open {
@@ -1007,7 +1035,7 @@ nav button[aria-current='page'] {
   height: 6px;
   border: 0;
   background: var(--panel-2);
-  border-radius: 3px;
+  border-radius: 0;
   box-shadow: inset 0 0 0 1px var(--edge);
 }
 .stepbar .s-done {
@@ -1056,51 +1084,53 @@ nav button[aria-current='page'] {
 .tag {
   display: inline-block;
   border: 1px solid transparent;
-  border-radius: var(--radius-xs);
-  padding: 0 6px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
+  border-radius: 0;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 800;
   line-height: 1.6;
   margin-right: 4px;
-  background: var(--panel-2);
-  color: var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .tag[style*='background'],
 .chip[aria-pressed='true'][style*='--c'] {
   color: #1f2a3d;
 }
 .tag.opt {
-  background: var(--info-soft);
-  color: var(--info);
+  background: var(--info);
+  color: var(--on-status);
 }
 .tag.wait {
-  background: var(--wait-soft);
-  color: var(--wait);
+  background: var(--wait);
+  color: var(--on-status);
 }
 /* waiting on someone else: the tag says so; the row itself reads like any other (one signal) */
 .row.waiting .open > span {
   color: var(--muted);
 }
 .tag.rep {
-  background: var(--ok-soft);
-  color: var(--ok);
+  background: var(--ok);
+  color: var(--on-status);
 }
 .tag.due {
-  background: var(--info-soft);
-  color: var(--info);
+  background: var(--ink);
+  color: var(--bg);
 }
 .tag.late {
-  background: var(--err-soft);
-  color: var(--err);
+  background: var(--err);
+  color: var(--on-status);
 }
 .tag.now {
-  background: var(--warn-soft);
-  color: var(--warn);
+  background: var(--signal);
+  color: var(--on-signal);
 }
 /* every step ticked, quest not finished: asking what's next */
 .tag.asknext {
-  background: var(--warn-soft);
-  color: var(--warn);
+  background: var(--signal);
+  color: var(--on-signal);
 }
 .node {
   padding: 14px;
@@ -1111,20 +1141,21 @@ nav button[aria-current='page'] {
   line-height: 1.3;
   margin: 0 0 12px;
   overflow-wrap: anywhere;
-  font-weight: 700;
+  font-weight: 900;
+  letter-spacing: -0.01em;
 }
 .prog {
   height: 8px;
   border: 0;
   background: var(--panel-2);
   margin: 6px 0;
-  border-radius: 999px;
+  border-radius: 0;
   overflow: hidden;
 }
 .prog div {
   height: 100%;
   background: var(--ok);
-  border-radius: 999px;
+  border-radius: 0;
 }
 .acts {
   display: flex;
@@ -1195,7 +1226,7 @@ p.f {
   min-width: 0;
   padding: 10px 12px;
   background: var(--panel);
-  border: 1px solid var(--edge-strong);
+  border: 2px solid var(--edge);
   border-radius: var(--radius-sm);
   min-height: 44px;
 }
@@ -1233,11 +1264,13 @@ textarea.fld {
   border: 0;
   padding: 6px 0;
   color: var(--accent-ink);
-  text-decoration: none;
+  text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: 700;
+  text-decoration-color: #ffd400;
+  text-decoration-thickness: 3px;
 }
 .links {
   display: flex;
@@ -1254,7 +1287,9 @@ textarea.fld {
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  margin: 0 0 6px;
+  margin: 0 0 10px;
+  border-top: 4px solid var(--ink);
+  padding-top: 8px;
 }
 .sechead h2 {
   margin: 0;
@@ -1990,7 +2025,7 @@ textarea.fld.kbbody {
 .srow mark {
   background: var(--warn-soft);
   color: inherit;
-  border-radius: 3px;
+  border-radius: 0;
 }
 div.srow {
   padding: 10px 0;
@@ -2219,7 +2254,7 @@ details.more > details {
   display: inline-flex;
   border: 1px solid var(--edge);
   background: var(--panel);
-  border-radius: 999px;
+  border-radius: 0;
   overflow: hidden;
 }
 .tchip button {
@@ -2418,8 +2453,8 @@ details.more > details {
   border-color: var(--edge-strong);
 }
 .tag.done {
-  background: var(--ok-soft);
-  color: var(--ok);
+  background: var(--ok);
+  color: var(--on-status);
 }
 /* single-task mode: where you left off, and saving a place */
 .zplace {
@@ -2472,11 +2507,11 @@ details.more > details {
   display: grid;
   place-items: center;
   border: 0;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-size: var(--fs-xs);
-  font-weight: 700;
-  border-radius: 50%;
+  background: var(--on-signal);
+  color: var(--signal);
+  font-size: var(--fs);
+  font-weight: 900;
+  border-radius: 0;
 }
 .t3row.done .t3n {
   background: var(--ok);
@@ -2829,7 +2864,7 @@ details.more > details {
   border: 0;
   font-size: var(--fs-xs);
   font-weight: 700;
-  border-radius: 999px;
+  border-radius: 0;
   min-width: 28px;
   padding: 0 8px;
 }
@@ -3066,6 +3101,64 @@ details.more > details {
 .procnone {
   margin: 0 0 8px;
 }
+/* Today (Release E): Scheduled and Waiting, sections like Top 3 and Today's tasks */
+.todaysec {
+  margin: 0 0 18px;
+}
+.schedrow .stime small {
+  display: block;
+  font-weight: 600;
+  color: var(--muted);
+}
+.schedpick {
+  cursor: pointer;
+}
+.schedrow .stime {
+  flex: none;
+  min-width: 3.4em;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-size: var(--fs-h);
+  letter-spacing: -0.02em;
+}
+.schedrow.sch-passed .stime,
+.schedrow.sch-past .stime {
+  color: var(--muted);
+}
+.schedrow.sch-passed .open small,
+.schedrow.sch-past .open small {
+  color: var(--warn);
+  font-weight: 600;
+}
+.tag.sched {
+  background: var(--info);
+  color: var(--on-status);
+}
+.wrow .open small .tag {
+  margin-left: 2px;
+}
+.nowork {
+  margin: 0 0 14px;
+}
+.t3out {
+  margin: 8px 0 0;
+}
+.schedflds .fld {
+  min-width: 0;
+  width: 100%;
+}
+.schedrow {
+  gap: 10px;
+}
+.schedflds {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 12px;
+}
+.wrow {
+  box-shadow: inset 4px 0 0 var(--wait);
+}
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {
   padding-right: 12px;
@@ -3093,11 +3186,12 @@ details.more > details {
   cursor: pointer;
   font: inherit;
   font-size: 0.8em;
-  border: 1px solid var(--edge-strong);
-  background: var(--paper);
+  border: 2px solid var(--edge);
+  background: var(--panel);
   min-height: 36px;
   display: inline-flex;
   align-items: center;
+  color: var(--ink);
 }
 .radar.empty {
   height: 48px;
@@ -3135,7 +3229,7 @@ details.more > details {
   border: 0;
   border-bottom: 0;
   background: var(--accent);
-  border-radius: 3px 3px 0 0;
+  border-radius: 0;
 }
 .rday.tight .rbar {
   background: var(--warn);
@@ -3220,7 +3314,7 @@ details.more > details {
   display: block;
   min-height: 2px;
   background: var(--info);
-  border-radius: 3px 3px 0 0;
+  border-radius: 0;
 }
 .ibar.picked .ifill {
   background: var(--accent);
@@ -3349,9 +3443,9 @@ details.more > details {
 }
 .attsum.sev0 > summary,
 .attsum.sev0 > .attsumline {
-  background: var(--err-soft);
-  color: var(--ink);
-  border-color: color-mix(in srgb, var(--err) 35%, transparent);
+  background: var(--err);
+  color: var(--on-status);
+  border-color: var(--err);
 }
 .attsum.sev1 > summary,
 .attsum.sev1 > .attsumline {
@@ -3393,7 +3487,7 @@ details.more > details {
   color: var(--ink);
   border: 1px solid var(--edge);
   text-decoration: none;
-  border-radius: 999px;
+  border-radius: 0;
 }
 .attn.attnone .attcc {
   position: static;

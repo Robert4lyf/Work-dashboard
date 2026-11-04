@@ -43,9 +43,7 @@ function renderWeek() {
     S.inbox.length,
   );
   // 2. Decide on anything that's been sitting on Today.
-  const stale = S.quests.filter(
-    q => !isDone(q) && !q.wait && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today(),
-  );
+  const stale = carried(); // (the same rule as Today's: never a scheduled one)
   step('Carried over', stale.length ? carriedRows(stale) : '', stale.length);
   // 3. Chase what you're waiting on: what's overdue or slipped first, then the rest.
   const wait = waitingNodes().sort((a, b) => {

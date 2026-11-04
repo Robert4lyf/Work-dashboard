@@ -230,7 +230,8 @@ test('the primary action follows the task’s state: waiting, every step ticked,
     renderAll();
   });
   await expect(page.locator('.facts .qnext b')).toHaveText('Nothing until you hear back');
-  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Review waiting']);
+  // (Release E: the one action is on what's waited on: the reply, as no follow-up is due yet)
+  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText([/^Reply received: /]);
   // Every step ticked: finish it.
   await page.evaluate(() => {
     const q = S.quests[0];

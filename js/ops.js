@@ -134,6 +134,17 @@ function attentionItems() {
       else today2.push([x.n.text, `Chase ${who} today`, 'Open in Waiting', `data-wgo="${x.n.id}"`]);
     });
   today2.forEach(r => add(2, ...r));
+  S.quests
+    .filter(q => isScheduled(q) && q.scheduled.date < t)
+    .forEach(q =>
+      add(
+        3,
+        q.text,
+        `Scheduled ${dayLabel(q.scheduled.date).replace(/^Yesterday$/, 'yesterday')}: not marked done`,
+        'Open task',
+        `data-open="${q.id}"`,
+      ),
+    );
   S.wruns
     .filter(r => r.status === 'ready')
     .forEach(r => add(2, r.name, 'Process ready to start', 'Start process', `data-wfopen="${r.id}"`));
@@ -198,7 +209,7 @@ function opsProgress() {
       }),
     );
   S.quests
-    .filter(q => q.resume && !isDone(q))
+    .filter(q => q.resume && canAct(q))
     .sort((a, b) => b.resume.at - a.resume.at)
     .forEach(q => rows.push({ text: q.text, sub: 'Saved place: ' + q.resume.note, open: q.id }));
   return rows;

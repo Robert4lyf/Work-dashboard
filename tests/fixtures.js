@@ -92,7 +92,14 @@ const test = base.test.extend({
         page.evaluate(
           () => document.querySelector('#mored') && (document.querySelector('#mored').open = true),
         ),
-      openQuest: text => page.click(`#v-today .open >> text="${text}"`),
+      // (a task only waiting, or scheduled, is under its own section: opened from its row there)
+      openQuest: async text => {
+        const inList = page.locator(`#v-today .row .open >> text="${text}"`);
+        if (await inList.count()) return inList.first().click();
+        await page.click(`#v-today .secrow:has-text("${text}") .open`);
+        const r = await page.evaluate(() => (path.length ? find(path[path.length - 1]) : null));
+        if (r && r.parents.length) await page.click('[data-crumb="0"]'); // (a step: up to its task)
+      },
       order: () => page.$$eval('#v-today .row .open > span', x => x.map(e => e.textContent)),
       // Views without a tab (Focus, and History under Review) are opened directly.
       go: async v => {

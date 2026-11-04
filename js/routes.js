@@ -192,7 +192,7 @@ function followRoute(r, first) {
     case 'continue': {
       // The task with the newest saved place, else the one Next up is in, else Today.
       const placed = S.quests
-          .filter(q => q.resume && !isDone(q))
+          .filter(q => q.resume && canAct(q)) // (not on a scheduled task, or one only waiting)
           .sort((a, b) => b.resume.at - a.resume.at)[0],
         nx = !placed && nextStep(),
         q = placed || (nx && nx.q);

@@ -174,7 +174,8 @@ test('the header follows one rule: saved place today, else Top 3, else list orde
     S.quests[5].wait = { who: 'Sam', note: '', due: '', since: today() };
     renderAll();
   });
-  await expect(head).toContainText('Top 3 priority 2 · Q4 budget report');
+  // (Release E: numbered as the Top 3 card shows them, where the waiting one is set aside)
+  await expect(head).toContainText('Top 3 priority 1 · Q4 budget report');
   await page.evaluate(() => {
     S.top3.ids = ['q9'];
     S.quests[9].children.forEach(c => (c.done = true));

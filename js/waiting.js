@@ -288,7 +288,12 @@ function openWaitActions(id) {
     ];
   if (inbox) a.push({ label: 'Open in the Inbox', attrs: 'data-goto="inbox"' });
   else if (upcoming) a.push({ label: 'Open Upcoming', attrs: 'data-goupd="1"' });
-  else a.push({ label: 'Open', attrs: `data-open="${id}"` });
+  else {
+    a.push({ label: 'Open', attrs: `data-open="${id}"` });
+    // (its task, which may be shown only under Waiting: its own actions are on its page)
+    const q = r.parents && r.parents[0];
+    if (q) a.push({ label: 'Open the task: ' + q.text, attrs: `data-open="${q.id}"` });
+  }
   actionSheet(
     r.n.text,
     a,
