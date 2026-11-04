@@ -264,7 +264,7 @@ function openExecHistory(flowId) {
       .slice(0, 30);
   if (!f) return;
   popSheet(
-    `<h2 id="sheettitle">${esc(f.name)}</h2><p class="hint qahint">${xs.length ? plural(xs.length, 'launch') + (S.track ? '' : ' (tracking is off)') : S.track ? 'No launches recorded yet.' : 'Tracking is off: turn it on under Settings > Automation result tracking.'}${
+    `<h2 id="sheettitle">${esc(f.name)}</h2><p class="hint qahint">${xs.length ? plural(xs.length, 'launch') + (S.track ? '' : ' (tracking is off)') : S.track ? 'No launches recorded yet.' : 'Tracking is off: turn it on under Settings > Automations and integrations.'}${
       !navigator.onLine ? ' Offline: as last synced.' : ''
     }</p><div class="qalist">${xs
       .map(

@@ -348,7 +348,7 @@ test('audit: the rules editor keeps a trigger’s details across a kind switch; 
     S.log = [{ id: 'a', d: shift(today(), -20), text: 'A', trail: [], p: '', est: 60, m: 60 }];
     save();
   });
-  await app.go('account');
+  await app.settings('rules');
   await page.click('[data-ruleedit="r1"]');
   await page.selectOption('#rlon', 'day');
   await page.selectOption('#rlon', 'quest_done');

@@ -30,6 +30,10 @@ test('five tabs; History sits under Review; Focus opens from the header', async 
     S.daily[today()] = { Design: 25 };
     renderHeader();
   });
+  // (Release D: the full header, with its stats, is Today's; elsewhere it's one line)
+  await expect(page.locator('header')).toHaveClass(/compact/);
+  await expect(page.locator('header .hfoot')).toBeHidden();
+  await page.click('nav [data-v=today]');
   await page.click('header [data-v=focus]');
   await expect(page.locator('#v-focus')).toBeVisible();
   await page.keyboard.press('l'); // history shortcut still works
@@ -89,8 +93,7 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
 });
 
 test('health check, signed out: says what is and isn’t set up', async ({ app, page }) => {
-  await app.go('account');
-  await page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
+  await app.settings('health');
   await page.click('#healthrun');
   const rows = page.locator('.health .hrow2');
   await expect(rows.first()).toContainText('Supabase settings');

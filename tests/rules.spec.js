@@ -203,7 +203,7 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
 }) => {
   await app.open();
   await page.evaluate(seed);
-  await app.go('account');
+  await app.settings('rules');
   await expect(page.locator('#v-account .rulerow')).toHaveCount(5);
   await expect(page.locator('#v-account .rulerow').nth(0)).toContainText(
     'When a task is finished (named like “report”), add an inbox item: “File {name}”',
@@ -248,12 +248,12 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await app.go('today');
   await page.click('[aria-label="Mark done: Weekly reporting"]');
   expect((await app.state()).inbox).toHaveLength(0);
-  await app.go('account');
+  await app.settings('rules');
   await page.click('[data-ruleon="r1"]');
   await tick(page, 'q1');
   await tick(page, 'q1');
   await tick(page, 'q1');
-  await app.go('account');
+  await app.settings('rules');
   await expect(page.locator('#v-account .rulerow').nth(0)).toContainText('inbox: File Weekly reporting');
   await page.click('#rlogd summary');
   await expect(page.locator('#rlogd li')).toHaveCount(1);

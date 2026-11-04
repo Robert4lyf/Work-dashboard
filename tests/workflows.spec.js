@@ -216,6 +216,7 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   expect(r.st.s3).toMatchObject({ o: 'failed', note: 'Wrong period' });
   // Skip isn't offered for a stage that can't be: Check can't, Prepare could.
   await expect(page.locator('[data-wfact="skip"]')).toHaveCount(0);
+  await page.click('#wfmore summary'); // (the failure's less common options)
   await page.click('[data-wfact="inbox"]');
   expect(await page.evaluate(() => S.inbox[0].text)).toBe('Process failed: Thursday report');
   expect((await run(page)).ack).toBe(1);
@@ -423,7 +424,7 @@ test('deep links open the list and a run (opening never moves a run on); junk is
   await expect.poll(() => page.locator('#toast').textContent()).toContain("process run isn't here");
   await cold('#/wrun');
   await expect.poll(() => page.locator('#toast').textContent()).toContain("isn't one the Dashboard knows");
-  await app.go('account');
+  await app.settings('auto');
   await page.selectOption('#scpick', 'workflows');
   expect(await page.locator('#sclink').textContent()).toBe('http://localhost:4173/#/workflows');
   expect(app.errors).toEqual([]);

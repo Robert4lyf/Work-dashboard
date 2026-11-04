@@ -143,7 +143,7 @@ function kbFlows() {
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
   // The buttons themselves, here as well as at the top of Today.
   let h = flows.length
-    ? `<h2>Desktop automations</h2>${quickActions()}`
+    ? `<h2>Desktop automations</h2>${quickActions(true)}`
     : '<h2>Desktop automations</h2><p class="hint">Buttons that run your Power Automate Desktop flows on this computer.</p>';
   h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage automations' : 'Add a desktop automation'}</summary>`;
   flows.forEach(

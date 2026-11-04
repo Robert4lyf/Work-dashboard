@@ -548,10 +548,13 @@ async function clearHistory() {
 }
 // Per-device appearance, kept out of synced data (a phone and laptop can differ).
 const LOOK_KEY = 'dashboard-look';
+// (Release D: one typeface; the old pixel/plain font choice is read as Standard text, and only
+// Larger is kept as a font setting)
 let look = {};
 try {
   look = JSON.parse(localStorage.getItem(LOOK_KEY)) || {};
 } catch (e) {}
+if (look.font && look.font !== 'large') delete look.font;
 function setLook(k, v) {
   if (v) look[k] = v;
   else delete look[k];
@@ -561,43 +564,128 @@ function setLook(k, v) {
   const root = document.documentElement.dataset;
   if (v) root[k] = v;
   else delete root[k];
+  if (k === 'theme') themeBar();
+}
+/* Settings: an index of a few groups, each opened as a page of its own (‹ and Android back go to
+   the index). Links from elsewhere open the group that holds what they point at (openSettings).
+   Nothing moves between devices or changes by being grouped: the same controls, sorted. */
+let setSub = null; // the group open, or null for the index
+const SET_GROUPS = [
+  ['sync', 'Sync and account'],
+  ['look', 'Appearance and this device'],
+  ['tags', 'Tags'],
+  ['rules', 'Rules'],
+  ['auto', 'Automations and integrations'],
+  ['backup', 'Backup and restore'],
+  ['health', 'Health check'],
+];
+// Which group a section's id is in (for links that name a section).
+const SET_SEC = {
+  syncsec: 'sync',
+  looksec: 'look',
+  tagsec: 'tags',
+  rulesec: 'rules',
+  execsec: 'auto',
+  capsec: 'auto',
+  notifsec: 'auto',
+  shortsec: 'auto',
+  backupsec: 'backup',
+  healthsec: 'health',
+};
+function openSettings(group, sec) {
+  if (view !== 'account') go('account');
+  setSub = SET_GROUPS.some(g => g[0] === group) ? group : null;
+  renderAccount();
+  window.scrollTo(0, 0);
+  const el = sec && document.getElementById(sec);
+  if (el && sec !== 'rulesec' && sec !== 'healthsec') el.scrollIntoView({ block: 'start' });
+}
+// One line under each group in the index: what's there, or its state now.
+function setGroupLine(k) {
+  if (k === 'sync')
+    return !sb
+      ? CFG.supabaseUrl && !window.supabase
+        ? 'The sync library didn’t load'
+        : 'Not set up: saved on this device only'
+      : !session
+        ? 'Not signed in'
+        : 'Signed in as ' + (session.user.email || '');
+  if (k === 'look')
+    return `${{ '': 'Colours match the system', light: 'Light', dark: 'Dark' }[look.theme || ''] || 'Light'} · ${look.font === 'large' ? 'larger text' : 'standard text'} · ${thisDevice.name || 'this device'}`;
+  if (k === 'tags') return S.tags.map(x => x.name).join(', ') || 'None yet';
+  if (k === 'rules') {
+    const on = S.rules.filter(r => r.enabled).length;
+    return S.rules.length
+      ? `${plural(S.rules.length, 'rule')}, ${on} on`
+      : 'When something happens, do one thing';
+  }
+  if (k === 'auto')
+    return `Result tracking ${sb && session ? (S.track ? 'on' : 'off') : 'needs signing in'} · shortcuts and deep links${sb && session ? ' · notifications · capture link' : ''}`;
+  if (k === 'backup') return 'Save everything to a file, or restore from one';
+  if (k === 'health') return 'Check the app, sync and notifications';
+  return '';
 }
 function renderAccount() {
-  let h = '<h2>Sync</h2>';
-  if (!sb) {
-    h +=
-      CFG.supabaseUrl && !window.supabase
-        ? '<p class="hint">The sync library didn\'t load (offline, or blocked). Reload once online.</p>'
-        : '<p class="hint">Sync isn\'t set up (see the README). Data is saved on this device only.</p>';
-  } else if (!session) {
-    h += `<form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg ? `<p class="msg">${esc(authMsg)}</p>` : ''}`;
-  } else {
-    h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p>${syncStatsLine()}<div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}`;
-  }
+  if (!SET_GROUPS.some(g => g[0] === setSub)) setSub = null;
+  let h = '';
+  // A restore waiting for its answer shows wherever Settings is.
   if (pending)
     h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'task')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced (notification keys and device names are kept).</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
+  if (!setSub) {
+    h += `<h2 class="kbtitle">Settings</h2><div class="list box setlist">${SET_GROUPS.map(
+      ([k, label]) =>
+        `<div class="row"><button class="open" data-setgo="${k}"><span>${label}</span><small>${esc(setGroupLine(k))}</small></button><span class="chev" aria-hidden="true">${chevron}</span></div>`,
+    ).join('')}</div>`;
+    setHTML($('#v-account'), h);
+    return;
+  }
+  const title = SET_GROUPS.find(g => g[0] === setSub)[1];
+  h += `<button class="linkbtn" data-setback="1">‹ Settings</button>`;
+  // (Rules and Health check are one section each: their own heading is the page's)
+  if (setSub !== 'rules' && setSub !== 'health') h += `<h2 class="kbtitle">${title}</h2>`;
+  if (setSub === 'sync') {
+    h += '<span id="syncsec"></span>';
+    if (!sb) {
+      h +=
+        CFG.supabaseUrl && !window.supabase
+          ? '<p class="hint">The sync library didn\'t load (offline, or blocked). Reload once online.</p>'
+          : '<p class="hint">Sync isn\'t set up (see the README). Data is saved on this device only.</p>';
+    } else if (!session) {
+      h += `<form id="authform"><label class="f" for="aemail">Email</label><input class="fld" id="aemail" type="email" autocomplete="email" required><label class="f" for="apass">Password</label><input class="fld" id="apass" type="password" autocomplete="current-password" required><div class="acts"><button class="btn green">Sign in</button><button class="btn" type="button" id="signup">Create account</button></div></form>${authMsg ? `<p class="msg">${esc(authMsg)}</p>` : ''}`;
+    } else {
+      h += `<div class="node box"><p style="margin:0 0 6px">Signed in as <b>${esc(session.user.email || '')}</b></p><p class="hint" style="margin:0">${syncLine()}</p>${syncStatsLine()}<div class="acts"><button class="btn blue" id="syncNow">Sync now</button><button class="btn" id="signout">Sign out</button></div></div><h2 style="margin-top:26px">Previous versions</h2>${renderHistory()}`;
+    }
+  }
   const opt = (k, v, label) =>
     `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
-  h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
-    <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
-    <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
+  if (setSub === 'look')
+    h += `<p class="hint" id="looksec" style="margin:0 0 6px">This device only.</p>
+    <p class="f" id="lookthemel">Colours</p><div class="chips" role="group" aria-labelledby="lookthemel">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
+    <p class="f" id="looksizel">Text size</p><div class="chips" role="group" aria-labelledby="looksizel">${opt('font', '', 'Standard')}${opt('font', 'large', 'Larger')}</div>
 
     <label class="f" for="devname">This device's name (to choose where an alarm rings)</label><input class="fld" id="devname" value="${esc(thisDevice.name)}" maxlength="40" style="max-width:20em">${renderDevices()}`;
-  h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
-  S.tags.forEach(
-    (t, i) =>
-      (h += `<div class="tagrow"><span class="sw" style="background:${t.color}"></span><input class="fld" data-tagname="${i}" value="${esc(t.name)}" maxlength="20" aria-label="Tag name"><button class="x" data-deltag="${i}" aria-label="Delete tag ${esc(t.name)}">×</button></div>`),
-  );
-  h +=
-    '<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form>';
-  h +=
-    '<h2 style="margin-top:26px">Backup</h2><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
-  // Notifications, then the rarely-needed bits folded away.
-  if (sb && session) h += renderNotifySettings();
-  h += renderShortcuts();
-  h += renderRuleSettings();
-  if (sb && session) h += renderExecSettings();
-  h += `<details id="advd" class="more"${panels.advd ? ' open' : ''}><summary>Advanced: capture link, health check</summary>${sb && session ? renderCapture() : ''}${renderHealth()}</details>`;
+  if (setSub === 'tags') {
+    h += '<p class="hint" id="tagsec">Tags group tasks by kind of work; a task has one at most.</p>';
+    S.tags.forEach(
+      (t, i) =>
+        (h += `<div class="tagrow"><span class="sw" style="background:${t.color}"></span><input class="fld" data-tagname="${i}" value="${esc(t.name)}" maxlength="20" aria-label="Tag name"><button class="x" data-deltag="${i}" aria-label="Delete tag ${esc(t.name)}">×</button></div>`),
+    );
+    h +=
+      '<form class="addrow" id="tagform" style="margin-top:12px"><input id="tagin" maxlength="20" placeholder="New tag" aria-label="New tag" autocomplete="off"><button class="btn">Add</button></form>';
+  }
+  if (setSub === 'backup')
+    h +=
+      '<p class="hint" id="backupsec">A backup is one file with everything. Restoring replaces tasks, inbox, notes, alarms and history, and asks first.</p><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
+  if (setSub === 'rules') h += renderRuleSettings().replace(/^<h2 style="margin-top:26px"/, '<h2');
+  if (setSub === 'auto') {
+    if (sb && session) h += renderExecSettings();
+    else
+      h +=
+        '<h2 id="execsec">Automation result tracking</h2><p class="hint">Sign in (Sync and account) to let your automations report their results.</p>';
+    if (sb && session) h += renderNotifySettings() + renderCapture();
+    h += `<span id="shortsec"></span>${renderShortcuts()}`;
+  }
+  if (setSub === 'health') h += renderHealth().replace(/^<h2 style="margin-top:26px"/, '<h2');
   setHTML($('#v-account'), h);
 }
 

@@ -45,6 +45,7 @@ function go(v) {
   // Leaving the Inbox leaves triage, except to write an article from an item (see triage.js).
   if (triage && v !== 'inbox' && !(triage.ref && kbEdit && kbEdit.fromInbox)) triage = null;
   if (v !== 'waiting') waitMark = ''; // (a deep link's mark on a waiting item lasts a visit)
+  if (v === 'account') setSub = null; // (the Settings tab opens its index; openSettings goes on to a group)
   view = v;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
@@ -325,6 +326,7 @@ document.addEventListener('input', e => {
   if (el.dataset) el.dataset.typed = '1'; // being edited: a background redraw keeps it
   if (el.id === 'notesin') return typedNotes(el.value);
   if (el.id === 'kbq') return kbSearch(el.value);
+  if (el.id === 'procq') return procSearch(el.value);
   if (el.id === 'sq') return typedSearch(el.value);
   if (el.id === 'resq') return resourceSearch(el.value, el.dataset.id);
   if (el.closest('#ruleform')) return typedRuleForm();
@@ -595,12 +597,7 @@ document.addEventListener('click', e => {
     setLook(d.look, d.val);
     renderAccount();
   }
-  if (d.edittags) {
-    renderAccount();
-    go('account');
-    const t = $('#tagsec');
-    t && t.scrollIntoView();
-  }
+  if (d.edittags) openSettings('tags');
   if (d.deltag) {
     if (!arm(b, 'Delete?')) return;
     withUndo('Tag deleted', () => {
@@ -771,10 +768,7 @@ document.addEventListener('click', e => {
     pending = null;
     renderAccount();
   }
-  if (b.id === 'syncBtn') {
-    renderAccount();
-    go('account');
-  }
+  if (b.id === 'syncBtn') openSettings('sync');
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
     // Unsent edits go first. Then alarms and alerts stop coming here, and nothing of this
@@ -1076,6 +1070,7 @@ function appBack() {
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
   if (view === 'inbox' && triage) return (exitTriage(), true);
   if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
+  if (view === 'account' && setSub) return (openSettings(null), true); // (a group: back to the index)
   if (view !== 'today') return (go('today'), true);
   return false;
 }

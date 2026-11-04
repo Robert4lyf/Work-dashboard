@@ -178,11 +178,17 @@ function opsProgress() {
       }),
     );
   S.runs
-    .filter(r => !r.fin && procOf(r.art))
+    .filter(r => !r.fin && procOf(r.art) && !guideParent(r)) // (one inside a process: shown as that process)
     .sort((a, b) => b.at - a.at)
     .forEach(r => rows.push({ text: procOf(r.art).title, sub: 'Guide · ' + runLine(r), runopen: r.id }));
   S.execs
-    .filter(x => !EXEC_TERMINAL.includes(x.status) && !execStale(x))
+    // (an attempt a run under way is waiting on: the run's row says so; any other, its own row)
+    .filter(
+      x =>
+        !EXEC_TERMINAL.includes(x.status) &&
+        !execStale(x) &&
+        !S.wruns.some(r => r.live.exec === x.id && !WRUN_FINAL.includes(r.status)),
+    )
     .sort((a, b) => b.at - a.at)
     .forEach(x =>
       rows.push({

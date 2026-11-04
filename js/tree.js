@@ -409,8 +409,10 @@ function inBackground(fn) {
 function focusSel(a) {
   if (!a || a === document.body) return '';
   if (a.id) return '#' + CSS.escape(a.id);
-  // (not data-typed: the redrawn field won't have it yet)
-  const ds = [...a.attributes].filter(x => x.name.startsWith('data-') && x.name !== 'data-typed');
+  // (not data-typed, nor an armed button's own marks: the redrawn control won't have them yet)
+  const ds = [...a.attributes].filter(
+    x => x.name.startsWith('data-') && !['data-typed', 'data-orig', 'data-armat'].includes(x.name),
+  );
   return ds.length ? a.tagName + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
 }
 function setHTML(el, html) {
@@ -456,7 +458,31 @@ function setHTML(el, html) {
   const typedSel =
       !fid && fsel && a.dataset.typed && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) ? a.value : null,
     typedWas = typedSel !== null ? a.defaultValue : '';
+  // A two-tap confirmation half done (Delete?, Revoke?): still armed after a sync's redraw, for the
+  // rest of its time, so the second tap does what the first asked.
+  // (only the same item's: its row must read the same, since some buttons are keyed by their place
+  // in a list, and a tag removed elsewhere meanwhile would put another tag's × in its place)
+  const rowOf = b =>
+    b.parentElement
+      ? [...b.parentElement.children]
+          .filter(c => c !== b)
+          .map(c => c.outerHTML)
+          .join('')
+      : '';
+  const armed = [...el.querySelectorAll('.armed')]
+    .map(b => ({
+      sel: focusSel(b),
+      row: rowOf(b),
+      label: b.textContent,
+      orig: b.dataset.orig,
+      at: +b.dataset.armat || 0,
+    }))
+    .filter(x => x.sel);
   el.innerHTML = html;
+  armed.forEach(x => {
+    const b = el.querySelector(x.sel);
+    if (b && b.textContent === x.orig && rowOf(b) === x.row) armAgain(b, x.label, x.orig, x.at);
+  });
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));
     if (i) i.value = typed[id];
@@ -507,18 +533,27 @@ function beep(notes) {
     });
   } catch (e) {}
 }
+const ARM_MS = 3000;
 function arm(b, label) {
   if (b.classList.contains('armed')) return true;
+  armAgain(b, label, b.textContent, Date.now());
+  return false;
+}
+// (also a redrawn button, armed `at` before: for what's left of its time)
+function armAgain(b, label, orig, at) {
+  const left = ARM_MS - (Date.now() - at);
+  if (left <= 0) return;
   b.classList.add('armed');
-  b.dataset.orig = b.textContent;
+  b.dataset.orig = orig;
+  b.dataset.armat = at;
   b.textContent = label;
   setTimeout(() => {
-    if (b.isConnected) {
+    if (b.isConnected && b.classList.contains('armed')) {
       b.classList.remove('armed');
       b.textContent = b.dataset.orig;
+      delete b.dataset.armat;
     }
-  }, 3000);
-  return false;
+  }, left);
 }
 // "1 task", "2 tasks".
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;

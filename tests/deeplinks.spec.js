@@ -167,7 +167,7 @@ test('missing, invalid or hostile targets fail plainly, change nothing, and neve
 test('Settings builds the links; app-icon shortcuts carry routes', async ({ app, page }) => {
   await app.open();
   await page.evaluate(seed);
-  await app.go('account');
+  await app.settings('auto');
   const link = () => page.locator('#sclink').textContent();
   expect(await link()).toBe('http://localhost:4173/#/today');
   await page.selectOption('#scpick', 'q');

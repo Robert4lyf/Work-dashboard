@@ -216,7 +216,7 @@ function recommendations(f) {
       k: 'none',
       text: `${plural(f.none.length, 'task')} ${f.none.length === 1 ? 'has' : 'have'} no estimate.`,
       more: 'Unestimated work is counted but not planned: it is not spare capacity.',
-      ids: f.none.slice(0, 6).map(q => [q.id, q.text]),
+      ids: f.none.slice(0, 40).map(q => [q.id, q.text]),
     });
   if (!out.length)
     out.push({
@@ -275,9 +275,9 @@ function renderForecast() {
   let h = `<div class="chips">${FORECAST_SPANS.map(s => `<button class="chip" data-fspan="${s}" aria-pressed="${s === forecastSpan}">${s} days</button>`).join('')}</div>`;
   // The headline: what's estimated, what there is room for, what isn't counted.
   h += `<div class="box fchead"><div class="fhl"><b>${hm(f.load)}</b><small>estimated work</small></div><div class="fhl"><b>${hm(f.cap)}</b><small>capacity${f.assumed ? ' (assumed)' : ''}</small></div><div class="fhl${overDays.length ? ' over' : ''}"><b>${overDays.length}</b><small>${overDays.length === 1 ? 'day overloaded' : 'days overloaded'}</small></div><div class="fhl${f.none.length ? ' none' : ''}"><b>${f.none.length}</b><small>${f.none.length === 1 ? 'task not estimated' : 'tasks not estimated'}</small></div></div>
-    <p class="hint fcov fcov-${cov.k}">${esc(cov.text)}${f.assumed ? ' Capacity uses assumed defaults.' : ''}${f.none.length ? ' Unestimated work is not spare capacity.' : ''}</p>${f.none.length ? hintBox('fcest', 'Tasks without an estimate aren’t counted. The + Estimate chip on a task’s page sets one in a tap.') : ''}`;
+    ${overDays.length ? `<p class="fwarn" role="note"><b>Overloaded:</b> ${esc(dayLabel(overDays[0].d))} by ${hm(overDays[0].load - overDays[0].cap)}${overDays.length > 1 ? `, and ${plural(overDays.length - 1, 'more day')}` : ''}. What to do about it is below the radar.</p>` : ''}<p class="hint fcov fcov-${cov.k}">${esc(cov.text)}${f.assumed ? ' Capacity uses assumed defaults.' : ''}${f.none.length ? ' Unestimated work is not spare capacity.' : ''}</p>${f.none.length ? hintBox('fcest', 'Tasks without an estimate aren’t counted. The + Estimate chip on a task’s page sets one in a tap.') : ''}`;
   // The radar: a bar a day; tap one (or pick one, at 30 days) for what's on it.
-  h += `<h2>Workload radar</h2><div class="radar${forecastSpan > 14 ? ' tight' : ''}" role="group" aria-label="Estimated work against capacity, each day">${f.days
+  h += `<h2>Workload radar</h2>${f.load ? '' : '<p class="hint">Nothing estimated in these days yet: the bars fill in as tasks get estimates. A day still opens to what is due on it.</p>'}<div class="radar${forecastSpan > 14 ? ' tight' : ''}${f.load ? '' : ' empty'}" role="group" aria-label="Estimated work against capacity, each day">${f.days
     .map(day => {
       const r = day.cap ? day.load / day.cap : day.load ? 2 : 0,
         cls = !day.load ? 'none' : r > 1 ? 'over' : r > 0.8 ? 'tight' : 'ok',
@@ -288,7 +288,8 @@ function renderForecast() {
         : `<button class="rday ${cls}${forecastDay === day.d ? ' picked' : ''}" data-fday="${day.d}" aria-label="${esc(label)}" aria-pressed="${forecastDay === day.d}"><span class="rbar" style="height:${hgt}%"></span><small>${WD[new Date(day.d + 'T12:00').getDay()].slice(0, forecastSpan > 7 ? 1 : 3)}</small></button>`;
     })
     .join('')}</div>`;
-  h += `<p class="hint rlegend">Green: room left · yellow: nearly full · pink: overloaded. ${forecastSpan > 14 ? 'Pick a day below for what is on it.' : 'Tap a day for what is on it.'}</p>`;
+  if (f.load)
+    h += `<p class="hint rlegend">Teal: room left · amber: nearly full · red: overloaded (each bar's label says which). ${forecastSpan > 14 ? 'Pick a day below for what is on it.' : 'Tap a day for what is on it.'}</p>`;
   if (forecastSpan > 14)
     h += `<label class="f" for="fdaypick">Look at a day</label><select class="fld" id="fdaypick"><option value="">Choose a day</option>${f.days.map(day => `<option value="${day.d}"${forecastDay === day.d ? ' selected' : ''}>${esc(dayLabel(day.d))} · ${hm(day.load)} of ${hm(day.cap)}${day.load > day.cap ? ' (overloaded)' : ''}</option>`).join('')}</select>`;
   // The day picked: what's estimated on it, its deadlines, its capacity, what isn't estimated.
@@ -317,17 +318,26 @@ function renderForecast() {
         : ''
     }</div>`;
   }
-  // What to do: the overloaded days first, then what's missing; each with its reason a tap away.
-  h += `<h2>What to do about it</h2><ul class="recs">${recs
-    .map(
-      r =>
-        `<li class="rec ${r.k}"><p>${esc(r.text)}</p>${r.more ? `<p class="hint recmore">${esc(r.more)}</p>` : ''}${r.move ? `<button class="btn sm blue" data-fmove="${r.move.id}" data-fdate="${r.move.d}">Move ${esc(r.move.text)} to ${esc(dayLabel(r.move.d))}</button>` : ''}${
-          r.ids
-            ? `<div class="chips">${r.ids.map(([id, t]) => `<button class="chip" data-open="${id}">${esc(t)}</button>`).join('')}</div>`
-            : ''
-        }</li>`,
-    )
-    .join('')}</ul>`;
+  // What to do: the most significant finding first, with its action; the rest folded under it.
+  // (the order of importance: an overloaded day, work past the days in view, what isn't
+  // estimated, then assumed capacity; the findings themselves are unchanged)
+  const rank = r =>
+      r.k === 'over' ? 0 : r.k === 'none' && !r.ids ? 1 : r.k === 'none' ? 2 : r.k === 'cap' ? 3 : 4,
+    sorted = recs
+      .map((r, i) => [r, i])
+      .sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1])
+      .map(x => x[0]),
+    recLi = r =>
+      `<li class="rec ${r.k}"><p>${esc(r.text)}</p>${r.more ? `<p class="hint recmore">${esc(r.more)}</p>` : ''}${r.move ? `<button class="btn sm blue" data-fmove="${r.move.id}" data-fdate="${r.move.d}">Move ${esc(r.move.text)} to ${esc(dayLabel(r.move.d))}</button>` : ''}${
+        r.ids
+          ? `<details class="fnone" id="fnoned"${panels.fnoned ? ' open' : ''}><summary>See the ${plural(r.ids.length, 'task')}</summary><div class="chips">${r.ids.map(([id, t]) => `<button class="chip" data-open="${id}">${esc(t)}</button>`).join('')}</div>${f.none.length > r.ids.length ? `<p class="hint">and ${f.none.length - r.ids.length} more</p>` : ''}</details>`
+          : ''
+      }</li>`,
+    first = sorted.slice(0, 1),
+    rest = sorted.slice(1);
+  h += `<h2>What to do about it</h2><ul class="recs">${first.map(recLi).join('')}</ul>`;
+  if (rest.length)
+    h += `<details id="recd"${panels.recd ? ' open' : ''}><summary>More suggestions <small>${rest.length}</small></summary><ul class="recs">${rest.map(recLi).join('')}</ul></details>`;
   h += `<details id="capd"${panels.capd ? ' open' : ''}><summary>Capacity per weekday${f.assumed ? ' <small>(assumed)</small>' : ''}</summary><p class="hint">Minutes of task time you can plan each day.</p><div class="capgrid">${WEEK.map(
     wd =>
       `<label><span>${WD[wd]}</span><input class="fld" type="number" min="0" max="960" step="15" value="${capacity()[wd]}" data-cap="${wd}" aria-label="Capacity ${WD[wd]}, minutes"></label>`,

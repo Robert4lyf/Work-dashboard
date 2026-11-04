@@ -141,7 +141,7 @@ test('a tag being renamed isn’t put onto another tag when the list changes mea
   app,
   page,
 }) => {
-  await app.go('account');
+  await app.settings('tags');
   await page.fill('[data-tagname="0"]', 'Zed');
   await page.evaluate(() => {
     S.tags.shift();

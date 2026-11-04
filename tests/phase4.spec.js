@@ -46,7 +46,7 @@ test('rule templates make a rule in two taps; the editor says when it can run; t
     ];
     save();
   });
-  await app.go('account');
+  await app.settings('rules');
   await page.click('[data-rulenew]');
   await expect(page.locator('#sheet .qact b')).toHaveText([
     'When a process fails, add an Inbox item',

@@ -300,7 +300,7 @@ test('routines are lists of buttons; the day summary copies; the status line is 
   await page.waitForFunction(() => window.appReady === true);
   await expect(page.locator('#v-ops')).toBeVisible();
   expect(await page.evaluate(() => location.hash)).toBe('');
-  await app.go('account');
+  await app.settings('auto');
   await page.selectOption('#scpick', 'ops');
   expect(await page.locator('#sclink').textContent()).toBe('http://localhost:4173/#/ops');
   expect(app.errors).toEqual([]);
