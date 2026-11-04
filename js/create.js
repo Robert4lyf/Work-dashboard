@@ -92,7 +92,7 @@ function procResults() {
     n = ws.length + gs.length;
   if (!n)
     return `<p class="hint procnone">Nothing ${q ? `called “${esc(procFind.q.trim())}”` : 'here'}${f ? ' that is ' + PROC_FILTERS.find(x => x[0] === f)[1].toLowerCase() : ''}. <button class="linkbtn" data-procclear="1">Show everything</button></p>`;
-  return `<p class="hint procfound">${plural(n, 'match')}${ws.some(w => w.archived) ? ', archived ones included' : ''}</p><div class="list box">${ws
+  return `<p class="hint procfound">${n} ${n === 1 ? 'match' : 'matches'}${ws.some(w => w.archived) ? ', archived ones included' : ''}</p><div class="list box">${ws
     .map(w =>
       w.archived
         ? `<div class="row"><button class="open" data-wfview="${w.id}"><span>${esc(w.name)}</span><small>Process · archived · ${plural(w.stages.length, 'step')}</small></button><button class="btn sm" data-wfview="${w.id}" aria-label="Open: ${esc(w.name)}">Open</button></div>`
@@ -163,7 +163,7 @@ function processRow(w) {
   const o = wfOpenRun(w.id),
     runs = wfRuns(w.id),
     last = runs.find(r => r.fin);
-  return `<div class="row"><button class="open" data-wfview="${w.id}"><span>${esc(w.name)}</span><small>${plural(w.stages.length, 'step')}${w.days.length || w.monthDay ? ' · repeats ' + esc(repLabel({ days: w.days, monthDay: w.monthDay })) : ''}${o ? ` · <span class="wst w-${o.status}">${runWord(o)}</span>` : last ? ' · last ' + WRUN_WORD[last.status].toLowerCase() + ' ' + esc(dayLabel(fmt(new Date(last.fin)))) : ''}</small></button><button class="btn sm ${o ? (o.status === 'failed' ? 'pink' : 'green') : 'blue'}" data-wfstart="${w.id}" aria-label="${o ? (o.status === 'failed' ? 'Fix' : o.status === 'ready' ? 'Start' : 'Continue') : 'Start'}: ${esc(w.name)}">${o ? (o.status === 'failed' ? 'Fix' : o.status === 'ready' ? 'Start' : 'Continue') : 'Start'}</button></div>`;
+  return `<div class="row"><button class="open" data-wfview="${w.id}"><span>${esc(w.name)}</span><small>${plural(w.stages.length, 'step')}${w.days.length || w.monthDay ? ' · repeats ' + esc(repLabel({ days: w.days, monthDay: w.monthDay })) : ''}${o ? ` · <span class="wst w-${o.status}">${runWord(o)}</span>` : last ? ' · last ' + WRUN_WORD[last.status].toLowerCase() + ' ' + esc(dayLabel(fmt(new Date(last.fin)))) : ''}</small></button><button class="btn sm ${o ? (o.status === 'failed' ? 'pink' : 'green') : 'blue'}" ${o && o.status === 'failed' ? `data-wfopen="${o.id}"` : `data-wfstart="${w.id}"`} aria-label="${o ? (o.status === 'failed' ? 'Fix' : o.status === 'ready' ? 'Start' : 'Continue') : 'Start'}: ${esc(w.name)}">${o ? (o.status === 'failed' ? 'Fix' : o.status === 'ready' ? 'Start' : 'Continue') : 'Start'}</button></div>`;
 }
 /* "+ New": what do you need to do? One sheet, four answers, each opening the editor that fits. */
 function openNewSheet() {

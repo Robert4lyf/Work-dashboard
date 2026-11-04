@@ -261,7 +261,10 @@ test('probe: back from the process editor asks when something was typed; a faile
     save();
   });
   await app.processes();
-  await expect(page.locator('[data-wfstart="w1"]')).toHaveText('Fix');
+  // (Release D: the row's Fix opens the failed run itself, by its id)
+  const fix = page.getByRole('region', { name: 'Processes' }).getByLabel('Fix: Report');
+  await expect(fix).toHaveText('Fix');
+  expect(await fix.getAttribute('data-wfopen')).toBeTruthy();
   await page.click('[data-wfview="w1"]');
   await expect(page.locator('.wfstate .btn')).toHaveText('Fix the failed step');
   await page.click('[data-wfdup="w1"]');

@@ -311,6 +311,8 @@ header.compact .now .go b {
 }
 header.compact .now .clk {
   font-size: var(--fs);
+  flex: none;
+  white-space: nowrap;
 }
 /* (a running timer keeps its label: the clock alone doesn't say what it's timing) */
 header.compact .now .go:has(.clk) {
@@ -795,10 +797,10 @@ nav button {
   background: none;
   border: 0;
   border-radius: var(--radius-sm);
-  padding: 6px 6px;
+  padding: 6px 4px;
   cursor: pointer;
   font-weight: 600;
-  font-size: var(--fs-sm);
+  font-size: 14px;
   color: var(--muted);
   white-space: nowrap;
 }
@@ -1553,6 +1555,10 @@ body.zen nav {
   border-color: transparent;
 }
 /* review tab */
+.rtabs .chip {
+  flex: 1 1 auto;
+  padding: 7px 6px;
+}
 .rtabs {
   margin-bottom: 16px;
   gap: 6px;
@@ -3096,7 +3102,7 @@ details.more > details {
   align-items: center;
 }
 .radar.empty {
-  height: 34px;
+  height: 48px;
 }
 .radar {
   display: flex;
@@ -3481,9 +3487,11 @@ details.more > details {
 }
 .wfstate {
   margin: 8px 0 12px;
+  padding: 12px 14px;
 }
 .wfstate p {
   margin: 0 0 8px;
+  color: var(--ink);
 }
 .wfstate.w-failed {
   border-color: var(--err);

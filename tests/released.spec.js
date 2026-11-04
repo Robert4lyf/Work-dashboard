@@ -940,3 +940,64 @@ test('static audit fixes: a re-armed Delete is the same item’s; dark tags and 
   expect((await app.state()).wruns[0].ack).toBe(1);
   expect(app.errors).toEqual([]);
 });
+
+test('UI pass fixes: a process row’s Fix opens its failed run; the paused clock stays on one line; tabs fit with Larger text; Add to the Inbox once', async ({
+  app,
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await app.open();
+  await app.setState(processDay);
+  await page.evaluate(() => localStorage.setItem('dashboard-look', JSON.stringify({ font: 'large' })));
+  await page.reload();
+  // Every tab whole and on screen at 360px with Larger text (and a two-digit Inbox count).
+  await page.evaluate(() => {
+    for (let i = 0; i < 12; i++) S.inbox.push({ id: 'n' + i, text: 'Item ' + i });
+    save();
+    renderAll();
+  });
+  for (const b of await page.locator('nav [data-v]').all()) {
+    const r = await b.boundingBox();
+    expect(r.x + r.width).toBeLessThanOrEqual(360);
+    expect(await b.evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
+  }
+  // Review's four tabs fit too.
+  await page.click('nav [data-v=review]');
+  expect(await page.$eval('#v-review .rtabs', t => t.scrollWidth <= t.clientWidth)).toBe(true);
+  // Fix on the process row opens the failed run, not the newer one under way.
+  await app.processes();
+  await page.click('#procall .row [data-wfopen="r1"].btn');
+  expect(await page.evaluate(() => wfOpen)).toBe('r1');
+  // Add to the Inbox, then not again (it acknowledges).
+  await page.click('#wfmore summary');
+  await page.click('[data-wfact="inbox"]');
+  await expect(page.locator('#v-knowledge [data-wfact="inbox"]')).toHaveCount(0);
+  expect((await app.state()).inbox.filter(x => /^Process failed/.test(x.text))).toHaveLength(1);
+  // Another failed run's Other options start folded.
+  await page.evaluate(() => {
+    wrunById('r3').status = 'failed';
+    wrunById('r3').err = 'x';
+    openWorkflowRun('r3');
+  });
+  await expect(page.locator('#wfmore')).not.toHaveAttribute('open', '');
+  // A paused timer in the compact header: one line.
+  await page.evaluate(() => {
+    S.timer = { id: 't', end: 0, left: 25 * 60e3, tag: '', mins: 25, q: 'q4b' };
+    save();
+    go('knowledge');
+  });
+  const clk = page.locator('header #hclock');
+  await expect(clk).toBeVisible();
+  const box = await clk.boundingBox();
+  expect(box.height).toBeLessThan(32);
+  // Search counts read right.
+  await page.evaluate(() => {
+    S.timer = null;
+    wfOpen = null;
+    save();
+  });
+  await app.processes();
+  await page.fill('#procq', 'mon');
+  await expect(page.locator('.procfound')).toContainText('matches');
+  expect(app.errors).toEqual([]);
+});

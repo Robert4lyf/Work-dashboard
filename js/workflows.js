@@ -245,7 +245,8 @@ function runActions(r) {
   if (r.status === 'failed')
     return {
       primary: s ? 'retry' : '',
-      more: [...(canSkip(s) ? ['skip'] : []), 'inbox', ...(r.ack ? [] : ['ack']), 'cancel', 'copy'],
+      // (Add to the Inbox acknowledges too: once either is done, neither is offered again)
+      more: [...(canSkip(s) ? ['skip'] : []), ...(r.ack ? [] : ['inbox', 'ack']), 'cancel', 'copy'],
     };
   if (WRUN_OVER.includes(r.status)) return { primary: '', more: ['copy'] };
   return { primary: 'step', more: ['pause', 'cancel', 'copy'] };
@@ -528,6 +529,7 @@ function openWorkflowRun(id) {
   if (!wrunById(id)) return toast('That run is gone', false, 3000);
   leaveEditor(() => {
     wfFrom = view === 'knowledge' ? null : view;
+    if (wfOpen !== id) panels.wfmore = false; // (another run's Other options start folded)
     wfOpen = id;
     kbRun = null;
     kbArt = null;
@@ -1079,7 +1081,7 @@ function wfOverview(w) {
     const s = runStage(o);
     h += `<div class="box wfstate w-${o.status}"><p><b>${runWord(o)}</b>${s ? ` · step ${o.def.indexOf(s) + 1} of ${o.def.length}: ${esc(s.title)}` : ''}</p>${o.err ? `<p class="hint">${esc(o.err)}</p>` : ''}<div class="acts"><button class="btn ${o.status === 'failed' ? 'pink' : 'green'}" data-wfopen="${o.id}">${o.status === 'failed' ? 'Fix the failed step' : o.status === 'ready' ? 'Start' : 'Continue'}</button></div></div>`;
   } else
-    h += `<div class="box wfstate"><p><b>Not started</b>${past.length ? ` · last run ${WRUN_WORD[past[0].status].toLowerCase()} ${esc(dayLabel(fmt(new Date(past[0].fin || past[0].at))))}` : ''}</p><div class="acts"><button class="btn green" data-wfstart="${w.id}">Start</button></div></div>`;
+    h += `<div class="box wfstate"><p><b>Not started</b>${past.length ? ` · last run ${WRUN_WORD[past[0].status].toLowerCase()} ${esc(dayLabel(fmt(new Date(past[0].fin || past[0].at))))}` : ''}</p><div class="acts">${w.archived ? `<button class="btn" data-wfarchive="${w.id}">Unarchive to run it</button>` : `<button class="btn green" data-wfstart="${w.id}">Start</button>`}</div></div>`;
   h += `<h3 class="kbsub">Steps</h3>${
     w.stages.length
       ? `<ol class="plist wlist wprev">${w.stages.map(s => `<li><span class="pjump">${kind(s) ? `<small>${kind(s)}</small>` : ''}${esc(s.title)}</span></li>`).join('')}</ol>`

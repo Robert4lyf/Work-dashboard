@@ -25,7 +25,7 @@ for (const width of [320, 360, 390, 1280]) {
   });
 }
 
-test('on a narrow phone the tab strip scrolls, with a fade hinting at hidden tabs; at 360px every tab fits', async ({
+test('on a very narrow phone the tab strip scrolls, with a fade hinting at hidden tabs; at 320px and up every tab fits', async ({
   app,
   page,
 }) => {
@@ -34,7 +34,8 @@ test('on a narrow phone the tab strip scrolls, with a fade hinting at hidden tab
   // (Release D: the labels are compact enough for all five tabs at 360px: no scrolling, no fade)
   expect(await page.$eval('#tabs', t => t.scrollWidth <= t.clientWidth)).toBe(true);
   expect(await page.$eval('#tabs', t => [...t.classList].filter(c => c.startsWith('more-')).length)).toBe(0);
-  await page.setViewportSize({ width: 320, height: 800 });
+  // (Release D: they fit at 320px too; a folded phone's 280px outer screen still scrolls)
+  await page.setViewportSize({ width: 280, height: 800 });
   await page.evaluate(() => fadeTabs());
   const cls = () => page.$eval('#tabs', t => [...t.classList].filter(c => c.startsWith('more-')).join(' '));
   expect(await cls()).toBe('more-right');
