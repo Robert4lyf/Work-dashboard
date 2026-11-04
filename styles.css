@@ -3369,15 +3369,6 @@ nav button[aria-current='page'] {
     border-right: 3px solid var(--edge);
     padding: 20px 12px;
   }
-  nav::before {
-    content: 'Work Dashboard';
-    display: block;
-    margin: 0 8px 22px;
-    font-size: 26px;
-    font-weight: 900;
-    line-height: 1.05;
-    letter-spacing: -0.03em;
-  }
   .tabs {
     flex-direction: column;
     gap: 4px;

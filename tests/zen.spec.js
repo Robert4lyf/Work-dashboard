@@ -59,3 +59,43 @@ test("the header's Focus button opens the task the header shows", async ({ app, 
   await page.click('header [data-zen]');
   await expect(page.locator('.zt')).toHaveText('Report');
 });
+
+test('Focus on another task while a session is paused asks first: back to it, or save it and switch', async ({
+  app,
+  page,
+}) => {
+  await app.addQuest('Report');
+  await app.addQuest('Email');
+  const email = (await app.state()).quests.find(q => q.text === 'Email').id;
+  await page.evaluate(id => {
+    S.top3 = { day: today(), ids: [S.quests[0].id, id] };
+    save();
+    renderAll();
+  }, email);
+  await page.click('header [data-zen]');
+  await expect(page.locator('.zt')).toHaveText('Report');
+  await page.click('[data-zstart]');
+  await page.clock.fastForward('03:00');
+  await page.click('#v-zen [data-pause]');
+  await page.click('#zenexit');
+  // Focus on Email: not Report's session, quietly.
+  await page.click(`.top3 [data-zen][data-q="${email}"]`);
+  await expect(page.locator('#sheettitle')).toHaveText('Switch focus?');
+  await expect(page.locator('#sheet')).toContainText('Report has a paused session (3 min)');
+  await page.click('#sheet [data-sheetans="back"]');
+  await expect(page.locator('.zt')).toHaveText('Report');
+  await expect(page.locator('#zclock')).toHaveText('22:00');
+  await page.click('#zenexit');
+  // Cancel: nothing changes.
+  await page.click(`.top3 [data-zen][data-q="${email}"]`);
+  await page.click('#sheet [data-sheetclose]:not(.sheetback)');
+  await expect(page.locator('#v-zen')).toBeHidden();
+  expect((await app.state()).timer).not.toBeNull();
+  // Save and switch: Report's 3 minutes are kept, Email is in front.
+  await page.click(`.top3 [data-zen][data-q="${email}"]`);
+  await page.click('#sheetok');
+  await expect(page.locator('.zt')).toHaveText('Email');
+  const s = await app.state();
+  expect(s.timer).toBeNull();
+  expect(s.daily['2026-09-23']['']).toBe(3);
+});
