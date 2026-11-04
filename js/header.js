@@ -60,7 +60,7 @@ function renderHeader() {
     const nx = recommend(),
       ask = !nx && S.quests.find(q => needsNext(q) && !q.wait); // (every step ticked: what's next?)
     if (ask) {
-      h = `<button class="go" data-open="${ask.id}"><small>Every step ticked in ${esc(ask.text)}</small><b>What's next?</b></button>`;
+      h = `<button class="go" data-open="${ask.id}"><small>Every step ticked in ${esc(ask.text)}</small><b>${full ? "What's next?" : esc(ask.text) + ": what's next?"}</b></button>`;
     } else if (nx && nx.why === 'place') {
       // Where work stopped: picking it up opens the saved place, in single-task mode.
       h = `<button class="go" data-open="${nx.q.id}"><small>Pick up where you left off · ${esc(nx.q.text)}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;

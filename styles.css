@@ -182,17 +182,6 @@ header {
   margin-bottom: 16px;
   border-radius: var(--radius);
 }
-.hrow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-.title {
-  font-size: var(--fs);
-  margin: 0;
-  font-weight: 650;
-}
 .now {
   display: flex;
   align-items: center;
@@ -309,7 +298,8 @@ header.compact .now .go {
   display: flex;
   align-items: center;
 }
-header.compact .now .go:not(:has(.clk)) b::before {
+/* (only before the work itself: not before 'All done for today') */
+header.compact .now .go[data-open] b::before {
   content: 'Now: ';
   color: var(--muted);
   font-weight: 500;
@@ -380,22 +370,6 @@ header.compact .now .go:has(.clk) small {
   padding: 2px 0;
   color: var(--muted);
   cursor: pointer;
-}
-.hstats .pill {
-  opacity: 1;
-  padding: 1px 9px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-}
-.hstats .warn {
-  opacity: 1;
-  color: var(--err);
-  background: var(--err-soft);
-  border: 0;
-  padding: 0 8px;
-  text-decoration: none;
-  border-radius: 999px;
-  font-weight: 600;
 }
 .hbtns {
   flex: none;
@@ -720,6 +694,7 @@ h2 {
   font-size: var(--fs-sm);
   font-weight: 500;
   cursor: pointer;
+  min-height: 40px;
 }
 .tagpick .chip {
   padding: 4px 12px;
@@ -1088,6 +1063,10 @@ nav button[aria-current='page'] {
   background: var(--panel-2);
   color: var(--ink);
 }
+.tag[style*='background'],
+.chip[aria-pressed='true'][style*='--c'] {
+  color: #1f2a3d;
+}
 .tag.opt {
   background: var(--info-soft);
   color: var(--info);
@@ -1160,7 +1139,7 @@ nav button[aria-current='page'] {
   font-size: var(--fs-sm);
   font-weight: 600;
   background: var(--err);
-  color: #fff;
+  color: var(--bg);
   border: 0;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
@@ -1169,7 +1148,7 @@ nav button[aria-current='page'] {
   font-weight: 600;
   text-decoration: none;
   background: var(--err);
-  color: #fff;
+  color: var(--bg);
   border: 0;
   padding: 6px 10px;
   margin-top: 12px;
@@ -1290,8 +1269,8 @@ textarea.fld {
 }
 .mv {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--edge);
   background: var(--panel);
   color: var(--ink);
@@ -1330,23 +1309,6 @@ textarea.fld {
 .soonrow .tag {
   flex: none;
   margin: 0;
-}
-.backup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
-  align-items: center;
-  margin-top: 30px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-.backup span {
-  flex-basis: 100%;
-}
-.backup label {
-  cursor: pointer;
 }
 .banner {
   padding: 14px;
@@ -1584,13 +1546,6 @@ body.zen nav {
 .dropping {
   outline: 2px dashed var(--accent);
   outline-offset: 3px;
-}
-.iacts.quick .chip {
-  padding: 3px 10px;
-  font-size: var(--fs-sm);
-}
-.iacts.quick .x {
-  margin-left: auto;
 }
 .chip.del {
   background: var(--err-soft);
@@ -1938,14 +1893,6 @@ body.ringing {
   color: var(--muted);
   font-weight: 400;
 }
-.kbody {
-  padding-left: 14px;
-  border-left: 2px solid var(--line);
-  margin-top: 4px;
-}
-.kbody .kcat {
-  margin-top: 8px;
-}
 .kbempty {
   margin: 8px 0 0;
 }
@@ -2081,14 +2028,6 @@ summary {
 .x {
   min-width: 40px;
   min-height: 40px;
-}
-.hsearch,
-.syncbtn {
-  min-height: 36px;
-  padding: 6px 0;
-}
-.chip {
-  min-height: 36px;
 }
 .node b {
   overflow-wrap: anywhere;
@@ -2292,7 +2231,7 @@ details.more > details {
 }
 .tchip .tdel.armed {
   background: var(--err);
-  color: #fff;
+  color: var(--bg);
   font-weight: 600;
 }
 /* an Inbox item's subquests, added before it goes to Today */
@@ -3715,15 +3654,6 @@ details.more > details {
 }
 .hintbox .x {
   margin: -6px 0 0;
-}
-.x,
-.mv {
-  min-width: 40px;
-  min-height: 40px;
-}
-.mv {
-  width: 40px;
-  height: 40px;
 }
 .rulewhen {
   font-style: italic;

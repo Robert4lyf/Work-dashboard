@@ -460,13 +460,28 @@ function setHTML(el, html) {
     typedWas = typedSel !== null ? a.defaultValue : '';
   // A two-tap confirmation half done (Delete?, Revoke?): still armed after a sync's redraw, for the
   // rest of its time, so the second tap does what the first asked.
+  // (only the same item's: its row must read the same, since some buttons are keyed by their place
+  // in a list, and a tag removed elsewhere meanwhile would put another tag's × in its place)
+  const rowOf = b =>
+    b.parentElement
+      ? [...b.parentElement.children]
+          .filter(c => c !== b)
+          .map(c => c.outerHTML)
+          .join('')
+      : '';
   const armed = [...el.querySelectorAll('.armed')]
-    .map(b => ({ sel: focusSel(b), label: b.textContent, orig: b.dataset.orig, at: +b.dataset.armat || 0 }))
+    .map(b => ({
+      sel: focusSel(b),
+      row: rowOf(b),
+      label: b.textContent,
+      orig: b.dataset.orig,
+      at: +b.dataset.armat || 0,
+    }))
     .filter(x => x.sel);
   el.innerHTML = html;
   armed.forEach(x => {
     const b = el.querySelector(x.sel);
-    if (b && b.textContent === x.orig) armAgain(b, x.label, x.orig, x.at);
+    if (b && b.textContent === x.orig && rowOf(b) === x.row) armAgain(b, x.label, x.orig, x.at);
   });
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));

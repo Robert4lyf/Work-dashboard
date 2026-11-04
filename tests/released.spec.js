@@ -830,3 +830,113 @@ test('re-saving a decision keeps the step it jumps to by id, when two steps shar
   expect((await app.state()).workflows[0].stages[0].choices[0].next).toBe('d');
   expect(app.errors).toEqual([]);
 });
+
+test('static audit fixes: a re-armed Delete is the same item’s; dark tags and armed buttons stay readable; the system bar follows a chosen theme; a stepless failure can be acknowledged', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await page.evaluate(() => {
+    S.tags = [
+      { name: 'A', color: 'var(--pink)' },
+      { name: 'B', color: 'var(--yellow)' },
+      { name: 'C', color: 'var(--blue)' },
+    ];
+    save();
+  });
+  await app.settings('tags');
+  await page.click('[data-deltag="1"]'); // (B)
+  await expect(page.locator('[data-deltag="1"]')).toHaveText('Delete?');
+  // Another device removes A: index 1 is now C. A redraw mustn't leave C's × armed.
+  await page.evaluate(() => {
+    S.tags.splice(0, 1);
+    inBackground(renderAccount);
+  });
+  await expect(page.locator('[data-deltag="1"]')).toHaveText('×');
+  await page.click('[data-deltag="1"]');
+  expect((await app.state()).tags.map(t => t.name)).toEqual(['B', 'C']); // (only armed, not deleted)
+  // Dark: text on a tag's colour, and on an armed button, has AA contrast.
+  await page.evaluate(() => setLook('theme', 'dark'));
+  const ratio = (fg, bg) =>
+    page.evaluate(
+      ([fg, bg]) => {
+        const p = s =>
+          s
+            .match(/\d+(\.\d+)?/g)
+            .slice(0, 3)
+            .map(Number);
+        const L = c =>
+          c
+            .map(v => v / 255)
+            .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+            .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
+        const [a, b] = [L(p(fg)), L(p(bg))];
+        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+      },
+      [fg, bg],
+    );
+  const tag = await page.evaluate(() => {
+    const s = document.createElement('span');
+    s.className = 'tag';
+    s.style.background = 'var(--yellow)';
+    s.textContent = 'B';
+    document.querySelector('#v-account').append(s);
+    const cs = getComputedStyle(s);
+    return [cs.color, cs.backgroundColor];
+  });
+  expect(await ratio(...tag)).toBeGreaterThan(4.5);
+  const armedBtn = page.locator('[data-deltag="0"]');
+  await armedBtn.click();
+  const ab = await armedBtn.evaluate(b => [getComputedStyle(b).color, getComputedStyle(b).backgroundColor]);
+  expect(await ratio(...ab)).toBeGreaterThan(4.5);
+  // The system bar: dark when Dark is chosen, whatever the system says.
+  expect(
+    await page.evaluate(() =>
+      [...document.querySelectorAll('meta[name="theme-color"]')].map(m => [m.media, m.content]),
+    ),
+  ).toEqual([
+    ['', '#12161c'],
+    ['', '#12161c'],
+  ]);
+  await page.evaluate(() => setLook('theme', ''));
+  expect(await page.evaluate(() => document.querySelector('meta[name="theme-color"]').media)).toContain(
+    'prefers-color-scheme',
+  );
+  // A failed run whose step is gone from its copy: acknowledged from its page.
+  await page.evaluate(() => {
+    S.workflows = [
+      {
+        id: 'w',
+        name: 'Gone step',
+        ver: 1,
+        days: [],
+        monthDay: 0,
+        stages: [{ id: 's', type: 'manual', title: 'S' }],
+      },
+    ];
+    S.wruns = [
+      {
+        id: 'g',
+        wf: 'w',
+        ver: 1,
+        name: 'Gone step',
+        q: '',
+        def: [{ id: 's', type: 'manual', title: 'S' }],
+        started: Date.now(),
+        at: Date.now(),
+        cur: '',
+        st: {},
+        live: {},
+        status: 'failed',
+        err: 'Lost',
+        log: [],
+      },
+    ];
+    norm(S);
+    save();
+    openWorkflowRun('g');
+  });
+  await page.click('#v-knowledge [data-wfact="ack"]');
+  expect((await app.state()).wruns[0].ack).toBe(1);
+  expect(app.errors).toEqual([]);
+});

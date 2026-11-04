@@ -785,7 +785,19 @@ function wfRunView(r) {
   else if (s) h += stageCard(r, s, i);
   else if (r.status === 'failed')
     // (failed with no step to try again: only its record, and the way out)
-    h += `<div class="pstep box failed"><div class="werr"><p><b>Failed.</b> ${esc(r.err || 'Failed')}</p></div><div class="acts">${b('cancel', 'Cancel the run')}${b('copy', 'Copy summary')}</div></div>`;
+    h += `<div class="pstep box failed"><div class="werr"><p><b>Failed.</b> ${esc(r.err || 'Failed')}</p></div><div class="acts">${can.more
+      .map(a =>
+        b(
+          a,
+          {
+            inbox: 'Add to the Inbox for later',
+            ack: 'Acknowledge (stays failed)',
+            cancel: 'Cancel the run',
+            copy: 'Copy summary',
+          }[a] || a,
+        ),
+      )
+      .join('')}</div></div>`;
   // Every stage, with its outcome.
   h += `<ol class="plist runlist wlist">${r.def
     .map((st, j) => {

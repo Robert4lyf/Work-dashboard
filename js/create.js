@@ -76,7 +76,7 @@ function procState(w) {
   const open = S.wruns.filter(r => r.wf === w.id && !WRUN_OVER.includes(r.status));
   return open.some(r => r.status === 'failed') ? 'failed' : open.length ? 'going' : 'idle';
 }
-const guideState = a => (openRunFor(a.id, '') ? 'going' : 'idle');
+const guideState = a => (S.runs.some(r => r.art === a.id && !r.fin && !guideParent(r)) ? 'going' : 'idle');
 const procFinding = () => !!(procFind.q.trim() || procFind.f);
 function procResults() {
   const q = procFind.q.trim().toLowerCase(),

@@ -564,6 +564,7 @@ function setLook(k, v) {
   const root = document.documentElement.dataset;
   if (v) root[k] = v;
   else delete root[k];
+  if (k === 'theme') themeBar();
 }
 /* Settings: an index of a few groups, each opened as a page of its own (‹ and Android back go to
    the index). Links from elsewhere open the group that holds what they point at (openSettings).
@@ -619,7 +620,7 @@ function setGroupLine(k) {
       : 'When something happens, do one thing';
   }
   if (k === 'auto')
-    return `Result tracking ${S.track ? 'on' : 'off'} · shortcuts and deep links${sb && session ? ' · notifications · capture link' : ''}`;
+    return `Result tracking ${sb && session ? (S.track ? 'on' : 'off') : 'needs signing in'} · shortcuts and deep links${sb && session ? ' · notifications · capture link' : ''}`;
   if (k === 'backup') return 'Save everything to a file, or restore from one';
   if (k === 'health') return 'Check the app, sync and notifications';
   return '';
