@@ -43,6 +43,11 @@ const test = base.test.extend({
         await page.goto('/');
         await started();
       },
+      // A Settings group (Release D: Settings is an index of groups, each a page of its own).
+      settings: async group => {
+        await page.click('nav [data-v=account]');
+        await page.click(`[data-setgo="${group}"]`);
+      },
       // Knowledge's Processes view (processes, guides, automations and what's under way).
       processes: async () => {
         await app.go('knowledge');

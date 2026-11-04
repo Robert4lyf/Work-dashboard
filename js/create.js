@@ -61,13 +61,69 @@ function activityRow(r) {
     word = r.status === 'failed' && r.ack ? 'Failed · acknowledged' : runWord(r);
   return `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${word}</span>${s ? ' · ' + esc(s.title) : ''}${pr ? ' (guide: ' + esc(runLine(pr)) + ')' : ''}${r.status === 'failed' && r.err ? ' · ' + esc(r.err) : ''} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm ${r.status === 'failed' ? 'pink' : 'green'}" data-wfopen="${r.id}" aria-label="${act}: ${esc(r.name)}">${act}</button></div>`;
 }
+/* finding a process or guide: a name search and a status filter, over this view only (global
+   search still finds everything). Nothing stored changes; the choice lasts the session. */
+let procFind = { q: '', f: '' };
+const PROC_FILTERS = [
+  ['', 'All'],
+  ['going', 'Under way'],
+  ['failed', 'Failed'],
+  ['idle', 'Not started'],
+];
+// Where a process or guide stands, for the filter: a failed run first (it needs you), then one
+// under way, else not started.
+function procState(w) {
+  const open = S.wruns.filter(r => r.wf === w.id && !WRUN_OVER.includes(r.status));
+  return open.some(r => r.status === 'failed') ? 'failed' : open.length ? 'going' : 'idle';
+}
+const guideState = a => (openRunFor(a.id, '') ? 'going' : 'idle');
+const procFinding = () => !!(procFind.q.trim() || procFind.f);
+function procResults() {
+  const q = procFind.q.trim().toLowerCase(),
+    f = procFind.f,
+    hit = s => !q || s.toLowerCase().includes(q),
+    // (archived processes only when looked for: by name or by state, and said so)
+    ws = S.workflows
+      .filter(w => hit(w.name) && (!f || procState(w) === f) && (!w.archived || q || f))
+      .sort((a, b) => !!a.archived - !!b.archived || byName(a.name, b.name)),
+    gs = S.kb
+      .filter(a => a.steps && a.steps.length && hit(a.title) && (!f || guideState(a) === f))
+      .sort((a, b) => byName(a.title, b.title)),
+    n = ws.length + gs.length;
+  if (!n)
+    return `<p class="hint procnone">Nothing ${q ? `called “${esc(procFind.q.trim())}”` : 'here'}${f ? ' that is ' + PROC_FILTERS.find(x => x[0] === f)[1].toLowerCase() : ''}. <button class="linkbtn" data-procclear="1">Show everything</button></p>`;
+  return `<p class="hint procfound">${plural(n, 'match')}${ws.some(w => w.archived) ? ', archived ones included' : ''}</p><div class="list box">${ws
+    .map(w =>
+      w.archived
+        ? `<div class="row"><button class="open" data-wfview="${w.id}"><span>${esc(w.name)}</span><small>Process · archived · ${plural(w.stages.length, 'step')}</small></button><button class="btn sm" data-wfview="${w.id}" aria-label="Open: ${esc(w.name)}">Open</button></div>`
+        : processRow(w),
+    )
+    .join('')}${gs.map(guideRow).join('')}</div>`;
+}
+function procSearch(v) {
+  procFind.q = v;
+  const res = $('#procres'),
+    all = $('#procall');
+  if (res) res.innerHTML = procFinding() ? procResults() : '';
+  if (all) all.hidden = procFinding();
+}
+function procFindBar() {
+  return `<div class="procfind" role="search"><input type="search" class="fld" id="procq" value="${esc(procFind.q)}" placeholder="Find a process or guide" aria-label="Find a process or guide" autocomplete="off" enterkeyhint="search"><div class="chips procf" role="group" aria-label="Show">${PROC_FILTERS.map(([k, l]) => `<button class="chip" data-procf="${k}" aria-pressed="${procFind.f === k}">${l}</button>`).join('')}</div></div><div id="procres" aria-live="polite">${procFinding() ? procResults() : ''}</div>`;
+}
+// One guide in a list: its name opens the article; the button follows (or continues) it.
+function guideRow(a) {
+  const o = openRunFor(a.id, '');
+  return `<div class="row"><button class="open" data-kbart="${a.id}"><span>${esc(a.title)}</span><small>Guide · ${plural(a.steps.length, 'step')}${o ? ' · ' + esc(runLine(o)) : ''}</small></button><button class="btn sm ${o ? 'green' : 'blue'}" data-runstart="${a.id}" aria-label="${o ? 'Continue' : 'Follow'} the guide: ${esc(a.title)}">${o ? 'Continue' : 'Follow'}</button></div>`;
+}
 function kbProcesses() {
   const { failed, going, pruns } = kbActivity(),
     ws = S.workflows.filter(w => !w.archived).sort((a, b) => byName(a.name, b.name)),
     guides = S.kb.filter(a => a.steps && a.steps.length).sort((a, b) => byName(a.title, b.title)),
     arch = S.workflows.filter(w => w.archived).length,
     busy = going.length + pruns.length;
-  let h = '';
+  // (the search only once there's enough to search through)
+  let h = ws.length + guides.length + arch >= 4 ? procFindBar() : '';
+  h += `<div id="procall"${procFinding() && h ? ' hidden' : ''}>`;
   if (failed.length)
     h += `<section class="kbsec" aria-labelledby="wfattn"><h2 class="kbhead" id="wfattn">Needs attention <small>${failed.length}</small></h2><div class="list box attnlist">${failed.map(activityRow).join('')}</div></section>`;
   if (busy)
@@ -95,15 +151,10 @@ function kbProcesses() {
   h += '</section>';
   h += `<section class="kbsec" aria-labelledby="wfguides"><div class="sechead"><h2 class="kbhead" id="wfguides">Guides</h2><button class="linkbtn" data-newguide="1">+ New guide</button></div>`;
   h += guides.length
-    ? `<div class="list box">${guides
-        .map(a => {
-          const o = openRunFor(a.id, '');
-          return `<div class="row"><button class="open" data-kbart="${a.id}"><span>${esc(a.title)}</span><small>Guide · ${plural(a.steps.length, 'step')}${o ? ' · ' + esc(runLine(o)) : ''}</small></button><button class="btn sm ${o ? 'green' : 'blue'}" data-runstart="${a.id}" aria-label="${o ? 'Continue' : 'Follow'} the guide: ${esc(a.title)}">${o ? 'Continue' : 'Follow'}</button></div>`;
-        })
-        .join('')}</div>`
+    ? `<div class="list box">${guides.map(guideRow).join('')}</div>`
     : '<p class="hint kbempty">A guide is a reference article with steps to follow one at a time. Add steps to any article to make one.</p>';
   h += '</section>';
-  h += `<section class="kbsec" aria-label="Desktop automations">${kbFlows()}</section>`;
+  h += `<section class="kbsec" aria-label="Desktop automations">${kbFlows()}</section></div>`;
   return h;
 }
 // One process in the list: its name opens its overview (what it's for, where it stands, start or
@@ -129,10 +180,18 @@ function openNewSheet() {
 }
 function createClick(d, b) {
   if (d.hintoff) return hintOff(d.hintoff);
-  if (d.gosec) {
-    go('account');
-    const el = document.getElementById(d.gosec);
-    if (el) el.scrollIntoView({ block: 'start' });
+  if (d.gosec) return openSettings(SET_SEC[d.gosec] || null, d.gosec);
+  if (d.setgo) return openSettings(d.setgo);
+  if (d.setback) return openSettings(null);
+  if (d.procf !== undefined) {
+    procFind.f = procFind.f === d.procf ? '' : d.procf;
+    return renderKnowledge();
+  }
+  if (d.procclear) {
+    procFind = { q: '', f: '' };
+    renderKnowledge();
+    const q = $('#procq');
+    if (q) q.focus();
     return;
   }
   if (d.kbview) {

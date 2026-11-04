@@ -271,6 +271,62 @@ header {
   align-items: center;
   gap: 10px;
 }
+/* Compact (away from Today): one line, the current work as a way back to it, then the running
+   timer's Pause if there is one, search and sync. The label stays for screen readers. */
+header.compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 4px 12px;
+  margin-bottom: 12px;
+}
+header.compact .now {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  margin: 0;
+}
+header.compact .hbar {
+  flex: none;
+  margin: 0;
+  gap: 4px;
+}
+header.compact .hact:empty,
+header.compact .hprog,
+header.compact .hfoot {
+  display: none;
+}
+header.compact .now .go small {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+header.compact .now .go b {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  font-size: var(--fs-sm);
+}
+header.compact .now .clk {
+  font-size: var(--fs);
+}
+/* (a running timer keeps its label: the clock alone doesn't say what it's timing) */
+header.compact .now .go:has(.clk) {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+header.compact .now .go:has(.clk) small {
+  position: static;
+  width: auto;
+  height: auto;
+  clip: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 /* Under the next step: what to do about it on the left, search and sync on the right. */
 .hbar {
   display: flex;
@@ -3047,6 +3103,32 @@ details.more > details {
   margin-top: 18px;
 }
 
+/* Processes: find by name, filter by state */
+.procfind {
+  margin: 0 0 12px;
+}
+.procfind .chips {
+  margin: 8px 0 0;
+  gap: 6px;
+}
+.procfound,
+.procnone {
+  margin: 0 0 8px;
+}
+/* Settings: the index of groups, a row each, opening its page */
+.setlist .row {
+  padding-right: 12px;
+}
+.setlist .chev,
+.row .chev {
+  flex: none;
+  color: var(--muted);
+}
+.setlist .chev svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
 /* Release C: rules */
 .rulerow.off .open > span {
   opacity: 0.8;
@@ -3575,6 +3657,18 @@ details.more > details {
 }
 .fhl.none b {
   color: var(--muted);
+}
+.fwarn {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--err-soft);
+}
+.fwarn b {
+  color: var(--err);
+}
+.fnone {
+  margin-top: 6px;
 }
 .fcov {
   margin: 0 0 12px;

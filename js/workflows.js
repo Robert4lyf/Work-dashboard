@@ -886,7 +886,7 @@ function stageCard(r, s, i) {
       if (x) body += `<p class="hint xline">${execLine(x)}</p>`;
       body += S.track
         ? '<p class="hint">Launch the automation; this step completes when its result is reported.</p>'
-        : '<p class="hint">Result tracking is off (Settings > Automation result tracking): launch the automation, then confirm its result yourself.</p>';
+        : '<p class="hint">Result tracking is off (<button class="linkbtn" data-gosec="execsec">Settings: Automations</button>): launch the automation, then confirm its result yourself.</p>';
       acts = `<a class="btn blue" href="${esc(f.url)}" data-flow="${f.id}" data-wrun="${id}" data-wstage="${s.id}"${r.q ? ` data-q="${r.q}"` : ''}>&#9654; Launch ${esc(f.name)}</a>${
         x || !S.track
           ? `${b('confirmflow', 'It succeeded (checked by hand)', '', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}`

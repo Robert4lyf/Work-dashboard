@@ -437,7 +437,7 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   const srv = server();
   const a = await device(browser, srv);
   await a.page.click('nav [data-v=account]');
-  await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
+  await a.page.click('[data-setgo="auto"]');
   await a.page.click('#capnew');
   await expect(a.page.locator('#capsetup .caprow code').nth(3)).toHaveText('tok123');
   await a.page.click('#captest');
@@ -455,7 +455,7 @@ test('capture: create a link, and items sent to it land in the inbox', async ({ 
   // The details survive a reload on this device, folded away until opened.
   await a.page.reload();
   await a.page.click('nav [data-v=account]');
-  await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
+  await a.page.click('[data-setgo="auto"]');
   await expect(a.page.locator('#capsetup .caprow').first()).toBeHidden();
   await a.page.click('#capsetup summary');
   await expect(a.page.locator('#capsetup .caprow code').nth(3)).toHaveText('tok123');
@@ -466,7 +466,7 @@ test('health check, signed in: sync, live updates and optional parts', async ({ 
   const srv = server();
   const a = await device(browser, srv);
   await a.page.click('nav [data-v=account]');
-  await a.page.evaluate(() => (document.querySelector('#advd').open = true)); // (Advanced, idempotent)
+  await a.page.click('[data-setgo="health"]');
   await a.page.click('#healthrun');
   const row = name => a.page.locator('.health .hrow2', { hasText: name });
   await expect(row('Signed in')).toHaveClass(/ok/);
@@ -787,6 +787,7 @@ test('Settings shows how long the last sync took and what it moved', async ({ br
   await a.sync();
   await a.sync();
   await a.page.click('nav [data-v=account]');
+  await a.page.click('[data-setgo="sync"]');
   const line = a.page.locator('#syncstats');
   await expect(line).toContainText(
     /Last sync: \d+ ms, [\d.]+ K?B down \(\d+ items? fetched\), [\d.]+ K?B up \(\d+ items? sent\)\./,
@@ -1247,6 +1248,7 @@ test('a launch on one device, reports from a script: both devices show the same 
     renderAll();
   });
   await a.page.click('nav [data-v=account]');
+  await a.page.click('[data-setgo="auto"]');
   await a.page.click('#xnew');
   await expect(a.page.locator('#xsetup .caprow code').nth(2)).toHaveText(/^xtok/);
   const token = await a.page.evaluate(() => execToken);
@@ -1311,7 +1313,7 @@ test('a launch on one device, reports from a script: both devices show the same 
     await expect(d.page.locator('#v-today .attn')).toContainText('Nothing needs attention');
   // Revoked: reports stop; the records stay.
   await a.page.click('nav [data-v=account]');
-  await settle(a, b); // (a sync redraw between the two taps would un-arm it: let it land first)
+  await a.page.click('[data-setgo="auto"]');
   await a.page.click('#xrevoke');
   await expect(a.page.locator('#xrevoke')).toHaveText('Revoke?'); // (a two-tap confirmation)
   await a.page.evaluate(() => revokeExecToken()); // (a sync redraw mid-way would un-arm it)
@@ -1333,6 +1335,7 @@ test('a report before the launch has synced, or with no launch at all, becomes a
     renderAll();
   });
   await a.page.click('nav [data-v=account]');
+  await a.page.click('[data-setgo="auto"]');
   await a.page.click('#xnew');
   const token = await a.page.evaluate(() => execToken);
   await a.sync();

@@ -161,7 +161,7 @@ test('deep hunt: typing survives background redraws, in fields with or without a
   page,
 }) => {
   // A tag's name (no id): still focused, still as typed, after two redraws.
-  await app.go('account');
+  await app.settings('tags');
   const tag = page.locator('[data-tagname="1"]');
   await tag.fill('Meetings XY');
   for (let i = 0; i < 2; i++) await page.evaluate(() => inBackground(renderAll));

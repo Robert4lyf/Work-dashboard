@@ -91,7 +91,7 @@ test('audit: a saved rule keeps only the details its trigger uses; previews hono
     ];
     save();
   });
-  await app.go('account');
+  await app.settings('rules');
   await page.click('[data-rulenew]');
   await page.click('[data-rulescratch]');
   await page.fill('#rlname', 'Switched');

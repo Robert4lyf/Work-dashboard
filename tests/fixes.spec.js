@@ -260,7 +260,7 @@ test('round 5: the keyboard stays in the view after an action; Restore backup is
   await expect(page.locator('#sheet')).toHaveCount(0);
   expect(await page.evaluate(() => document.activeElement.dataset.qact)).toBe('k3');
 
-  await app.go('account');
+  await app.settings('backup');
   await page.focus('#impbtn');
   expect(await page.evaluate(() => document.activeElement.id)).toBe('impbtn');
 

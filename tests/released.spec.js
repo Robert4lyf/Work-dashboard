@@ -448,3 +448,214 @@ test('Insights: a repeated failure links to that automation’s own latest failu
   expect(f.found.map(x => x[1])).not.toContain('data-xdet="g0"');
   expect(app.errors).toEqual([]);
 });
+
+/* checkpoint 3: the header, Settings, Forecast, finding a process */
+
+test('the header is full on Today and Focus, one line elsewhere; a running timer keeps its clock and Pause; nothing is lost moving between', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await app.setState(processDay);
+  await page.reload();
+  const hgt = () => page.$eval('header', h => Math.round(h.getBoundingClientRect().height));
+  const full = await hgt();
+  await expect(page.locator('header')).not.toHaveClass(/compact/);
+  await expect(page.locator('header [data-resume]')).toBeVisible();
+  for (const v of ['knowledge', 'review', 'account']) {
+    await page.click(`nav [data-v=${v}]`);
+    await expect(page.locator('header')).toHaveClass(/compact/);
+    // One line: search, sync, and the current work as a way back to it (no tick to tap by mistake).
+    await expect(page.locator('header #searchBtn')).toBeVisible();
+    await expect(page.locator('header #syncBtn')).toBeVisible();
+    await expect(page.locator('header .now .go')).toContainText('Review');
+    await expect(page.locator('header [data-toggle]')).toHaveCount(0);
+    expect(await hgt()).toBeLessThan(full - 40);
+  }
+  // The way back opens the task where work stopped.
+  await page.click('header .now .go');
+  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('header')).not.toHaveClass(/compact/);
+  // A focus session: the compact header keeps its clock, its label and its Pause.
+  await page.evaluate(() => {
+    S.timer = { id: 't1', end: Date.now() + 20 * 60e3, tag: '', mins: 25, q: 'q4b' };
+    save();
+    go('knowledge');
+  });
+  await expect(page.locator('header #hclock')).toBeVisible();
+  await expect(page.locator('header .now .go small')).toBeVisible();
+  await page.click('header [data-pause]');
+  expect(await page.evaluate(() => S.timer.left != null)).toBe(true);
+  await expect(page.locator('header [data-pause]')).toHaveText('Resume');
+  // The Focus page keeps the full header.
+  await page.evaluate(() => go('focus'));
+  await expect(page.locator('header')).not.toHaveClass(/compact/);
+  expect(app.errors).toEqual([]);
+});
+
+test('Settings is an index of groups; each opens as a page, back returns to the index; links from elsewhere open the right group', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await app.setState(processDay);
+  await page.reload();
+  await page.click('nav [data-v=account]');
+  await expect(page.locator('#v-account [data-setgo]')).toHaveCount(7);
+  await expect(page.locator('#v-account [data-setgo="rules"]')).toContainText('1 rule');
+  // Rules are one tap from the index.
+  await page.click('[data-setgo="rules"]');
+  await expect(page.locator('#rulesec')).toHaveText('Rules');
+  await expect(page.locator('#v-account .rulerow')).toHaveCount(1);
+  // Android back: the index, then Today.
+  await page.evaluate(() => history.back());
+  await expect(page.locator('#v-account [data-setgo]')).toHaveCount(7);
+  await page.evaluate(() => history.back());
+  await expect(page.locator('#v-today')).toBeVisible();
+  // The tab opens the index, even from inside a group.
+  await app.settings('backup');
+  await expect(page.locator('#exp')).toBeVisible();
+  await page.click('nav [data-v=account]');
+  await expect(page.locator('#exp')).toHaveCount(0);
+  // Links: the sync badge, a tag's edit link, a section named by an Insights finding.
+  await page.click('#syncBtn');
+  await expect(page.locator('#v-account .kbtitle')).toHaveText('Sync and account');
+  await page.evaluate(() => createClick({ gosec: 'execsec' }, null));
+  await expect(page.locator('#v-account .kbtitle')).toHaveText('Automations and integrations');
+  await expect(page.locator('#execsec')).toBeVisible();
+  await page.evaluate(() => {
+    const b = document.createElement('button');
+    b.dataset.edittags = '1';
+    document.querySelector('#v-today').append(b);
+    b.click(); // (as a task's tag picker's "Edit tags" link does)
+    b.remove();
+  });
+  await expect(page.locator('#v-account .kbtitle')).toHaveText('Tags');
+  await expect(page.locator('[data-tagname="0"]')).toBeVisible();
+  // A process step with tracking off links to its setting.
+  await page.evaluate(() => {
+    S.track = false;
+    retryStage(wrunById('r1'), 's2'); // (its flow step, waiting to be launched)
+    openWorkflowRun('r1');
+  });
+  await page.click('#v-knowledge [data-gosec="execsec"]');
+  await expect(page.locator('#v-account .kbtitle')).toHaveText('Automations and integrations');
+  // Preferences are untouched by the regrouping.
+  await page.evaluate(() => go('today'));
+  await app.settings('look');
+  await page.click('[data-look="theme"][data-val="dark"]');
+  await page.click('[data-setback]');
+  await expect(page.locator('[data-setgo="look"]')).toContainText('Dark');
+  expect(app.errors).toEqual([]);
+});
+
+test('a two-tap confirmation stays armed through a sync redraw, so the second tap does what the first asked', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await app.settings('tags');
+  const n = (await app.state()).tags.length;
+  await page.click('[data-deltag="0"]');
+  await expect(page.locator('[data-deltag="0"]')).toHaveText('Delete?');
+  await page.evaluate(() => inBackground(renderAccount));
+  await expect(page.locator('[data-deltag="0"]')).toHaveText('Delete?');
+  await page.click('[data-deltag="0"]');
+  expect((await app.state()).tags.length).toBe(n - 1);
+  // And it still lapses on its own.
+  await page.click('[data-deltag="0"]');
+  await page.evaluate(() => inBackground(renderAccount));
+  await expect(page.locator('[data-deltag="0"]')).toHaveText('×', { timeout: 5000 });
+  expect(app.errors).toEqual([]);
+});
+
+test('Forecast leads with the most significant finding; the rest and the unestimated list are a tap away', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await app.setState(processDay);
+  await page.reload();
+  await page.evaluate(() => {
+    // An overloaded tomorrow: two big estimated tasks due then.
+    const t = shift(today(), 1);
+    S.quests[0].est = 400;
+    S.quests[0].due = t;
+    S.quests[5].est = 300;
+    S.quests[5].due = t;
+    S.cap = [0, 300, 300, 300, 300, 300, 0];
+    save();
+  });
+  await page.click('nav [data-v=review]');
+  await page.evaluate(() => {
+    reviewSub = 'forecast';
+    renderReview();
+  });
+  const tmr = await page.evaluate(() => dayLabel(shift(today(), 1)));
+  await expect(page.locator('.fwarn')).toContainText('Overloaded: ' + tmr);
+  await expect(page.locator('#v-review > .recs .rec, #v-review .recs').first()).toBeVisible();
+  const shownRecs = page.locator('#v-review .recs:not(#recd .recs) .rec');
+  await expect(shownRecs).toHaveCount(1);
+  await expect(shownRecs.first()).toHaveClass(/over/);
+  await expect(page.locator('#recd > summary')).toContainText('More suggestions');
+  // Unestimated work: still said, its list folded until asked for.
+  await page.click('#recd > summary');
+  await expect(page.locator('#recd')).toContainText('have no estimate');
+  await expect(page.locator('#fnoned .chip').first()).toBeHidden();
+  await page.click('#fnoned > summary');
+  expect(await page.locator('#fnoned .chip').count()).toBeGreaterThan(6);
+  // Folds stay open through a redraw.
+  await page.evaluate(() => inBackground(renderReview));
+  await expect(page.locator('#fnoned')).toHaveAttribute('open', '');
+  expect(app.errors).toEqual([]);
+});
+
+test('finding a process: by name or by state; results open the right thing; archived ones are said; a sync redraw keeps the search', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await app.setState(processDay);
+  await page.reload();
+  await page.evaluate(() => {
+    S.workflows.push({
+      id: 'wfa',
+      name: 'Old month-end',
+      stages: [{ id: 'x', type: 'manual', title: 'X' }],
+      days: [],
+      ver: 1,
+      archived: true,
+    });
+    norm(S);
+    save();
+  });
+  await app.processes();
+  await page.fill('#procq', 'month');
+  await expect(page.locator('#procall')).toBeHidden();
+  const res = page.locator('#procres .row');
+  await expect(res).toHaveCount(4); // Month-end close, Month-end report, Old month-end (archived), the checklist guide
+  await expect(page.locator('#procres')).toContainText('archived');
+  // A redraw from a sync keeps the search and the keyboard.
+  await page.evaluate(() => inBackground(renderKnowledge));
+  await expect(page.locator('#procq')).toHaveValue('month');
+  await expect(page.locator('#procq')).toBeFocused();
+  await expect(res).toHaveCount(4);
+  // By state: failed.
+  await page.fill('#procq', '');
+  await page.click('[data-procf="failed"]');
+  await expect(res).toHaveCount(1);
+  await expect(res.first()).toContainText('Month-end report');
+  await page.click('#procres [data-wfview="wf1"]');
+  await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Month-end report');
+  // Back: the filter is still applied; nothing stored changed.
+  await page.click('[data-wfback2]');
+  await expect(page.locator('[data-procf="failed"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.click('[data-procf="idle"]');
+  await page.fill('#procq', 'zzz');
+  await expect(page.locator('#procres')).toContainText('Nothing called “zzz”');
+  await page.click('[data-procclear]');
+  await expect(page.locator('#procall')).toBeVisible();
+  const s = await app.state();
+  expect(s.workflows.find(w => w.id === 'wfa').archived).toBe(true);
+  expect(app.errors).toEqual([]);
+});

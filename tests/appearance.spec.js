@@ -5,7 +5,7 @@ test('text size and colour choices apply at once and survive a reload; the old f
   page,
 }) => {
   await app.open();
-  await app.go('account');
+  await app.settings('look');
   await page.click('[data-look="font"][data-val="large"]');
   await page.click('[data-look="theme"][data-val="dark"]');
   const root = () =>
@@ -23,7 +23,7 @@ test('text size and colour choices apply at once and survive a reload; the old f
   expect(r).toMatchObject({ font: 'large', theme: 'dark' });
   // Appearance is per device: it is not part of the synced data.
   expect(JSON.stringify(await app.state())).not.toContain('large');
-  await app.go('account');
+  await app.settings('look');
   await page.click('[data-look="font"][data-val=""]');
   await page.click('[data-look="theme"][data-val=""]');
   r = await root();
@@ -37,14 +37,14 @@ test('text size and colour choices apply at once and survive a reload; the old f
   r = await root();
   expect(r).toMatchObject({ theme: 'dark' });
   expect(r.font).toBeUndefined();
-  await app.go('account');
+  await app.settings('look');
   await expect(page.locator('[data-look="font"][data-val=""]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('notes text follows the theme colour, so it stays readable in dark mode', async ({ app, page }) => {
   await app.open();
   await app.addQuest('Report');
-  await app.go('account');
+  await app.settings('look');
   await page.click('[data-look="theme"][data-val="dark"]');
   await app.go('today');
   await app.openQuest('Report');

@@ -181,7 +181,7 @@ test('review fixes: re-arming makes new notices, a half-typed past time never ri
   });
   await expect(page.locator('.arow .awarn')).toContainText('Old phone has no notifications turned on');
   // Forgetting that device moves its alarms to any device.
-  await app.go('account');
+  await app.settings('look');
   await page.click('[data-forgetdev="old"]');
   await page.click('[data-forgetdev="old"]');
   a = (await app.state()).alarms[0];

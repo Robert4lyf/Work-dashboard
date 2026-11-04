@@ -36,11 +36,19 @@ function recommend() {
   const nx = nextStep();
   return nx ? { ...nx, why: 'list' } : null;
 }
+// Where the header is full: Today and Focus, where the work itself is. Elsewhere (Knowledge,
+// Review, Settings, the Command Centre, Search) it's one line: the current work as a way back to it (a
+// running timer, with its Pause), search and sync. The same content either way, so nothing is
+// lost by moving between them.
+const headerFull = () => view === 'today' || view === 'focus';
 function renderHeader() {
   // The next step on a line of its own; what you can do about it on the row below, with search
   // and sync.
   let h,
     acts = '';
+  const full = headerFull(),
+    hd = document.querySelector('header');
+  if (hd) hd.classList.toggle('compact', !full);
   if (S.timer && view !== 'focus') {
     const t = S.timer,
       paused = t.left != null;
@@ -54,12 +62,13 @@ function renderHeader() {
     } else if (nx && nx.why === 'place') {
       // Where work stopped: picking it up opens the saved place, in single-task mode.
       h = `<button class="go" data-open="${nx.q.id}"><small>Pick up where you left off · ${esc(nx.q.text)}</small><b>${esc(nx.n.text)}</b></button>`;
-      acts = `<button class="btn sm green" data-resume="${nx.q.id}">Resume</button>`;
+      if (full) acts = `<button class="btn sm green" data-resume="${nx.q.id}">Resume</button>`;
     } else if (nx) {
       const label = nx.why === 'top3' ? `Top 3 priority ${nx.rank}` : 'Next task',
         where = nx.n !== nx.q ? ' · ' + esc(nx.q.text) : '';
-      h = `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button><button class="go" data-open="${nx.n.id}"><small>${label}${where}</small><b>${esc(nx.n.text)}</b></button>`;
-      acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
+      // (compact: no tick, so a quick tap on another page can't finish a step by mistake)
+      h = `${full ? `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button>` : ''}<button class="go" data-open="${nx.n.id}"><small>${label}${where}</small><b>${esc(nx.n.text)}</b></button>`;
+      if (full) acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
     } else
       h = `<button class="go" data-v="today"><small>Next task</small><b>${S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
   }

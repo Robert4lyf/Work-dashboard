@@ -424,7 +424,7 @@ test('deep links open the list and a run (opening never moves a run on); junk is
   await expect.poll(() => page.locator('#toast').textContent()).toContain("process run isn't here");
   await cold('#/wrun');
   await expect.poll(() => page.locator('#toast').textContent()).toContain("isn't one the Dashboard knows");
-  await app.go('account');
+  await app.settings('auto');
   await page.selectOption('#scpick', 'workflows');
   expect(await page.locator('#sclink').textContent()).toBe('http://localhost:4173/#/workflows');
   expect(app.errors).toEqual([]);

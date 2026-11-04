@@ -299,8 +299,10 @@ test('bug fixes: editor keeps typed text through redraws; limits; links; overlay
   await page.click('[data-kbnew]');
   await page.fill('#kbt', 'Draft title');
   await page.fill('#kbb', 'Draft body');
-  // A redraw after a tap elsewhere (here: ticking the header's next step) keeps the draft.
-  await page.click('header [data-toggle]');
+  // A redraw after a tap elsewhere (here: ticking a step; Release D's header is compact away
+  // from Today, so the tick goes through Today's own button, by the same click handler) keeps
+  // the draft.
+  await page.evaluate(() => document.querySelector('#v-today [data-toggle]').click());
   await expect(page.locator('#kbt')).toHaveValue('Draft title');
   await expect(page.locator('#kbb')).toHaveValue('Draft body');
   await expect(page.locator('#kbb')).toHaveAttribute('maxlength', '50000');
