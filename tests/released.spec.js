@@ -956,14 +956,20 @@ test('UI pass fixes: a process row’s Fix opens its failed run; the paused cloc
     save();
     renderAll();
   });
-  for (const b of await page.locator('nav [data-v]').all()) {
+  // (each label whole, and each tab, once current, fully on screen: whether all five fit at once
+  // depends on the device's font, so the strip may scroll instead)
+  for (const v of ['today', 'inbox', 'knowledge', 'review', 'account']) {
+    const b = page.locator(`nav [data-v=${v}]`);
+    await b.click();
     const r = await b.boundingBox();
-    expect(r.x + r.width).toBeLessThanOrEqual(360);
+    expect(r.x >= 0 && r.x + r.width <= 360).toBe(true);
     expect(await b.evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
   }
   // Review's four tabs fit too.
   await page.click('nav [data-v=review]');
-  expect(await page.$eval('#v-review .rtabs', t => t.scrollWidth <= t.clientWidth)).toBe(true);
+  // (on one line where the font allows, else wrapped: never cut off or scrolled out of sight)
+  for (const r of await page.$$eval('#v-review .rtabs .chip', cs => cs.map(c => c.getBoundingClientRect())))
+    expect(r.x >= 0 && r.x + r.width <= 360).toBe(true);
   // Fix on the process row opens the failed run, not the newer one under way.
   await app.processes();
   await page.click('#procall .row [data-wfopen="r1"].btn');

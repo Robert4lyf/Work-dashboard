@@ -1562,9 +1562,7 @@ body.zen nav {
 .rtabs {
   margin-bottom: 16px;
   gap: 6px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-wrap: wrap;
 }
 .wsum {
   margin: 0 0 14px;
