@@ -173,6 +173,13 @@ function todayTitle() {
   el.hidden = view !== 'today' || path.length > 0;
   setIfChanged(el, `<b>Today</b><span>${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}</span>`);
 }
+const colsMQ = matchMedia('(min-width: 1240px)');
+// (not while typing in it: the old arrangement still reads as one column until the next redraw)
+colsMQ.addEventListener('change', () => {
+  const a = document.activeElement;
+  if (view === 'today' && !path.length && !(a && a.matches('input, textarea') && $('#v-today').contains(a)))
+    drawToday();
+});
 function drawToday() {
   $('#v-today')
     .querySelectorAll('details[id]')
@@ -198,13 +205,19 @@ function drawToday() {
     work = reorder ? qs : qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
   // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. what's scheduled;
   // 4. Today's work; 5. what it's waiting on.
+  // (On a wide screen, two columns: what you work through on the left, under the header; what
+  // needs you, what's at a time and what you're waiting on down the right.)
   todayTitle();
-  let h = renderAttention() + renderTop3() + renderCarried() + renderScheduledToday();
+  const att = renderAttention(),
+    sched = renderScheduledToday(),
+    wait = renderWaitingToday(),
+    cols = colsMQ.matches;
+  let h = (cols ? '' : att) + renderTop3() + renderCarried() + (cols ? '' : sched);
   const asBoard = todayView === 'board' && work.length;
   h += listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0);
   h += asBoard ? board(work) : list(work, true);
   if (qs.length && !work.length) h += '<p class="hint nowork">Nothing to act on now.</p>';
-  h += renderWaitingToday();
+  if (!cols) h += wait;
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
     h +=
@@ -236,6 +249,7 @@ function drawToday() {
   }
   more += quickActions() + renderAlarms();
   if (more) h += `<section class="todaymore" aria-label="More on Today">${more}</section>`;
+  if (cols) h = `<div class="tmain">${h}</div><div class="tside">${att + sched + wait}</div>`;
   setHTML($('#v-today'), h);
 }
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
