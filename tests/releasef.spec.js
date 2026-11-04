@@ -734,7 +734,7 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
     page,
   }) => {
     await day(app, page);
-    expect(await page.$eval('#v-today .attsum > summary', e => getComputedStyle(e).borderTopWidth)).toBe(
+    expect(await page.$eval('#v-today .attsum > .attsumline', e => getComputedStyle(e).borderTopWidth)).toBe(
       '3px',
     );
     const due = await page.$eval('#v-today .tag.now', e => getComputedStyle(e).backgroundColor);

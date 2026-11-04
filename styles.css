@@ -3555,6 +3555,135 @@ nav button[aria-current='page'] {
     font-weight: 800;
   }
 }
+/* Release G: Today's list, easier to scan. A task's steps as a count and a thin line along the
+   row's foot (no taller than the row); a Top 3 priority marked with its number; the filter and
+   Find under the title. */
+#v-today .list .row {
+  position: relative;
+}
+#v-today .list .row .stepbar {
+  position: absolute;
+  left: 12px;
+  right: 6px;
+  bottom: 0;
+  gap: 1px;
+  margin: 0;
+}
+#v-today .list .row .stepbar i {
+  height: 3px;
+  min-width: 2px;
+  box-shadow: none;
+  background: var(--line);
+  opacity: 0.18;
+}
+#v-today .list .row .stepbar :is(.s-done, .s-next, .s-wait) {
+  opacity: 1;
+}
+#v-today .list .row .stepbar .s-next {
+  opacity: 0.55;
+}
+.sfrac {
+  margin-right: 6px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.t3mark::before {
+  /* (the number isn't part of the name: drawn, and read out, before it) */
+  content: attr(data-rank);
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  margin-right: 8px;
+  padding: 0 3px;
+  vertical-align: 0.06em;
+  font-size: 0.82em;
+  font-weight: 900;
+  background: var(--sec-blue);
+  color: #111111;
+  border: 1.5px solid #111111;
+}
+.tfilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border: 3px solid var(--edge);
+  border-top: 0;
+  background: var(--panel);
+}
+:is(#v-today, .tmain) > .tfilter + .list.box {
+  border-width: 3px;
+  border-top: 0;
+}
+.tfilter .chips {
+  display: flex;
+  gap: 6px;
+}
+.tfilter .chip {
+  min-height: 44px;
+}
+.tfilter .chip small {
+  font-weight: 800;
+  margin-left: 2px;
+}
+.tfindbtn {
+  margin-left: auto;
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.tfindbtn svg {
+  width: 20px;
+  height: 20px;
+}
+.tfind {
+  flex: 1 1 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+}
+/* Needs attention, compact: the bar, the one that matters most, then the rest folded */
+.attlist.attfirst {
+  margin: 0;
+  border-width: 3px;
+  border-top-width: 0;
+}
+.attmore {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.attmore > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 3px solid var(--edge);
+  border-top: 0;
+  background: var(--panel);
+  font-weight: 800;
+  cursor: pointer;
+}
+.attmore > summary::before {
+  content: '▸';
+}
+.attmore[open] > summary::before {
+  content: '▾';
+}
+.attmore > summary::-webkit-details-marker {
+  display: none;
+}
+.attmore > .attlist {
+  margin: 0;
+  border-width: 3px;
+  border-top-width: 0;
+}
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {
   padding-right: 12px;

@@ -33,7 +33,14 @@ function row(n, i, len, sib) {
   const nx = kids && !d ? nextLeaf(n) : null,
     stepWait = !d && !n.wait ? stepWaitBadge(n) : '';
   const rt = tplFor(n);
+  // (Release G: how far it's got as a count, the bar thin along the row's foot; see stepBar)
+  const req = kids ? n.children.filter(c => !c.opt) : [],
+    set = req.length ? req : n.children,
+    frac = kids && !d ? `<span class="sfrac">${set.filter(isDone).length}/${set.length}</span>` : '';
+  // A Top 3 priority keeps its place in the list, marked with its number.
+  const rank = rowRank.get(n.id);
   const meta =
+    frac +
     tagBadge(n.tag) +
     waitBadge(n) +
     stepWait +
@@ -50,7 +57,7 @@ function row(n, i, len, sib) {
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
-  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
+  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
 }
 // A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
 // and any waiting marked. Every one ticked but the task not finished: a last block asks what's next.
@@ -76,6 +83,71 @@ function stepBar(n) {
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder (and,
 // for Today's tasks, the List / Board switch).
+/* Today's list, narrowed (Release G): All, Due (overdue or due today, the task or a step) or
+   Started (a step done, or a saved place), and Find (by words, in the name or its steps). Only
+   what's shown changes: the order and the tasks themselves stay as they are. The choice is this
+   device's, kept; the words are for now. */
+const TFILTER = 'dashboard-today-filter';
+let todayFilter = (() => {
+    try {
+      const v = localStorage.getItem(TFILTER);
+      return ['due', 'started'].includes(v) ? v : 'all';
+    } catch (e) {
+      return 'all';
+    }
+  })(),
+  todayFind = '',
+  todayFindOpen = false,
+  rowRank = new Map(); // (Top 3 rank by task id, for the list's marks; set as Today is drawn)
+const isDueNow = q =>
+  !isDone(q) &&
+  ((q.due && q.due <= today()) || q.children.some(c => !isDone(c) && c.due && c.due <= today()));
+const isStarted = q => !isDone(q) && (q.children.some(isDone) || !!q.resume);
+const TFILTERS = [
+  ['all', 'All', () => true],
+  ['due', 'Due', isDueNow],
+  ['started', 'Started', isStarted],
+];
+const searchIcon =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
+const findWords = () => todayFind.toLowerCase().split(/\s+/).filter(Boolean);
+function findMatch(q, words = findWords()) {
+  if (!words.length) return true;
+  const hay = [q.text, q.summary || '', ...q.children.map(c => c.text)].join(' ').toLowerCase();
+  return words.every(w => hay.includes(w));
+}
+function setTodayFilter(v) {
+  todayFilter = TFILTERS.some(([k]) => k === v) ? v : 'all';
+  try {
+    localStorage.setItem(TFILTER, todayFilter);
+  } catch (e) {}
+  renderToday();
+}
+// The chips and Find, under the list's title (not while reordering: that's the whole list).
+function listFilter(work) {
+  if (reorder || work.filter(q => !isDone(q)).length < 4) return '';
+  const chips = TFILTERS.map(([k, label, fn]) => {
+    const n = work.filter(q => !isDone(q) && fn(q)).length;
+    return `<button class="chip" data-tfilter="${k}" aria-pressed="${todayFilter === k}">${label} <small>${n}</small></button>`;
+  }).join('');
+  // (Find: a button, opening the box on a line of its own; open while there are words in it)
+  const many = work.length >= 8,
+    open = many && (todayFindOpen || !!todayFind),
+    btn = many
+      ? `<button class="chip tfindbtn" data-tfindopen="1" aria-expanded="${open}" aria-label="Find a task">${searchIcon}</button>`
+      : '',
+    find = open
+      ? `<input class="fld tfind" id="tfind" type="search" placeholder="Find a task" aria-label="Find a task on Today" value="${esc(todayFind)}" autocomplete="off" enterkeyhint="search">`
+      : '';
+  return `<div class="tfilter"><span class="chips" role="group" aria-label="Show">${chips}</span>${btn}${find}</div>`;
+}
+// The tasks shown by the filter and Find (finished ones only under All, in Done today).
+function filteredWork(work) {
+  if (reorder) return work;
+  const fn = (TFILTERS.find(([k]) => k === todayFilter) || TFILTERS[0])[2],
+    words = findWords();
+  return work.filter(q => (todayFilter === 'all' || fn(q)) && findMatch(q, words));
+}
 function listHead(title, ns, views) {
   const sw = views
     ? `<span class="viewsw" role="group" aria-label="Show as">${['list', 'board'].map(v => `<button class="chip" data-tview="${v}" aria-pressed="${todayView === v}">${v === 'list' ? 'List' : 'Board'}</button>`).join('')}</span>`
@@ -230,12 +302,17 @@ function drawToday() {
     // have sections of their own, in Reorder too: see moveAmong)
     work = todayWork(qs);
   todayTitle();
-  // Today's work: the list (or board), or why there's none.
-  const asBoard = todayView === 'board' && work.length;
+  // Today's work: the list (or board), or why there's none; narrowed by the filter and Find.
+  rowRank = new Map(top3Ids().map((id, i) => [id, i + 1]));
+  const asBoard = todayView === 'board' && work.length,
+    shown = filteredWork(work);
   let tasks =
     listHead("Today's tasks", asBoard ? [] : work, qs.length > 0) +
-    (asBoard ? board(work) : list(work, true));
+    listFilter(work) +
+    (asBoard ? board(shown) : list(shown, true));
   if (qs.length && !work.length) tasks += '<p class="hint nowork">Nothing to act on now.</p>';
+  else if (work.length && !shown.length)
+    tasks += `<p class="hint nowork">No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>`;
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
     tasks +=
@@ -307,15 +384,47 @@ function renderAttention() {
   const items = attentionItems(),
     cc = '<button class="linkbtn attcc" data-goto="ops">Command Centre &rsaquo;</button>';
   if (!items.length) return `<div class="attn attnone"><span>Nothing needs attention</span>${cc}</div>`;
-  const fails = items.filter(i => i.sev === 0),
-    rest = items.filter(i => i.sev > 0);
+  // (Release G: compact. The count and what kind, the one that matters most with its action,
+  // then the rest a tap away: failures first, then overdue, chases due, due today, the rest; the
+  // same order as the Command Centre's. Open or folded is remembered on this device.)
+  const order = [...items].sort((a, b) => a.sev - b.sev),
+    [first, ...rest] = order;
   const sum = `<b>Needs attention <span class="attn-n">${items.length}</span></b><small>${attentionCounts(items)}</small>`;
-  return `<div class="attn">${
+  return `<div class="attn"><div class="attsum sev${first.sev}" id="attsum"><div class="attsumline">${sum}</div></div><div class="attlist box attfail attfirst">${attentionRow(first)}</div>${
     rest.length
-      ? `<details id="attd" class="attsum sev${items[0].sev}"${panels.attd ? ' open' : ''}><summary>${sum}</summary><div class="attlist box">${rest.map(attentionRow).join('')}</div></details>`
-      : `<div id="attd" class="attsum sev0"><div class="attsumline">${sum}</div></div>`
-  }${fails.length ? `<div class="attlist box attfail">${fails.map(attentionRow).join('')}</div>` : ''}${cc}</div>`;
+      ? `<details id="attd" class="attmore"${attnOpen() ? ' open' : ''}><summary>${rest.length} more</summary><div class="attlist box">${rest.map(attentionRow).join('')}</div></details>`
+      : ''
+  }${cc}</div>`;
 }
+const ATTN = 'dashboard-attn-open';
+function attnOpen() {
+  if (panels.attd !== undefined) return panels.attd;
+  try {
+    return (panels.attd = localStorage.getItem(ATTN) === '1');
+  } catch (e) {
+    return false;
+  }
+}
+document.addEventListener(
+  'toggle',
+  e => {
+    if (e.target.id !== 'attd') return;
+    panels.attd = e.target.open;
+    try {
+      localStorage.setItem(ATTN, e.target.open ? '1' : '0');
+    } catch (x) {}
+  },
+  true,
+);
+document.addEventListener('input', e => {
+  if (e.target.id !== 'tfind') return;
+  todayFind = e.target.value.slice(0, 80);
+  // (the list is drawn again around the box: the caret stays where it was)
+  const at = [e.target.selectionStart, e.target.selectionEnd];
+  renderToday();
+  const f = document.getElementById('tfind');
+  if (f && document.activeElement === f) f.setSelectionRange(...at);
+});
 
 /* carried over: tasks on Today for STALE days or more get a decision each morning */
 const STALE = 3;

@@ -40,21 +40,20 @@ test('busy day: one attention summary, ordered by urgency; a workflow and its ow
   page,
 }) => {
   await busy(app, page);
-  const sum = page.locator('#attd > summary');
+  const sum = page.locator('#attsum');
   await expect(sum).toContainText('Needs attention 7');
   await expect(sum).toContainText('2 failed · 3 overdue · 2 today');
-  await expect(page.locator('#attd')).toHaveClass(/sev0/);
-  // Failures are shown straight away (one tap to act); the rest are folded until opened. Every
-  // item says what tapping it does.
-  await expect(page.locator('.attfail .attrow')).toHaveCount(2);
-  await expect(page.locator('.attfail .attrow').first()).toBeVisible();
+  await expect(sum).toHaveClass(/sev0/);
+  // (Release G: compact) The one that matters most is shown straight away, with its action; the
+  // rest are folded under "6 more" until opened. Every item says what tapping it does.
+  await expect(page.locator('.attfirst .attrow')).toHaveCount(1);
+  await expect(page.locator('.attfirst .attrow')).toBeVisible();
+  await expect(page.locator('#attd > summary')).toHaveText('6 more');
   await expect(page.locator('#attd .attrow').first()).toBeHidden();
-  await sum.click();
-  expect(await attRows(page, '.attfail')).toEqual([
-    ['Month-end report', 'Open the failed step'],
-    ['Tidy downloads', 'Open automation details'],
-  ]);
+  await page.click('#attd > summary');
+  expect(await attRows(page, '.attfirst')).toEqual([['Month-end report', 'Open the failed step']]);
   expect(await attRows(page, '#attd')).toEqual([
+    ['Tidy downloads', 'Open automation details'],
     ['Fletcher Way', 'Open task'],
     ['Review', 'Open task'],
     ['Hear back on figures', 'Open in Waiting'],
@@ -83,7 +82,7 @@ test('acting on items: the failed stage opens; acknowledging or resolving update
 }) => {
   await busy(app, page);
   await page.click('#attd > summary');
-  await page.click('.attfail [data-wfopen="r1"]');
+  await page.click('.attfirst [data-wfopen="r1"]');
   await expect(page.locator('.werr')).toContainText('Timed out logging in');
   // Back returns to Today (where it was opened from), not to the workflow list.
   await expect(page.locator('[data-wfback]')).toHaveText('‹ Today');
@@ -100,8 +99,8 @@ test('acting on items: the failed stage opens; acknowledging or resolving update
     inBackground(renderAll);
   });
   await expect(page.locator('#attd')).toHaveAttribute('open', '');
-  await expect(page.locator('#attd > summary')).toContainText('Needs attention 4');
-  await expect(page.locator('#attd')).not.toHaveClass(/sev0/);
+  await expect(page.locator('#attsum')).toContainText('Needs attention 4');
+  await expect(page.locator('#attsum')).not.toHaveClass(/sev0/);
   await page.evaluate(() => go('ops'));
   await expect(page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 4');
   // Acknowledged failures are results now.
@@ -147,7 +146,7 @@ test('a flow failure of its own stays its own item; a stale launch inside a run 
     ];
   });
   await page.reload();
-  expect(await attRows(page, '.attfail')).toEqual([['Export report', 'Open automation details']]);
+  expect(await attRows(page, '.attfirst')).toEqual([['Export report', 'Open automation details']]);
   expect(await attRows(page, '#attd')).toEqual([['Report run', 'Open process']]);
 });
 
@@ -215,7 +214,8 @@ test("Today's order: attention, Top 3, what it's waiting on, the work; the rest 
     els.map(e => e.className.split(' ')[0] || e.tagName.toLowerCase()),
   );
   // (Release F: Waiting above the list on a phone, so a long day doesn't bury it)
-  expect(blocks.slice(0, 5)).toEqual(['attn', 'top3', 'todaysec', 'sechead', 'list']);
+  // (Release G: the list's filter between its title and the list)
+  expect(blocks.slice(0, 6)).toEqual(['attn', 'top3', 'todaysec', 'sechead', 'tfilter', 'list']);
   await expect(page.locator('#v-today > .todaysec')).toHaveClass(/waitsec2/);
   expect(blocks[blocks.length - 1]).toBe('todaymore');
   // Flows, steps due soon and the rest are folded there, still a tap away.
@@ -238,7 +238,7 @@ test("Today's order: attention, Top 3, what it's waiting on, the work; the rest 
 test('board mode keeps the same summary and Top 3 above it', async ({ app, page }) => {
   await busy(app, page);
   await page.click('[data-tview="board"]');
-  await expect(page.locator('#attd > summary')).toContainText('Needs attention 7');
+  await expect(page.locator('#attsum')).toContainText('Needs attention 7');
   await expect(page.locator('#v-today .top3')).toBeVisible();
   await expect(page.locator('#v-today .blane')).not.toHaveCount(0);
   await page.click('[data-tview="list"]');
@@ -271,7 +271,7 @@ for (const width of [320, 360, 390])
     await busy(app, page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     const [a, b] = await Promise.all([
-      page.locator('#attd > summary b').boundingBox(),
+      page.locator('#attsum b').boundingBox(),
       page.locator('#v-today .attcc').boundingBox(),
     ]);
     expect(a.x + a.width).toBeLessThanOrEqual(b.x);

@@ -363,6 +363,18 @@ document.addEventListener('click', e => {
   if (d.resume) resumeWork(d.resume);
   if (d.clearplace) clearPlace(d.clearplace);
   top3Click(d);
+  if (d.tfindopen) {
+    // (open: closes it, and clears its words; closed: opens it)
+    todayFindOpen = !(todayFindOpen || todayFind);
+    todayFind = '';
+    renderToday();
+    const f = document.getElementById('tfind');
+    if (f) f.focus();
+  }
+  if (d.tfilter) {
+    if (d.tfindclear) todayFind = '';
+    setTodayFilter(d.tfilter);
+  }
   linkClick(d);
   triageClick(d, b);
   waitClick(d);
