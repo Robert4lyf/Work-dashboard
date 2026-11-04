@@ -180,14 +180,28 @@ function applyFind() {
     el.hidden = !show;
     if (show && !el.closest('#donesec')) left++;
   });
+  // (a finished task found: "Done today" opens to show it while the words are there, and closes
+  // again after; not remembered as opened)
+  const done = v.querySelector('#donesec');
+  let hit = false;
+  if (done) {
+    hit = words.length > 0 && [...done.querySelectorAll('.row[data-qid]')].some(r => !r.hidden);
+    if (hit && !done.open) {
+      done.dataset.findopen = '1';
+      done.open = true;
+    } else if (!hit && done.dataset.findopen) {
+      delete done.dataset.findopen;
+      done.open = false;
+    }
+  }
   const none = v.querySelector('.tnomatch');
-  if (none) none.hidden = !words.length || left > 0;
+  if (none) none.hidden = !words.length || left > 0 || hit;
 }
 function listHead(title, ns, views) {
   const sw = views
     ? `<span class="viewsw" role="group" aria-label="Show as">${['list', 'board'].map(v => `<button class="chip" data-tview="${v}" aria-pressed="${todayView === v}">${v === 'list' ? 'List' : 'Board'}</button>`).join('')}</span>`
     : '';
-  return `<div class="sechead"><h2>${title}</h2>${sw}${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
+  return `<div class="sechead"><h2 id="taskshead" tabindex="-1">${title}</h2>${sw}${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
 }
 /* Today as a board: a lane per stage, a tile per task. The choice is this device's own. */
 const TVIEW = 'dashboard-today-view';
@@ -317,7 +331,9 @@ function drawToday() {
   $('#v-today')
     .querySelectorAll('details[id]')
     // (the waiting panel is held open on a waiting quest: that isn't a choice to remember)
-    .forEach(d => (d.id !== 'waitd' || !d.dataset.held ? (panels[d.id] = d.open) : 0));
+    .forEach(d =>
+      (d.id !== 'waitd' || !d.dataset.held) && !d.dataset.findopen ? (panels[d.id] = d.open) : 0,
+    );
   // Down the path as far as it still leads (a level moved or removed elsewhere cuts it there).
   const ok = [];
   let arr = S.quests;
@@ -394,10 +410,32 @@ function drawToday() {
     rest = more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '';
   const h = colsMQ.matches
     ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
-    : att + top3 + sched + wait + tasks + rest;
+    : todayJump(work, sched, wait) + att + top3 + sched + wait + tasks + rest;
   setHTML($('#v-today'), h);
   applyFind();
 }
+// (Release H) On one column: a line at the top of Today saying what's on it further down, each a
+// tap to its section, so Today's tasks are one tap from the first screen however busy the day.
+// The sections themselves are unchanged. (Two columns show everything at once: not there.)
+function todayJump(work, sched, wait) {
+  const left = work.filter(q => !isDone(q)).length,
+    parts = [
+      sched && ['schedhead', 'Scheduled', S.quests.filter(isScheduled).length],
+      wait && ['waithead', 'Waiting', todayWaiting().length],
+      work.length && ['taskshead', 'Tasks', left],
+    ].filter(Boolean);
+  if (parts.length < 2) return '';
+  return `<div class="tjump chips" role="navigation" aria-label="On Today">${parts.map(([id, label, k]) => `<button class="chip" data-jump="${id}">${label} <small>${k}</small><span class="jarrow" aria-hidden="true">↓</span></button>`).join('')}</div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-jump]'),
+    h = b && document.getElementById(b.dataset.jump);
+  if (!h) return;
+  // (to the section's bar, the keyboard and a screen reader with it; no animation)
+  h.closest('.sechead').scrollIntoView({ block: 'start' });
+  if (!h.hasAttribute('tabindex')) h.tabIndex = -1;
+  h.focus({ preventScroll: true });
+});
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
 // (`bare`: the buttons alone, for a page whose section already says what they are)
 function quickActions(bare = false) {
@@ -438,26 +476,7 @@ function renderAttention() {
       : ''
   }${cc}</div>`;
 }
-const ATTN = 'dashboard-attn-open';
-function attnOpen() {
-  if (panels.attd !== undefined) return panels.attd;
-  try {
-    return (panels.attd = localStorage.getItem(ATTN) === '1');
-  } catch (e) {
-    return false;
-  }
-}
-document.addEventListener(
-  'toggle',
-  e => {
-    if (e.target.id !== 'attd') return;
-    panels.attd = e.target.open;
-    try {
-      localStorage.setItem(ATTN, e.target.open ? '1' : '0');
-    } catch (x) {}
-  },
-  true,
-);
+const attnOpen = () => foldOpen('attd');
 // (a summary just written in a one-line box: three lines once left, so none of it is cut off)
 document.addEventListener('focusout', e => {
   if (e.target.id === 'fsum' && e.target.value.trim()) e.target.rows = 3;

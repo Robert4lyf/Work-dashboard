@@ -98,6 +98,12 @@ const test = base.test.extend({
       openQuest: async text => {
         const inList = page.locator(`#v-today .row .open >> text="${text}"`);
         if (await inList.count()) return inList.first().click();
+        // (Release H: the rest of Scheduled and Waiting may be folded: opened, as a user would)
+        await page.evaluate(() =>
+          ['schedmore', 'waitmore'].forEach(
+            id => document.getElementById(id) && (document.getElementById(id).open = true),
+          ),
+        );
         await page.click(`#v-today .secrow:has-text("${text}") .open`);
         const r = await page.evaluate(() => (path.length ? find(path[path.length - 1]) : null));
         if (r && r.parents.length) await page.click('[data-crumb="0"]'); // (a step: up to its task)

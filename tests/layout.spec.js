@@ -82,7 +82,9 @@ test.describe('a wide desktop: Today in two columns', () => {
     // Narrower, one column in the phone's order; wider again, two.
     await page.setViewportSize({ width: 1100, height: 900 });
     await expect(page.locator('#v-today > .tside')).toHaveCount(0);
-    expect(await page.$eval('#v-today > :first-child', e => e.className)).toContain('attn');
+    // (Release H: the line that jumps to each section first, then the sections)
+    expect(await page.$eval('#v-today > :first-child', e => e.className)).toContain('tjump');
+    expect(await page.$eval('#v-today > :nth-child(2)', e => e.className)).toContain('attn');
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(page.locator('#v-today > .tside')).toHaveCount(1);
     // A task's page isn't redrawn as Today by a resize.

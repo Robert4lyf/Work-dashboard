@@ -210,9 +210,11 @@ test("Today's order: attention, Top 3, what it's waiting on, the work; the rest 
   page,
 }) => {
   await busy(app, page);
+  // (Release H: the line that jumps to each section first)
   const blocks = await page.$$eval('#v-today > *', els =>
     els.map(e => e.className.split(' ')[0] || e.tagName.toLowerCase()),
   );
+  expect(blocks.shift()).toBe('tjump');
   // (Release F: Waiting above the list on a phone, so a long day doesn't bury it)
   // (Release G: the list's filter between its title and the list)
   expect(blocks.slice(0, 6)).toEqual(['attn', 'top3', 'todaysec', 'sechead', 'tfilter', 'list']);
