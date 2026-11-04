@@ -136,14 +136,18 @@ function setTodayFilter(v) {
   renderToday();
 }
 // The chips and Find, under the list's title (not while reordering: that's the whole list).
+// (shown, and so applied, only while there's enough to narrow: a filter or words left over from a
+// fuller day never hide tasks with nothing on screen to show them again)
+const filterOn = work => !reorder && work.filter(q => !isDone(q)).length >= 4;
+const findOn = work => !reorder && work.length >= 8;
 function listFilter(work) {
-  if (reorder || work.filter(q => !isDone(q)).length < 4) return '';
+  if (!filterOn(work)) return '';
   const chips = TFILTERS.map(([k, label, fn]) => {
     const n = work.filter(q => !isDone(q) && fn(q)).length;
     return `<button class="chip" data-tfilter="${k}" aria-pressed="${todayFilter === k}">${label} <small>${n}</small></button>`;
   }).join('');
   // (Find: a button, opening the box on a line of its own; open while there are words in it)
-  const many = work.length >= 8,
+  const many = findOn(work),
     open = many && (todayFindOpen || !!todayFind),
     btn = many
       ? `<button class="chip tfindbtn" data-tfindopen="1" aria-expanded="${open}" aria-label="Find a task">${searchIcon}</button>`
@@ -154,11 +158,30 @@ function listFilter(work) {
   return `<div class="tfilter"><span class="chips" role="group" aria-label="Show">${chips}</span>${btn}${find}</div>`;
 }
 // The tasks shown by the filter and Find (finished ones only under All, in Done today).
+// (Find's words are applied in place, by applyFind, so the box isn't drawn again as they're typed)
 function filteredWork(work) {
-  if (reorder) return work;
-  const fn = (TFILTERS.find(([k]) => k === todayFilter) || TFILTERS[0])[2],
-    words = findWords();
-  return work.filter(q => (todayFilter === 'all' || fn(q)) && findMatch(q, words));
+  if (!filterOn(work) || todayFilter === 'all') return work;
+  const fn = (TFILTERS.find(([k]) => k === todayFilter) || TFILTERS[0])[2];
+  return work.filter(fn);
+}
+// Find: the rows (and tiles) not matching the words hidden where they are; "No tasks match" when
+// none is left. Nothing is drawn again, so typing (an Android keyboard's composing too) isn't
+// interrupted, and it's quick with hundreds of tasks.
+function applyFind() {
+  const v = document.getElementById('v-today');
+  if (!v || path.length) return;
+  const on = findOn(todayWork(S.quests)),
+    words = on ? findWords() : [],
+    byId = new Map(S.quests.map(q => [q.id, q]));
+  let left = 0;
+  v.querySelectorAll('.list .row[data-qid], .qtile[data-qid]').forEach(el => {
+    const q = byId.get(el.dataset.qid),
+      show = !q || findMatch(q, words);
+    el.hidden = !show;
+    if (show && !el.closest('#donesec')) left++;
+  });
+  const none = v.querySelector('.tnomatch');
+  if (none) none.hidden = !words.length || left > 0;
 }
 function listHead(title, ns, views) {
   const sw = views
@@ -304,6 +327,8 @@ function drawToday() {
     ok.push(id);
     arr = n.children;
   }
+  // (a task gone from under its page: where it was opened from no longer applies)
+  if (ok.length < path.length && typeof returnTo !== 'undefined') returnTo = null;
   path = ok;
   if (path.length) {
     todayTitle();
@@ -325,6 +350,8 @@ function drawToday() {
   if (qs.length && !work.length) tasks += '<p class="hint nowork">Nothing to act on now.</p>';
   else if (work.length && !shown.length)
     tasks += `<p class="hint nowork">No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>`;
+  else if (findOn(work))
+    tasks += `<p class="hint nowork tnomatch" hidden>No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>`;
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
     tasks +=
@@ -369,6 +396,7 @@ function drawToday() {
     ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
     : att + top3 + sched + wait + tasks + rest;
   setHTML($('#v-today'), h);
+  applyFind();
 }
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
 // (`bare`: the buttons alone, for a page whose section already says what they are)
@@ -430,14 +458,16 @@ document.addEventListener(
   },
   true,
 );
+// (a summary just written in a one-line box: three lines once left, so none of it is cut off)
+document.addEventListener('focusout', e => {
+  if (e.target.id === 'fsum' && e.target.value.trim()) e.target.rows = 3;
+});
+let findTimer = 0;
 document.addEventListener('input', e => {
   if (e.target.id !== 'tfind') return;
   todayFind = e.target.value.slice(0, 80);
-  // (the list is drawn again around the box: the caret stays where it was)
-  const at = [e.target.selectionStart, e.target.selectionEnd];
-  renderToday();
-  const f = document.getElementById('tfind');
-  if (f && document.activeElement === f) f.setSelectionRange(...at);
+  clearTimeout(findTimer);
+  findTimer = setTimeout(applyFind, 80);
 });
 
 /* carried over: tasks on Today for STALE days or more get a decision each morning */

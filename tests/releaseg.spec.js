@@ -8,7 +8,9 @@ async function day(app, page, at = new Date(2026, 10, 4, 11, 0)) {
   await app.setState(gDay);
   await page.reload();
 }
-const names = page => page.$$eval('#v-today .list .row .open > span', x => x.map(e => e.textContent));
+// (the rows shown: Find hides the others where they are)
+const names = page =>
+  page.$$eval('#v-today .list .row:not([hidden]) .open > span', x => x.map(e => e.textContent));
 const ids = page => page.$$eval('#v-today .list .row', x => x.map(e => e.dataset.qid));
 
 test.describe('Checkpoint 1: a busy day', () => {
@@ -81,12 +83,12 @@ test.describe('Checkpoint 1: a busy day', () => {
     await page.click('[data-tfindopen]');
     await expect(page.locator('#tfind')).toBeFocused();
     await page.keyboard.type('harpenden bound');
-    expect(await names(page)).toEqual(['Reply to Harpenden about the boundary query']);
+    await expect.poll(() => names(page)).toEqual(['Reply to Harpenden about the boundary query']);
     await expect(page.locator('#tfind')).toBeFocused();
     expect(await page.$eval('#tfind', e => [e.value, e.selectionStart])).toEqual(['harpenden bound', 15]);
     // A step's words find its task.
     await page.fill('#tfind', 'gather figures');
-    expect(await names(page)).toEqual(['Quarterly safeguarding return']);
+    await expect.poll(() => names(page)).toEqual(['Quarterly safeguarding return']);
     // A sync redraw while typing keeps the words, the match and the keyboard.
     await page.evaluate(() => inBackground(renderAll));
     await expect(page.locator('#tfind')).toHaveValue('gather figures');
@@ -94,14 +96,14 @@ test.describe('Checkpoint 1: a busy day', () => {
     expect(await names(page)).toEqual(['Quarterly safeguarding return']);
     // Nothing matches: says so, and Show all clears it.
     await page.fill('#tfind', 'zzzz');
-    await expect(page.locator('#v-today .nowork')).toContainText('No tasks match');
-    await page.click('#v-today .nowork [data-tfindclear]');
-    expect((await names(page)).length).toBe(25);
+    await expect(page.locator('#v-today .tnomatch')).toBeVisible();
+    await page.click('#v-today .tnomatch [data-tfindclear]');
+    await expect.poll(async () => (await names(page)).length).toBe(25);
     // (the box stays open for other words) The button closes it, and clears it.
     await page.fill('#tfind', 'rota');
     await page.click('[data-tfindopen]');
     await expect(page.locator('#tfind')).toHaveCount(0);
-    expect((await names(page)).length).toBe(25);
+    await expect.poll(async () => (await names(page)).length).toBe(25);
   });
 
   test('Needs attention: the count, the one that matters most, the rest a tap away; kept open or folded', async ({
@@ -349,10 +351,14 @@ test.describe('Checkpoint 3: review fixes', () => {
     await page.evaluate(() => go('today'));
     const row = page.locator('#v-today .list .row').nth(15);
     await row.scrollIntoViewIfNeeded();
-    const y0 = await page.evaluate(() => window.scrollY);
+    const top0 = await row.evaluate(e => e.getBoundingClientRect().top);
     await row.locator('.open').click();
     await page.evaluate(() => history.back());
-    expect(Math.abs((await page.evaluate(() => window.scrollY)) - y0)).toBeLessThan(5);
+    // (the row just left is where it was on the screen)
+    const id = await page.evaluate(() => listAt === null);
+    expect(id).toBe(true);
+    const back = page.locator('#v-today .list .row').nth(15);
+    expect(Math.abs((await back.evaluate(e => e.getBoundingClientRect().top)) - top0)).toBeLessThan(5);
   });
 
   test('a save that fails says so until a save works; moving to the Inbox keeps finished steps', async ({
@@ -364,7 +370,8 @@ test.describe('Checkpoint 3: review fixes', () => {
       window.__realTx = picDb.transaction.bind(picDb);
       picDb.transaction = (...a) => {
         const tx = window.__realTx(...a);
-        if (a[0] === 'kv' && a[1] === 'readwrite') setTimeout(() => tx.abort(), 0);
+        // (aborted at once: the write fails every time, as with a full disk; not a race)
+        if (a[0] === 'kv' && a[1] === 'readwrite') tx.abort();
         return tx;
       };
     });
@@ -453,5 +460,133 @@ test.describe('Checkpoint 3: review fixes', () => {
     expect(
       await page.evaluate(() => [document.querySelector('.wrap').inert, document.querySelector('nav').inert]),
     ).toEqual([false, false]);
+  });
+});
+
+test.describe('Checkpoint 5: adversarial review fixes', () => {
+  test('a filter or words left from a fuller day are not applied once their controls are gone', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.click('[data-tfilter="due"]');
+    await page.evaluate(() => {
+      todayFind = 'harpenden';
+      // (down to three tasks to work on: no chips, no Find)
+      S.quests = S.quests.filter(q => !canAct(q) || ['g3', 'g5', 'g1'].includes(q.id));
+      save();
+      renderAll();
+    });
+    await expect(page.locator('#v-today .tfilter')).toHaveCount(0);
+    expect((await names(page)).length).toBe(
+      await page.evaluate(() => todayWork(S.quests).filter(q => !isDone(q)).length),
+    );
+  });
+
+  test("Find keeps its box while typing, so an Android keyboard's composing isn't broken; quick on 300 tasks", async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.click('[data-tfindopen]');
+    const box = await page.$('#tfind');
+    const cdp = await page.context().newCDPSession(page);
+    for (const t of ['h', 'ha', 'har'])
+      await cdp.send('Input.imeSetComposition', {
+        text: t,
+        selectionStart: t.length,
+        selectionEnd: t.length,
+      });
+    await cdp.send('Input.insertText', { text: 'har' });
+    await expect(page.locator('#tfind')).toHaveValue('har');
+    expect(await page.evaluate(b => b === document.getElementById('tfind'), box)).toBe(true);
+    await expect.poll(() => names(page)).toContain('Reply to Harpenden about the boundary query');
+    // 300 tasks: applying the words is well under a frame's budget twice over.
+    const { datasets } = require('./perf/data');
+    await app.setState(datasets.heavy);
+    await page.reload();
+    const ms = await page.evaluate(() => {
+      todayFind = 'report';
+      const a = performance.now();
+      applyFind();
+      return performance.now() - a;
+    });
+    expect(ms).toBeLessThan(60);
+  });
+
+  test('drafts: kept when going back to Search; the Inbox box regardless of the task open on Today', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    const id = await page.evaluate(() => S.quests.find(q => q.children.length).id);
+    await page.evaluate(() => go('search'));
+    await page.evaluate(id => {
+      const q = S.quests.find(x => x.id === id);
+      document.querySelector('#sq').value = q.text;
+      searchQ = q.text;
+      renderSearch();
+    }, id);
+    await page.click(`#v-search [data-open="${id}"]`);
+    await page.fill('#sin', 'Ring Jo');
+    await page.evaluate(() => history.back());
+    await expect(page.locator('#v-search')).toBeVisible();
+    await page.click(`#v-search [data-open="${id}"]`);
+    await expect(page.locator('#sin')).toHaveValue('Ring Jo');
+    // The Inbox box: the task open on Today doesn't matter.
+    await app.go('inbox');
+    await page.fill('#iin', 'Call the bank');
+    await app.go('today');
+    await page.evaluate(() => openPath([]));
+    await app.go('inbox');
+    await expect(page.locator('#iin')).toHaveValue('Call the bank');
+  });
+
+  test('a task opened from Search then removed: back from the next task is to Today, not Search', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    const [a, b] = await page.evaluate(() =>
+      S.quests
+        .filter(canAct)
+        .map(q => q.id)
+        .slice(3, 5),
+    );
+    await page.evaluate(() => go('search'));
+    await page.evaluate(id => {
+      returnTo = null;
+      const q = S.quests.find(x => x.id === id);
+      searchQ = q.text;
+      renderSearch();
+    }, a);
+    await page.click(`#v-search [data-open="${a}"]`);
+    await page.evaluate(id => {
+      S.quests = S.quests.filter(q => q.id !== id);
+      inBackground(renderAll);
+    }, a);
+    await page.click(`#v-today .list [data-open="${b}"]`);
+    await expect(page.locator('#v-today .crumbs button').first()).toHaveText('‹ Today');
+    await page.evaluate(() => history.back());
+    await expect(page.locator('#v-today .list')).toBeVisible();
+  });
+
+  test('Clear in the Top 3 picker closes it, so its Undo is in sight; a summary left keeps its lines', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.click('[data-top3pick]');
+    await page.click('#sheet [data-t3none]');
+    await expect(page.locator('#sheet')).toHaveCount(0);
+    await expect(page.locator('#toast #undo')).toBeVisible();
+    await page.click('#toast #undo');
+    expect(await page.evaluate(() => top3Ids().length)).toBe(3);
+    // A summary written in the one-line box: three lines once left.
+    const id = await page.evaluate(() => S.quests.find(q => !q.summary).id);
+    await page.evaluate(id => openPath([id]), id);
+    await page.fill('#fsum', 'Waiting on the planning team\nthen the board signs it off');
+    await page.locator('#fsum').blur();
+    expect(await page.$eval('#fsum', e => e.rows)).toBe(3);
   });
 });

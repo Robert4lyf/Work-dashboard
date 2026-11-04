@@ -85,7 +85,8 @@ function go(v) {
    another view (Waiting, Forecast, Search, the Command Centre) with its scroll position, or
    Today's list where it was scrolled to. */
 let returnTo = null, // { view, sub, y, depth }: the view a task's page was opened from
-  listY = 0; // (where Today's list was scrolled to when a task was opened from it)
+  listY = 0, // (where Today's list was scrolled to when a task was opened from it)
+  listAt = null; // ({ id, top }: the task opened, and where its row was on the screen)
 const RETURN_NAME = {
   waiting: 'Waiting',
   review: 'Review',
@@ -96,7 +97,7 @@ const RETURN_NAME = {
 // Words typed into a box and left (going to another view or task) come back with it: kept per
 // box, view and task, so one task's half-typed step never turns up on another's page.
 const drafts = {};
-const draftKey = id => `${id}|${view}|${path.join('/')}`;
+const draftKey = id => `${id}|${view}${view === 'today' ? '|' + path.join('/') : ''}`;
 function keepDrafts() {
   // (never a password)
   COMPOSE.filter(id => id !== 'apass').forEach(id => {
@@ -112,7 +113,11 @@ function restoreDrafts() {
   });
 }
 function openPath(p) {
-  if (!path.length && p.length && view === 'today') listY = window.scrollY;
+  if (!path.length && p.length && view === 'today') {
+    listY = window.scrollY;
+    const row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(p[0])}"]`);
+    listAt = row ? { id: p[0], top: row.getBoundingClientRect().top } : null;
+  }
   keepDrafts();
   path = p;
   reorder = false;
@@ -120,11 +125,19 @@ function openPath(p) {
   renderToday();
   restoreDrafts();
   window.scrollTo(0, p.length ? 0 : listY);
+  // (back on the list: the task's row where it was on the screen, whatever the rows above it
+  // measure now that they're drawn afresh)
+  if (!p.length && listAt) {
+    const row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(listAt.id)}"]`);
+    if (row) window.scrollBy(0, row.getBoundingClientRect().top - listAt.top);
+    listAt = null;
+  }
 }
 // Back from a task's page opened from another view: to that view, where it was.
 function returnBack() {
   const r = returnTo;
   returnTo = null;
+  keepDrafts(); // (the task page's words, kept under its own path before it's left)
   path = [];
   if (r.view === 'review') reviewSub = r.sub;
   go(r.view);
@@ -444,9 +457,11 @@ document.addEventListener('click', e => {
           : null;
       openPath(p);
       if (view !== 'today') go('today');
+      // (opened from Today itself: back is to Today's list, whatever came before)
+      returnTo = from;
       if (from) {
-        returnTo = from;
         renderToday();
+        restoreDrafts();
       }
     }
   }

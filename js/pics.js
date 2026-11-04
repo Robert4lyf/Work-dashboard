@@ -96,7 +96,8 @@ function writeKV(entries) {
         st = tx.objectStore('kv');
       for (const k in entries) st.put(entries[k], k);
       tx.oncomplete = () => {
-        saveWarn(false);
+        // (only a save of the state itself shows things are saved again, not the sync's notes)
+        if ('state' in entries) saveWarn(false);
         ok(true);
       };
       tx.onerror = tx.onabort = () => {
@@ -193,8 +194,20 @@ function prunePics() {
 // A saved record's fingerprint, remembered for pictures (they don't change, and fingerprinting
 // megabytes of them on every save was most of a save's time).
 const picHashes = new Map();
+// (Release G: each record's fingerprint is kept with the record as it was written out, and worked
+// out again only when that changes. Every save fingerprinted every record: 100ms on a heavy day.
+// The fingerprints themselves are the same as ever, so nothing is sent again.)
+const recHashes = new Map();
 function recHash(k, v) {
-  if (!v || typeof v.src !== 'string' || !/^(noteimg|kbimg):/.test(k)) return hashOf(v);
+  if (!v || typeof v.src !== 'string' || !/^(noteimg|kbimg):/.test(k)) {
+    const raw = JSON.stringify(v === undefined ? null : v),
+      c = recHashes.get(k);
+    if (c && c.raw === raw) return c.h;
+    const h = hashOf(v);
+    if (recHashes.size > 50000) recHashes.clear(); // (records long gone aren't kept for ever)
+    recHashes.set(k, { raw, h });
+    return h;
+  }
   const rest = JSON.stringify({ ...v, src: '' }),
     c = picHashes.get(k);
   if (c && c.src === v.src && c.rest === rest) return c.h;
