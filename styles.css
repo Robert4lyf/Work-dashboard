@@ -1,34 +1,37 @@
 :root {
   /* Release D design tokens ("calm productivity"). Surfaces and text */
-  --bg: #ffffff; /* the page */
-  --panel: #ffffff; /* cards, sheets, the tab bar */
-  --panel-2: #f3f3f0; /* quiet fills: tracks, code, pressed rows */
-  --ink: #0a0a0a; /* text: 13:1 on the page */
-  --muted: #5a5a5a; /* secondary text: 5.7:1 on the page */
+  --bg: #f7f3ea; /* the page */
+  --panel: #fffdf8; /* cards, sheets, the tab bar */
+  --panel-2: #efe9dc; /* quiet fills: tracks, code, pressed rows */
+  --ink: #111111; /* text: 13:1 on the page */
+  --muted: #4a4741; /* secondary text: 5.7:1 on the page */
   /* lines */
-  --line: #0a0a0a; /* dividers between rows */
-  --edge: #0a0a0a; /* card and button outlines */
-  --edge-strong: #0a0a0a; /* form fields: 3:1 against their surface */
+  --line: #111111; /* dividers between rows */
+  --edge: #111111; /* card and button outlines */
+  --edge-strong: #111111; /* form fields: 3:1 against their surface */
   /* actions: one accent, used for the primary action and the current selection */
-  --accent: #0a0a0a;
+  --accent: #111111;
   --accent-hover: #262626;
-  --accent-soft: #ffd400;
-  --accent-ink: #0a0a0a; /* accent as text (links) */
-  --on-accent: #ffd400;
-  --grad: #ffd400;
+  --accent-soft: #ffd60a;
+  --accent-ink: #111111; /* accent as text (links) */
+  --on-accent: #ffffff;
+  --grad: #ffd60a;
   --on-status: #ffffff; /* text on a solid status colour */
-  --signal: #ffd400; /* the one highlight, the same in both themes */
-  --on-signal: #0a0a0a;
+  --signal: #ffd60a; /* the one highlight, the same in both themes */
+  --sec-yellow: #ffd60a; /* section bars: black type on each, in both themes */
+  --sec-red: #ff5a3c;
+  --sec-blue: #0b6f73; /* night turquoise, white type on it */
+  --on-signal: #111111;
   /* status: a text colour and a quiet fill each; always with a word or glyph, never colour alone */
-  --ok: #00703a;
+  --ok: #11703a;
   --ok-soft: #d9f2e3;
   --warn: #0a0a0a;
   --warn-soft: #ffd400;
-  --err: #c8001a;
+  --err: #c8261b;
   --err-soft: #ffe3e6;
   --wait: #b84a00;
   --wait-soft: #ffe8d6;
-  --info: #0047b3;
+  --info: #1f4fd1;
   --info-soft: #e0ebff;
   /* tag swatches (a tag's colour is stored as one of these names): mid tones under dark text */
   --pink: #ff6fa5;
@@ -67,14 +70,14 @@
 /* Dark: the same roles, lighter text on deep neutral surfaces. Set by the system, or chosen. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0a0a0a;
-    --panel: #111111;
-    --panel-2: #1c1c1c;
-    --ink: #f5f5f5;
-    --muted: #a6a6a6;
-    --line: #f5f5f5;
-    --edge: #f5f5f5;
-    --edge-strong: #f5f5f5;
+    --bg: #121212;
+    --panel: #1b1b1b;
+    --panel-2: #262626;
+    --ink: #f4f1ea;
+    --muted: #bdb7ab;
+    --line: #f4f1ea;
+    --edge: #f4f1ea;
+    --edge-strong: #f4f1ea;
     --accent: #ffd400;
     --accent-hover: #ffe14d;
     --accent-soft: #3a3000;
@@ -100,14 +103,14 @@
   }
 }
 :root[data-theme='dark'] {
-  --bg: #0a0a0a;
-  --panel: #111111;
-  --panel-2: #1c1c1c;
-  --ink: #f5f5f5;
-  --muted: #a6a6a6;
-  --line: #f5f5f5;
-  --edge: #f5f5f5;
-  --edge-strong: #f5f5f5;
+  --bg: #121212;
+  --panel: #1b1b1b;
+  --panel-2: #262626;
+  --ink: #f4f1ea;
+  --muted: #bdb7ab;
+  --line: #f4f1ea;
+  --edge: #f4f1ea;
+  --edge-strong: #f4f1ea;
   --accent: #ffd400;
   --accent-hover: #ffe14d;
   --accent-soft: #3a3000;
@@ -458,8 +461,8 @@ label.btn {
 }
 
 h2 {
-  font-size: var(--fs);
-  line-height: 1.3;
+  font-size: calc(var(--fs-h) + 3px);
+  line-height: 1.2;
   margin: 0 0 8px;
   font-weight: 900;
   text-transform: uppercase;
@@ -3158,6 +3161,287 @@ details.more > details {
 }
 .wrow {
   box-shadow: inset 4px 0 0 var(--wait);
+}
+
+/* Structured brutalist: Today's sections are labelled panels, each under a bar of its own colour
+   (yellow: what you're on and what's at a time; red: what needs you and the task list; blue: Top 3
+   and waiting), with its sign; heavy black outlines; a sidebar on a desktop. */
+.ptitle {
+  margin: 2px 0 14px;
+}
+.ptitle[hidden] {
+  display: none;
+}
+.ptitle b {
+  display: block;
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.ptitle span {
+  display: block;
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+/* the bars */
+#v-today .top3 > .sechead,
+#v-today .todaysec > .sechead,
+#v-today > .sechead {
+  margin: 0;
+  padding: 8px 12px;
+  border: 3px solid var(--edge);
+  border-bottom-width: 3px;
+  background: var(--bar);
+  color: var(--bar-ink, #111111);
+}
+#v-today .top3 > .sechead h2,
+#v-today .todaysec > .sechead h2,
+#v-today > .sechead > h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-title);
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: var(--bar-ink, #111111);
+}
+#v-today .top3 > .sechead h2::before,
+#v-today .todaysec > .sechead h2::before,
+#v-today > .sechead > h2::before {
+  content: '';
+  flex: none;
+  width: 26px;
+  height: 26px;
+  background: var(--bar-ink, #111111);
+  -webkit-mask: var(--sign) center / contain no-repeat;
+  mask: var(--sign) center / contain no-repeat;
+}
+#v-today .top3 > .sechead :is(.linkbtn, small),
+#v-today .todaysec > .sechead :is(.linkbtn, small),
+#v-today > .sechead :is(.linkbtn, small) {
+  color: var(--bar-ink, #111111);
+  text-decoration-color: currentColor;
+}
+.top3 {
+  --bar: var(--sec-blue);
+  --bar-ink: #ffffff;
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224.5%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%22.6%22%2F%3E%3C%2Fsvg%3E');
+  padding: 0;
+  border-width: 3px;
+}
+.top3 > .sechead {
+  border: 0 !important;
+  border-bottom: 3px solid var(--edge) !important;
+}
+.top3 .t3list,
+.top3 .t3out {
+  padding: 0 12px;
+}
+.schedsec {
+  --bar: var(--sec-yellow);
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223.5%22%20y%3D%225%22%20width%3D%2217%22%20height%3D%2215.5%22%20rx%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M3.5%2010h17M8%203v4M16%203v4%22%2F%3E%3C%2Fsvg%3E');
+}
+.waitsec2 {
+  --bar: var(--sec-blue);
+  --bar-ink: #ffffff;
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cpath%20d%3D%22M12%207v5l3.5%202%22%2F%3E%3C%2Fsvg%3E');
+}
+#v-today > .sechead {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  --bar: var(--sec-red);
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9%206h11M9%2012h11M9%2018h11M4%206h.5M4%2012h.5M4%2018h.5%22%2F%3E%3C%2Fsvg%3E');
+}
+#v-today .todaysec > .slist.box,
+#v-today > .sechead + .list.box {
+  border-width: 3px;
+  border-top: 0;
+}
+/* what you're on: the header, under its own label */
+header:not(.compact) {
+  border-width: 3px;
+  padding-top: 0;
+}
+header:not(.compact)::before {
+  content: 'Current work / next action';
+  display: block;
+  margin: 0 -12px 10px;
+  padding: 8px 12px 8px 44px;
+  border-bottom: 3px solid #111111;
+  font-weight: 900;
+  font-size: var(--fs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%204.5l12%207.5-12%207.5z%22%2F%3E%3C%2Fsvg%3E')
+    14px center / 20px no-repeat;
+}
+/* what needs you: a red panel */
+.attsum > summary,
+.attsum > .attsumline {
+  border-width: 3px;
+}
+#v-today .attsum.sev0 > summary,
+#v-today .attsum.sev0 > .attsumline,
+#v-today .attsum.sev1 > summary,
+#v-today .attsum.sev1 > .attsumline {
+  background: var(--sec-red);
+  color: #111111;
+  border-color: var(--edge);
+}
+.attsum > summary b::before,
+.attsum > .attsumline b::before {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  vertical-align: -4px;
+  background: currentColor;
+  -webkit-mask: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203.5l9.5%2017h-19z%22%2F%3E%3Cpath%20d%3D%22M12%2010v4.5M12%2017.6v.2%22%2F%3E%3C%2Fsvg%3E')
+    center / contain no-repeat;
+  mask: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203.5l9.5%2017h-19z%22%2F%3E%3Cpath%20d%3D%22M12%2010v4.5M12%2017.6v.2%22%2F%3E%3C%2Fsvg%3E')
+    center / contain no-repeat;
+}
+/* a task's own tags (Work, Client...) as pills; states stay square blocks */
+.tag[style*='background'] {
+  border-radius: 999px;
+  border: 1.5px solid #111111;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: var(--fs-xs);
+}
+/* the tab bar's signs */
+nav button[data-v]::before {
+  content: '';
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto 2px;
+  background: currentColor;
+  -webkit-mask: var(--sign) center / contain no-repeat;
+  mask: var(--sign) center / contain no-repeat;
+}
+nav [data-v='today'] {
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%2011l8-7%208%207v9h-5.5v-6h-5v6H4z%22%2F%3E%3C%2Fsvg%3E');
+}
+nav [data-v='inbox'] {
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3.5%2013.5l3-8.5h11l3%208.5v6h-17z%22%2F%3E%3Cpath%20d%3D%22M3.5%2013.5h5l1.5%202.5h4l1.5-2.5h5%22%2F%3E%3C%2Fsvg%3E');
+}
+nav [data-v='knowledge'] {
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M4%205.5c3-1.5%206-1.5%208%20.5%202-2%205-2%208-.5v14c-3-1.5-6-1.5-8%20.5-2-2-5-2-8-.5z%22%2F%3E%3Cpath%20d%3D%22M12%206v14%22%2F%3E%3C%2Fsvg%3E');
+}
+nav [data-v='review'] {
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%2020V11M11%2020V5M17%2020v-7M3%2020h18%22%2F%3E%3C%2Fsvg%3E');
+}
+nav [data-v='account'] {
+  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223.2%22%2F%3E%3Cpath%20d%3D%22M12%202.5v3M12%2018.5v3M2.5%2012h3M18.5%2012h3M5.3%205.3l2.1%202.1M16.6%2016.6l2.1%202.1M5.3%2018.7l2.1-2.1M16.6%207.4l2.1-2.1%22%2F%3E%3C%2Fsvg%3E');
+}
+nav button[aria-current='page'] {
+  background: var(--sec-yellow);
+  color: #111111;
+}
+/* a desktop: the sidebar, and Today as a grid (what you're on beside what needs you; Top 3,
+   scheduled and waiting side by side; the task list across) */
+@media (min-width: 1000px) {
+  body {
+    padding-left: 232px;
+  }
+  nav {
+    top: 0;
+    bottom: 0;
+    right: auto;
+    width: 232px;
+    border-top: 0;
+    border-right: 3px solid var(--edge);
+    padding: 20px 12px;
+  }
+  nav::before {
+    content: 'Work Dashboard';
+    display: block;
+    margin: 0 8px 22px;
+    font-size: 26px;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+  .tabs {
+    flex-direction: column;
+    gap: 4px;
+    max-width: none;
+    padding: 0;
+    mask-image: none !important;
+  }
+  nav button,
+  nav button:first-child,
+  nav button:last-child {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 10px 12px;
+    font-size: var(--fs);
+    text-align: left;
+  }
+  nav button[data-v]::before {
+    margin: 0;
+  }
+  .wrap {
+    max-width: 1180px;
+    padding: 28px 28px 40px;
+  }
+  body:not(.zen) .wrap:has(> #v-today:not([hidden])) {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    column-gap: 18px;
+    align-items: start;
+  }
+  .wrap:has(> #v-today:not([hidden])) > header {
+    grid-column: 1 / 5;
+    grid-row: 2;
+    margin: 0 0 18px;
+  }
+  #v-today:not([hidden]) {
+    display: contents;
+  }
+  #v-today > * {
+    grid-column: 1 / -1;
+    order: 5;
+  }
+  .wrap > .ptitle {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  #v-today > .attn {
+    grid-column: 5 / 7;
+    grid-row: 2;
+    order: 1;
+  }
+  #v-today > .top3 {
+    grid-column: 1 / 3;
+    order: 2;
+  }
+  #v-today > .schedsec {
+    grid-column: 3 / 5;
+    order: 3;
+  }
+  #v-today > .waitsec2 {
+    grid-column: 5 / 7;
+    order: 4;
+  }
+  /* (a task's page, opened from Today, stays one column of reading width) */
+  .wrap:has(> #v-today .node) {
+    display: block;
+    max-width: 760px;
+  }
+  .wrap:has(> #v-today .node) > #v-today {
+    display: block;
+  }
 }
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {

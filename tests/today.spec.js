@@ -138,8 +138,9 @@ test('the header: the next step on up to two lines, then Focus, Search and the s
   expect(title.height).toBeLessThan(line * 2.5);
   expect(focus.y).toBeGreaterThan(title.y + title.height - 1);
   expect(Math.abs(search.y + search.height / 2 - (focus.y + focus.height / 2))).toBeLessThan(6);
+  // (and stays compact: the header plus its "Current work / next action" label bar)
   const h = await page.locator('header').boundingBox();
-  expect(h.height).toBeLessThan(150);
+  expect(h.height).toBeLessThan(200);
 });
 
 test('a change redraws only the view on screen; another view is drawn when opened', async ({ app, page }) => {

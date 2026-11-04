@@ -47,6 +47,7 @@ function go(v) {
   if (v !== 'waiting') waitMark = ''; // (a deep link's mark on a waiting item lasts a visit)
   if (v === 'account') setSub = null; // (the Settings tab opens its index; openSettings goes on to a group)
   view = v;
+  if (v !== 'today') $('#ptitle').hidden = true;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
   document.querySelectorAll('nav button[data-v]').forEach(x => {
