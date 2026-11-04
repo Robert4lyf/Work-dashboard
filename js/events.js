@@ -628,6 +628,31 @@ document.addEventListener('click', e => {
   if (d.zstart) startTimer(d.zstart);
   if (d.asknext) askNext(d.asknext);
   if (d.zen) {
+    // A paused session on other work: one session at a time, so say so rather than quietly
+    // opening that one (save its time and switch, or go back to it).
+    const t = S.timer,
+      was = t && topOf(t.q),
+      to = d.q && find(d.q);
+    if (t && t.left != null && to && was && topOf(d.q) !== was) {
+      const m = Math.floor((t.mins * 60000 - remaining()) / 60000);
+      return sheet(
+        {
+          title: 'Switch focus?',
+          text: `${was.text} has a paused session${m >= 1 ? ` (${m} min)` : ''}. Save its time and focus on ${to.n.text}?`,
+          ok: 'Save and switch',
+          extra: [['back', 'Back to ' + was.text, 'blue']],
+        },
+        a => {
+          if (a === true) {
+            stopAndSave(false);
+            if (!find(d.q)) return toast('That task has gone', false, 3000);
+            S.focusQ = d.q;
+            save();
+          }
+          setZen(true);
+        },
+      );
+    }
     // Focus on what the header shows, not an older pick.
     if (d.q && !S.timer && S.focusQ !== d.q) {
       S.focusQ = d.q;

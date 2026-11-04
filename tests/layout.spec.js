@@ -104,4 +104,33 @@ test.describe('a wide desktop: Today in two columns', () => {
       ),
     ).toBe(true);
   });
+
+  test("a task's actions sit at the foot of the window, never over the page's end", async ({ app, page }) => {
+    await app.open();
+    await page.evaluate(() => {
+      S.quests.push({ id: 'lq1', text: 'Aldenham query', children: [] });
+      norm(S);
+      path = ['lq1'];
+      renderAll();
+    });
+    await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+    const f = await box(page, '.qfoot'),
+      more = await box(page, '#v-today > details.more'),
+      vh = await page.evaluate(() => innerHeight);
+    expect(f.y + f.height).toBeLessThanOrEqual(vh + 1);
+    // (no tab bar to clear on a desktop: at the end of the page it follows what's above it)
+    expect(f.y).toBeGreaterThanOrEqual(more.y + more.height - 1);
+  });
+
+  test('single-task mode sits in the middle of the window, the sidebar gone', async ({ app, page }) => {
+    await day(app, page);
+    await page.evaluate(() => setZen(true));
+    await expect(page.locator('nav')).toBeHidden();
+    const z = await box(page, '#v-zen'),
+      // (the page's width less the scrollbar's gutter)
+      vw = await page.evaluate(() => document.body.getBoundingClientRect().width);
+    expect(Math.abs(z.x + z.width / 2 - vw / 2)).toBeLessThan(2);
+    await page.evaluate(() => setZen(false));
+    await expect(page.locator('nav')).toBeVisible();
+  });
 });
