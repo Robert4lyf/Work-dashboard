@@ -137,9 +137,43 @@ select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6'
 select public.cockpit_put_wrun('wrun:f1', 0, t.run('f1', 1, '{"status":"succeeded","fin":1}'), 'op-f1-create') as res \gset
 update cockpit_items set deleted = true, data = null, edited_at = 99999999999999 where key = 'wrun:f1';
 select t.ok((select deleted from cockpit_items where key = 'wrun:f1'), 'a finished run can be tidied away by any copy');
+select t.eq((select data::text from cockpit_items where key = 'wrun:f1'), '{"id": "f1", "rev": 2}', 'and its tombstone keeps the next revision');
+update cockpit_items set deleted = false, data = t.run('f1', 1, '{"status":"running"}'), edited_at = 99999999999999 where key = 'wrun:f1';
+select t.ok((select deleted from cockpit_items where key = 'wrun:f1'), 'so it can''t be brought back at an old revision');
+update cockpit_items set data = t.run('r1', 999999999, '{"cur":"jump"}'), edited_at = 99999999999999 where key = 'wrun:r1';
+select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6', 'nor can a run be jumped to the last revision (it would block every later change)');
+update cockpit_items set data = t.run('r1', 8, '{"cur":"skip"}'), edited_at = 99999999999999 where key = 'wrun:r1';
+select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6', 'nor skip a revision');
 insert into cockpit_items (user_id, key, kind, data, edited_at) values (auth.uid(), 'wrun:n1', 'wrun', '{"id":"n1"}', 1);
 select t.ok(exists (select 1 from cockpit_items where key = 'wrun:n1'), 'a new run can still be inserted by an older copy');
 update cockpit_items set data = '{"id":"q1","text":"Q2"}', edited_at = 2 where key = 'quest:q1';
 select t.eq((select data->>'text' from cockpit_items where key = 'quest:q1'), 'Q2', 'other rows are as before');
 update cockpit_items set data = '{"id":"r1","rev":"999"}', edited_at = 99999999999999 where key = 'wrun:r1';
 select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6', 'a revision that isn''t a number is read as 0: refused, without an error');
+
+-- At most 600 changes an hour per user (a duplicate is still answered).
+reset role;
+insert into cockpit_wrun_ops (user_id, op, key, rev)
+  select :'B', 'op-flood-' || g, 'wrun:flood', g from generate_series(1, 600) g;
+set role authenticated;
+select t.as_user(:'B');
+select t.raises($$ select public.cockpit_put_wrun('wrun:r2', 0, t.run('r2', 1), 'op-r2-after-flood') $$, 'too many run changes', 'the 601st change in an hour is refused');
+select t.eq((public.cockpit_put_wrun('wrun:r1', 0, t.run('r1', 1, '{"cur":"b"}'), 'op-r1-create'))->>'status', 'duplicate', 'a change already applied is still answered');
+reset role;
+delete from cockpit_wrun_ops where op like 'op-flood-%';
+
+-- Automation reports with no execution id go to the oldest launch still waiting, so a late
+-- report from an attempt a retry set aside never lands on the newer attempt.
+insert into cockpit_exec_tokens (token, user_id) values ('xtok-a', :'A');
+insert into cockpit_items (user_id, key, kind, data, edited_at) values
+  (:'A', 'exec:x1', 'exec', jsonb_build_object('id', 'x1', 'flow', 'f9', 'status', 'requested', 'aside', 1,
+     'at', (extract(epoch from now() - interval '10 minutes') * 1000)::bigint), 1),
+  (:'A', 'exec:x2', 'exec', jsonb_build_object('id', 'x2', 'flow', 'f9', 'status', 'requested',
+     'at', (extract(epoch from now() - interval '1 minute') * 1000)::bigint), 1);
+set role anon;
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'running'))->>'execution', 'x1', 'a report goes to the oldest launch waiting (the one set aside)');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'succeeded', 'late'))->>'execution', 'x1', 'still waiting after a running report: its result goes there too');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'succeeded'))->>'execution', 'x2', 'once it has its result, the next report goes to the newer launch');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'failed'))->>'execution', '', 'with none waiting, a report is its own');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'failed', '', 'x2'))->>'execution', 'x2', 'one naming its execution goes there');
+reset role;

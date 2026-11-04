@@ -220,7 +220,7 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   await page.click('[data-wfact="inbox"]');
   // (Release G: the item is that failure's, with its step; the acknowledgement names the failure)
   expect(await page.evaluate(() => S.inbox[0].text)).toBe('Process failed: Thursday report · Check');
-  expect((await run(page)).ack).toBe('2');
+  expect((await run(page)).ack).toMatch(/^f/); // (Release G: a failure id unique to it)
   expect(await page.evaluate(() => renderAttention())).not.toContain('Process failed');
   await page.click('[data-wfact="retry"]');
   expect((await run(page)).status).toBe('awaiting_user');

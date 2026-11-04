@@ -37,7 +37,16 @@ step() { echo "== $*"; }
 step "setup: Supabase stand-in, supabase-setup.sql, the migration"
 "${PSQL[@]}" -f "$HERE/bootstrap.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/supabase-setup.sql" >/dev/null 2>&1
+REPORT_FN="select md5(prosrc) || proconfig::text || prosecdef from pg_proc where proname = 'cockpit_exec_report'"
+SETUP_FN=$("${PSQL[@]}" -At -c "$REPORT_FN")
 "${PSQL[@]}" -f "$ROOT/supabase/release-g-runs.sql" >/dev/null 2>&1
+if [ "$("${PSQL[@]}" -At -c "$REPORT_FN")" = "$SETUP_FN" ]; then
+  echo "ok - the migration's cockpit_exec_report is supabase-setup.sql's" | tee -a "$OUT"
+else
+  echo "FAIL: cockpit_exec_report differs between supabase-setup.sql and the migration" | tee -a "$OUT"
+fi
+"${PSQL[@]}" -At -c "select proconfig from pg_proc where proname in ('cockpit_exec_report', 'cockpit_put_wrun')" | grep -c 'search_path=public, pg_temp' | grep -qx 2 \
+  && echo "ok - both run with search_path public, pg_temp" | tee -a "$OUT" || echo "FAIL: search_path" | tee -a "$OUT"
 
 step "cases"
 run -f "$HERE/cases.sql"

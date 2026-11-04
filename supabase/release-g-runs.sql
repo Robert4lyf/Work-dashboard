@@ -104,6 +104,10 @@ begin
     return jsonb_build_object('status', 'conflict', 'rev', cur_rev, 'data', cur_data,
       'deleted', coalesce(cur_deleted, false), 'seq', cur_seq, 'edited_at', cur_edited);
   end if;
+  -- A runaway script (or a leaked session) can't flood the account: at most 600 changes an hour.
+  if (select count(*) from cockpit_wrun_ops o where o.user_id = u and o.at > now() - interval '1 hour') >= 600 then
+    raise exception 'too many run changes: at most 600 an hour' using errcode = '54000';
+  end if;
   -- (a deleted run keeps its id and revision in its row, so a later change is checked as well)
   if had then
     update cockpit_items
@@ -125,11 +129,12 @@ revoke all on function public.cockpit_put_wrun(text, integer, jsonb, text) from 
 grant execute on function public.cockpit_put_wrun(text, integer, jsonb, text) to authenticated;
 
 -- Ordinary writes (an upsert from a copy of the app from before this, or any other client) can't
--- take a run back: an update of a 'wrun:' row must carry a higher revision than the one stored.
--- One that doesn't is skipped, not an error, so the rest of its batch is still written; the row
--- isn't returned, and the app that sent it takes the stored run instead (as it does for an older
--- edit, see cockpit_items_stamp). Deleting a run that is over (succeeded or cancelled) is still
--- allowed from anywhere: that is only the app's tidying of old runs.
+-- take a run back or jump it ahead: an update of a 'wrun:' row must carry exactly the next
+-- revision (below 999999999, the function's limit). One that doesn't is skipped, not an error,
+-- so the rest of its batch is still written; the row isn't returned, and the app that sent it
+-- takes the stored run instead (as it does for an older edit, see cockpit_items_stamp). Deleting
+-- a run that is over (succeeded or cancelled) is still allowed from anywhere, as the app's tidying
+-- of old runs, and the tombstone keeps the next revision, so the run can't come back at an old one.
 create or replace function public.cockpit_items_wrun_guard() returns trigger
 language plpgsql set search_path = public, pg_temp as $$
 declare
@@ -142,8 +147,9 @@ begin
   if jsonb_typeof(new.data->'rev') = 'number' and (new.data->>'rev') ~ '^\d{1,9}$' then
     n := (new.data->>'rev')::integer;
   end if;
-  if n > o then return new; end if;
-  if new.deleted and not old.deleted and old.data->>'status' in ('succeeded', 'cancelled') then
+  if n = o + 1 and n < 999999999 then return new; end if;
+  if new.deleted and not old.deleted and old.data->>'status' in ('succeeded', 'cancelled') and o < 999999998 then
+    new.data := jsonb_build_object('id', old.data->'id', 'rev', o + 1);
     return new;
   end if;
   return null;
@@ -153,10 +159,88 @@ drop trigger if exists cockpit_items_wrun_guard on public.cockpit_items;
 create trigger cockpit_items_wrun_guard before update on public.cockpit_items
   for each row when (old.key like 'wrun:%') execute function public.cockpit_items_wrun_guard();
 
+-- Automation reports (the same function as in supabase-setup.sql, kept the same in both): a
+-- report that names no execution goes to the OLDEST launch of its flow still waiting to hear
+-- (with no result reported yet), not the newest, so a late report from an attempt that a retry
+-- set aside never completes or fails the newer attempt. Its arguments, checks, limits and rights
+-- are as before.
+create or replace function public.cockpit_exec_report(
+  token text, flow text, status text, message text default '', execution text default '', run_ref text default ''
+) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  u uuid;
+  f text := trim(coalesce(flow, ''));
+  s text := lower(trim(coalesce(status, '')));
+  m text := left(trim(regexp_replace(regexp_replace(coalesce(message, ''), '[[:cntrl:]]+', ' ', 'g'), '\s+', ' ', 'g')), 300);
+  x text := trim(coalesce(execution, ''));
+  r text := left(trim(coalesce(run_ref, '')), 60);
+  fname text;
+  ev bigint;
+begin
+  select t.user_id into u from cockpit_exec_tokens t where t.token = cockpit_exec_report.token;
+  if u is null then raise exception 'unknown execution token'; end if;
+  if f !~ '^[A-Za-z0-9_-]{1,40}$' then raise exception 'flow must be the flow''s id'; end if;
+  if s not in ('running', 'succeeded', 'failed', 'cancelled') then
+    raise exception 'status must be running, succeeded, failed or cancelled';
+  end if;
+  if x !~ '^[A-Za-z0-9_-]{0,40}$' then raise exception 'execution must be an execution id'; end if;
+  if r !~ '^[A-Za-z0-9_.:-]{0,60}$' then raise exception 'run_ref may only hold letters, digits and ._:-'; end if;
+  m := trim(m);
+  -- A runaway script (or a leaked token) can't flood the account; calls take turns per person.
+  perform pg_advisory_xact_lock(hashtext('cockpit_exec:' || u::text));
+  if (select count(*) from cockpit_exec_events e where e.user_id = u
+      and e.reported_at > now() - interval '1 hour') >= 120 then
+    raise exception 'too many reports: at most 120 an hour';
+  end if;
+  delete from cockpit_exec_events e where e.user_id = u and e.reported_at < now() - interval '90 days';
+  delete from cockpit_notices n where n.user_id = u and n.key like 'exec:%' and n.sent_at < now() - interval '30 days';
+  -- Which execution this is about: the caller's say, else the run it reported before (an
+  -- earlier report with no execution of its own stands for one, named 'u' + its row id, as the
+  -- app names it), else the OLDEST launch of this flow still waiting to hear: requested or
+  -- running, within a day, with no result reported for it yet. (Oldest, not newest: a report
+  -- coming late from an attempt a retry has set aside goes to that attempt, never to the newer
+  -- one that took its place. Release G.)
+  if x = '' and r <> '' then
+    select coalesce(nullif(e.execution, ''), 'u' || e.id) into x from cockpit_exec_events e
+      where e.user_id = u and e.flow = f and e.run_ref = r
+        and e.reported_at > now() - interval '7 days'
+      order by e.id limit 1;
+    x := coalesce(x, '');
+  end if;
+  if x = '' then
+    select i.data->>'id' into x from cockpit_items i
+      where i.user_id = u and i.kind = 'exec' and not i.deleted
+        and i.data->>'flow' = f and i.data->>'status' in ('requested', 'running')
+        and (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end)
+            > (extract(epoch from now() - interval '24 hours') * 1000)::bigint
+        and not exists (select 1 from cockpit_exec_events e where e.user_id = u
+          and e.execution = i.data->>'id' and e.status in ('succeeded', 'failed', 'cancelled'))
+      order by (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end), i.key
+      limit 1;
+    x := coalesce(x, '');
+    if x !~ '^[A-Za-z0-9_-]{1,40}$' then x := ''; end if;
+  end if;
+  insert into cockpit_exec_events (user_id, execution, flow, status, message, run_ref)
+    values (u, x, f, s, m, r) returning id into ev;
+  -- A failure is worth a notification (the send-notices job pushes it within a minute).
+  if s = 'failed' then
+    select i.data->>'name' into fname from cockpit_items i
+      where i.user_id = u and i.key = 'flow:' || f and not i.deleted;
+    insert into cockpit_notices (user_id, key, at, title, body)
+      values (u, 'exec:' || ev, now(), 'Flow failed: ' || left(coalesce(fname, f), 60), left(m, 300))
+      on conflict (user_id, key) do nothing;
+  end if;
+  return jsonb_build_object('execution', x, 'event', ev);
+end $$;
+revoke execute on function public.cockpit_exec_report(text, text, text, text, text, text) from public;
+grant execute on function public.cockpit_exec_report(text, text, text, text, text, text) to anon, authenticated;
+
 -- (so the app can call the function straight away)
 notify pgrst, 'reload schema';
 
 -- ROLLBACK: to remove this again, run the four lines between the markers without their "-- ".
+-- (cockpit_exec_report stays as it is: supabase-setup.sql has the same version.)
 -- The runs stay as they are (their `rev` is kept and simply ignored), and the app goes back to
 -- the newer edit winning.
 -- BEGIN ROLLBACK

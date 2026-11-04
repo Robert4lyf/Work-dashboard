@@ -4437,3 +4437,7 @@ summary,
 .wconf p {
   margin: 0 0 6px;
 }
+.wsync.ws-refused {
+  color: var(--err);
+  font-weight: 600;
+}

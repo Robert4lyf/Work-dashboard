@@ -35,6 +35,9 @@ const conflictBox = d => d.page.locator('#v-knowledge .wconf');
 const wsync = d => d.page.locator('#v-knowledge .runprog .wsync');
 const srvRun = srv => srv.rows.get('wrun:r1').data;
 const noErrors = (...ds) => ds.forEach(d => expect(d.errors).toEqual([]));
+// A toast said (from the log of every toast: another may have replaced it on screen since).
+const said = (d, text) =>
+  expect.poll(async () => (await d.toasts()).filter(t => t.includes(text)).length).toBeGreaterThan(0);
 // A failed step's less common options, opened.
 const more = async d => {
   if (!(await d.page.locator('#wfmore[open]').count())) await d.page.click('#wfmore summary');
@@ -144,7 +147,7 @@ test('offline on one device: several changes go as one, accepted on reconnecting
   await a.offline(true);
   await a.page.click('[data-wfact="done"][data-wstage="s1"]');
   await a.page.click('[data-wfact="done"][data-wstage="s2"]');
-  await expect(a.page.locator('#toast')).toContainText('Completed on this device; not synced yet');
+  await said(a, 'Completed on this device; not synced yet');
   await expect(wsync(a)).toHaveText('Saved on this device');
   expect(srvRun(srv).status).toBe('awaiting_user');
   const puts = srv.puts.length;
@@ -445,40 +448,39 @@ test('Acknowledge and Add to the Inbox drawn for one failure refuse a newer one;
     prep: "failStage(r, 's1', 'Missing file');",
   });
   for (const d of [a, b]) await open(d);
-  await expect(a.page.locator('[data-wfact="ack"]')).toHaveAttribute('data-wocc', '1');
+  const f1 = (await a.run('r1')).fid;
+  expect(f1).toMatch(/^f/);
+  await expect(a.page.locator('[data-wfact="ack"]')).toHaveAttribute('data-wocc', f1);
   // B retries and it fails again (failure 2); A's page still shows failure 1's controls.
   await b.page.click('[data-wfact="retry"]');
   await b.page.click('[data-wfact="fail"][data-wstage="s1"]');
   await b.page.fill('#sheetin', 'Wrong period');
   await b.page.click('#sheetok');
   await b.sync();
-  await a.page.evaluate(async () => {
-    const draw = renderKnowledge;
-    renderKnowledge = () => {}; // (the pull lands, the page isn't redrawn yet)
-    await sync();
-    while (syncing || again) await new Promise(r => setTimeout(r, 20));
-    renderKnowledge = draw;
-  });
+  await a.sync();
   expect(await a.run('r1')).toMatchObject({ occ: 2, err: 'Wrong period' });
-  await more(a);
-  await a.page.click('[data-wfact="ack"]');
-  await expect(a.page.locator('#toast')).toContainText('That failure has changed');
+  const f2 = (await a.run('r1')).fid;
+  expect(f2).not.toBe(f1);
+  // A tap on A's page as drawn for failure 1 (its data-wocc), arriving after the pull. (Played
+  // as that tap: a background redraw could otherwise draw failure 2 before the click lands.)
+  await a.page.evaluate(f => wfClick({ wrun: 'r1', wfact: 'ack', wocc: f }), f1);
+  await said(a, 'That failure has changed');
   expect((await a.run('r1')).ack).toBeUndefined();
-  await expect(a.page.locator('[data-wfact="ack"]')).toHaveAttribute('data-wocc', '2');
+  await expect(a.page.locator('[data-wfact="ack"]')).toHaveAttribute('data-wocc', f2);
   // Add to the Inbox: failure 2's details, a link to the run, a stable id.
   await more(a);
   await a.page.click('[data-wfact="inbox"]');
-  await expect(a.page.locator('#toast')).toContainText('Added to inbox');
+  await said(a, 'Added to inbox');
   let s = await a.state();
   const item = s.inbox[0];
   expect(item.text).toBe('Process failed: Weekly report · Prepare');
   expect(item.node.notes).toContain('Error: Wrong period');
   expect(item.node.notes).toContain('(failure 2 of this run)');
   expect(item.node.links[0].url).toMatch(/#\/wrun\/r1$/);
-  expect(s.wruns[0].ack).toBe('2');
-  expect(s.wruns[0].fails.map(f => [f.occ, f.err])).toEqual([
-    [1, 'Missing file'],
-    [2, 'Wrong period'],
+  expect(s.wruns[0].ack).toBe(f2);
+  expect(s.wruns[0].fails.map(f => [f.occ, f.fid, f.err])).toEqual([
+    [1, f1, 'Missing file'],
+    [2, f2, 'Wrong period'],
   ]);
   // B, before hearing of it, adds the same failure to the Inbox: one item, on both devices.
   await more(b);
@@ -491,8 +493,8 @@ test('Acknowledge and Add to the Inbox drawn for one failure refuse a newer one;
     expect(s.wconflicts).toEqual([]); // (the same acknowledgement on both: nothing to choose)
   }
   // Asked again on a stale page: no second item.
-  await a.page.evaluate(() => wfFailAct(wrunById('r1'), 'inbox', '2'));
-  await expect(a.page.locator('#toast')).toContainText('Already in the Inbox');
+  await a.page.evaluate(f => wfFailAct(wrunById('r1'), 'inbox', f), f2);
+  await said(a, 'Already in the Inbox');
   expect((await a.state()).inbox).toHaveLength(1);
   noErrors(a, b);
 });
@@ -515,22 +517,17 @@ test('an automation failure’s Acknowledge and Add to the Inbox are bound to th
   const occ1 = await a.page.locator('[data-xack]').getAttribute('data-xocc');
   // Reported failing again while the sheet is open.
   await report(a, { token, flow: 'f1', execution: x, status: 'failed', message: 'Timeout' });
-  await a.page.evaluate(async () => {
-    const pop = popSheet;
-    popSheet = () => {};
-    await sync();
-    while (syncing || again) await new Promise(r => setTimeout(r, 20));
-    popSheet = pop;
-  });
-  await a.page.click('[data-xack]');
-  await expect(a.page.locator('#toast')).toContainText('That failure has changed');
+  await a.sync();
+  // (the sheet's Acknowledge, as drawn for the first failure)
+  await a.page.evaluate(([id, o]) => execClick({ xack: id, xocc: o }), [x, occ1]);
+  await said(a, 'That failure has changed');
   expect((await a.state()).execs[0].ack).toBeUndefined();
   await a.page.evaluate(id => openExecDetail(id), x);
   expect(await a.page.locator('[data-xinbox]').getAttribute('data-xocc')).not.toBe(occ1);
   await a.page.click('[data-xinbox]');
   await a.page.evaluate(id => openExecDetail(id), x);
   await a.page.click('[data-xinbox]');
-  await expect(a.page.locator('#toast')).toContainText('Already in the Inbox');
+  await said(a, 'Already in the Inbox');
   const s = await a.state();
   expect(s.inbox).toHaveLength(1);
   expect(s.execs[0].ack).toBe(1);

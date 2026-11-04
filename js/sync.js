@@ -126,7 +126,8 @@ async function pullChanges() {
 // only if its edit is newer than the server's.
 // `holdCursor`: the caller moves the cursor (see pullChanges).
 function applyRows(rows, firstSync, keep, holdCursor) {
-  const recs = firstSync ? keep || new Map() : toRecords(S);
+  const recs = firstSync ? keep || new Map() : toRecords(S),
+    tookRuns = [];
   let changed = firstSync;
   for (const r of rows) {
     if (!holdCursor) sync2.cursor = Math.max(sync2.cursor, Number(r.seq));
@@ -150,7 +151,10 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     else sync2.synced[r.key] = h;
     // (a run's revision as stored, the base of the next change made here; what was noted for a
     // version replaced is of no further use)
-    if (isWrunKey(r.key)) tookRunRow(r);
+    if (isWrunKey(r.key)) {
+      tookRunRow(r);
+      tookRuns.push(r.key);
+    }
     if (h === null ? recs.has(r.key) : recHash(r.key, recs.get(r.key)) !== h) {
       if (h === null) recs.delete(r.key);
       else recs.set(r.key, r.data);
@@ -162,6 +166,11 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     // (with this device's own refused run changes, which aren't records: see wfConflict)
     norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt, wconflicts: S.wconflicts }));
     settleTop3();
+    // (a run taken in, as cleaned here, is explained: not a change of this device's, see wrunSeen)
+    tookRuns.forEach(k => {
+      const w = wrunById(k.slice(5));
+      if (w) (sync2.wjh = sync2.wjh || {})[w.id] = recHash(k, w);
+    });
     // The task on screen went (in the rows, not through the day's reset or a chosen replace).
     const open = !firstSync && path.length && !find(path[path.length - 1]);
     if (!persistLocal()) toast("Couldn't save: this device is out of storage", false, 4000);
@@ -257,7 +266,8 @@ async function pushDirty() {
     // A row the server kept its own newer version of (see cockpit_items_stamp) isn't among
     // them: this device takes that version instead, now, rather than counting its own as sent.
     const took = Array.isArray(wrote) ? new Set(wrote.map(r => r.key)) : null,
-      lost = [];
+      lost = [],
+      lostRun = {}; // (a run's change that didn't go in: what it was, and when made)
     (wrote || []).forEach(r => ((sync2.at = sync2.at || {})[r.key] = Number(r.seq)));
     // (one stored cleaned is read back, so this device has it as stored)
     sent.forEach((r, j) => r !== rows[j] && delete sync2.at[r.key]);
@@ -266,6 +276,8 @@ async function pushDirty() {
       const again = sync2.dirty[k] !== d;
       if (took && !took.has(k)) {
         lost.push(k);
+        if (isWrunKey(k))
+          lostRun[k] = { at: d.at, mine: d.h === null ? null : JSON.parse(JSON.stringify(recs.get(k))) };
         delete sync2.at[k];
         if (!again) delete sync2.dirty[k];
         return;
@@ -285,6 +297,20 @@ async function pushDirty() {
         .select(FULL)
         .in('key', lost.slice(j, j + 100));
       if (e2) throw e2;
+      // A run's change refused although no newer edit was there (a server with the run guard but
+      // without the function: see supabase/release-g-runs.sql): kept as a conflict, not dropped.
+      data.forEach(row => {
+        const l = lostRun[row.key];
+        if (l && Number(row.edited_at) <= l.at)
+          wfConflict(
+            row.key.slice(5),
+            l.mine,
+            row.deleted ? null : row.data,
+            baseRev(row.key),
+            rowRev(row.data),
+            (sync2.wjour || {})[row.key.slice(5)] || [],
+          );
+      });
       applyRows(
         data.sort((a, b) => a.seq - b.seq),
         false,
@@ -317,7 +343,32 @@ const isWrunKey = k => k.startsWith('wrun:');
 const wrunCasOff = () => wrunCas.on === false && Date.now() - wrunCas.at < 30 * 60e3;
 // (PostgREST: no such function. A 404 is that too, from older versions.)
 const fnMissing = (error, status) => status === 404 || ['PGRST202', '42883'].includes(error && error.code);
-const rowRev = d => (d && Number.isInteger(d.rev) && d.rev > 0 ? d.rev : 0);
+const rowRev = d => (d && Number.isInteger(d.rev) && d.rev > 0 && d.rev < 999999999 ? d.rev : 0);
+// What the server counts a run's size by: its text as PostgreSQL writes jsonb (", " and ": "),
+// in UTF-8 bytes. The limit is the function's.
+const WRUN_BYTES = 262144;
+function jsonbText(v) {
+  if (Array.isArray(v)) return '[' + v.map(jsonbText).join(', ') + ']';
+  if (v && typeof v === 'object')
+    return (
+      '{' +
+      Object.keys(v)
+        .filter(k => v[k] !== undefined)
+        .map(k => JSON.stringify(k) + ': ' + jsonbText(v[k]))
+        .join(', ') +
+      '}'
+    );
+  return v === undefined ? 'null' : JSON.stringify(v);
+}
+const jsonbBytes = v => new TextEncoder().encode(jsonbText(v)).length;
+// A run the server refused for what it is (too large, malformed): kept here, said on its page, and
+// not sent again until it changes, so it doesn't hold up the rest. (sync2.wbad: why, and the
+// version refused)
+const wrunParked = k => {
+  const b = sync2.wbad && sync2.wbad[k],
+    d = sync2.dirty[k];
+  return b && d && b.h === d.h ? b : null;
+};
 // The revision this device's version of a run was changed from: the server's, as last taken in
 // or accepted here (else the run's own, from before this bookkeeping).
 function baseRev(k) {
@@ -340,12 +391,17 @@ async function pushRuns(keys) {
     was = open ? wsyncState(open) : '';
   let left = rest;
   try {
-    for (let i = 0; i < runs.length; i++)
-      if ((await putRun(runs[i])) === 'missing') {
+    for (let i = 0; i < runs.length; i++) {
+      if (wrunParked(runs[i])) continue;
+      const got = await putRun(runs[i]);
+      if (got === 'missing') {
         left = [...rest, ...runs.slice(i)];
         break;
       }
+      if (got === 'later') break; // (too many changes this hour: the runs wait, the rest goes)
+    }
     for (const id in sync2.wjour || {}) if (!wrunById(id)) delete sync2.wjour[id];
+    for (const k in sync2.wbad || {}) if (!sync2.dirty[k]) delete sync2.wbad[k];
   } finally {
     // (the revisions taken, saved with the bookkeeping: after a reload the two agree)
     if (runs.length && persistLocal()) saveSyncState();
@@ -364,12 +420,18 @@ async function putRun(k) {
     let p = wop[k];
     // One change, frozen as first sent: sent again as it was until it's answered.
     if (!p || p.base !== base) {
-      const r = wrunById(id);
+      const r = wrunById(id),
+        j = (sync2.wjour || {})[id] || [],
+        data = r ? clean({ data: { ...JSON.parse(JSON.stringify(r)), rev: base + 1 } }).data : null;
+      if (data && jsonbBytes(data) > WRUN_BYTES) {
+        park(k, `too large to sync (${Math.ceil(jsonbBytes(data) / 1024)} KB; at most 256 KB)`);
+        return;
+      }
       p = wop[k] = {
         op: uid() + Math.random().toString(36).slice(2, 10),
         base,
-        data: r ? clean({ data: { ...JSON.parse(JSON.stringify(r)), rev: base + 1 } }).data : null,
-        n: ((sync2.wjour || {})[id] || []).length, // (the journal's changes it holds)
+        data,
+        upto: j.length ? j[j.length - 1].q || 0 : 0, // (the journal's changes it holds: up to this one)
       };
       saveSyncState(); // (before it goes: if the answer is lost, the same op is asked again)
     }
@@ -382,7 +444,17 @@ async function putRun(k) {
       error,
       status,
     } = await sb.rpc('cockpit_put_wrun', { p_key: k, p_base_rev: p.base, p_data: p.data, p_op: p.op });
-    if (error && !fnMissing(error, status)) throw error;
+    if (error && !fnMissing(error, status)) {
+      // Refused for what this run is: kept and said on its page; the rest of the sync goes on.
+      // (A connection or sign-in problem stops the sync, to try again later.)
+      if (error.code === '22023' || status === 400 || status === 413) {
+        delete wop[k];
+        park(k, error.message || 'refused by the server');
+        return;
+      }
+      if (error.code === '54000') return 'later';
+      throw error;
+    }
     // (no such function, or an answer it can't have given: as before the function, for now)
     if (error || !out || typeof out !== 'object' || !out.status) {
       wrunCas = { on: false, at: Date.now() };
@@ -431,6 +503,14 @@ async function putRun(k) {
     }
   }
 }
+function park(k, msg) {
+  (sync2.wbad = sync2.wbad || {})[k] = {
+    h: sync2.dirty[k].h,
+    msg: String(msg).slice(0, 200),
+    at: Date.now(),
+  };
+  saveSyncState();
+}
 // The change `p` was taken as revision `rev` (`row`: the row as stored, when it's the one sent).
 function acceptedRun(k, p, rev, row) {
   const id = k.slice(5),
@@ -438,8 +518,10 @@ function acceptedRun(k, p, rev, row) {
   delete sync2.wop[k];
   (sync2.wrev = sync2.wrev || {})[k] = rev;
   if (j) {
-    j.splice(0, p.n);
-    if (!j.length) delete sync2.wjour[id];
+    // (by number, however the journal was trimmed meanwhile; an op from before numbers: by count)
+    const left = p.upto !== undefined ? j.filter(e => (e.q || 0) > p.upto) : j.slice(p.n || 0);
+    if (left.length) sync2.wjour[id] = left;
+    else delete sync2.wjour[id];
   }
   const h = p.data ? recHash(k, p.data) : null;
   if (h === null) delete sync2.synced[k];
@@ -449,12 +531,38 @@ function acceptedRun(k, p, rev, row) {
     (sync2.et = sync2.et || {})[k] = row.edited_at;
   } else if (sync2.at) delete sync2.at[k];
   // This device's copy is that revision now; changed again since it went, it's sent next.
-  const r = wrunById(id);
+  // (and changed back meanwhile, to what was synced before, it's still sent: the server has the
+  // change now, and this device's copy hasn't)
+  const r = wrunById(id),
+    before = r ? recHash(k, r) : null;
   if (r) r.rev = rev;
   const now = r ? recHash(k, r) : null;
+  if (r && sync2.wjh && sync2.wjh[id] === before) sync2.wjh[id] = now; // (the revision: explained)
   if (now === h) delete sync2.dirty[k];
-  else if (sync2.dirty[k]) sync2.dirty[k] = { ...sync2.dirty[k], h: now };
+  else sync2.dirty[k] = { h: now, at: Math.max(Date.now(), (sync2.dirty[k] && sync2.dirty[k].at) || 0) };
   saveSyncState();
+}
+// "Use the server's" for a run the server refused (see park): this device's version is dropped,
+// what it held written into the run's history, and the server's run taken in.
+async function wrunTakeServer(k) {
+  const id = k.slice(5),
+    bad = sync2.wbad && sync2.wbad[k],
+    r0 = wrunById(id),
+    what = r0 ? jourSummary({ jour: (sync2.wjour || {})[id] || [], mine: r0 }) : '';
+  if (!sb || !session || !navigator.onLine) return toast('Needs a connection', false, 3000);
+  const { data, error } = await sb.from('cockpit_items').select(FULL).in('key', [k]);
+  if (error || !Array.isArray(data)) return toast("Couldn't reach the server", false, 3000);
+  if (!data.length) return toast('The server has no copy of this run', false, 3000);
+  delete sync2.dirty[k];
+  if (sync2.wbad) delete sync2.wbad[k];
+  if (sync2.wop) delete sync2.wop[k];
+  applyRows(data, false, null, true);
+  const r = wrunById(id);
+  if (r) {
+    noteRun(r, 'conflict', 'not synced from this device (' + (bad ? bad.msg : 'refused') + '): ' + what);
+    save();
+  }
+  inBackground(renderKnowledge);
 }
 // For the health check: whether the server checks run changes (its function refuses an empty key).
 async function wrunHealth(add) {

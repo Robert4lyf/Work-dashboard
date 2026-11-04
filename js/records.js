@@ -239,9 +239,13 @@ function markDirty(now) {
           );
   recs.forEach((v, k) => {
     seen.add(k);
-    const h = recHash(k, v);
-    if (sync2.synced[k] === h) delete sync2.dirty[k];
+    const h = recHash(k, v),
+      // (Release G: a run whose change is still being sent stays marked even when it's back to
+      // what was last synced: the server may yet take that change, and this must follow it)
+      sending = sync2.wop && sync2.wop[k];
+    if (sync2.synced[k] === h && !sending) delete sync2.dirty[k];
     else if (!sync2.dirty[k] || sync2.dirty[k].h !== h) sync2.dirty[k] = { h, at: at(k) };
+    if (k.startsWith('wrun:') && typeof wrunSeen === 'function') wrunSeen(k, h, !sync2.dirty[k]);
   });
   for (const k in sync2.synced)
     if (!seen.has(k) && knownKey(k) && (!sync2.dirty[k] || sync2.dirty[k].h !== null)) {
@@ -252,6 +256,7 @@ function markDirty(now) {
     }
   converted.clear(); // (from here on, changes to them are edits)
   // Added and removed again before it was ever sent: nothing to send.
-  for (const k in sync2.dirty) if (!seen.has(k) && !(k in sync2.synced)) delete sync2.dirty[k];
+  for (const k in sync2.dirty)
+    if (!seen.has(k) && !(k in sync2.synced) && !(sync2.wop && sync2.wop[k])) delete sync2.dirty[k];
   saveSyncState();
 }

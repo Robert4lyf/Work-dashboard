@@ -39,6 +39,7 @@ function normExecs() {
         .slice(-EXEC_EVENTS),
       ...(x.ack ? { ack: 1 } : {}),
       ...(x.unreq ? { unreq: 1 } : {}),
+      ...(x.aside ? { aside: 1 } : {}), // (Release G: a retry or a new launch took its place)
     }));
   pruneExecs();
 }
@@ -245,7 +246,7 @@ function renderExecSettings() {
   h += S.flows.length
     ? `<p class="hint" style="margin:8px 0 2px">Flow ids (the <code>flow</code> value):</p>${S.flows.map(f => `<div class="caprow"><span>${esc(f.name)}</span><code>${esc(f.id)}</code></div>`).join('')}`
     : '<p class="hint">Add a desktop automation under Knowledge > Processes first.</p>';
-  h += `<p class="hint">POST JSON <code>{"token":"…","flow":"<id>","status":"running|succeeded|failed|cancelled","message":"…"}</code> to the report URL with the apikey header. The report is matched to the newest launch of that flow still waiting to hear. Power Automate Desktop and PowerShell examples are in the README.</p>
+  h += `<p class="hint">POST JSON <code>{"token":"…","flow":"<id>","status":"running|succeeded|failed|cancelled","message":"…"}</code> to the report URL with the apikey header. The report is matched to the oldest launch of that flow still waiting to hear. Power Automate Desktop and PowerShell examples are in the README.</p>
     <div class="acts"><button class="btn" id="xnew">${execToken ? 'New token' : 'Create token'}</button><button class="btn" id="xrevoke">Revoke</button></div></details>`;
   return h;
 }
@@ -306,7 +307,7 @@ function openExecDetail(id) {
   const f = S.flows.find(y => y.id === x.flow),
     st = execState(x);
   popSheet(
-    `<h2 id="sheettitle">${esc(f ? f.name : 'Automation ' + x.flow)}</h2><p class="xhead">${execLine(x)}</p><p class="hint qahint">Launched ${esc(whenLabel(x.at))}${x.unreq ? ' (reported by the automation, not launched here)' : ''}${x.q ? ' · for ' + esc(questName(x.q)) : ''}${
+    `<h2 id="sheettitle">${esc(f ? f.name : 'Automation ' + x.flow)}</h2><p class="xhead">${execLine(x)}</p><p class="hint qahint">Launched ${esc(whenLabel(x.at))}${x.unreq ? ' (reported by the automation, not launched here)' : ''}${x.aside ? ' · set aside: its step no longer waits for it' : ''}${x.q ? ' · for ' + esc(questName(x.q)) : ''}${
       st === 'unconfirmed'
         ? '. Nothing was reported: the automation may not have started, or its report never arrived.'
         : ''

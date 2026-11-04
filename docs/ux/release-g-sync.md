@@ -28,33 +28,55 @@ server. No event log, no merge engine.
      null), records the op id and returns `accepted`.
 
    It also checks that the new `rev` is exactly base + 1, that the data keeps the run's id, that
-   it's an object of at most 256 KB, and that the key and op id are well formed.
-3. **Ordinary writes can't take a run back.** A `BEFORE UPDATE` trigger on `cockpit_items`
-   (`cockpit_items_wrun_guard`) skips an update of a `wrun:` row unless its `rev` is higher than
-   the stored one. It returns NULL rather than raising, so the rest of an upsert batch is still
-   written. The skipped row isn't in what the upsert returns, so the app that sent it treats it as
-   lost and fetches the stored run, as it already does for an older edit. The one exception:
-   deleting a run that is over (succeeded or cancelled) is allowed from any copy, because that is
-   only the app's tidying of old runs.
+   it's an object of at most 256 KB (UTF-8 bytes of its jsonb text), and that the key and op id
+   are well formed. A user can make at most 600 changes an hour (SQLSTATE 54000); a change
+   already applied is still answered as a duplicate.
+3. **Ordinary writes can't take a run back, or jump it ahead.** A `BEFORE UPDATE` trigger on
+   `cockpit_items` (`cockpit_items_wrun_guard`) skips an update of a `wrun:` row unless its `rev`
+   is exactly the stored one + 1 and below 999,999,999 (so no write can push a run to the
+   function's limit and block every later change). It returns NULL rather than raising, so the rest
+   of an upsert batch is still written. The skipped row isn't in what the upsert returns, so the
+   app that sent it treats it as lost and fetches the stored run, as it already does for an older
+   edit. The one exception: deleting a run that is over (succeeded or cancelled) is allowed from
+   any copy, because that is only the app's tidying of old runs; the trigger then stores the
+   tombstone as `{id, rev: stored + 1}`, so the run can't be brought back at an old revision.
 4. **The app sends runs through the function.** `pushDirty` (js/sync.js) sends every dirty `wrun:`
    record through `cockpit_put_wrun` first, one at a time, then upserts the rest as before.
    - The base is the revision this device last took in or had accepted (`sync2.wrev`).
-   - The change is frozen when first sent (`sync2.wop`: op id, base, the exact data, how many
-     journal entries it holds) and saved before it goes. If the answer is lost, the same op is sent
-     again, unchanged, and comes back `duplicate`.
+   - The change is frozen when first sent (`sync2.wop`: op id, base, the exact data, and the
+     number of the last journal entry it holds) and saved before it goes. If the answer is lost,
+     the same op is sent again, unchanged, and comes back `duplicate`.
+   - While a change is out, the run stays marked as changed here even if it's changed back to
+     what was last synced; once the change is taken, anything different here is sent next. So a
+     change undone while its write is in flight follows it, and device and server agree.
    - Several changes made offline go as one change, from one base to base + 1.
+   - A run the server refuses for what it is (bad input, SQLSTATE 22023, or a 400) is parked
+     (`sync2.wbad`): not sent again until it changes, said on its page ("Not synced: …", with
+     **Use the server's**, which takes the server's run and writes what wasn't sent into its
+     history), and the rest of the sync goes on. The app checks a run's size the way the server
+     does (UTF-8 bytes of the jsonb text) before sending, so a run over 256 KB (a 30-step
+     verification with long CJK text, say) is parked here with its size. Too many changes in an
+     hour leaves the runs for later and sends the rest.
 5. **A pull never replaces a run changed here and not yet accepted.** With the function
    installed, the server decides between the two (step 4). Without it, the old rule applies.
 
 ### The journal: what "Apply mine on top" replays
 
-Each transition is noted per run in `sync2.wjour` (this device's own bookkeeping, saved with the
+Each transition is noted per run in `sync2.wjour`, numbered (`q`, rising on this device; when a
+change is taken, the entries up to the number it held are dropped, however the journal was
+trimmed meanwhile), (this device's own bookkeeping, saved with the
 sync state) with what it was asked. That covers begin, step done/skipped/chosen (with how: by
 hand, choice, guide, reply, automation), fail, retry, pause, resume, cancel, a check ticked, a
 launch recorded, a guide linked, waiting started, a waiting item re-keyed, acknowledge and notes.
 `wfTx` wraps every transition function. Only the outermost call is noted (a result applied on
 Resume is part of the Resume), and a call that changes nothing isn't noted. When the server
 accepts a change, the entries it held are dropped.
+
+A change to a run that came through none of the transitions (a backup restored, say) is noted
+as a `replace`: `sync2.wjh` holds each run's hash as last explained (by a transition, a sync or a
+row taken in), and `markDirty` notes a `replace` when a run differs from it. A conflict over a
+`replace` is never settled on its own; **Apply mine on top** then puts this device's whole
+version in place of the server's (at the server's revision).
 
 Moves every device makes alike from the same records are marked `eng`: an automation's reported
 result, folded in or reconciled, and the day's tidy-up cancelling an unstarted run.
@@ -64,7 +86,8 @@ result, folded in or reconciled, and the day's tidy-up cancelling an unstarted r
 When the server refuses a change, the device:
 
 1. keeps its version and journal as a conflict (`S.wconflicts`: this device only, in its
-   backups, kept across pulls and reloads, at most 20);
+   backups, kept across pulls and reloads, at most 20; when the oldest has to go to make room,
+   what it held is first written into its run's history, and a run with a conflict isn't pruned);
 2. takes the server's run (`applyRows`), which also re-derives any automation result it hasn't
    applied yet.
 
@@ -74,8 +97,9 @@ A refusal that loses nothing is settled without asking (`conflictSettles`):
 - the same automation result or tidy-up, already on the server's run, or still to come because
   the server's run still waits for that attempt;
 - an acknowledgement of the failure the server already has acknowledged;
-- a run only made ready on both devices (a repeat's run, made under the same id);
-- nothing noted, and no history entry the server lacks.
+- a run only made ready on both devices (a repeat's run, made under the same id): new here (base
+  0), still ready, no step outcome, and no history entry the server lacks but its "prepared";
+- nothing noted, and no history entry the server lacks (for a run the server already had).
 
 Notes alone are written again on the server's version. Anything else is shown.
 
@@ -119,6 +143,17 @@ same way. Both are refused unless the step is waiting for that very attempt (`r.
 - a duplicate report of the same result finds the step already moved on and changes nothing;
 - a late "running" after a result is ignored (as before, in `foldExecEvent`);
 - a delayed report for an older attempt never completes or fails the newer attempt;
+- a report that names no execution (the normal case: a launch by its `ms-powerautomate:` link
+  can't pass one on) is paired by `cockpit_exec_report` with the **oldest** launch of that flow
+  still waiting to hear (requested or running, within a day, no result reported yet), not the
+  newest. So the late report of an attempt a retry has set aside goes to that attempt, never to the
+  newer one. (The function is replaced in the migration, keeping its arguments, checks, limits and
+  rights, with `search_path = public, pg_temp`; `supabase-setup.sql` has the same version, so
+  re-running it doesn't undo this.)
+- an attempt the step no longer waits for (a retry, a new launch, the step done by hand or skipped,
+  the run cancelled) is marked `aside` on its own record (synced) and acknowledged, so it isn't
+  flagged as waiting; it's still the attempt its own late reports are paired with, and its results
+  never move the run;
 - two devices that both fold the same report both move the run. One change is accepted, and the
   other settles on its own (same attempt, same outcome).
 
@@ -127,9 +162,11 @@ a retry the server accepted) is shown as a conflict, not dropped.
 
 ### Failure occurrences: Acknowledge and Add to the Inbox
 
-- Every failure gets an id. `r.occ` counts a run's failures, and `failOcc(r)` is the current one's
-  id (a failure from before is named by its time, `t<ms>`).
-- The step's outcome keeps its `occ`. `r.fails` keeps the last 12 failures (step, time, error,
+- Every failure gets an id, `r.fid`, unique across devices: `'x' + attempt` for an automation's
+  reported failure (the same on every device that folds the report), else `'f' + uid()`.
+  `failOcc(r)` is the current one's (a failure from before is named by its time, `t<ms>`).
+  `r.occ` only counts a run's failures, for the words ("failure 2 of this run").
+- The step's outcome keeps its `fid`. `r.fails` keeps the last 12 failures (id, step, time, error,
   attempt), so a retry no longer loses the failure.
 - Acknowledge and Add to the Inbox carry `data-wocc`. At the tap, the run must still be failed with
   that failure, or the answer is "That failure has changed" and the page redraws. `r.ack` stores
@@ -137,7 +174,7 @@ a retry the server accepted) is shown as a conflict, not dropped.
 - Add to the Inbox makes that failure's item:
   - the step, time, error, attempt and a link to the run (`#/wrun/<id>`, also as a resource), plus
     the run's summary;
-  - its id is derived from the run and the failure (`keyId('wfail:' + run + ':' + occ)`). A second
+  - its id is derived from the run and the failure (`keyId('wfail:' + run + ':' + fid)`). A second
     tap, on any device, makes no second item ("Already in the Inbox").
 - An automation's failure has the same binding in its details sheet (`data-xocc`, the id of the
   failure report). Its Inbox item's id is derived from the attempt and the report.
@@ -160,7 +197,12 @@ With `supabase/release-g-runs.sql` installed:
 - **No automation launched by sync.** Sending, resending and settling never open a launch URL.
 - **Stale controls are refused.** A step's actions are bound to the step (Release F). Acknowledge
   and Add to the Inbox are bound to the failure, and a resolution is checked again when tapped.
-- **The Inbox gets one item per failure**, on any number of devices.
+- **The Inbox gets one item per failure**, on any number of devices, and two failures never share
+  one.
+- **A refused run doesn't hold up the rest.** A run the server refuses as it is is parked and said
+  on its page; every other record still syncs.
+- **Reports go to their own attempt.** A report with no execution id goes to the oldest launch of
+  its flow still waiting; a step only moves on a result for the attempt it waits for.
 
 ## Not guaranteed
 
@@ -182,6 +224,16 @@ With `supabase/release-g-runs.sql` installed:
 - **Revisions count accepted changes, not taps.** Several changes made offline are one revision.
 - Two devices that disagree about a run while the function is missing, then install it, keep
   whatever newer-edit-wins left.
+- **Pairing a report without an execution id is still a guess.** Oldest-first is right when an
+  automation reports in the order it was launched. If a set-aside attempt never reports at all, the
+  next attempt's report is paired with it: the step then waits (unconfirmed after a day) for you
+  to confirm it by hand, rather than taking a result that may not be its own. A script that passes
+  `execution` or `run_ref` avoids the guess.
+- **With the guard but not the function** (a stale schema cache, a partial rollback), every run
+  change is refused. Each one is kept as a conflict on its device, not dropped, but the run can't
+  move on until the function is back (re-run the migration).
+- **A parked run** stays as it is here until you choose **Use the server's** (or it changes and is
+  sent again).
 
 ## Compatibility
 
@@ -192,7 +244,8 @@ With `supabase/release-g-runs.sql` installed:
 - **Backups** hold runs with their `rev`, and the device's conflicts. Restoring sends each run as
   a new revision on top of the server's (the base is the server's revision, not the backup's), so
   a restore works whatever revisions the backup has, old backups included.
-- **Older copies of the app** treat `rev`, `occ`, `fails` and a string `ack` as unknown fields
+- **Older copies of the app** treat `rev`, `occ`, `fid`, `fails`, an execution's `aside` and a
+  string `ack` as unknown fields
   (`cleanRun` drops them on their side, and the guard keeps them from writing that back over a
   newer run).
 
@@ -219,7 +272,10 @@ drop table if exists public.cockpit_wrun_ops;
 
 The runs stay, with their revision. The app notices the function is gone at its next run change
 and goes back to newer edit wins. Running the migration again later picks up from the revisions
-stored.
+stored. `cockpit_exec_report` is left as the migration made it: `supabase-setup.sql` has the same
+version (oldest waiting launch), so there's nothing to undo there.
+
+If you re-run `supabase-setup.sql` without this migration, you also get the new report pairing.
 
 ## Security review
 
@@ -242,7 +298,10 @@ stored.
 - **The guard trigger** runs as the caller (not SECURITY DEFINER), only on `wrun:` rows. A
   revision it can't read (not a number) counts as 0, so it refuses rather than errors.
 - **No service-role key in the client**, and no new runtime dependency.
-- **Denial of service.** A user can only lock their own runs, one run at a time. The size limit
+- **The report function** (`cockpit_exec_report`, replaced) keeps its signature, token check,
+  input checks, 120-an-hour limit and grants, and now runs with `search_path = public, pg_temp`.
+- **Denial of service.** At most 600 run changes an hour per user. A user can only lock their own
+  runs, one run at a time. The size limit
   caps what one call stores.
 
 ## Tests
@@ -263,6 +322,12 @@ stored.
     run tidied, a non-numeric rev;
   - two truly concurrent sessions (one holds the lock; the other waits and is refused), for an
     existing run and for creating the same run;
+  - the guard: a revision jumped ahead or skipped refused, and a tidied run's tombstone keeping
+    the next revision so it can't come back at an old one;
+  - the hourly limit;
+  - report pairing: oldest waiting launch, set aside or not, then the next once it has a result,
+    none waiting, one named; the function the same in `supabase-setup.sql` and the migration, both
+    functions with `search_path = public, pg_temp`;
   - the migration applied twice;
   - the rollback;
   - reinstalling.
@@ -281,5 +346,16 @@ stored.
   - Acknowledge and Add to the Inbox refusing a newer failure, with the item made once across
     two devices;
   - the same for an automation's failure.
+- **`tests/releaseg-review.spec.js`**: one regression test per defect found in the concurrency and
+  security review (each fails without its fix):
+  - a late report from a set-aside attempt;
+  - failure ids from two devices;
+  - a change undone while its write is in flight;
+  - a run too large, or refused, parked without holding up the rest, and Use the server's;
+  - a restore over a run changed elsewhere;
+  - a run new here with steps done, which the server has too;
+  - the journal's numbering after trimming;
+  - the conflict cap's note, and pruning;
+  - the guard without the function.
 - `tests/workflows.spec.js`: the run-level Inbox test now expects the failure's step in the item
   and the failure id in `ack`.

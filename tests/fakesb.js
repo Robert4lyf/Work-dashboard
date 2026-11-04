@@ -2,8 +2,11 @@
 // Release G's server side too: cockpit_put_wrun (supabase/release-g-runs.sql) with the same rules,
 // checked revision, op ids applied once, the same answers, and the guard on ordinary upserts of
 // 'wrun:' rows. `srv.wrunFn = false` is a project without the migration (PostgREST's "no such
-// function", and no guard). `srv.dropAnswers = n`: the next n accepted changes are applied but
-// their answers lost, as on a connection that drops.
+// function", and no guard; `srv.guard = true` with it: the guard without the function, as a stale
+// schema cache or a partial rollback leaves it). `srv.dropAnswers = n`: the next n accepted
+// changes are applied but their answers lost, as on a connection that drops. `srv.beforeAnswer`:
+// an async function run after a change is applied and before its answer goes back (the page
+// waiting on it can act meanwhile).
 const { expect } = require('@playwright/test');
 
 function fakeSupabase() {
@@ -128,15 +131,21 @@ function execReport(srv, a) {
     if (first) x = first.execution || 'u' + first.id;
   }
   if (!x) {
+    // (as supabase-setup.sql since Release G: the OLDEST launch still waiting, with no result
+    // reported for it yet; set aside or not)
+    const done = new Set(
+      srv.events.filter(e => ['succeeded', 'failed', 'cancelled'].includes(e.status)).map(e => e.execution),
+    );
     const open = [...srv.rows.values()]
       .filter(
         r =>
           r.key.startsWith('exec:') &&
           !r.deleted &&
           r.data.flow === a.flow &&
-          ['requested', 'running'].includes(r.data.status),
+          ['requested', 'running'].includes(r.data.status) &&
+          !done.has(r.data.id),
       )
-      .sort((p, q) => q.data.at - p.data.at)[0];
+      .sort((p, q) => p.data.at - q.data.at)[0];
     x = open ? open.data.id : '';
   }
   const ev = {
@@ -163,6 +172,18 @@ function jsonb(v) {
   return o;
 }
 const revOf = d => (d && Number.isInteger(d.rev) && d.rev > 0 && d.rev < 1e9 ? d.rev : 0);
+function jsonbText(v) {
+  if (Array.isArray(v)) return '[' + v.map(jsonbText).join(', ') + ']';
+  if (v && typeof v === 'object')
+    return (
+      '{' +
+      Object.keys(v)
+        .map(k => JSON.stringify(k) + ': ' + jsonbText(v[k]))
+        .join(', ') +
+      '}'
+    );
+  return JSON.stringify(v);
+}
 // Tell the other devices, like Supabase Realtime would.
 function live(srv, page) {
   srv.devices
@@ -170,7 +191,7 @@ function live(srv, page) {
     .forEach(d => d.page.evaluate(() => window.__live && window.__live()).catch(() => {}));
 }
 // What cockpit_put_wrun does (see supabase/release-g-runs.sql).
-function putWrun(srv, a, page) {
+async function putWrun(srv, a, page) {
   if (!srv.wrunFn) return { missing: true };
   srv.puts.push({ ...a });
   const bad = m => ({ error: m, code: '22023', status: 400 });
@@ -183,7 +204,8 @@ function putWrun(srv, a, page) {
     d = a.p_data;
   if (d !== null) {
     if (!d || typeof d !== 'object' || Array.isArray(d)) return bad('data must be an object');
-    if (JSON.stringify(d).length > 262144) return bad('run too large (at most 256 KB)');
+    // (PostgreSQL measures the jsonb text, ", " and ": " between, in bytes)
+    if (Buffer.byteLength(jsonbText(d)) > 262144) return bad('run too large (at most 256 KB)');
     if (d.id !== id) return bad("data must keep the run's id");
     if (d.rev !== rev) return bad('rev must be the base revision + 1');
   }
@@ -213,6 +235,11 @@ function putWrun(srv, a, page) {
   srv.ops.set(a.p_op, { key: a.p_key, rev });
   srv.writes++;
   live(srv, page);
+  if (srv.beforeAnswer) {
+    const f = srv.beforeAnswer;
+    srv.beforeAnswer = null;
+    await f(page);
+  }
   if (srv.dropAnswers > 0) {
     srv.dropAnswers--;
     return { lost: true };
@@ -259,12 +286,15 @@ async function device(browser, srv, seed, opts = {}) {
       // (as the server's trigger does: an older edit arriving later is dropped)
       if (old && r.edited_at < old.edited_at) return;
       // (and, with Release G's SQL, a run can't be written back to an older revision)
-      if (srv.wrunFn && old && r.key.startsWith('wrun:')) {
-        const tidy =
-          r.deleted && !old.deleted && ['succeeded', 'cancelled'].includes((old.data || {}).status);
-        if (!(revOf(r.data) > revOf(old.data)) && !tidy) return srv.refused.push(r.key);
+      // (the next revision only; a finished run tidied away keeps the next one in its tombstone)
+      let data = r.data;
+      if ((srv.guard !== undefined ? srv.guard : srv.wrunFn) && old && r.key.startsWith('wrun:')) {
+        const o = revOf(old.data),
+          tidy = r.deleted && !old.deleted && ['succeeded', 'cancelled'].includes((old.data || {}).status);
+        if (tidy) data = { id: old.data.id, rev: o + 1 };
+        else if (revOf(r.data) !== o + 1) return srv.refused.push(r.key);
       }
-      srv.rows.set(r.key, { ...r, data: jsonb(r.data), seq: ++srv.seq });
+      srv.rows.set(r.key, { ...r, data: jsonb(data), seq: ++srv.seq });
       wrote.push({ key: r.key, seq: srv.seq });
     });
     live(srv, page);
@@ -334,4 +364,4 @@ const settle = async (...ds) => {
 };
 const report = (d, args) => d.page.evaluate(a => sb.rpc('cockpit_exec_report', a), args);
 
-module.exports = { server, device, settle, report, jsonb, revOf };
+module.exports = { server, device, settle, report, jsonb, revOf, jsonbText };
