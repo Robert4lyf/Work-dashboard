@@ -81,7 +81,7 @@ limitations).
   failure.
 - Without the SQL installed the app works as before (newer edit wins) and Settings > Health
   check says so.
-- Tested against a real PostgreSQL 16 (`tests/db/run.sh`, 94 checks), including two truly
+- Tested against a real PostgreSQL 16 (`tests/db/run.sh`, 107 checks), including two truly
   concurrent sessions, and in the browser with a two-device fake (`tests/releaseg-sync.spec.js`).
 
 ## Checkpoint 3: interaction
@@ -158,4 +158,41 @@ where practical). They're listed in the commit messages. The main ones:
 - Clear's Undo was hidden under the picker.
 - A summary was cut off after leaving its box.
 - The storage line was cleared by an unrelated write.
-- Process-run sync: being fixed (see `release-g-sync.md` once in).
+- Process-run sync (concurrency and security review, all fixed, each with a regression test;
+  details in `release-g-sync.md`):
+  - A late report from an older automation attempt could complete the newer one. A report
+    without an attempt id now goes to the oldest waiting launch, and attempts a step stopped
+    waiting for are set aside.
+  - Failure ids collided across devices; they're now unique.
+  - A run changed back while its write was in flight stayed different from the server's.
+  - One run the server refused (too large in bytes, or out of range) blocked all sync. It's now
+    parked and shown, and the rest syncs.
+  - A tidy-delete lost the revision.
+  - A restored backup was dropped silently for a run changed elsewhere.
+  - A base-0 settle, the journal trim, and the conflict cap could each drop a change without
+    a trace.
+  - Fallback mode with the guard installed lost run changes.
+  - The new function has an hourly limit, and `search_path` includes `pg_temp`.
+
+## Remaining weaknesses
+
+Not a 10/10: these are what a demanding daily user would still notice.
+
+- **Today is still long on a busy day.** 3,800px at 390 × 844 with 25 tasks. The filter and Find
+  make it quicker to narrow, but All still lists everything. Needs attention, Top 3 and
+  Waiting each repeat a task or two that's also in the list (on purpose, so nothing hides).
+- **Redraws are whole-view.** A tick redraws all of Today. It's fine at 25–100 tasks; at 300 it's
+  still several hundred ms on a slow phone (see the performance table). Patching single rows
+  is the next step, and the riskiest.
+- **The sync guarantees hold only with the migration installed**, and only for process runs.
+  Tasks, Inbox items and the rest are still newer-edit-wins per record. Conflicts live on the
+  device that made them.
+- **Not measured on a real phone.** Everything here is Chromium with mobile emulation and CPU
+  throttling. The Android keyboard (IME) behaviour of Find was emulated over CDP, not
+  typed on a device. No human usability test was run: the "first-time use" findings are a
+  reviewer's walkthrough.
+- **Tap counts for the basic journeys are unchanged.** Capture → Today is still 4 taps, through
+  the Inbox. A task's Waiting is reached from its page, not from its ⋯. Processes still live
+  under a chip in Knowledge.
+- **App-wide terms still vary** in places: "Continue" vs "Resume" for a paused run; "Clear" vs
+  "Delete".
