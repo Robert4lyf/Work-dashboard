@@ -71,7 +71,7 @@ const seed = () => {
       ver: 1,
       name: 'Weekly report',
       def,
-      started: now - 3600e3,
+      started: now - 60e3,
       at: now,
       fin: 0,
       status: 'awaiting_user',
@@ -109,8 +109,8 @@ const seed = () => {
     x('x1', 'f1', now - 2 * day, 'succeeded', now - 2 * day + 120e3),
     x('x2', 'f1', now - day, 'failed', now - day + 60e3),
     x('x3', 'f1', now - 2 * day, 'requested'), // (no word after a day: unconfirmed)
-    x('x4', 'f2', now - 600e3, 'requested'), // (awaiting)
-    x('x5', 'f2', now - 600e3, 'cancelled', now - 300e3),
+    x('x4', 'f2', now - 60e3, 'requested'), // (awaiting)
+    x('x5', 'f2', now - 60e3, 'cancelled', now - 30e3),
     x('x6', 'f1', now - 12 * day, 'succeeded', now - 12 * day + 60e3),
   ];
   S.follows = [
