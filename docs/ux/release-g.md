@@ -134,6 +134,46 @@ Accessibility:
 - Touch targets as above.
 - Reduced motion was already honoured.
 
+### Measured, before and after
+
+`tests/perf/bench.js`, Chromium at 390 × 844 with the CPU slowed ×4 (the phone figure). The
+Release F code and this branch were run alternately, twice each, on a quiet machine. Each cell is
+the lower of the two medians of 3. Busy is 100 tasks; heavy is 300 tasks plus history.
+
+| ms | busy before | busy after | heavy before | heavy after |
+|---|---:|---:|---:|---:|
+| Cold load to first frame | 537 | 518 | 1497 | 1387 |
+| App start (store read to first draw) | 299 | 291 | 1120 | 876 |
+| Today redraw (renderAll + layout) | 175 | 216 | 647 | 553 |
+| Tick a step on Today | 230 | 209 | 719 | 793 |
+| Background sync redraw | 128 | 137 | 569 | 748 |
+| Tab to Today | 126 | 154 | 556 | 565 |
+| Tab to Waiting | 55 | 57 | 347 | 377 |
+| Tab to Command Centre | 56 | 75 | 235 | 219 |
+| Tab to Processes | 57 | 64 | 178 | 210 |
+| Search keystroke | 38 | 40 | 91 | 55 |
+| save() (sync part) | 44 | 39 | 165 | 98 |
+| save() with the IndexedDB write | 57 | 50 | 180 | 115 |
+| markDirty() | 24 | 16 | 82 | 37 |
+| applyRows, 500 rows | 216 | 268 | 866 | 761 |
+| Today's elements (heavy) | | | 13,421 | 13,697 |
+
+What this shows, without dressing it up:
+
+- **Saving is faster:** save 165 → 98ms and markDirty 82 → 37ms at heavy.
+- **Search is faster:** a keystroke at heavy is 91 → 55ms. Today's Find is 0.5–1.3s faster per
+  keystroke at heavy (it no longer redraws).
+- **Start-up is faster:** 1120 → 876ms at heavy.
+- **Redraws are mixed.** Today's redraw is faster at heavy (647 → 553ms) but slower at busy
+  (175 → 216ms). The background sync redraw at heavy is slower (569 → 748ms). The tick and tab
+  numbers move both ways by amounts within the run-to-run spread seen (often ±20%).
+- **The new work Today does on each redraw:** filter counts, step-due marks, the attention
+  order, the process-run journal. In one page, switching each off cost ≤ 5ms of script
+  (unthrottled), so the remaining redraw cost is layout of a view of 13,000+ elements.
+- **Still over budget at heavy:** every whole-Today redraw (budget 100ms at ×4) and applyRows
+  (500ms). The fix is redrawing only what changed: listed under Remaining weaknesses, not done
+  here.
+
 ## Checkpoint 5: adversarial QA
 
 Eight review passes, by independent reviewers working from the code and the running app:
