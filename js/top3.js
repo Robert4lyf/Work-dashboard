@@ -222,9 +222,11 @@ function top3Click(d) {
     return renderTop3Picker();
   }
   if (d.t3none) {
-    S.top3 = null;
-    save();
-    renderToday();
+    withUndo('Top 3 cleared', () => {
+      S.top3 = null;
+      save();
+      renderToday();
+    });
     return renderTop3Picker();
   }
 }

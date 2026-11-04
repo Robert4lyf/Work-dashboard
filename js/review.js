@@ -6,7 +6,7 @@ const reviewDue = () => [5, 6, 0].includes(new Date().getDay()) && (!S.reviewed 
 function renderReview() {
   const tab = (k, l) =>
     `<button class="chip" data-rsub="${k}" aria-pressed="${reviewSub === k}">${l}</button>`;
-  let h = `<div class="chips rtabs">${tab('week', 'Week')}${tab('forecast', 'Forecast')}${tab('insights', 'Insights')}${tab('log', 'History')}</div>`;
+  let h = `<h2 class="sr">Review</h2><div class="chips rtabs" role="group" aria-label="Review view">${tab('week', 'Week')}${tab('forecast', 'Forecast')}${tab('insights', 'Insights')}${tab('log', 'History')}</div>`;
   if (reviewSub === 'week') h += renderWeek();
   if (reviewSub === 'forecast') h += renderForecast();
   if (reviewSub === 'insights') h += renderInsights();

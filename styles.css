@@ -406,12 +406,16 @@ header.compact .now .go:has(.clk) small {
   height: 18px;
   display: block;
 }
-.syncbtn .sr {
+/* words for screen readers only (a page's heading, the sync dot's state) */
+.sr {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .hstats {
   display: flex;
@@ -3759,6 +3763,34 @@ summary,
 }
 #v-today .attn .attcc::after {
   content: none;
+}
+/* (Release G) changes not saved on this device: a line that stays until a save works */
+#savewarn {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding: 10px 14px;
+  background: var(--sec-red);
+  color: #111111;
+  font-weight: 800;
+  border-bottom: 3px solid #111111;
+}
+/* (Release G) a task's summary: one line until it's being written in, so its steps come sooner */
+.fsum[rows='1'] {
+  min-height: 44px;
+  resize: none;
+}
+.fsum[rows='1']:focus {
+  min-height: 7em;
+}
+/* (Release G) the Top 3 picker's Done and Clear stay in reach below a long list */
+#sheet .t3pick + .acts {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
 }
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {

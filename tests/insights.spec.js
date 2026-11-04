@@ -198,7 +198,13 @@ test('the page shows the period, charts and sentences; exports carry the numbers
   await app.go('review');
   await page.click('[data-rsub="insights"]');
   await expect(page.locator('[data-ispan="30"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('#v-review h2')).toHaveText(['What stands out', 'Key numbers', 'Trends']);
+  // (Release G: the page's own heading, for screen readers, comes first)
+  await expect(page.locator('#v-review h2')).toHaveText([
+    'Review',
+    'What stands out',
+    'Key numbers',
+    'Trends',
+  ]);
   await expect(page.locator('#idetail h3')).toHaveText([
     'Productivity',
     'Processes',

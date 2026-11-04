@@ -232,7 +232,17 @@ function kbResults() {
   const q = kbQuery.trim().toLowerCase();
   if (!q) return '';
   const hits = S.kb
-    .filter(a => (a.title + '\n' + a.body + '\n' + kbTrail(a.cat).join(' ')).toLowerCase().includes(q))
+    .filter(a =>
+      [
+        a.title,
+        a.body,
+        kbTrail(a.cat).join(' '),
+        ...(a.steps || []).map(s => (s.title || '') + ' ' + (s.note || '')),
+      ]
+        .join('\n')
+        .toLowerCase()
+        .includes(q),
+    )
     .sort((a, b) => byName(a.title, b.title));
   if (!hits.length) return '<p class="hint">No articles match.</p>';
   return hits

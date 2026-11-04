@@ -20,6 +20,17 @@ function dueTag(n) {
     cls = n.due < t ? 'late' : n.due === t ? 'now' : 'due';
   return `<span class="tag ${cls}">${n.due < t ? 'Overdue' : n.due === t ? 'Due today' : 'Due ' + niceDate(n.due)}</span>`;
 }
+// A task's own deadline aside, a step overdue or due today says so on the task's row (it's why
+// the task is under Due).
+function stepDueTag(n) {
+  if (isDone(n) || (n.due && n.due <= today())) return '';
+  const t = today(),
+    ds = n.children.filter(c => !isDone(c) && c.due && c.due <= t).map(c => c.due);
+  if (!ds.length) return '';
+  return ds.some(d => d < t)
+    ? '<span class="tag late">Step overdue</span>'
+    : '<span class="tag now">Step due today</span>';
+}
 function row(n, i, len, sib) {
   const d = isDone(n),
     kids = n.children.length;
@@ -47,6 +58,7 @@ function row(n, i, len, sib) {
     (n.opt ? '<span class="tag opt">Optional</span>' : '') +
     (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
     dueTag(n) +
+    stepDueTag(n) +
     schedTag(n) +
     placeMark(n) +
     (nx
@@ -389,7 +401,9 @@ function renderAttention() {
   // same order as the Command Centre's. Open or folded is remembered on this device.)
   const order = [...items].sort((a, b) => a.sev - b.sev),
     [first, ...rest] = order;
-  const sum = `<b>Needs attention <span class="attn-n">${items.length}</span></b><small>${attentionCounts(items)}</small>`;
+  // (a heading, as Top 3, Scheduled and Waiting are: the first thing a screen reader's heading list
+  // finds on Today)
+  const sum = `<b role="heading" aria-level="2">Needs attention <span class="attn-n">${items.length}</span></b><small>${attentionCounts(items)}</small>`;
   return `<div class="attn"><div class="attsum sev${first.sev}" id="attsum"><div class="attsumline">${sum}</div></div><div class="attlist box attfail attfirst">${attentionRow(first)}</div>${
     rest.length
       ? `<details id="attd" class="attmore"${attnOpen() ? ' open' : ''}><summary>${rest.length} more</summary><div class="attlist box">${rest.map(attentionRow).join('')}</div></details>`
@@ -506,7 +520,9 @@ function renderNode({ n, parents }) {
     kids = n.children.length,
     top = !parents.length,
     q = parents[0] || n; // (the quest: a step's page shares its resources and saved place)
-  let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
+  // (opened from another view: the way back names it)
+  const from = typeof atReturn === 'function' && atReturn() ? RETURN_NAME[returnTo.view] : 'Today';
+  let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; ${from}</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
   // The facts: what's set on this task, each a tap to change. First what you're here for: how
   // far it's got and what's next.
@@ -544,7 +560,7 @@ function renderNode({ n, parents }) {
   if (q.resume && !isDone(q) && placeFits(q, n)) h += placeCard(q);
   // Its summary, under its name: where it's at, written by you (or drafted by Claude, on asking).
   if (top)
-    h += `<label class="f" for="fsum">Summary and updates <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="4" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>${summaryBox(n)}`;
+    h += `<label class="f" for="fsum">Summary and updates <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="${n.summary ? 3 : 1}" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>${summaryBox(n)}`;
   // Its tag, folded to the one it has (tap to change).
   if (top)
     h += `<details id="tagd" class="tagd"${panels.tagd ? ' open' : ''}><summary>Tag: ${n.tag ? tagBadge(n.tag) : '<span class="hint">none</span>'}</summary>${tagPicker('q', n.id, n.tag)}</details>`;

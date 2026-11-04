@@ -110,15 +110,18 @@ function attentionItems() {
         );
     });
   const today2 = [];
-  (function w(ns) {
+  // (a step is named with its task, "Client onboarding: Review": a step's name alone is often
+  // shared by many tasks)
+  (function w(ns, q) {
     ns.forEach(n => {
       if (isDone(n)) return;
+      const name = q ? `${q.text}: ${n.text}` : n.text;
       if (n.due && n.due < t)
-        add(1, n.text, 'Overdue, due ' + niceDate(n.due), 'Open task', `data-open="${n.id}"`);
-      else if (n.due === t) today2.push([n.text, 'Due today', 'Open task', `data-open="${n.id}"`]);
-      w(n.children);
+        add(1, name, 'Overdue, due ' + niceDate(n.due), 'Open task', `data-open="${n.id}"`);
+      else if (n.due === t) today2.push([name, 'Due today', 'Open task', `data-open="${n.id}"`]);
+      w(n.children, q || n);
     });
-  })(S.quests);
+  })(S.quests, null);
   waitingNodes()
     .filter(x => x.n.wait.due && x.n.wait.due <= t)
     .forEach(x => {

@@ -46,6 +46,7 @@ function go(v) {
   if (triage && v !== 'inbox' && !(triage.ref && kbEdit && kbEdit.fromInbox)) triage = null;
   if (v !== 'waiting') waitMark = ''; // (a deep link's mark on a waiting item lasts a visit)
   if (v === 'account') setSub = null; // (the Settings tab opens its index; openSettings goes on to a group)
+  keepDrafts();
   view = v;
   if (v !== 'today') $('#ptitle').hidden = true;
   if (imgShown || kbImgShown) closeImgs();
@@ -68,6 +69,7 @@ function go(v) {
     'ops',
   ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
+  restoreDrafts();
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
   // (only when it's off screen: asking always makes the browser lay out the whole page first)
@@ -79,16 +81,61 @@ function go(v) {
   fadeTabs();
   window.scrollTo(0, 0);
 }
+/* Release G: where a task's page was opened from, so back (and its ‹ crumb) returns there:
+   another view (Waiting, Forecast, Search, the Command Centre) with its scroll position, or
+   Today's list where it was scrolled to. */
+let returnTo = null, // { view, sub, y, depth }: the view a task's page was opened from
+  listY = 0; // (where Today's list was scrolled to when a task was opened from it)
+const RETURN_NAME = {
+  waiting: 'Waiting',
+  review: 'Review',
+  search: 'Search',
+  ops: 'Command Centre',
+  inbox: 'Inbox',
+};
+// Words typed into a box and left (going to another view or task) come back with it: kept per
+// box, view and task, so one task's half-typed step never turns up on another's page.
+const drafts = {};
+const draftKey = id => `${id}|${view}|${path.join('/')}`;
+function keepDrafts() {
+  // (never a password)
+  COMPOSE.filter(id => id !== 'apass').forEach(id => {
+    const e = document.getElementById(id);
+    if (e && e.offsetParent !== null) drafts[draftKey(id)] = e.value;
+  });
+}
+function restoreDrafts() {
+  COMPOSE.forEach(id => {
+    const e = document.getElementById(id),
+      v = drafts[draftKey(id)];
+    if (e && !e.value && v) e.value = v;
+  });
+}
 function openPath(p) {
+  if (!path.length && p.length && view === 'today') listY = window.scrollY;
+  keepDrafts();
   path = p;
   reorder = false;
+  if (returnTo && p.length < returnTo.depth) returnTo = null;
   renderToday();
-  window.scrollTo(0, 0);
+  restoreDrafts();
+  window.scrollTo(0, p.length ? 0 : listY);
 }
+// Back from a task's page opened from another view: to that view, where it was.
+function returnBack() {
+  const r = returnTo;
+  returnTo = null;
+  path = [];
+  if (r.view === 'review') reviewSub = r.sub;
+  go(r.view);
+  window.scrollTo(0, r.y);
+}
+const atReturn = () => returnTo && view === 'today' && path.length === returnTo.depth;
 document.querySelectorAll('nav button[data-v]').forEach(
   b =>
     (b.onclick = () => {
       if (!window.appReady) return; // (not started yet)
+      returnTo = null; // (a tab is a fresh start: back no longer leads to where a task came from)
       if (b.dataset.v === 'today' && view === 'today' && path.length) {
         openPath([]);
       }
@@ -389,8 +436,18 @@ document.addEventListener('click', e => {
   if (d.open) {
     const r = find(d.open);
     if (r) {
-      openPath([...r.parents.map(p => p.id), r.n.id]);
+      const p = [...r.parents.map(p => p.id), r.n.id];
+      // (from another view: remembered, to come back to)
+      const from =
+        view !== 'today' && RETURN_NAME[view]
+          ? { view, sub: reviewSub, y: window.scrollY, depth: p.length }
+          : null;
+      openPath(p);
       if (view !== 'today') go('today');
+      if (from) {
+        returnTo = from;
+        renderToday();
+      }
     }
   }
   if (d.v && b.closest('header, #v-waiting, #waitsec')) {
@@ -430,7 +487,10 @@ document.addEventListener('click', e => {
     const i = d.goto === 'inbox' && $('#iin');
     i && i.focus();
   }
-  if (d.crumb !== undefined) openPath(path.slice(0, +d.crumb + 1));
+  if (d.crumb !== undefined) {
+    if (+d.crumb === -1 && atReturn()) returnBack();
+    else openPath(path.slice(0, +d.crumb + 1));
+  }
   if (d.toggle) {
     const r = find(d.toggle);
     if (!r) return;
@@ -717,10 +777,7 @@ document.addEventListener('click', e => {
     renderNoteImgs();
   }
   if (d.delnimg && arm(b, 'Delete?')) deleteNoteImg(d.delnimg);
-  if (d.waitclear) {
-    setWaiting(d.waitclear, null);
-    toast('Back on your list');
-  }
+  if (d.waitclear) withUndo('Back on your list', () => setWaiting(d.waitclear, null));
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) togglePause();
   if (b.id === 'undo') undo();
@@ -1111,6 +1168,7 @@ function appBack() {
     renderKnowledge();
     return true;
   }
+  if (atReturn()) return (returnBack(), true);
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
   if (view === 'inbox' && triage) return (exitTriage(), true);
   if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
@@ -1118,6 +1176,10 @@ function appBack() {
   if (view !== 'today') return (go('today'), true);
   return false;
 }
+// (the app puts the page where it belongs on back: the browser's own restoring would undo it)
+try {
+  history.scrollRestoration = 'manual';
+} catch (e) {}
 try {
   // (after a reload the entries are already there)
   if (!(history.state && history.state.app === 'in')) {

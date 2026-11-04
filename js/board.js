@@ -15,10 +15,9 @@ function moveToInboxNow(r) {
   delete r.n.since; // it starts afresh if it comes back to Today
   delete r.n.kept;
   delete r.n.scheduled; // (nor scheduled: the Inbox is for work still to be sorted)
-  (function undone(x) {
-    x.done = false;
-    x.children.forEach(undone);
-  })(r.n);
+  // (it's open again, but its finished steps stay finished: Release G, they used to be un-ticked
+  // without a word, and that progress was lost)
+  r.n.done = false;
   const it = { id: uid(), text: r.n.text, node: r.n, tag: r.n.tag, project: r.n.project };
   if (r.n.wait) {
     it.wait = r.n.wait; // still waiting (and chased) from the Inbox

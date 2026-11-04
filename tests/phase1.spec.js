@@ -55,7 +55,7 @@ test('busy day: one attention summary, ordered by urgency; a workflow and its ow
   expect(await attRows(page, '#attd')).toEqual([
     ['Tidy downloads', 'Open automation details'],
     ['Fletcher Way', 'Open task'],
-    ['Review', 'Open task'],
+    ['Client onboarding: Review', 'Open task'], // (Release G: a step named with its task)
     ['Hear back on figures', 'Open in Waiting'],
     ['Filbert Close', 'Open task'],
     ['Floor plan sign-off', 'Open in Waiting'],
