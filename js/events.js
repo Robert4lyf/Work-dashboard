@@ -46,6 +46,7 @@ function go(v) {
   if (triage && v !== 'inbox' && !(triage.ref && kbEdit && kbEdit.fromInbox)) triage = null;
   if (v !== 'waiting') waitMark = ''; // (a deep link's mark on a waiting item lasts a visit)
   if (v === 'account') setSub = null; // (the Settings tab opens its index; openSettings goes on to a group)
+  keepDrafts();
   view = v;
   if (v !== 'today') $('#ptitle').hidden = true;
   if (imgShown || kbImgShown) closeImgs();
@@ -68,6 +69,7 @@ function go(v) {
     'ops',
   ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
+  restoreDrafts();
   // Keep the current tab visible when the tab bar is scrolled sideways.
   const tab = document.querySelector(`nav [data-v="${v}"]`);
   // (only when it's off screen: asking always makes the browser lay out the whole page first)
@@ -79,16 +81,74 @@ function go(v) {
   fadeTabs();
   window.scrollTo(0, 0);
 }
+/* Release G: where a task's page was opened from, so back (and its ‹ crumb) returns there:
+   another view (Waiting, Forecast, Search, the Command Centre) with its scroll position, or
+   Today's list where it was scrolled to. */
+let returnTo = null, // { view, sub, y, depth }: the view a task's page was opened from
+  listY = 0, // (where Today's list was scrolled to when a task was opened from it)
+  listAt = null; // ({ id, top }: the task opened, and where its row was on the screen)
+const RETURN_NAME = {
+  waiting: 'Waiting',
+  review: 'Review',
+  search: 'Search',
+  ops: 'Command Centre',
+  inbox: 'Inbox',
+};
+// Words typed into a box and left (going to another view or task) come back with it: kept per
+// box, view and task, so one task's half-typed step never turns up on another's page.
+const drafts = {};
+const draftKey = id => `${id}|${view}${view === 'today' ? '|' + path.join('/') : ''}`;
+function keepDrafts() {
+  // (never a password)
+  COMPOSE.filter(id => id !== 'apass').forEach(id => {
+    const e = document.getElementById(id);
+    if (e && e.offsetParent !== null) drafts[draftKey(id)] = e.value;
+  });
+}
+function restoreDrafts() {
+  COMPOSE.forEach(id => {
+    const e = document.getElementById(id),
+      v = drafts[draftKey(id)];
+    if (e && !e.value && v) e.value = v;
+  });
+}
 function openPath(p) {
+  if (!path.length && p.length && view === 'today') {
+    listY = window.scrollY;
+    const row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(p[0])}"]`);
+    listAt = row ? { id: p[0], top: row.getBoundingClientRect().top } : null;
+  }
+  keepDrafts();
   path = p;
   reorder = false;
+  if (returnTo && p.length < returnTo.depth) returnTo = null;
   renderToday();
-  window.scrollTo(0, 0);
+  restoreDrafts();
+  window.scrollTo(0, p.length ? 0 : listY);
+  // (back on the list: the task's row where it was on the screen, whatever the rows above it
+  // measure now that they're drawn afresh)
+  if (!p.length && listAt) {
+    const row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(listAt.id)}"]`);
+    if (row) window.scrollBy(0, row.getBoundingClientRect().top - listAt.top);
+    listAt = null;
+  }
 }
+// Back from a task's page opened from another view: to that view, where it was.
+function returnBack() {
+  const r = returnTo;
+  returnTo = null;
+  keepDrafts(); // (the task page's words, kept under its own path before it's left)
+  path = [];
+  if (r.view === 'review') reviewSub = r.sub;
+  go(r.view);
+  window.scrollTo(0, r.y);
+}
+const atReturn = () => returnTo && view === 'today' && path.length === returnTo.depth;
 document.querySelectorAll('nav button[data-v]').forEach(
   b =>
     (b.onclick = () => {
       if (!window.appReady) return; // (not started yet)
+      returnTo = null; // (a tab is a fresh start: back no longer leads to where a task came from)
       if (b.dataset.v === 'today' && view === 'today' && path.length) {
         openPath([]);
       }
@@ -363,6 +423,18 @@ document.addEventListener('click', e => {
   if (d.resume) resumeWork(d.resume);
   if (d.clearplace) clearPlace(d.clearplace);
   top3Click(d);
+  if (d.tfindopen) {
+    // (open: closes it, and clears its words; closed: opens it)
+    todayFindOpen = !(todayFindOpen || todayFind);
+    todayFind = '';
+    renderToday();
+    const f = document.getElementById('tfind');
+    if (f) f.focus();
+  }
+  if (d.tfilter) {
+    if (d.tfindclear) todayFind = '';
+    setTodayFilter(d.tfilter);
+  }
   linkClick(d);
   triageClick(d, b);
   waitClick(d);
@@ -377,8 +449,20 @@ document.addEventListener('click', e => {
   if (d.open) {
     const r = find(d.open);
     if (r) {
-      openPath([...r.parents.map(p => p.id), r.n.id]);
+      const p = [...r.parents.map(p => p.id), r.n.id];
+      // (from another view: remembered, to come back to)
+      const from =
+        view !== 'today' && RETURN_NAME[view]
+          ? { view, sub: reviewSub, y: window.scrollY, depth: p.length }
+          : null;
+      openPath(p);
       if (view !== 'today') go('today');
+      // (opened from Today itself: back is to Today's list, whatever came before)
+      returnTo = from;
+      if (from) {
+        renderToday();
+        restoreDrafts();
+      }
     }
   }
   if (d.v && b.closest('header, #v-waiting, #waitsec')) {
@@ -418,7 +502,10 @@ document.addEventListener('click', e => {
     const i = d.goto === 'inbox' && $('#iin');
     i && i.focus();
   }
-  if (d.crumb !== undefined) openPath(path.slice(0, +d.crumb + 1));
+  if (d.crumb !== undefined) {
+    if (+d.crumb === -1 && atReturn()) returnBack();
+    else openPath(path.slice(0, +d.crumb + 1));
+  }
   if (d.toggle) {
     const r = find(d.toggle);
     if (!r) return;
@@ -705,10 +792,7 @@ document.addEventListener('click', e => {
     renderNoteImgs();
   }
   if (d.delnimg && arm(b, 'Delete?')) deleteNoteImg(d.delnimg);
-  if (d.waitclear) {
-    setWaiting(d.waitclear, null);
-    toast('Back on your list');
-  }
+  if (d.waitclear) withUndo('Back on your list', () => setWaiting(d.waitclear, null));
   if (b.id === 'stopdone' || d.stop === 'done') stopAndSave(true);
   if (d.pause) togglePause();
   if (b.id === 'undo') undo();
@@ -1029,7 +1113,12 @@ function start(pics, kv) {
   deferStart = !!sb && navigator.onLine;
   if (!deferStart) rollover();
   if (!deferStart && timerDue()) finishTimer(true);
-  else renderAll();
+  else {
+    // (the view itself and the header are drawn once, by go() below, not here as well: Release
+    // G, half of starting up on a heavy day)
+    syncRinging();
+    renderZen();
+  }
   heldAtStart = deferStart ? holdDue() : '';
   setTimeout(() => releaseHeld(heldAtStart), 20000); // (never held for long, whatever happens)
   // An article left half-written when the app was closed (or Android closed it) comes back.
@@ -1094,6 +1183,7 @@ function appBack() {
     renderKnowledge();
     return true;
   }
+  if (atReturn()) return (returnBack(), true);
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
   if (view === 'inbox' && triage) return (exitTriage(), true);
   if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
@@ -1101,6 +1191,10 @@ function appBack() {
   if (view !== 'today') return (go('today'), true);
   return false;
 }
+// (the app puts the page where it belongs on back: the browser's own restoring would undo it)
+try {
+  history.scrollRestoration = 'manual';
+} catch (e) {}
 try {
   // (after a reload the entries are already there)
   if (!(history.state && history.state.app === 'in')) {

@@ -82,7 +82,7 @@ function rekeyFollows(from, to) {
   });
   // A workflow's waiting stage waiting through that item now waits through the step.
   (S.wruns || []).forEach(r => {
-    if (r.live && r.live.wait === from) r.live.wait = to;
+    if (r.live && r.live.wait === from) rekeyRunWait(r, from, to); // (noted, for sync: see workflows.js)
   });
 }
 const FOLLOW_LABEL = {

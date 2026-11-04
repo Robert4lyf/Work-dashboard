@@ -323,7 +323,7 @@ revoke execute on function public.cockpit_revoke_exec_token() from public, anon;
 grant execute on function public.cockpit_revoke_exec_token() to authenticated;
 
 -- One row per report. `execution` is the app's execution id when it's known: given by the
--- caller, matched by run_ref to an earlier report, or paired here with the newest unconfirmed
+-- caller, matched by run_ref to an earlier report, or paired here with the oldest unconfirmed
 -- launch of that flow. Otherwise the app makes an execution of its own for the report.
 create sequence if not exists public.cockpit_exec_events_seq;
 create table if not exists public.cockpit_exec_events (
@@ -363,7 +363,7 @@ end $$;
 create or replace function public.cockpit_exec_report(
   token text, flow text, status text, message text default '', execution text default '', run_ref text default ''
 ) returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   u uuid;
   f text := trim(coalesce(flow, ''));
@@ -393,8 +393,10 @@ begin
   delete from cockpit_notices n where n.user_id = u and n.key like 'exec:%' and n.sent_at < now() - interval '30 days';
   -- Which execution this is about: the caller's say, else the run it reported before (an
   -- earlier report with no execution of its own stands for one, named 'u' + its row id, as the
-  -- app names it), else the newest launch of this flow still waiting to hear (requested or
-  -- running, within a day).
+  -- app names it), else the OLDEST launch of this flow still waiting to hear: requested or
+  -- running, within a day, with no result reported for it yet. (Oldest, not newest: a report
+  -- coming late from an attempt a retry has set aside goes to that attempt, never to the newer
+  -- one that took its place. Release G.)
   if x = '' and r <> '' then
     select coalesce(nullif(e.execution, ''), 'u' || e.id) into x from cockpit_exec_events e
       where e.user_id = u and e.flow = f and e.run_ref = r
@@ -408,7 +410,10 @@ begin
         and i.data->>'flow' = f and i.data->>'status' in ('requested', 'running')
         and (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end)
             > (extract(epoch from now() - interval '24 hours') * 1000)::bigint
-      order by (i.data->>'at')::bigint desc limit 1;
+        and not exists (select 1 from cockpit_exec_events e where e.user_id = u
+          and e.execution = i.data->>'id' and e.status in ('succeeded', 'failed', 'cancelled'))
+      order by (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end), i.key
+      limit 1;
     x := coalesce(x, '');
     if x !~ '^[A-Za-z0-9_-]{1,40}$' then x := ''; end if;
   end if;

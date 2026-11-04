@@ -142,7 +142,7 @@ test('the five lists come from the records; every row opens its thing; nothing r
   const before = await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
   const weekend = [5, 6, 0].includes(new Date().getDay());
   // Today's summary counts the same items the Command Centre lists.
-  await expect(page.locator('#attd > summary')).toContainText('Needs attention ' + (weekend ? 7 : 6));
+  await expect(page.locator('#attsum')).toContainText('Needs attention ' + (weekend ? 7 : 6));
   await page.click('#v-today .attcc');
   await expect(page.locator('#v-ops .opshead')).toHaveText('Command Centre');
   await expect(page.locator('.opsync')).toContainText("Not syncing this device's records only.");

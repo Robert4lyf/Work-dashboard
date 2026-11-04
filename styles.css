@@ -406,12 +406,16 @@ header.compact .now .go:has(.clk) small {
   height: 18px;
   display: block;
 }
-.syncbtn .sr {
+/* words for screen readers only (a page's heading, the sync dot's state) */
+.sr {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: 0;
+  padding: 0;
   overflow: hidden;
   clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .hstats {
   display: flex;
@@ -1547,7 +1551,7 @@ textarea.fld {
 .uprow input.fld {
   width: auto;
   flex: 1 1 140px;
-  min-height: 40px;
+  min-height: 44px;
   padding: 4px 8px;
 }
 .uprow {
@@ -3555,6 +3559,245 @@ nav button[aria-current='page'] {
     font-weight: 800;
   }
 }
+/* Release G: Today's list, easier to scan. A task's steps as a count and a thin line along the
+   row's foot (no taller than the row); a Top 3 priority marked with its number; the filter and
+   Find under the title. */
+#v-today .list .row {
+  position: relative;
+}
+#v-today .list .row .stepbar {
+  position: absolute;
+  left: 12px;
+  right: 6px;
+  bottom: 0;
+  gap: 1px;
+  margin: 0;
+}
+#v-today .list .row .stepbar i {
+  height: 3px;
+  min-width: 2px;
+  box-shadow: none;
+  background: var(--line);
+  opacity: 0.18;
+}
+#v-today .list .row .stepbar :is(.s-done, .s-next, .s-wait) {
+  opacity: 1;
+}
+#v-today .list .row .stepbar .s-next {
+  opacity: 0.55;
+}
+.sfrac {
+  margin-right: 6px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.t3mark::before {
+  /* (the number isn't part of the name: drawn, and read out, before it) */
+  content: attr(data-rank);
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35em;
+  height: 1.35em;
+  margin-right: 8px;
+  padding: 0 3px;
+  vertical-align: 0.06em;
+  font-size: 0.82em;
+  font-weight: 900;
+  background: var(--sec-blue);
+  color: #111111;
+  border: 1.5px solid #111111;
+}
+.tfilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border: 3px solid var(--edge);
+  border-top: 0;
+  background: var(--panel);
+}
+:is(#v-today, .tmain) > .tfilter + .list.box {
+  border-width: 3px;
+  border-top: 0;
+}
+.tfilter .chips {
+  display: flex;
+  gap: 6px;
+}
+.tfilter .chip {
+  min-height: 44px;
+}
+.tfilter .chip small {
+  font-weight: 800;
+  margin-left: 2px;
+}
+.tfindbtn {
+  margin-left: auto;
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.tfindbtn svg {
+  width: 20px;
+  height: 20px;
+}
+.tfind {
+  flex: 1 1 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+}
+/* Needs attention, compact: the bar, the one that matters most, then the rest folded */
+.attlist.attfirst {
+  margin: 0;
+  border-width: 3px;
+  border-top-width: 0;
+}
+.attmore {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.attmore > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 3px solid var(--edge);
+  border-top: 0;
+  background: var(--panel);
+  font-weight: 800;
+  cursor: pointer;
+}
+.attmore > summary::before {
+  content: '▸';
+}
+.attmore[open] > summary::before {
+  content: '▾';
+}
+.attmore > summary::-webkit-details-marker {
+  display: none;
+}
+.attmore > .attlist {
+  margin: 0;
+  border-width: 3px;
+  border-top-width: 0;
+}
+/* Release G: touch targets. The small controls used every day reach at least 44 x 44 CSS px to
+   the finger, without growing on screen: an invisible margin of touch around each (it stops
+   short of its neighbours, which keep their own). Fields, chips and folded sections are 44px
+   tall themselves. */
+:where(
+  .qmore,
+  .meter,
+  .row .check,
+  .mv,
+  .hsearch,
+  .syncbtn,
+  .attcc,
+  .chip,
+  .linkbtn,
+  .day,
+  .x,
+  .btn.sm,
+  .open,
+  .now .go,
+  .ititle,
+  .crumbs button,
+  .tag.estpick,
+  .dellink
+) {
+  position: relative;
+}
+:where(
+  .qmore,
+  .meter,
+  .row .check,
+  .mv,
+  .hsearch,
+  .syncbtn,
+  .attcc,
+  .btn.sm,
+  .open,
+  .now .go,
+  .ititle,
+  .crumbs button,
+  .dellink
+)::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+:where(.tag.estpick)::after {
+  content: '';
+  position: absolute;
+  inset: -5px -3px;
+}
+:where(.chip, .day, .x)::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+:where(.linkbtn)::after {
+  content: '';
+  position: absolute;
+  inset: -12px -6px;
+}
+/* (a link inside a line of text keeps to its line: its neighbours are words, not controls) */
+:where(p, small, .hint) .linkbtn::after {
+  inset: -6px -2px;
+}
+summary,
+.fld:not(textarea) {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+/* (Command Centre clips its own overflow, so it can't reach out: it's 44px tall itself) */
+#v-today .attn .attcc {
+  min-height: 44px;
+}
+#v-today .attn .attcc::after {
+  content: none;
+}
+/* (Release G) changes not saved on this device: a line that stays until a save works */
+#savewarn {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  padding: 10px 14px;
+  background: var(--sec-red);
+  color: #111111;
+  font-weight: 800;
+  border-bottom: 3px solid #111111;
+}
+/* (Release G) a task's summary: one line until it's being written in, so its steps come sooner */
+.fsum[rows='1'] {
+  min-height: 44px;
+  resize: none;
+}
+.fsum[rows='1']:focus {
+  min-height: 7em;
+}
+/* (Release G) the Top 3 picker's Done and Clear stay in reach below a long list */
+#sheet .t3pick + .acts {
+  position: sticky;
+  bottom: 0;
+  margin: 0 -16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+}
+/* (Release G, measured) folded sections at the foot of Today aren't laid out until opened or
+   near. (Rows themselves were tried too: 28-38% off a redraw, but the browser drawing them in
+   over several frames moved the list under a returning reader: not worth it.) */
+#v-today .todaymore > details:not([open]) {
+  content-visibility: auto;
+}
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {
   padding-right: 12px;
@@ -4176,4 +4419,25 @@ nav button[aria-current='page'] {
 .kbimghead h3 {
   margin: 0;
   font-size: inherit;
+}
+
+/* Release G: process-run sync state */
+.wsync.ws-pending {
+  color: var(--wait);
+}
+.wsync.ws-conflict {
+  color: var(--err);
+  font-weight: 600;
+}
+.wconf {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-color: var(--err);
+}
+.wconf p {
+  margin: 0 0 6px;
+}
+.wsync.ws-refused {
+  color: var(--err);
+  font-weight: 600;
 }

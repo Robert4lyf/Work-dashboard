@@ -29,3 +29,12 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  # The Release G SQL (supabase/release-g-runs.sql) against a real PostgreSQL: the runner has
+  # PostgreSQL installed, not running; the script starts a throwaway cluster of its own.
+  db:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: tests/db/run.sh

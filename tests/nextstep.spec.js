@@ -183,6 +183,12 @@ test('a task left asking stays open over reloads, after an earlier finish (via I
     save();
     renderAll();
   });
+  // (Release G: the move kept its finished step; un-ticked here, so ticking it asks again)
+  expect(await page.evaluate(() => [S.quests[0].done, S.quests[0].children[0].done])).toEqual([false, true]);
+  await page.evaluate(() => {
+    S.quests[0].children[0].done = false;
+    save();
+  });
   await page.evaluate(() => {
     const bf = snapshot();
     S.quests[0].children[0].done = true;

@@ -6,15 +6,18 @@ const dragAttr = key => (wideMQ.matches ? ` draggable="true" data-drag="${key}"`
 function moveToInbox(id) {
   const r = find(id);
   if (!r) return;
+  // (Release G: with Undo, as a move is easily made by mistake)
+  withUndo('Moved to inbox', () => moveToInboxNow(r));
+}
+function moveToInboxNow(r) {
   const bf = snapshot();
   r.arr.splice(r.arr.indexOf(r.n), 1);
   delete r.n.since; // it starts afresh if it comes back to Today
   delete r.n.kept;
   delete r.n.scheduled; // (nor scheduled: the Inbox is for work still to be sorted)
-  (function undone(x) {
-    x.done = false;
-    x.children.forEach(undone);
-  })(r.n);
+  // (it's open again, but its finished steps stay finished: Release G, they used to be un-ticked
+  // without a word, and that progress was lost)
+  r.n.done = false;
   const it = { id: uid(), text: r.n.text, node: r.n, tag: r.n.tag, project: r.n.project };
   if (r.n.wait) {
     it.wait = r.n.wait; // still waiting (and chased) from the Inbox
@@ -23,7 +26,6 @@ function moveToInbox(id) {
   delete r.n.wait; // (the item's are the ones that count)
   S.inbox.unshift(it);
   settle(bf);
-  toast('Moved to inbox');
 }
 
 let dragging = null,

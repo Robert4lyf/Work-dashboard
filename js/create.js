@@ -32,7 +32,8 @@ const KB_VIEWS = [
   ['proc', 'Processes'],
 ];
 function kbTabs() {
-  return `<div class="kbtabs"><div class="chips viewsw" role="group" aria-label="Knowledge view">${KB_VIEWS.map(([k, l]) => `<button class="chip" data-kbview="${k}" aria-pressed="${kbView === k}">${l}</button>`).join('')}</div><button class="btn sm newbtn" data-newsheet="1" aria-haspopup="dialog" aria-label="New: a task, a process, an article or a desktop automation">+ New</button></div>`;
+  // (Release G: the page's heading, for screen readers: the tabs say which view is open)
+  return `<h2 class="sr">Knowledge</h2><div class="kbtabs"><div class="chips viewsw" role="group" aria-label="Knowledge view">${KB_VIEWS.map(([k, l]) => `<button class="chip" data-kbview="${k}" aria-pressed="${kbView === k}">${l}</button>`).join('')}</div><button class="btn sm newbtn" data-newsheet="1" aria-haspopup="dialog" aria-label="New: a task, a process, an article or a desktop automation">+ New</button></div>`;
 }
 // Processes: what needs you first (failed runs), then what's under way (one tap to continue),
 // then the processes and guides you can follow again, then the desktop automations. A guide is an

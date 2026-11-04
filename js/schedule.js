@@ -121,6 +121,12 @@ function setSchedule(id, date, time) {
     return toast('Pause or finish the focus session on it first', false, 3500);
   const sc = cleanSched({ date, time });
   if (!sc) return;
+  // (Release G: with Undo)
+  withUndo(`Scheduled ${dayLabel(date)}${sc.time ? ', ' + sc.time : ''}`, () =>
+    applySchedule(n, r, onToday, later, sc, date),
+  );
+}
+function applySchedule(n, r, onToday, later, sc, date) {
   n.scheduled = sc;
   if (onToday && date > today()) {
     r.arr.splice(r.arr.indexOf(n), 1);
@@ -137,15 +143,15 @@ function setSchedule(id, date, time) {
   S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
   save();
   renderAll();
-  toast(`Scheduled ${dayLabel(date)}${sc.time ? ', ' + sc.time : ''}`);
 }
 function clearSchedule(id) {
   const r = find(id) || find(id, S.later);
   if (!r || !r.n.scheduled) return;
-  delete r.n.scheduled;
-  save();
-  renderAll();
-  toast('Unscheduled');
+  withUndo('Unscheduled', () => {
+    delete r.n.scheduled;
+    save();
+    renderAll();
+  });
 }
 function schedClick(d) {
   if (d.schedset) return openScheduleSheet(d.schedset);
@@ -175,15 +181,18 @@ function renderScheduledToday() {
 // Today's waiting steps, most urgent first, each with its task. A task with nothing else left to
 // do is shown only here; one with other steps to do stays in Today's tasks as well.
 function todayWaiting() {
+  // (each waiting step's task from one walk of Today, not a search per step; each one's urgency
+  // worked out once, not on every comparison: Release G, measured at 70ms on a heavy day)
+  const top = new Map(),
+    walk = (n, q) => {
+      top.set(n.id, q);
+      n.children.forEach(c => walk(c, q));
+    };
+  S.quests.forEach(q => walk(q, q));
+  const rank = new Map(BUCKETS.map(([k], i) => [k, i]));
   return openWaiting(S.quests)
-    .map(x => {
-      const r = find(x.n.id);
-      return { ...x, q: r ? r.parents[0] || r.n : null };
-    })
-    .sort((a, b) => {
-      const o = k => BUCKETS.findIndex(([x]) => x === waitBucket(k.n.wait));
-      return o(a) - o(b) || (a.n.wait.due || '9').localeCompare(b.n.wait.due || '9');
-    });
+    .map(x => ({ ...x, q: top.get(x.n.id) || null, o: rank.get(waitBucket(x.n.wait)) ?? -1 }))
+    .sort((a, b) => a.o - b.o || (a.n.wait.due || '9').localeCompare(b.n.wait.due || '9'));
 }
 function renderWaitingToday() {
   const ws = todayWaiting();

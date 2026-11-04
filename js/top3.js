@@ -74,22 +74,20 @@ function toggleTop3(id) {
     ids = st.active.map(q => q.id),
     q = S.quests.find(x => x.id === id);
   if (!q) return;
-  if (ids.includes(id)) {
-    setTop3(
-      ids.filter(x => x !== id),
-      { drop: [id] },
+  // (Release G: taking one out, or adding one, with Undo)
+  if (ids.includes(id))
+    withUndo('Removed from Top 3', () =>
+      setTop3(
+        ids.filter(x => x !== id),
+        { drop: [id] },
+      ),
     );
-    toast('Removed from Top 3');
-  } else if ([...st.aside, ...st.back].includes(q)) {
-    setTop3(ids, { drop: [id] });
-    toast('Removed from Top 3');
-  } else if (!canAct(q))
+  else if ([...st.aside, ...st.back].includes(q))
+    withUndo('Removed from Top 3', () => setTop3(ids, { drop: [id] }));
+  else if (!canAct(q))
     toast(`${q.scheduled ? 'Scheduled' : 'Waiting'}: not a priority to work on now`, false, 3000);
   else if (ids.length >= TOP3_MAX) openTop3Picker(`Top 3 is full. Take one out to add ${q.text}.`);
-  else {
-    setTop3([...ids, id]);
-    toast('Added to Top 3');
-  }
+  else withUndo('Added to Top 3', () => setTop3([...ids, id]));
 }
 // A compact label of how far a task has got.
 function progressLine(n) {
@@ -224,9 +222,13 @@ function top3Click(d) {
     return renderTop3Picker();
   }
   if (d.t3none) {
-    S.top3 = null;
-    save();
-    renderToday();
-    return renderTop3Picker();
+    // (the picker closes, so the Undo is in sight, not under it)
+    closeSheet();
+    withUndo('Top 3 cleared', () => {
+      S.top3 = null;
+      save();
+      renderToday();
+    });
+    return;
   }
 }

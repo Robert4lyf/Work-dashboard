@@ -8,8 +8,10 @@ let kbArt = null, // the article being read
   kbImgShown = null, // an article's picture shown full size
   kbReturn = false, // the article was opened from a task's page: its ‹ goes back there
   kbRunBack = null; // the article was opened from a run being followed: its ‹ goes back to it
-const byName = (a, b) =>
-  a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) || (a < b ? -1 : a > b ? 1 : 0);
+// (one collator for every comparison: localeCompare with options builds one each time, which was
+// most of a search keystroke with hundreds of articles. The order is the same.)
+const nameCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+const byName = (a, b) => nameCollator.compare(a, b) || (a < b ? -1 : a > b ? 1 : 0);
 // A flow's Run URL (Power Automate Desktop: the flow's Properties > Details). Only that kind of
 // link: a synced row mustn't be able to put any other link behind a button.
 const FLOW_URL = /^ms-powerautomate:\/[^\s"'<>`]*$/i;
@@ -230,7 +232,17 @@ function kbResults() {
   const q = kbQuery.trim().toLowerCase();
   if (!q) return '';
   const hits = S.kb
-    .filter(a => (a.title + '\n' + a.body + '\n' + kbTrail(a.cat).join(' ')).toLowerCase().includes(q))
+    .filter(a =>
+      [
+        a.title,
+        a.body,
+        kbTrail(a.cat).join(' '),
+        ...(a.steps || []).map(s => (s.title || '') + ' ' + (s.note || '')),
+      ]
+        .join('\n')
+        .toLowerCase()
+        .includes(q),
+    )
     .sort((a, b) => byName(a.title, b.title));
   if (!hits.length) return '<p class="hint">No articles match.</p>';
   return hits

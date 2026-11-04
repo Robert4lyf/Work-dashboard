@@ -107,7 +107,11 @@ function searchResults() {
   group(
     'Reference',
     S.kb
-      .filter(a => has(a.title) || has(a.body))
+      // (a guide's steps too: their titles and notes)
+      .filter(
+        a =>
+          has(a.title) || has(a.body) || (a.steps || []).some(s => has(s.title || '') || has(s.note || '')),
+      )
       .sort((a, b) => byName(a.title, b.title))
       .map(a =>
         row(

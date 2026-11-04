@@ -152,7 +152,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   // 3-4. The chase date arrives: Today's chip, the Centre's "To chase", the 9am notice.
   await page.clock.setSystemTime(new Date(2026, 10, 4, 9));
   await page.reload();
-  await expect(page.locator('#attd [data-wgo]')).toContainText('Chase Sarah today');
+  await expect(page.locator('#v-today .attn [data-wgo]')).toContainText('Chase Sarah today');
   await unfold(page, 'attd');
   await page.click('#v-today .attn [data-wgo]');
   await expect(page.locator('#v-waiting .wgroup').first()).toContainText('To chase');

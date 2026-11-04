@@ -296,8 +296,20 @@ function popSheet(html, { labelledBy = '', label = '' } = {}) {
   el.id = 'sheet';
   el.innerHTML = `<div class="sheetback" data-sheetclose="1"></div><div class="sheetbox box" role="dialog" aria-modal="true"${labelledBy ? ` aria-labelledby="${labelledBy}"` : ''}${label ? ` aria-label="${esc(label)}"` : ''}>${html}</div>`;
   document.body.appendChild(el);
+  // (Release G: the page behind is out of reach while a sheet is up, for a screen reader too, not
+  // only for the pointer)
+  sheetInert(true);
   const f = el.querySelector('[autofocus], .qact, input, textarea, select, button');
   if (f) f.focus();
+}
+const SHEET_BEHIND = ['.wrap', 'nav', '#v-zen'];
+function sheetInert(on) {
+  // (not while an alarm rings: that keeps the page out of reach itself)
+  if (!on && !$('#v-alarm').hidden) return;
+  SHEET_BEHIND.forEach(s => {
+    const e = $(s);
+    if (e) e.inert = on;
+  });
 }
 function closeSheet(answer) {
   const el = $('#sheet'),
@@ -307,6 +319,7 @@ function closeSheet(answer) {
   sheetOpener = null;
   if (el) {
     el.remove();
+    sheetInert(false);
     // The keyboard goes back to what opened it, if that's still on the page (and nothing else
     // has it: the action may have moved it on).
     const f =

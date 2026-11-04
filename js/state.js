@@ -241,6 +241,7 @@ function norm(s) {
       execs: [],
       workflows: [],
       wruns: [],
+      wconflicts: [], // (Release G: this device's refused run changes, see workflows.js; not synced)
       rules: [],
       rlog: [],
       pins: [],

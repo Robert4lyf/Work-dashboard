@@ -71,6 +71,23 @@ function readKV(db) {
 // Writes (a save, the sync bookkeeping) go one after another; storeDone() waits for them all.
 let storeTail = Promise.resolve(),
   storeWarned = false;
+// (Release G) While changes can't be saved on this device, a line that stays at the top of every
+// screen says so, not only a message that comes and goes; the next save that works takes it away
+// and lets the message come again if it fails later.
+function saveWarn(on) {
+  let el = document.getElementById('savewarn');
+  if (on && !el) {
+    el = document.createElement('div');
+    el.id = 'savewarn';
+    el.setAttribute('role', 'alert');
+    el.textContent =
+      'Not saved on this device: its storage is full. Free some space; the next change saves everything.';
+    document.body.prepend(el);
+  } else if (!on && el) {
+    el.remove();
+    storeWarned = false;
+  }
+}
 function writeKV(entries) {
   const done = new Promise(ok => {
     if (!picDb) return ok(false);
@@ -78,15 +95,21 @@ function writeKV(entries) {
       const tx = picDb.transaction('kv', 'readwrite'),
         st = tx.objectStore('kv');
       for (const k in entries) st.put(entries[k], k);
-      tx.oncomplete = () => ok(true);
+      tx.oncomplete = () => {
+        // (only a save of the state itself shows things are saved again, not the sync's notes)
+        if ('state' in entries) saveWarn(false);
+        ok(true);
+      };
       tx.onerror = tx.onabort = () => {
         localSaved = false;
         if (!storeWarned) toast("Couldn't save: this device is out of storage", false, 4000);
         storeWarned = true;
+        saveWarn(true);
         ok(false);
       };
     } catch (e) {
       localSaved = false;
+      saveWarn(true);
       ok(false);
     }
   });
@@ -171,8 +194,20 @@ function prunePics() {
 // A saved record's fingerprint, remembered for pictures (they don't change, and fingerprinting
 // megabytes of them on every save was most of a save's time).
 const picHashes = new Map();
+// (Release G: each record's fingerprint is kept with the record as it was written out, and worked
+// out again only when that changes. Every save fingerprinted every record: 100ms on a heavy day.
+// The fingerprints themselves are the same as ever, so nothing is sent again.)
+const recHashes = new Map();
 function recHash(k, v) {
-  if (!v || typeof v.src !== 'string' || !/^(noteimg|kbimg):/.test(k)) return hashOf(v);
+  if (!v || typeof v.src !== 'string' || !/^(noteimg|kbimg):/.test(k)) {
+    const raw = JSON.stringify(v === undefined ? null : v),
+      c = recHashes.get(k);
+    if (c && c.raw === raw) return c.h;
+    const h = hashOf(v);
+    if (recHashes.size > 50000) recHashes.clear(); // (records long gone aren't kept for ever)
+    recHashes.set(k, { raw, h });
+    return h;
+  }
   const rest = JSON.stringify({ ...v, src: '' }),
     c = picHashes.get(k);
   if (c && c.src === v.src && c.rest === rest) return c.h;
