@@ -11,12 +11,20 @@
    skipped|failed, at, note, exec, run, wait, pick, checks } }, status, fin, err, ack, log }. */
 const WF_TYPES = ['manual', 'procedure', 'flow', 'verify', 'wait', 'decide'];
 const WF_TYPE_NAME = {
-  manual: 'Manual step',
-  procedure: 'Knowledge procedure',
-  flow: 'Automation (flow)',
-  verify: 'Verification',
-  wait: 'Waiting on someone',
-  decide: 'Decision',
+  manual: 'Plain step',
+  procedure: 'Follow a guide',
+  flow: 'Run a desktop automation',
+  verify: 'Check the result',
+  wait: 'Wait for someone',
+  decide: 'Decide what happens next',
+};
+const WF_TYPE_HINT = {
+  manual: 'You do it, then mark it done.',
+  procedure: 'Opens a guide to follow step by step; finishing the guide completes this step.',
+  flow: 'Launches a desktop automation when you tap; with result tracking on, the step completes when it reports a result.',
+  verify: 'A checklist to tick before the process moves on.',
+  wait: 'Makes a waiting item (in the Inbox and the Waiting Centre); the reply completes the step.',
+  decide: 'Choices to pick from; each can jump to a later step.',
 };
 const WRUN_STATUS = [
   'ready',
@@ -31,12 +39,12 @@ const WRUN_STATUS = [
 ];
 const WRUN_WORD = {
   ready: 'Ready to start',
-  running: 'Running',
+  running: 'In progress',
   awaiting_user: 'Your turn',
-  awaiting_automation: 'Waiting for result',
+  awaiting_automation: 'Waiting for the automation',
   waiting: 'Waiting on someone',
   paused: 'Paused',
-  succeeded: 'Succeeded',
+  succeeded: 'Completed',
   failed: 'Failed',
   cancelled: 'Cancelled',
 };
@@ -56,7 +64,8 @@ const WF_STAGES_MAX = 30,
   WF_LOG_MAX = 40,
   WRUNS_KEEP = 120,
   WRUNS_DAYS = 180;
-let wfFrom = null, // the page a run was opened from (Today, the Command Centre...): ‹ goes back there
+let wfView = null, // the process whose overview is shown (its id)
+  wfFrom = null, // the page a run was opened from (Today, the Command Centre...): ‹ goes back there
   wfOpen = null, // the run being followed (its id), shown in the Knowledge view
   wfEdit = null; // the definition being edited: { id (none for a new one), ...fields }
 const txt = (v, max) =>
@@ -93,7 +102,7 @@ function cleanWorkflow(w) {
     uniq = stages.filter(s => !seen.has(s.id) && seen.add(s.id)).slice(0, WF_STAGES_MAX);
   return {
     id: w.id,
-    name: txt(w.name, 120) || 'Workflow',
+    name: txt(w.name, 120) || 'Process',
     desc: txt(w.desc, 600),
     stages: uniq,
     kb: okRef(w.kb) ? w.kb : '',
@@ -145,7 +154,7 @@ function cleanRun(r) {
     id: r.id,
     wf: r.wf,
     ver: Number.isInteger(+r.ver) && +r.ver > 0 ? +r.ver : 1,
-    name: txt(r.name, 120) || 'Workflow',
+    name: txt(r.name, 120) || 'Process',
     q: okRef(r.q) ? r.q : '',
     def,
     started: +r.started,
@@ -181,12 +190,13 @@ function reconcileRuns() {
       return;
     if (r.status === 'ready') return;
     if (x.status === 'succeeded') {
-      if (completeStage(r, s.id, { note: x.msg ? 'Flow: ' + x.msg : '' }) === '') emitRun(r);
+      if (completeStage(r, s.id, { note: x.msg ? 'Automation: ' + x.msg : '' }) === '') emitRun(r);
     } else {
       failStage(
         r,
         s.id,
-        (x.status === 'cancelled' ? 'Flow cancelled' : 'Flow failed') + (x.msg ? ': ' + x.msg : ''),
+        (x.status === 'cancelled' ? 'Automation cancelled' : 'Automation failed') +
+          (x.msg ? ': ' + x.msg : ''),
       );
       emitRun(r);
     }
@@ -287,10 +297,10 @@ function completeStage(r, sid, { o = 'done', note = '', pick } = {}) {
   if (r.status === 'paused') return 'the run is paused';
   if (r.status === 'ready') return 'the run has not started';
   const s = runStage(r);
-  if (!s || s.id !== sid) return 'not the current stage';
+  if (!s || s.id !== sid) return 'not the current step';
   const gone =
     (s.type === 'procedure' && !procOf(s.kb)) || (s.type === 'flow' && !S.flows.some(f => f.id === s.flow));
-  if (o === 'skipped' && !s.skip && !gone) return "this stage can't be skipped";
+  if (o === 'skipped' && !s.skip && !gone) return "this step can't be skipped";
   if (s.type === 'decide' && o === 'done' && !(s.choices || [])[pick]) return 'choose first';
   const out = { o, at: Date.now() };
   if (note) out.note = txt(note, 300);
@@ -320,7 +330,7 @@ function completeStage(r, sid, { o = 'done', note = '', pick } = {}) {
 function failStage(r, sid, err) {
   if (WRUN_FINAL.includes(r.status) || r.status === 'paused') return 'the run is over or paused';
   const s = runStage(r);
-  if (!s || s.id !== sid) return 'not the current stage';
+  if (!s || s.id !== sid) return 'not the current step';
   r.status = 'failed';
   r.err = txt(err, 300) || 'Failed';
   r.st[sid] = { o: 'failed', at: Date.now(), note: r.err, ...(r.live.exec ? { exec: r.live.exec } : {}) };
@@ -333,7 +343,7 @@ function retryStage(r, sid) {
   if (r.status !== 'failed' && r.status !== 'awaiting_user' && r.status !== 'awaiting_automation')
     return 'nothing to retry';
   const s = runStage(r);
-  if (!s || s.id !== sid) return 'not the current stage';
+  if (!s || s.id !== sid) return 'not the current step';
   const tries = (r.live.tries || 0) + 1;
   delete r.st[sid];
   r.live = { tries };
@@ -359,12 +369,13 @@ function resumeRun(r) {
   if (p && s && s.type === 'flow') {
     // (the flow's result came while paused: applied now)
     delete r.live.pending;
-    if (p.k === 'exec_succeeded') completeStage(r, s.id, { note: p.msg ? 'Flow: ' + p.msg : '' });
+    if (p.k === 'exec_succeeded') completeStage(r, s.id, { note: p.msg ? 'Automation: ' + p.msg : '' });
     else
       failStage(
         r,
         s.id,
-        (p.k === 'exec_cancelled' ? 'Flow cancelled' : 'Flow failed') + (p.msg ? ': ' + p.msg : ''),
+        (p.k === 'exec_cancelled' ? 'Automation cancelled' : 'Automation failed') +
+          (p.msg ? ': ' + p.msg : ''),
       );
     emitRun(r);
   }
@@ -390,12 +401,13 @@ function onWorkflowEvent(ev) {
         return;
       }
       if (ev.k === 'exec_succeeded') {
-        if (completeStage(r, s.id, { note: ev.msg ? 'Flow: ' + ev.msg : '' }) === '') emitRun(r);
+        if (completeStage(r, s.id, { note: ev.msg ? 'Automation: ' + ev.msg : '' }) === '') emitRun(r);
       } else if (!WRUN_FINAL.includes(r.status)) {
         failStage(
           r,
           s.id,
-          (ev.k === 'exec_cancelled' ? 'Flow cancelled' : 'Flow failed') + (ev.msg ? ': ' + ev.msg : ''),
+          (ev.k === 'exec_cancelled' ? 'Automation cancelled' : 'Automation failed') +
+            (ev.msg ? ': ' + ev.msg : ''),
         );
         emitRun(r);
       }
@@ -461,8 +473,8 @@ function rolloverWorkflows(d) {
 /* actions from the page */
 function startWorkflow(wfId, q = '') {
   const w = wfById(wfId);
-  if (!w || !w.stages.length) return toast('That workflow has no stages yet', false, 3000);
-  // A run already under way for it (same quest): that one, not a second.
+  if (!w || !w.stages.length) return toast('That process has no steps yet', false, 3000);
+  // A run already under way for it (same task): that one, not a second.
   const open = S.wruns
     .filter(r => r.wf === wfId && (r.q || '') === (q || w.q || '') && !WRUN_OVER.includes(r.status))
     .sort((a, b) => b.started - a.started)[0];
@@ -552,9 +564,11 @@ function wfClick(d, b) {
   } else if (d.wfact === 'pick') why = completeStage(r, s ? s.id : '', { pick: +d.pick });
   else if (d.wfact === 'skip')
     return sheet(
-      { title: 'Skip this stage?', label: 'Why', ok: 'Skip', placeholder: 'Done by hand already' },
+      { title: 'Skip this step?', label: 'Why', ok: 'Skip', placeholder: 'Done by hand already' },
       v => {
-        const why2 = completeStage(r, s ? s.id : '', { o: 'skipped', note: v || 'skipped' });
+        const rr = wrunById(r.id); // (the run as it is now: a sync pull may have replaced it)
+        if (!rr) return toast('That run is gone', false, 3000);
+        const why2 = completeStage(rr, s ? s.id : '', { o: 'skipped', note: v || 'skipped' });
         if (why2) toast("Couldn't skip: " + why2, false, 3000);
         save();
         renderKnowledge();
@@ -562,9 +576,11 @@ function wfClick(d, b) {
     );
   else if (d.wfact === 'fail')
     return sheet({ title: 'What went wrong?', label: 'Error', ok: 'Mark failed', danger: true }, v => {
-      const why2 = failStage(r, s ? s.id : '', v || 'Failed');
+      const rr = wrunById(r.id);
+      if (!rr) return toast('That run is gone', false, 3000);
+      const why2 = failStage(rr, s ? s.id : '', v || 'Failed');
       if (why2) toast(why2, false, 3000);
-      else emitRun(r);
+      else emitRun(rr);
       save();
       renderKnowledge();
     });
@@ -572,13 +588,15 @@ function wfClick(d, b) {
     if (s && s.type === 'flow' && r.st[s.id] && r.st[s.id].exec)
       return sheet(
         {
-          title: 'Launch the flow again?',
+          title: 'Launch the automation again?',
           text: 'The last attempt may already have done its work. Only retry if you have checked that it is safe to run again.',
           ok: 'Retry',
           danger: true,
         },
         () => {
-          retryStage(r, s.id);
+          const rr = wrunById(r.id);
+          if (!rr) return toast('That run is gone', false, 3000);
+          retryStage(rr, s.id);
           save();
           renderKnowledge();
         },
@@ -590,7 +608,7 @@ function wfClick(d, b) {
     return sheet(
       {
         title: 'Cancel this run?',
-        text: 'Its stages so far are kept in the history.',
+        text: 'Its steps so far are kept in the history.',
         ok: 'Cancel the run',
         cancel: 'Keep going',
         danger: true,
@@ -608,7 +626,7 @@ function wfClick(d, b) {
     renderAll();
     return;
   } else if (d.wfact === 'inbox') {
-    const text = ('Workflow failed: ' + r.name).slice(0, 200);
+    const text = ('Process failed: ' + r.name).slice(0, 200);
     S.inbox.unshift({ id: uid(), text, node: fix({ id: uid(), text, notes: runSummary(r) }) });
     r.ack = 1;
     save();
@@ -626,7 +644,7 @@ function wfClick(d, b) {
     if (d.ok === 'yes') why = completeStage(r, s ? s.id : '', { note: 'Result confirmed by hand' });
     else why = failStage(r, s ? s.id : '', 'Failed (confirmed by hand)');
   } else if (d.wfact === 'procedure') {
-    if (!s || s.type !== 'procedure' || !procOf(s.kb)) return toast('That procedure is gone', false, 3000);
+    if (!s || s.type !== 'procedure' || !procOf(s.kb)) return toast('That guide is gone', false, 3000);
     const pr = openRunFor(s.kb, 'wr-' + r.id) || null;
     if (!pr) {
       const nr = {
@@ -668,13 +686,13 @@ function wfClick(d, b) {
   if ((r.status === 'succeeded' || r.status === 'failed') && r.status !== was) emitRun(r);
   save();
   renderKnowledge();
-  if (r.status === 'succeeded') toast('Workflow succeeded');
+  if (r.status === 'succeeded') toast('Process completed');
 }
 let kbRunBackWf = null; // a procedure opened from a workflow run: its ‹ goes back to the run
 function runSummary(r) {
   return [
-    `Workflow: ${r.name} (${r.wf} v${r.ver})`,
-    `Run: ${r.id}${r.q ? ' · quest ' + r.q : ''}`,
+    `Process: ${r.name} (${r.wf} v${r.ver})`,
+    `Run: ${r.id}${r.q ? ' · task ' + r.q : ''}`,
     `Started: ${new Date(r.started).toLocaleString()}`,
     `Status: ${WRUN_WORD[r.status]}${r.err ? ': ' + r.err : ''}`,
     ...r.def.map(
@@ -696,9 +714,9 @@ function wfRunView(r) {
     i = s ? r.def.indexOf(s) : r.def.length,
     q = r.q && (find(r.q) || find(r.q, S.later)),
     final = WRUN_OVER.includes(r.status);
-  let h = `<button class="linkbtn" data-wfback="1">‹ ${wfFrom === 'today' ? 'Today' : wfFrom === 'ops' ? 'Command Centre' : wfFrom ? 'Back' : 'Workflows'}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
+  let h = `<button class="linkbtn" data-wfback="1">‹ ${wfFrom === 'today' ? 'Today' : wfFrom === 'ops' ? 'Command Centre' : wfFrom ? 'Back' : wfView && wfById(wfView) ? esc(wfById(wfView).name) : 'Processes'}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(r.name)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div>
-    <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · stage ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}</p>`;
+    <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · step ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}</p>`;
   if (r.err && r.status === 'failed')
     h += `<div class="ask box werr"><p><b>Failed.</b> ${esc(r.err)}</p></div>`;
   if (r.status === 'ready')
@@ -706,13 +724,13 @@ function wfRunView(r) {
   else if (r.status === 'paused')
     h += `<div class="pstep box"><h3>Paused</h3>${s ? `<p class="ptext">At: ${esc(s.title)}</p>` : ''}<div class="acts"><button class="btn green" data-wrun="${r.id}" data-wfact="resume">Resume</button><button class="btn" data-wrun="${r.id}" data-wfact="cancel">Cancel</button></div></div>`;
   else if (final)
-    h += `<div class="pstep box done"><h3>${WRUN_WORD[r.status]}${r.fin ? ' · ' + esc(whenLabel(r.fin)) : ''}</h3><div class="acts">${r.status === 'failed' && !r.ack ? `<button class="btn" data-wrun="${r.id}" data-wfact="ack">Acknowledge</button>` : ''}${r.status === 'failed' ? `<button class="btn" data-wrun="${r.id}" data-wfact="inbox">Add to the Inbox</button>` : ''}<button class="btn" data-wrun="${r.id}" data-wfact="copy">Copy summary</button>${q ? `<button class="btn blue" data-open="${q.n.id}">Back to the quest</button>` : ''}</div></div>`;
+    h += `<div class="pstep box done"><h3>${WRUN_WORD[r.status]}${r.fin ? ' · ' + esc(whenLabel(r.fin)) : ''}</h3><div class="acts">${r.status === 'failed' && !r.ack ? `<button class="btn" data-wrun="${r.id}" data-wfact="ack">Acknowledge</button>` : ''}${r.status === 'failed' ? `<button class="btn" data-wrun="${r.id}" data-wfact="inbox">Add to the Inbox</button>` : ''}<button class="btn" data-wrun="${r.id}" data-wfact="copy">Copy summary</button>${q ? `<button class="btn blue" data-open="${q.n.id}">Back to the task</button>` : ''}</div></div>`;
   else if (s) h += stageCard(r, s, i);
   // Every stage, with its outcome.
   h += `<ol class="plist runlist wlist">${r.def
     .map((st, j) => {
       const o = r.st[st.id];
-      return `<li class="${o ? o.o : st === s ? 'cur' : ''}"><span class="pjump"><small>${WF_TYPE_NAME[st.type]}</small>${o ? (o.o === 'done' ? '✓ ' : o.o === 'skipped' ? '↷ ' : '✗ ') : st === s ? '▶ ' : ''}${esc(st.title)}${o && o.note ? ` <small>· ${esc(o.note)}</small>` : ''}</span></li>`;
+      return `<li class="${o ? o.o : st === s ? 'cur' : ''}"><span class="pjump">${st.type !== 'manual' ? `<small>${WF_TYPE_NAME[st.type]}</small>` : ''}${o ? (o.o === 'done' ? '✓ ' : o.o === 'skipped' ? '↷ ' : '✗ ') : st === s ? '▶ ' : ''}${esc(st.title)}${o && o.note ? ` <small>· ${esc(o.note)}</small>` : ''}</span></li>`;
     })
     .join('')}</ol>`;
   if (!final && r.status !== 'ready')
@@ -736,11 +754,14 @@ function stageCard(r, s, i) {
   let body = s.text ? `<p class="ptext">${kbLinkify(s.text)}</p>` : '',
     acts = '';
   const failed = r.status === 'failed';
+  let next = '';
   if (failed) {
-    acts = `${b('retry', 'Retry', 'green')}${s.skip ? b('skip', 'Skip') : ''}${b('cancel', 'Cancel')}${r.ack ? '' : b('ack', 'Acknowledge')}${b('inbox', 'Inbox item')}`;
-  } else if (s.type === 'manual')
-    acts = `${b('done', 'Done, next', 'green')}${s.skip ? b('skip', 'Skip') : ''}${b('fail', "Couldn't")}`;
-  else if (s.type === 'verify') {
+    next = 'Try the step again (a fresh attempt), skip it with a reason, or cancel the run.';
+    acts = `${b('retry', 'Try again', 'green')}${s.skip ? b('skip', 'Skip') : ''}${b('cancel', 'Cancel the run')}${r.ack ? '' : b('ack', 'Acknowledge')}${b('inbox', 'Add to the Inbox')}`;
+  } else if (s.type === 'manual') {
+    next = 'Marking it done moves the process to the next step.';
+    acts = `${b('done', 'Mark done', 'green')}${s.skip ? b('skip', 'Skip') : ''}${b('fail', 'Report a problem')}`;
+  } else if (s.type === 'verify') {
     const ticks = r.live.checks || [];
     body += `<div class="wchecks">${(s.checks || [])
       .map(
@@ -749,8 +770,12 @@ function stageCard(r, s, i) {
       )
       .join('')}</div>`;
     const all = s.checks.every((c, j) => ticks[j]);
-    acts = `${b('done', 'Verified, next', 'green', all ? '' : 'disabled')}${s.skip ? b('skip', 'Skip') : ''}${b('fail', 'Not right')}`;
-  } else if (s.type === 'decide')
+    next = all
+      ? 'Every check is ticked: Verified moves the process on.'
+      : 'Tick every check, then Verified moves the process on.';
+    acts = `${b('done', 'Verified', 'green', all ? '' : 'disabled')}${s.skip ? b('skip', 'Skip') : ''}${b('fail', 'Check failed')}`;
+  } else if (s.type === 'decide') {
+    next = 'Your choice decides which step comes next.';
     acts =
       (s.choices || [])
         .map(
@@ -758,28 +783,29 @@ function stageCard(r, s, i) {
             `<button class="btn blue" data-wrun="${id}" data-wfact="pick" data-pick="${j}">${esc(c.label)}</button>`,
         )
         .join('') + (s.skip ? b('skip', 'Skip') : '');
-  else if (s.type === 'procedure') {
+  } else if (s.type === 'procedure') {
     const a = procOf(s.kb),
       pr = r.live.run && S.runs.find(x => x.id === r.live.run);
     body += a
-      ? `<p class="hint">Procedure: ${esc(a.title)}${pr ? ' · ' + esc(runLine(pr)) : ''}</p>`
-      : '<p class="hint"><span class="tag gone">Procedure removed</span> Finish this stage by hand, or skip it.</p>';
-    acts = `${a ? b('procedure', pr ? 'Resume procedure' : 'Start procedure', 'blue') : ''}${pr && pr.fin ? b('done', 'Done, next', 'green') : ''}${s.skip || !a ? b('skip', 'Skip') : ''}`;
+      ? `<p class="hint">Guide: ${esc(a.title)}${pr ? ' · ' + esc(runLine(pr)) : ''}</p>`
+      : '<p class="hint"><span class="tag gone">Guide removed</span> Finish this step by hand, or skip it.</p>';
+    next = a ? 'Finishing the guide completes this step.' : '';
+    acts = `${a ? b('procedure', pr ? 'Continue the guide' : 'Follow the guide', 'blue') : ''}${pr && pr.fin ? b('done', 'Mark done', 'green') : ''}${s.skip || !a ? b('skip', 'Skip') : ''}`;
   } else if (s.type === 'flow') {
     const f = S.flows.find(x => x.id === s.flow),
       x = r.live.exec && S.execs.find(e => e.id === r.live.exec);
     if (!f) {
       body +=
-        '<p class="hint"><span class="tag gone">Flow removed</span> Confirm the result by hand, or skip.</p>';
+        '<p class="hint"><span class="tag gone">Automation removed</span> Confirm the result by hand, or skip.</p>';
       acts = `${b('confirmflow', 'It succeeded', 'green', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}${s.skip ? b('skip', 'Skip') : ''}`;
     } else if (x && !EXEC_TERMINAL.includes(x.status) && !execStale(x)) {
-      body += `<p class="hint xline">${execLine(x)}</p><p class="hint">The stage moves on when the flow reports its result.${S.track ? '' : ''}</p>`;
+      body += `<p class="hint xline">${execLine(x)}</p><p class="hint">This step completes on its own when the automation reports its result.</p>`;
       acts = `${b('confirmflow', 'It succeeded (checked by hand)', '', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}`;
     } else {
       if (x) body += `<p class="hint xline">${execLine(x)}</p>`;
       body += S.track
-        ? '<p class="hint">Launch the flow; the stage moves on when its result is reported.</p>'
-        : '<p class="hint">Execution tracking is off (Settings > Flows and automations): launch the flow, then confirm its result yourself.</p>';
+        ? '<p class="hint">Launch the automation; this step completes when its result is reported.</p>'
+        : '<p class="hint">Result tracking is off (Settings > Automation result tracking): launch the automation, then confirm its result yourself.</p>';
       acts = `<a class="btn blue" href="${esc(f.url)}" data-flow="${f.id}" data-wrun="${id}" data-wstage="${s.id}"${r.q ? ` data-q="${r.q}"` : ''}>&#9654; Launch ${esc(f.name)}</a>${
         x || !S.track
           ? `${b('confirmflow', 'It succeeded (checked by hand)', '', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}`
@@ -791,18 +817,32 @@ function stageCard(r, s, i) {
     if (wn)
       body += `<p class="hint">Waiting on ${esc(wn.wait.who || 'someone')} · <button class="linkbtn" data-goto="waiting">Waiting Centre</button></p>`;
     else if (r.live.wait) body += '<p class="hint">The waiting item was cleared.</p>';
-    acts = `${wn ? b('received', 'Reply received', 'green') : r.live.wait ? b('received', 'Received, next', 'green') : b('waititem', 'Start waiting' + (s.who ? ' on ' + esc(s.who) : ''), 'blue')}${s.skip ? b('skip', 'Skip') : ''}`;
+    next = wn
+      ? 'Marking the reply received (here or in Waiting) completes this step.'
+      : r.live.wait
+        ? ''
+        : 'Start waiting makes a waiting item to chase; the reply completes this step.';
+    acts = `${wn ? b('received', 'Mark reply received', 'green') : r.live.wait ? b('received', 'Mark reply received', 'green') : b('waititem', 'Start waiting' + (s.who ? ' on ' + esc(s.who) : ''), 'blue')}${s.skip ? b('skip', 'Skip') : ''}`;
   }
-  return `<div class="pstep box${failed ? ' failed' : ''}"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3><p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>${body}<div class="acts wacts">${acts}</div></div>`;
+  return `<div class="pstep box${failed ? ' failed' : ''}"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}${next ? `<p class="hint pnext">${next}</p>` : ''}<div class="acts wacts">${acts}</div></div>`;
 }
 /* definitions: the list under Knowledge, and the editor (a stage list) */
 const WF_TEMPLATES = [
   {
+    name: 'Simple checklist',
+    desc: 'Plain steps, done one after another.',
+    stages: [
+      ['manual', 'Read the instructions', ''],
+      ['manual', 'Do the work', ''],
+      ['manual', 'Tidy up and file it', ''],
+    ],
+  },
+  {
     name: 'Weekly report',
-    desc: 'Prepare, run the report flow, check the output, send.',
+    desc: 'Prepare, run the report automation, check the output, send.',
     stages: [
       ['manual', 'Prepare', 'Check the period and the source data.'],
-      ['flow', 'Run the report flow', ''],
+      ['flow', 'Run the report automation', ''],
       [
         'verify',
         'Check the output',
@@ -813,19 +853,8 @@ const WF_TEMPLATES = [
     ],
   },
   {
-    name: 'Month-end checklist',
-    desc: 'Prepare, reconcile by hand, review, get approval, close.',
-    stages: [
-      ['manual', 'Prepare', 'Gather statements and the month’s figures.'],
-      ['manual', 'Reconcile', ''],
-      ['verify', 'Review', '', ['Totals agree', 'Exceptions noted']],
-      ['wait', 'Approval', '', [], 'Approver'],
-      ['manual', 'Close the month', ''],
-    ],
-  },
-  {
     name: 'Approval process',
-    desc: 'Prepare the request, wait, follow up, act on the answer.',
+    desc: 'Prepare the request, wait for the answer, act on it.',
     stages: [
       ['manual', 'Prepare the request', ''],
       ['wait', 'Waiting for the answer', '', [], ''],
@@ -844,15 +873,53 @@ const WF_TEMPLATES = [
     ],
   },
   {
-    name: 'Manual process',
-    desc: 'Read the instructions, do the work, check it.',
+    name: 'Automation with a check',
+    desc: 'Launch a desktop automation, check what it produced, finish by hand.',
     stages: [
-      ['manual', 'Read the instructions', ''],
-      ['manual', 'Do it', ''],
-      ['verify', 'Check', '', ['Result as expected']],
+      ['flow', 'Run the automation', ''],
+      ['verify', 'Check what it produced', '', ['Output present and complete', 'Nothing left behind']],
+      ['manual', 'Finish and file', ''],
+    ],
+  },
+  {
+    name: 'Month-end process',
+    desc: 'Prepare, reconcile, review, get approval, close.',
+    stages: [
+      ['manual', 'Prepare', 'Gather statements and the month’s figures.'],
+      ['manual', 'Reconcile', ''],
+      ['verify', 'Review', '', ['Totals agree', 'Exceptions noted']],
+      ['wait', 'Approval', '', [], 'Approver'],
+      ['manual', 'Close the month', ''],
     ],
   },
 ];
+// The picker: a few worked examples, each previewed before it's used; or a blank one.
+function openTemplatePicker() {
+  popSheet(
+    `<h2 id="sheettitle">New process</h2><p class="hint qahint">Start from an example (you can change every step), or from scratch.</p><div class="qalist newlist">${WF_TEMPLATES.map(
+      (t, i) =>
+        `<button class="qact" data-wftplpick="${i}" data-stay="1"><b>${esc(t.name)}</b><small>${esc(t.desc)} · ${plural(t.stages.length, 'step')}</small></button>`,
+    ).join(
+      '',
+    )}<button class="qact" data-wfnew="1"><b>From scratch</b><small>A name, then steps as you type them.</small></button></div><div class="acts"><button class="btn" type="button" data-sheetclose="1">Cancel</button></div>`,
+    { labelledBy: 'sheettitle' },
+  );
+}
+function openTemplatePreview(i) {
+  const t = WF_TEMPLATES[i];
+  if (!t) return;
+  popSheet(
+    `<h2 id="sheettitle">${esc(t.name)}</h2><p class="hint qahint">${esc(t.desc)}</p><ol class="plist wprev tplprev">${t.stages
+      .map(
+        ([type, title]) =>
+          `<li><span class="pjump">${type !== 'manual' ? `<small>${WF_TYPE_NAME[type]}</small>` : ''}${esc(title)}</span></li>`,
+      )
+      .join(
+        '',
+      )}</ol><p class="hint">${t.stages.some(([k]) => k === 'flow') ? 'You choose which desktop automation the automation step launches. ' : ''}Every step can be renamed, moved, removed or made smarter after.</p><div class="acts"><button class="btn green" data-wftpl="${i}">Use this example</button><button class="btn" type="button" data-wftplback="1" data-stay="1">Back</button></div>`,
+    { labelledBy: 'sheettitle' },
+  );
+}
 function templateToWorkflow(t) {
   const w = {
     id: uid(),
@@ -878,44 +945,53 @@ function templateToWorkflow(t) {
   return w;
 }
 const wfRuns = id => S.wruns.filter(r => r.wf === id).sort((a, b) => b.started - a.started);
+// (a failed run first: it needs you; else the newest under way)
 const wfOpenRun = id =>
   S.wruns
     .filter(r => r.wf === id && !WRUN_OVER.includes(r.status))
-    .sort((a, b) => b.started - a.started)[0] || null;
-function kbWorkflows() {
-  const ws = S.workflows.filter(w => !w.archived).sort((a, b) => byName(a.name, b.name)),
-    arch = S.workflows.filter(w => w.archived).length,
-    open = S.wruns.filter(r => !WRUN_OVER.includes(r.status)).sort((a, b) => b.at - a.at);
-  let h = `<h2 class="wfhead" id="wfhead">Workflows</h2>`;
-  if (open.length)
-    h += `<div class="list box">${open
+    .sort((a, b) => (a.status === 'failed') - (b.status === 'failed') || a.started - b.started)
+    .reverse()[0] || null;
+/* a process's overview: what it's for, where it stands, and the one thing to do with it (start,
+   continue or fix). Editing is a step further: the definition is for changing now and then, the
+   overview for using. */
+function wfOverview(w) {
+  const o = wfOpenRun(w.id),
+    runs = wfRuns(w.id),
+    past = runs.filter(r => WRUN_OVER.includes(r.status) || (r.status === 'failed' && r !== o)).slice(0, 5),
+    kind = s => (s.type === 'manual' ? '' : WF_TYPE_NAME[s.type]);
+  let h = `<button class="linkbtn" data-wfback2="1">‹ Processes</button><h2 class="kbtitle">${esc(w.name)}</h2>${w.desc ? `<p class="kbdesc">${esc(w.desc)}</p>` : ''}
+    <p class="hint">${plural(w.stages.length, 'step')}${w.days.length || w.monthDay ? ' · repeats ' + esc(repLabel({ days: w.days, monthDay: w.monthDay })) + ' (a run is made ready that day, never started on its own)' : ''}${w.ver > 1 ? ' · version ' + w.ver : ''}</p>`;
+  // Where it stands, and the one action.
+  if (o) {
+    const s = runStage(o);
+    h += `<div class="box wfstate w-${o.status}"><p><b>${runWord(o)}</b>${s ? ` · step ${o.def.indexOf(s) + 1} of ${o.def.length}: ${esc(s.title)}` : ''}</p>${o.err ? `<p class="hint">${esc(o.err)}</p>` : ''}<div class="acts"><button class="btn ${o.status === 'failed' ? 'pink' : 'green'}" data-wfopen="${o.id}">${o.status === 'failed' ? 'Fix the failed step' : o.status === 'ready' ? 'Start' : 'Continue'}</button></div></div>`;
+  } else
+    h += `<div class="box wfstate"><p><b>Not started</b>${past.length ? ` · last run ${WRUN_WORD[past[0].status].toLowerCase()} ${esc(dayLabel(fmt(new Date(past[0].fin || past[0].at))))}` : ''}</p><div class="acts"><button class="btn green" data-wfstart="${w.id}">Start</button></div></div>`;
+  h += `<h3 class="kbsub">Steps</h3>${
+    w.stages.length
+      ? `<ol class="plist wlist wprev">${w.stages.map(s => `<li><span class="pjump">${kind(s) ? `<small>${kind(s)}</small>` : ''}${esc(s.title)}</span></li>`).join('')}</ol>`
+      : '<p class="hint">No steps yet: edit the process to add some.</p>'
+  }`;
+  if (past.length)
+    h += `<h3 class="kbsub">Past runs</h3><div class="list box">${past
       .map(
         r =>
-          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${runWord(r)}</span>${runStage(r) ? ' · ' + esc(runStage(r).title) : ''} · ${esc(whenLabel(r.at))}</small></button></div>`,
+          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(dayLabel(fmt(new Date(r.fin || r.at))))}</span><small><span class="wst w-${r.status}">${WRUN_WORD[r.status]}</span>${r.err ? ' · ' + esc(r.err) : ''}</small></button></div>`,
       )
       .join('')}</div>`;
-  h += ws.length
-    ? `<div class="list box">${ws
-        .map(w => {
-          const o = wfOpenRun(w.id),
-            runs = wfRuns(w.id),
-            last = runs.find(r => r.fin);
-          return `<div class="row"><button class="open" data-wfedit="${w.id}"><span>${esc(w.name)}</span><small>${plural(w.stages.length, 'stage')}${w.days.length || w.monthDay ? ' · repeats ' + esc(repLabel({ days: w.days, monthDay: w.monthDay })) : ''}${last ? ' · last ' + WRUN_WORD[last.status].toLowerCase() + ' ' + esc(dayLabel(fmt(new Date(last.fin)))) : ''}</small></button><button class="btn sm ${o ? 'green' : 'blue'}" data-wfstart="${w.id}">${o ? 'Resume' : 'Start'}</button></div>`;
-        })
-        .join('')}</div>`
-    : '<p class="hint">A workflow is a reusable process: manual steps, procedures, flows, checks and waits, run one stage at a time. Start from a template or build your own.</p>';
-  h += `<div class="chips resadd"><button class="chip" data-wfnew="1">+ Workflow</button>${WF_TEMPLATES.map((t, i) => `<button class="chip" data-wftpl="${i}">+ ${esc(t.name)}</button>`).join('')}</div>`;
-  if (arch) h += `<p class="hint">${plural(arch, 'archived workflow')} (shown in Settings > Backup).</p>`;
+  h += `<div class="links wfacts"><button class="linkbtn" data-wfedit="${w.id}">Edit the steps</button><button class="linkbtn" data-wfdup="${w.id}">Duplicate</button><button class="dellink" data-wfarchive="${w.id}">${w.archived ? 'Unarchive' : 'Archive'}</button></div>`;
   return h;
 }
 function wfEditor() {
   const w = wfEdit,
     st = (k, l, p) =>
       `<button class="chip" type="button" data-wfpreset="${k}" aria-pressed="${p}">${l}</button>`;
-  let h = `<h2>${w.id ? 'Edit workflow' : 'New workflow'}</h2><form id="wfform">
+  let h = `<h2>${w.id ? 'Edit process' : 'New process'}</h2>${w.id ? '' : hintBox('proc', 'Write the steps as a checklist, one line each. Tap a step later to make it smarter: an automation to launch, a guide to follow, a check, a wait for someone or a decision.')}<form id="wfform">
     <label class="f" for="wfname">Name</label><input class="fld" id="wfname" maxlength="120" value="${esc(w.name || '')}" autocomplete="off" required>
     <label class="f" for="wfdesc">What it is for <small class="hint">(optional)</small></label><textarea class="fld" id="wfdesc" rows="2" maxlength="600">${esc(w.desc || '')}</textarea>
-    <div class="sechead kbimghead"><h2>Stages</h2><button class="btn sm" type="button" id="wfstageadd">Add stage</button></div><div id="wfstages">${wfStagesList()}</div>
+    <div class="sechead kbimghead"><h3>Steps</h3>${w.stages.length ? `<button class="btn sm" type="button" id="wfstageadd">Add with options</button>` : ''}</div><div id="wfstages">${wfStagesList()}</div>
+    <div class="addrow wfaddrow"><input class="fld" id="wfstepin" maxlength="120" value="${esc(w.typing || '')}" placeholder="${w.stages.length ? 'Add another step' : 'Type the first step, e.g. Download the report'}" aria-label="New step" autocomplete="off"><button class="btn" type="button" id="wfstepgo" aria-label="Add step">Add</button></div>
+    <p class="hint">Each step is a plain one until you make it smarter: tap a step to attach an automation, a guide, a check, a wait or a decision.</p>
     <details id="wfrep"${w.days.length || w.monthDay ? ' open' : ''}><summary>Repeat: ${w.days.length || w.monthDay ? esc(repLabel({ days: w.days, monthDay: w.monthDay })) : 'off'}</summary>
       <p class="hint">On its days a run is made ready for you (never started on its own).</p>
       <div class="chips" style="margin-bottom:10px">${st('weekdays', 'Weekdays', repLabel({ days: w.days, monthDay: 0 }) === 'Weekdays')}${st('off', 'Off', !w.days.length && !w.monthDay)}</div>
@@ -931,13 +1007,41 @@ function wfEditor() {
 }
 function wfStagesList() {
   const ss = wfEdit.stages;
-  if (!ss.length) return '<p class="hint">No stages yet.</p>';
+  if (!ss.length) return '';
   return `<ol class="plist editlist">${ss
     .map(
       (s, i) =>
-        `<li><button class="pjump" type="button" data-wfstage="${s.id}">${esc(s.title)} <small>· ${WF_TYPE_NAME[s.type]}</small></button><span class="pmv"><button class="mv" type="button" data-wfup="${s.id}" aria-label="Move up"${i === 0 ? ' disabled' : ''}>&#9650;</button><button class="mv" type="button" data-wfdown="${s.id}" aria-label="Move down"${i === ss.length - 1 ? ' disabled' : ''}>&#9660;</button><button class="x" type="button" data-wfdel="${s.id}" aria-label="Remove stage: ${esc(s.title)}">×</button></span></li>`,
+        `<li><button class="pjump" type="button" data-wfstage="${s.id}" aria-label="Step: ${esc(s.title)}. Change what happens at this step">${esc(s.title)}${s.type !== 'manual' ? ` <small>· ${WF_TYPE_NAME[s.type]}</small>` : ''}</button><span class="pmv"><button class="mv" type="button" data-wfup="${s.id}" aria-label="Move up"${i === 0 ? ' disabled' : ''}>&#9650;</button><button class="mv" type="button" data-wfdown="${s.id}" aria-label="Move down"${i === ss.length - 1 ? ' disabled' : ''}>&#9660;</button><button class="x" type="button" data-wfdel="${s.id}" aria-label="Remove step: ${esc(s.title)}">×</button></span></li>`,
     )
     .join('')}</ol>`;
+}
+// A plain step, typed in the row under the list (Enter or Add).
+function addTypedStep() {
+  const i = $('#wfstepin');
+  if (!wfEdit || !i) return;
+  const title = txt(i.value, 120);
+  if (!title) return i.focus();
+  if (wfEdit.stages.length >= WF_STAGES_MAX) return toast(`At most ${WF_STAGES_MAX} steps`, false, 3000);
+  wfEdit.stages.push({ id: uid(), type: 'manual', title, text: '', skip: true });
+  i.value = '';
+  wfRenderStages();
+  if (wfEdit.stages.length === 1) {
+    readWfForm();
+    renderKnowledge(); // (the first step: the row's placeholder and the options button change)
+    const n = $('#wfstepin');
+    if (n) n.focus();
+  } else i.focus();
+}
+// Has the editor anything worth asking about before it's left?
+function wfEditDirty() {
+  if (!wfEdit) return false;
+  readWfForm();
+  if (wfEdit.typing) return true;
+  if (!wfEdit.id) return !!(wfEdit.name || wfEdit.desc || wfEdit.stages.length);
+  const cur = wfById(wfEdit.id);
+  if (!cur) return true;
+  const now = cleanWorkflow({ ...wfEdit, id: wfEdit.id, at: cur.at, ver: cur.ver });
+  return JSON.stringify(now) !== JSON.stringify(cur);
 }
 // What's typed in the editor, into the draft (so a redraw shows it).
 function readWfForm() {
@@ -945,38 +1049,51 @@ function readWfForm() {
   wfEdit.name = $('#wfname').value;
   wfEdit.desc = $('#wfdesc').value;
   wfEdit.monthDay = +$('#wfmonth').value || 0;
+  wfEdit.typing = $('#wfstepin') ? $('#wfstepin').value : '';
 }
-function wfRenderStages() {
+// (`focusId`: the step to leave the keyboard on, else the typed-step row, so a redraw of the list
+// doesn't drop focus to the page)
+function wfRenderStages(focusId) {
   const el = $('#wfstages');
-  if (el && wfEdit) el.innerHTML = wfStagesList();
+  if (!el || !wfEdit) return;
+  el.innerHTML = wfStagesList();
+  const f = (focusId && el.querySelector(`[data-wfstage="${focusId}"]`)) || $('#wfstepin');
+  if (f && (!document.activeElement || document.activeElement === document.body))
+    f.focus({ preventScroll: true });
 }
 function openStageForm(id) {
   if (!wfEdit) return;
-  const s = wfEdit.stages.find(x => x.id === id) || { id: '', type: 'manual', title: '', text: '' },
+  const s = wfEdit.stages.find(x => x.id === id) || {
+      id: '',
+      type: 'manual',
+      title: '',
+      text: '',
+      skip: true,
+    },
     opt = (list, cur, none) =>
       `<option value=""${cur ? '' : ' selected'}>${none}</option>` +
       list.map(([v, l]) => `<option value="${v}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join(''),
     others = wfEdit.stages.filter(x => x.id !== s.id).map(x => [x.id, x.title]);
   popSheet(
-    `<form id="wfstageform" data-id="${s.id}"><h2 id="sheettitle">${s.id ? 'Edit stage' : 'New stage'}</h2>
-    <label class="f" for="wstype">Kind</label><select class="fld" id="wstype">${WF_TYPES.map(t => `<option value="${t}"${t === s.type ? ' selected' : ''}>${WF_TYPE_NAME[t]}</option>`).join('')}</select>
-    <label class="f" for="wstitle">Stage</label><input class="fld" id="wstitle" maxlength="120" value="${esc(s.title)}" autocomplete="off" required>
+    `<form id="wfstageform" data-id="${s.id}"><h2 id="sheettitle">${s.id ? 'This step' : 'New step'}</h2>
+    <label class="f" for="wstitle">Step</label><input class="fld" id="wstitle" maxlength="120" value="${esc(s.title)}" autocomplete="off" required>
     <label class="f" for="wstext">Instructions <small class="hint">(optional)</small></label><textarea class="fld" id="wstext" rows="2" maxlength="1000">${esc(s.text || '')}</textarea>
-    <div data-for="procedure"><label class="f" for="wskb">Procedure</label><select class="fld" id="wskb">${opt(
+    <label class="f" for="wstype">What happens at this step</label><select class="fld" id="wstype">${WF_TYPES.map(t => `<option value="${t}"${t === s.type ? ' selected' : ''}>${WF_TYPE_NAME[t]}</option>`).join('')}</select><p class="hint" id="wskindhint">${WF_TYPE_HINT[s.type]}</p>
+    <div data-for="procedure"><label class="f" for="wskb">Guide</label><select class="fld" id="wskb">${opt(
       S.kb.filter(a => a.steps && a.steps.length).map(a => [a.id, a.title]),
       s.kb,
       'Choose',
     )}</select></div>
-    <div data-for="flow"><label class="f" for="wsflow">Flow</label><select class="fld" id="wsflow">${opt(
+    <div data-for="flow"><label class="f" for="wsflow">Desktop automation</label><select class="fld" id="wsflow">${opt(
       S.flows.map(f => [f.id, f.name]),
       s.flow,
       'Choose',
     )}</select></div>
     <div data-for="verify"><label class="f" for="wschecks">Checks, one per line</label><textarea class="fld" id="wschecks" rows="3" maxlength="2000">${esc((s.checks || []).join('\n'))}</textarea></div>
     <div data-for="wait"><label class="f" for="wswho">Waiting on whom</label><input class="fld" id="wswho" maxlength="60" value="${esc(s.who || '')}" list="wholist" autocomplete="off">${whoList()}</div>
-    <div data-for="decide"><label class="f" for="wschoices">Choices, one per line <small class="hint">(add " -> stage" to jump)</small></label><textarea class="fld" id="wschoices" rows="3" maxlength="1000">${esc((s.choices || []).map(c => c.label + (c.next ? ' -> ' + ((wfEdit.stages.find(x => x.id === c.next) || {}).title || '') : '')).join('\n'))}</textarea>${others.length ? `<p class="hint">Stages: ${others.map(([, t]) => esc(t)).join(' · ')}</p>` : ''}</div>
+    <div data-for="decide"><label class="f" for="wschoices">Choices, one per line <small class="hint">(add " -> step" to jump)</small></label><textarea class="fld" id="wschoices" rows="3" maxlength="1000">${esc((s.choices || []).map(c => c.label + (c.next ? ' -> ' + ((wfEdit.stages.find(x => x.id === c.next) || {}).title || '') : '')).join('\n'))}</textarea>${others.length ? `<p class="hint">Steps: ${others.map(([, t]) => esc(t)).join(' · ')}</p>` : ''}</div>
     <label class="optbox"><input type="checkbox" id="wsskip"${s.skip ? ' checked' : ''}>May be skipped (with a reason)</label>
-    <div class="acts"><button class="btn green" id="sheetok">${s.id ? 'Save stage' : 'Add stage'}</button><button class="btn" type="button" data-sheetclose="1">Cancel</button></div></form>`,
+    <div class="acts"><button class="btn green" id="sheetok">${s.id ? 'Save step' : 'Add step'}</button><button class="btn" type="button" data-sheetclose="1">Cancel</button></div></form>`,
     { labelledBy: 'sheettitle' },
   );
   wsShowKind();
@@ -985,6 +1102,8 @@ function openStageForm(id) {
 function wsShowKind() {
   const t = $('#wstype') && $('#wstype').value;
   document.querySelectorAll('#wfstageform [data-for]').forEach(d => (d.hidden = d.dataset.for !== t));
+  const hint = $('#wskindhint');
+  if (hint && WF_TYPE_HINT[t]) hint.textContent = WF_TYPE_HINT[t];
 }
 function saveStageForm(id) {
   if (!wfEdit) return closeSheet();
@@ -1013,21 +1132,22 @@ function saveStageForm(id) {
             wfEdit.stages.find(x => x.title.toLowerCase() === m[2].trim().toLowerCase() && x.id !== s.id);
         return { label, next: target ? target.id : '' };
       });
-  if ((type === 'procedure' && !s.kb) || (type === 'flow' && !s.flow))
-    return toast('Choose which one', false, 3000);
+  if (type === 'procedure' && !s.kb) return toast('Choose the guide to follow', false, 3000);
+  if (type === 'flow' && !s.flow) return toast('Choose the desktop automation to launch', false, 3000);
   if (type === 'verify' && !s.checks.length) return toast('Add at least one check', false, 3000);
   if (type === 'decide' && !s.choices.length) return toast('Add at least one choice', false, 3000);
   const i = wfEdit.stages.findIndex(x => x.id === id);
   if (i >= 0) wfEdit.stages[i] = s;
   else {
-    if (wfEdit.stages.length >= WF_STAGES_MAX) return toast(`At most ${WF_STAGES_MAX} stages`, false, 3000);
+    if (wfEdit.stages.length >= WF_STAGES_MAX) return toast(`At most ${WF_STAGES_MAX} steps`, false, 3000);
     wfEdit.stages.push(s);
   }
   closeSheet();
-  wfRenderStages();
+  wfRenderStages(s.id);
 }
 function saveWorkflowForm() {
   if (!wfEdit) return;
+  if ($('#wfstepin') && $('#wfstepin').value.trim()) addTypedStep(); // (typed, not yet added: it counts)
   const name = txt($('#wfname').value, 120);
   if (!name) return;
   const w = cleanWorkflow({
@@ -1041,7 +1161,7 @@ function saveWorkflowForm() {
   const missing = w.stages.find(s => (s.type === 'flow' && !s.flow) || (s.type === 'procedure' && !s.kb));
   if (missing)
     return toast(
-      `Choose the ${missing.type === 'flow' ? 'flow' : 'procedure'} for “${missing.title}”`,
+      `Choose the ${missing.type === 'flow' ? 'automation' : 'guide'} for “${missing.title}”`,
       false,
       3500,
     );
@@ -1053,24 +1173,37 @@ function saveWorkflowForm() {
     Object.assign(cur, w);
   } else S.workflows.push(w);
   wfEdit = null;
+  wfView = w.id; // (saved: its overview, with Start to hand)
   save();
   renderKnowledge();
-  toast('Workflow saved');
+  toast('Process saved');
 }
 function wfEditClick(d, b) {
   if (d.wfnew) {
+    if ($('#sheet')) closeSheet();
     wfEdit = { id: '', name: '', desc: '', stages: [], days: [], monthDay: 0, ver: 1, archived: false };
-    renderKnowledge();
+    kbView = 'proc';
+    wfView = null;
+    if (view !== 'knowledge') go('knowledge');
+    else renderKnowledge();
     window.scrollTo(0, 0);
     $('#wfname').focus();
     return;
   }
+  if (d.wftplpick !== undefined) return openTemplatePreview(+d.wftplpick);
+  if (d.wftplback) return openTemplatePicker();
   if (d.wftpl !== undefined) {
     const t = WF_TEMPLATES[+d.wftpl];
     if (!t) return;
+    if ($('#sheet')) closeSheet();
     wfEdit = { ...templateToWorkflow(t), id: '' };
-    renderKnowledge();
+    kbView = 'proc';
+    wfView = null;
+    if (view !== 'knowledge') go('knowledge');
+    else renderKnowledge();
     window.scrollTo(0, 0);
+    const n = $('#wfname');
+    if (n) n.focus();
     return;
   }
   if (d.wfedit) {
@@ -1081,7 +1214,26 @@ function wfEditClick(d, b) {
     window.scrollTo(0, 0);
     return;
   }
+  if (d.wfview) {
+    const w = wfById(d.wfview);
+    if (!w) return toast('That process is gone', false, 3000);
+    return leaveEditor(() => {
+      kbView = 'proc';
+      wfView = w.id;
+      wfOpen = kbRun = kbArt = kbRunBackWf = null; // (whatever Knowledge was showing gives way)
+      if (view !== 'knowledge') go('knowledge');
+      else renderKnowledge();
+      window.scrollTo(0, 0);
+    });
+  }
+  if (d.wfback2) {
+    wfView = null;
+    renderKnowledge();
+    window.scrollTo(0, 0);
+    return;
+  }
   if (d.wfcancel) {
+    wfView = wfEdit && wfEdit.id && wfById(wfEdit.id) ? wfEdit.id : null;
     wfEdit = null;
     return renderKnowledge();
   }
@@ -1103,6 +1255,7 @@ function wfEditClick(d, b) {
     });
     S.workflows.push(c);
     wfEdit = null;
+    wfView = c.id; // (the copy, to rename or edit)
     save();
     renderKnowledge();
     return toast('Duplicated');
@@ -1112,12 +1265,14 @@ function wfEditClick(d, b) {
     if (!w) return;
     w.archived = !w.archived;
     wfEdit = null;
+    if (w.archived) wfView = null;
     save();
     renderKnowledge();
     return toast(w.archived ? 'Archived' : 'Back in the list');
   }
   if (!wfEdit) return;
   if (b && b.id === 'wfstageadd') return openStageForm('');
+  if (b && b.id === 'wfstepgo') return addTypedStep();
   if (d.wfstage) return openStageForm(d.wfstage);
   if (d.wfup || d.wfdown) {
     const ss = wfEdit.stages,
@@ -1144,7 +1299,7 @@ function wfEditClick(d, b) {
     renderKnowledge();
   }
 }
-// On a quest's page: a workflow linked to it (by the definition's q, or runs for it).
+// On a task's page: a workflow linked to it (by the definition's q, or runs for it).
 function questWorkflows(qid) {
   const ws = S.workflows.filter(w => !w.archived && w.q === qid),
     runs = S.wruns.filter(r => r.q === qid && !WRUN_OVER.includes(r.status));
@@ -1152,13 +1307,13 @@ function questWorkflows(qid) {
   return `<div class="list box reslist">${runs
     .map(
       r =>
-        `<div class="row resrow"><button class="open" data-wfopen="${r.id}"><small>Workflow</small><span>${esc(r.name)}</span></button><span class="procline"><small>${runWord(r)}${runStage(r) ? ' · ' + esc(runStage(r).title) : ''}</small><button class="btn sm blue" data-wfopen="${r.id}">${WRUN_FINAL.includes(r.status) ? 'Open' : 'Continue workflow'}</button></span></div>`,
+        `<div class="row resrow"><button class="open" data-wfopen="${r.id}"><small>Process</small><span>${esc(r.name)}</span></button><span class="procline"><small>${runWord(r)}${runStage(r) ? ' · ' + esc(runStage(r).title) : ''}</small><button class="btn sm blue" data-wfopen="${r.id}">${WRUN_FINAL.includes(r.status) ? 'Open' : 'Continue process'}</button></span></div>`,
     )
     .join('')}${ws
     .filter(w => !runs.some(r => r.wf === w.id))
     .map(
       w =>
-        `<div class="row resrow"><button class="open" data-wfedit="${w.id}"><small>Workflow</small><span>${esc(w.name)}</span></button><span class="procline"><small>Not running</small><button class="btn sm blue" data-wfstart="${w.id}" data-q="${qid}">Start</button></span></div>`,
+        `<div class="row resrow"><button class="open" data-wfview="${w.id}"><small>Process</small><span>${esc(w.name)}</span></button><span class="procline"><small>Not started</small><button class="btn sm blue" data-wfstart="${w.id}" data-q="${qid}">Start</button></span></div>`,
     )
     .join('')}</div>`;
 }

@@ -1,5 +1,5 @@
 /* domain events (Release C): the places where work changes state say so here, once, with a key
-   that names the change the same on every device (a quest finished on a day, a flow's report by
+   that names the change the same on every device (a task finished on a day, a flow's report by
    its row id, a run's outcome). Rules listen (see rules.js) and workflows advance (see
    workflows.js). Nothing here touches the page: a redraw never makes an event. */
 let eventQueue = [],

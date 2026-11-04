@@ -43,6 +43,15 @@ const test = base.test.extend({
         await page.goto('/');
         await started();
       },
+      // Knowledge's Processes view (processes, guides, automations and what's under way).
+      processes: async () => {
+        await app.go('knowledge');
+        await page.evaluate(() => {
+          kbView = 'proc';
+          wfView = null;
+          renderKnowledge();
+        });
+      },
       // The app's data as saved (the state in memory is what the store holds, pictures included).
       state: () => page.evaluate(() => JSON.parse(JSON.stringify(S))),
       // Changes the saved data as a raw object (as a test would edit the saved copy), for the
@@ -55,7 +64,7 @@ const test = base.test.extend({
           persistLocal();
           await storeDone();
         }, `(${fn})(s)`),
-      // New quests come in through the Inbox, then move to Today.
+      // New tasks come in through the Inbox, then move to Today.
       addQuest: async text => {
         await page.click('nav [data-v=inbox]');
         await page.fill('#iin', text);
@@ -67,7 +76,7 @@ const test = base.test.extend({
         await page.fill('#sin', text);
         await page.press('#sin', 'Enter');
       },
-      // A quest's tag (folded to the one it has) and its "More" (do later, repeat...).
+      // A task's tag (folded to the one it has) and its "More" (do later, repeat...).
       setTag: async name => {
         await page.evaluate(
           () => document.querySelector('#tagd') && (document.querySelector('#tagd').open = true),

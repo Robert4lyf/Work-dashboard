@@ -25,7 +25,7 @@ const seed = () => {
     },
     {
       id: 'r2',
-      name: 'Flow failed',
+      name: 'Automation failed',
       on: { k: 'exec_failed', flow: 'f1' },
       do: { k: 'wait', text: 'Ask IT about {name}: {err}', who: 'IT', days: 1 },
       enabled: true,
@@ -56,7 +56,7 @@ const seed = () => {
   renderAll();
 };
 const rlog = page => page.evaluate(() => S.rlog.map(l => [l.r, l.out, l.m]));
-// Tick (or untick) a quest as its check button does.
+// Tick (or untick) a task as its check button does.
 const tick = (page, id) =>
   page.evaluate(id => {
     const r = find(id),
@@ -82,11 +82,11 @@ test('rules fire once per event, fill in the words, skip disabled rules, and nev
   s = await app.state();
   expect(s.inbox).toHaveLength(1);
   expect(s.rlog).toHaveLength(1);
-  // Another quest doesn't match the name filter; the disabled rule never fires.
+  // Another task doesn't match the name filter; the disabled rule never fires.
   await page.click('[aria-label="Mark done: Call Dana"]');
   expect((await app.state()).inbox).toHaveLength(1);
   expect((await app.state()).rlog).toHaveLength(1);
-  // A quest a rule made, finished: no rule fires on it (no loops).
+  // A task a rule made, finished: no rule fires on it (no loops).
   await page.evaluate(() => {
     S.rules.push({
       id: 'r6',
@@ -193,7 +193,7 @@ test('a flow failure makes one waiting item on every device (same id), the day r
     S.rlog = [];
     emitEvent({ k: 'quest_done', key: 'quest:zz', text: 'z' });
   });
-  expect(await rlog(page)).toEqual([['r10', 'err', 'that workflow is gone']]);
+  expect(await rlog(page)).toEqual([['r10', 'err', 'that process is gone']]);
   expect(app.errors).toEqual([]);
 });
 
@@ -206,10 +206,15 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await app.go('account');
   await expect(page.locator('#v-account .rulerow')).toHaveCount(5);
   await expect(page.locator('#v-account .rulerow').nth(0)).toContainText(
-    'When A quest is finished (named like “report”), add an inbox item: “File {name}”',
+    'When a task is finished (named like “report”), add an inbox item: “File {name}”',
   );
-  await expect(page.locator('#v-account .rulerow').nth(0)).toContainText('Never fired');
+  await expect(page.locator('#v-account .rulerow').nth(0)).toContainText('Has not run yet');
+  await expect(page.locator('#v-account .rulerow').nth(0)).toContainText(
+    'Runs the moment a task is finished',
+  );
   await page.click('[data-rulenew]');
+  await expect(page.locator('#sheet .qact')).toHaveCount(6); // (five starters and from scratch)
+  await page.click('[data-rulescratch]');
   await page.fill('#rlname', 'Chase on Friday');
   await page.selectOption('#rlon', 'day');
   await expect(page.locator('#ruleform .days')).toBeVisible();
@@ -219,7 +224,7 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await page.fill('#rltext', 'Chase the week’s approvals');
   await page.fill('#rlest', '20');
   await expect(page.locator('.rlprev')).toContainText(
-    'Preview: when The app is opened on Fri, add a quest to today: “Chase the week’s approvals”.',
+    'When the app is opened on Fri, add a task to today: “Chase the week’s approvals”.',
   );
   await page.click('#sheetok');
   await expect(page.locator('#sheet')).toHaveCount(0);
@@ -261,11 +266,12 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await expect(page.locator('#rlogd li')).toContainText('removed rule');
   // A rule needs the right bits: no workflow chosen, no text, no day.
   await page.click('[data-rulenew]');
+  await page.click('[data-rulescratch]');
   await page.fill('#rlname', 'Half');
   await page.selectOption('#rldo', 'wrun');
   await page.selectOption('#rlwrun', '');
   await page.click('#sheetok');
-  await expect(page.locator('#toast')).toContainText('Choose the workflow');
+  await expect(page.locator('#toast')).toContainText('Choose the process');
   await expect(page.locator('#sheet')).toHaveCount(1);
   await page.evaluate(() => history.back());
   await expect(page.locator('#sheet')).toHaveCount(0);
@@ -315,7 +321,7 @@ test('junk rules and log rows are dropped; the wait-due and weekday events come 
     rollover();
   });
   s = await app.state();
-  expect(s.inbox.map(i => i.text)).toEqual(['Chase Sam about Sign-off']); // (the quest, not its waiting step)
+  expect(s.inbox.map(i => i.text)).toEqual(['Chase Sam about Sign-off']); // (the task, not its waiting step)
   expect(s.rlog.filter(l => l.r === 'r1')).toHaveLength(1);
   expect(app.errors).toEqual([]);
 });

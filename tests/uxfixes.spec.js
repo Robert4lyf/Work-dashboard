@@ -129,7 +129,7 @@ test('articles with no category left are still reachable when there are no categ
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Lost article');
 });
 
-test("the header's alarm button opens Today's list from a quest page; back from Notes goes to Knowledge", async ({
+test("the header's alarm button opens Today's list from a task page; back from Notes goes to Knowledge", async ({
   app,
   page,
 }) => {

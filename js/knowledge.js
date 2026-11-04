@@ -6,7 +6,7 @@ let kbArt = null, // the article being read
   kbMoving = null, // the category being moved (its "Move to" choice is showing)
   kbCatOpen = null, // the category being looked at ('' or null: the top level; 'lost': the uncategorised)
   kbImgShown = null, // an article's picture shown full size
-  kbReturn = false, // the article was opened from a quest's page: its ‹ goes back there
+  kbReturn = false, // the article was opened from a task's page: its ‹ goes back there
   kbRunBack = null; // the article was opened from a run being followed: its ‹ goes back to it
 const byName = (a, b) =>
   a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }) || (a < b ? -1 : a > b ? 1 : 0);
@@ -59,7 +59,7 @@ function normKnowledge() {
     .filter(f => ok(f) && typeof f.url === 'string' && FLOW_URL.test(f.url))
     .map(f => ({
       id: f.id,
-      name: okText(f.name, 60) || 'Flow',
+      name: okText(f.name, 60) || 'Automation',
       url: f.url,
       // (a time that can't be right, say from a device with its clock wrong, isn't shown)
       last: Number.isFinite(+f.last) && f.last > 0 && f.last < Date.now() + 864e5 ? +f.last : 0,
@@ -131,9 +131,11 @@ function renderKnowledge() {
   else if (wrun) h = wfRunView(wrun);
   else if (run) h = kbRunView(run);
   else if (kbArt && S.kb.some(a => a.id === kbArt)) h = kbArticle(S.kb.find(a => a.id === kbArt));
+  else if (typeof wfView !== 'undefined' && wfView && wfById(wfView)) h = wfOverview(wfById(wfView));
   else {
     kbArt = null;
-    h = kbIndex() + kbWorkflows() + kbFlows();
+    if (typeof wfView !== 'undefined') wfView = null;
+    h = kbTabs() + (kbView === 'proc' ? kbProcesses() : kbIndex());
   }
   setHTML($('#v-knowledge'), h);
 }
@@ -141,17 +143,17 @@ function kbFlows() {
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
   // The buttons themselves, here as well as at the top of Today.
   let h = flows.length
-    ? `<h2>Flows</h2>${quickActions()}`
-    : '<h2>Flows</h2><p class="hint">Buttons on Today that run your Power Automate Desktop flows on this computer.</p>';
-  h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage flows' : 'Add a flow'}</summary>`;
+    ? `<h2>Desktop automations</h2>${quickActions()}`
+    : '<h2>Desktop automations</h2><p class="hint">Buttons that run your Power Automate Desktop flows on this computer.</p>';
+  h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage automations' : 'Add a desktop automation'}</summary>`;
   flows.forEach(
     f =>
       (h += `<div class="tagrow"><input class="fld" data-flowname="${f.id}" value="${esc(f.name)}" maxlength="60" aria-label="Flow name"><button class="x" data-delflow="${f.id}" aria-label="Delete flow ${esc(f.name)}">×</button></div><p class="hint flowline">${flowStatusLine(f)}${S.execs.some(x => x.flow === f.id) ? ` <button class="linkbtn" data-xhist="${f.id}">History</button>` : ''}</p>`),
   );
   h += `<form id="flowform"><label class="f" for="flowname">Button name</label><input class="fld" id="flowname" maxlength="60" autocomplete="off" required>
     <label class="f" for="flowurl">Run URL</label><input class="fld" id="flowurl" placeholder="ms-powerautomate:/console/flow/run?..." autocomplete="off" required>
-    <div class="acts"><button class="btn">Add flow</button></div></form>
-    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. Each flow gets a button here and at the top of Today. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run.</p></details>`;
+    <div class="acts"><button class="btn">Add automation</button></div></form>
+    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. Each one gets a button here and on Today. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run.</p></details>`;
   return h;
 }
 // The notes (one scratchpad, synced), pinned at the top of Knowledge.
@@ -162,7 +164,7 @@ function notesTile() {
 function kbIndex() {
   let h =
     notesTile() +
-    `<h2 class="kbhead">Knowledge</h2><input class="fld" type="search" id="kbq" placeholder="Search articles" aria-label="Search articles" autocomplete="off" value="${esc(kbQuery)}"><div id="kbres">${kbResults()}</div>`;
+    `<input class="fld" type="search" id="kbq" placeholder="Search reference articles" aria-label="Search reference articles" autocomplete="off" value="${esc(kbQuery)}"><div id="kbres">${kbResults()}</div>`;
   h += `<div id="kbtree"${kbQuery.trim() ? ' hidden' : ''}>`;
   const c = kbCatOpen && kbCatOpen !== 'lost' && kbCat(kbCatOpen);
   if (!c && kbCatOpen !== 'lost') kbCatOpen = null;
@@ -192,7 +194,7 @@ function kbCategory(c) {
     ids = kbTrailIds(c.id),
     kids = kbKids(c.id),
     arts = kbArts(c.id);
-  let h = `<div class="kbcrumbs crumbs"><button data-kbcat="">&lsaquo; Knowledge</button>${trail
+  let h = `<div class="kbcrumbs crumbs"><button data-kbcat="">&lsaquo; Reference</button>${trail
     .slice(0, -1)
     .map((t, i) => `<span>/</span><button data-kbcat="${ids[i]}">${esc(t)}</button>`)
     .join('')}</div><h2 class="kbcatname">${esc(c.name)}</h2>`;
@@ -206,7 +208,7 @@ function kbCategory(c) {
 // The lost articles (their category went), as a category of their own.
 function kbLostView() {
   const lost = kbLost();
-  return `<div class="kbcrumbs crumbs"><button data-kbcat="">&lsaquo; Knowledge</button></div><h2 class="kbcatname">Uncategorised</h2>${
+  return `<div class="kbcrumbs crumbs"><button data-kbcat="">&lsaquo; Reference</button></div><h2 class="kbcatname">Uncategorised</h2>${
     lost.length
       ? `<div class="list box">${lost.map(kbRow).join('')}</div>`
       : '<p class="hint">Nothing here.</p>'
@@ -240,7 +242,7 @@ function kbResults() {
 }
 function kbArticle(a) {
   const trail = kbTrail(a.cat);
-  return `<button class="linkbtn" data-kbback="1">‹ ${kbRunBack && S.runs.some(r => r.id === kbRunBack) ? 'Back to the procedure' : kbReturn && path.length ? 'Back to the quest' : 'Knowledge'}</button>
+  return `<button class="linkbtn" data-kbback="1">‹ ${kbRunBack && S.runs.some(r => r.id === kbRunBack) ? 'Back to the guide' : kbReturn && path.length ? 'Back to the task' : kbView === 'proc' ? 'Processes' : 'Reference'}</button>
     <p class="hint kbtrail">${esc(trail.join(' › ') || 'Uncategorised')}</p>
     <h2 class="kbtitle">${esc(a.title)}</h2>
     <div class="kbtext box">${a.body ? kbLinkify(a.body) : a.imgs.length || (a.steps && a.steps.length) ? '' : '<span class="hint">Nothing written yet.</span>'}</div>
@@ -282,11 +284,11 @@ function kbEditor() {
   if (!kbEdit.imgs) kbEdit.imgs = [...(a.imgs || [])]; // (changed here, kept only on Save)
   if (!kbEdit.steps) kbEdit.steps = (a.steps || []).map(s => ({ ...s })); // (its procedure's steps, likewise)
   if (kbEdit.title === undefined) Object.assign(kbEdit, { title: a.title, body: a.body, cat: a.cat });
-  return `<h2>${kbEdit.id ? 'Edit article' : 'New article'}</h2><form id="kbform">
+  return `<h2>${kbEdit.id ? 'Edit article' : kbEdit.guide ? 'New guide' : 'New article'}</h2>${kbEdit.guide && !kbEdit.id ? '<p class="hint">A guide is an article with steps: write what it is for, then add the steps to follow below.</p>' : ''}<form id="kbform">
     <label class="f" for="kbt">Title</label><input class="fld" id="kbt" maxlength="200" value="${esc(kbEdit.title)}" autocomplete="off" required>
     <label class="f" for="kbc">Category</label><select class="fld" id="kbc">${kbCatOptions(kbEdit.cat)}</select>
     <label class="f" for="kbb">Article</label><textarea class="fld kbbody" id="kbb" maxlength="${KB_BODY}" placeholder="Steps, contacts, links... Web links become clickable. Paste a screenshot to add it below.">${esc(kbEdit.body)}</textarea>
-    <div class="sechead kbimghead"><h2>Steps <small class="hint">(a procedure, optional)</small></h2><button class="btn sm" type="button" id="pstepadd">Add step</button></div><div id="psteps">${stepsEditList()}</div>
+    <div class="sechead kbimghead"><h2>Steps <small class="hint">(optional: makes it a guide you can follow)</small></h2><button class="btn sm" type="button" id="pstepadd">Add step</button></div><div id="psteps">${stepsEditList()}</div>
     <div class="sechead kbimghead"><h2>Pictures</h2><button class="btn sm" type="button" id="kbimgadd">Add picture</button></div><input type="file" id="kbimgfile" accept="image/*" multiple hidden aria-hidden="true"><div id="kbimgs">${kbImgGrid(kbEdit.imgs, true)}</div>
     <div class="acts"><button class="btn green">Save</button><button class="btn" type="button" data-kbcancel="1">Cancel</button></div></form>`;
 }
@@ -335,10 +337,14 @@ function restoreKbDraft() {
 }
 // An article being written is left only on purpose (a sheet asks, in place of confirm()).
 function leaveEditor(then) {
-  if (!kbEdit) return then();
+  const proc = !kbEdit && typeof wfEditDirty === 'function' && wfEditDirty();
+  if (!kbEdit && !proc) {
+    if (typeof wfEdit !== 'undefined') wfEdit = null;
+    return then();
+  }
   sheet(
     {
-      title: 'Leave this article?',
+      title: proc ? 'Leave this process?' : 'Leave this article?',
       text: 'Changes not saved will be lost.',
       ok: 'Leave',
       danger: true,
@@ -346,6 +352,7 @@ function leaveEditor(then) {
     },
     () => {
       kbEdit = null;
+      wfEdit = null;
       clearKbDraft();
       then();
     },
@@ -519,7 +526,7 @@ function kbClick(d, b) {
   }
   if (d.kbback) {
     const a = S.kb.find(x => x.id === kbArt);
-    if (a) kbCatOpen = kbCat(a.cat) ? a.cat : kbLost().includes(a) ? 'lost' : null;
+    if (a) kbCatOpen = kbView === 'proc' ? null : kbCat(a.cat) ? a.cat : kbLost().includes(a) ? 'lost' : null;
     kbArt = null;
     if (kbRunBack && S.runs.some(r => r.id === kbRunBack)) {
       kbRun = kbRunBack;
@@ -600,7 +607,7 @@ function kbClick(d, b) {
   }
   if (d.delflow && arm(b, 'Delete?')) {
     const f = S.flows.find(x => x.id === d.delflow);
-    withUndo('Deleted ' + (f ? f.name : 'flow'), () => {
+    withUndo('Deleted ' + (f ? f.name : 'automation'), () => {
       S.flows = S.flows.filter(x => x.id !== d.delflow);
       save();
       renderKnowledge();

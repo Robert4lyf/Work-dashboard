@@ -30,7 +30,7 @@ test('voice capture splits on "next item" in order', async ({ app, page }) => {
   ]);
 });
 
-test('an opened inbox item: waiting, do later and subquests (which go to Today with it)', async ({
+test('an opened inbox item: waiting, do later and steps (which go to Today with it)', async ({
   app,
   page,
 }) => {
@@ -46,7 +46,7 @@ test('an opened inbox item: waiting, do later and subquests (which go to Today w
     await page.fill(sub, t);
     await page.press(sub, 'Enter');
   }
-  await expect(page.locator('#v-inbox .tag.opt')).toHaveText('2 subquests');
+  await expect(page.locator('#v-inbox .tag.opt')).toHaveText('2 steps');
   await page.click(`[data-delsub="${id}"] >> nth=0`);
   await page.click('#undo');
   await page.click(`[data-promote="${id}"]`);

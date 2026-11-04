@@ -6,7 +6,7 @@ test.beforeEach(async ({ app, page }) => {
   await app.open();
 });
 
-test('waiting: cleared in the Inbox stays cleared; a waiting quest moved to the Inbox stays waiting', async ({
+test('waiting: cleared in the Inbox stays cleared; a waiting task moved to the Inbox stays waiting', async ({
   page,
 }) => {
   const q = await page.evaluate(() => {
@@ -193,7 +193,7 @@ test('round 3: Upcoming rows on Waiting open the Upcoming list; the chase date i
   await expect(page.locator('#wdue')).toHaveValue('2026-09-30');
 });
 
-test('round 4: a due session waits for the server while held; the waiting panel is not remembered open from a waiting quest', async ({
+test('round 4: a due session waits for the server while held; the waiting panel is not remembered open from a waiting task', async ({
   page,
 }) => {
   // Held (as while the first sync after opening is under way): the tick doesn't finish it.
@@ -246,9 +246,9 @@ test('round 5: the keyboard stays in the view after an action; Restore backup is
   });
   await page.focus('#v-today [aria-label="Mark done: Keyboard one"]');
   await page.keyboard.press('Space');
-  // (the quest folded into "Done today": the keyboard stays in the view)
+  // (the task folded into "Done today": the keyboard stays in the view)
   expect(await page.evaluate(() => document.activeElement.closest('#v-today') !== null)).toBe(true);
-  // The header's tick too: it moves on to the next quest, and keeps the keyboard.
+  // The header's tick too: it moves on to the next task, and keeps the keyboard.
   await page.focus('#hnow [data-toggle]');
   await page.keyboard.press('Space');
   expect(await page.evaluate(() => document.activeElement.closest('#hnow') !== null)).toBe(true);
@@ -296,7 +296,7 @@ test('round 6: repeats sent to Tomorrow aren’t doubled; a broken path is cut, 
     renderToday();
     const pathAfter = [...path];
 
-    // Removing the open step of a quest doesn't finish it for points.
+    // Removing the open step of a task doesn't finish it for points.
     const xp = S.xp;
     S.quests = [
       fix({
@@ -313,7 +313,7 @@ test('round 6: repeats sent to Tomorrow aren’t doubled; a broken path is cut, 
   expect(r).toEqual({ standups: 1, pathAfter: [], gained: 0, logged: 0 });
 });
 
-test('round 6: a saved template with the same name is left alone by Repeat; a finished quest moved to the Inbox comes back open', async ({
+test('round 6: a saved template with the same name is left alone by Repeat; a finished task moved to the Inbox comes back open', async ({
   page,
 }) => {
   const r = await page.evaluate(() => {
@@ -343,11 +343,11 @@ test('round 6: a step’s ⋯ offers its own actions; adding a step after closin
   page,
 }) => {
   await page.evaluate(() => {
-    S.quests = [fix({ id: 'm1', text: 'Menu quest', children: [fix({ id: 'm1a', text: 'Step' })] })];
+    S.quests = [fix({ id: 'm1', text: 'Menu task', children: [fix({ id: 'm1a', text: 'Step' })] })];
     save();
     renderAll();
   });
-  await app.openQuest('Menu quest');
+  await app.openQuest('Menu task');
   await page.click('[data-qact="m1a"]');
   await expect(page.locator('#sheet .qact')).toHaveText([
     'Open',

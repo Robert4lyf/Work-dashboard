@@ -1,11 +1,11 @@
-/* interruption recovery: a quest keeps where work on it stopped, q.resume = { note, at, step }:
+/* interruption recovery: a task keeps where work on it stopped, q.resume = { note, at, step }:
    what was found and what to do next, when, and the step it was on. Saved from the focus timer
-   (pausing it) or from any quest or step, with or without a session. Shown on the quest's page,
+   (pausing it) or from any task or step, with or without a session. Shown on the task's page,
    as a mark on its row on Today and in single-task mode, until it's cleared, replaced, or the
-   quest is finished. It travels with the quest (to the Inbox or Upcoming and back); a repeat's
+   task is finished. It travels with the task (to the Inbox or Upcoming and back); a repeat's
    fresh copy never gets it. */
 const placeLine = rs => (rs.note || 'Stopped at a step') + ' · ' + whenLabel(rs.at);
-// Whether the quest's saved place belongs where `n` is shown: on the quest itself, or on the
+// Whether the task's saved place belongs where `n` is shown: on the task itself, or on the
 // step it points at (not on another step's page).
 const placeFits = (q, n) => q === n || !q.resume.step || q.resume.step === n.id;
 // The step a saved place points at, if it's still there to do.
@@ -23,7 +23,7 @@ function savePlace(id) {
   // minutes are kept, as any pause keeps them.)
   if (S.timer && topOf(S.timer.q) === q && S.timer.left == null && !timerDue()) togglePause();
   // The step: the one asked about, else the session's, else (editing the note) the one the place
-  // already points at while it's still to do, else the quest's next.
+  // already points at while it's still to do, else the task's next.
   const cur = q.resume,
     kept = cur && placeStep(q);
   let step = '';
@@ -48,7 +48,7 @@ function savePlace(id) {
     },
     v => {
       const now = find(q.id); // (looked up again: a sync meanwhile may have rebuilt the list)
-      if (!now || isDone(now.n)) return toast("That quest's finished: nothing to come back to");
+      if (!now || isDone(now.n)) return toast("That task's finished: nothing to come back to");
       const note = cleanText(typeof v === 'string' ? v : '')
         .trim()
         .slice(0, RESUME_MAX);
@@ -62,7 +62,7 @@ function savePlace(id) {
     },
   );
 }
-// Back to the work: single-task mode on the step the place points at (or the quest's next),
+// Back to the work: single-task mode on the step the place points at (or the task's next),
 // with the note shown there. The place stays until it's cleared: it's yours to read again.
 function resumeWork(id) {
   const r = find(id);
@@ -90,7 +90,7 @@ function clearPlace(id) {
     renderAll();
   });
 }
-// The saved place on a quest's page: the note, when, the step, and what to do with it.
+// The saved place on a task's page: the note, when, the step, and what to do with it.
 function placeCard(q) {
   const rs = q.resume,
     st = placeStep(q),
@@ -105,7 +105,7 @@ function placeCard(q) {
     rs.note ? `<p class="placenote">${esc(rs.note)}</p>` : ''
   }${stepLine ? `<p class="hint placestep">At: ${esc(stepLine)}</p>` : ''}<div class="links placeacts"><button class="linkbtn" data-saveplace="${q.id}">Edit the note</button><button class="linkbtn" data-clearplace="${q.id}">Clear</button></div>`;
 }
-// A finished quest has nothing to come back to (called by settle).
+// A finished task has nothing to come back to (called by settle).
 function dropDonePlaces() {
   S.quests.forEach(q => {
     if (q.resume && isDone(q)) delete q.resume;

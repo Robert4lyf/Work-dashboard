@@ -1,5 +1,5 @@
-// Release A: the quest page as a workspace: what's next, the one action to hand, and the
-// resources (articles, flows, web links) linked to the quest.
+// Release A: the task page as a workspace: what's next, the one action to hand, and the
+// resources (articles, flows, web links) linked to the task.
 const { test, expect } = require('./fixtures');
 
 const seed = () => {
@@ -46,7 +46,7 @@ test('the page leads with the next step and one primary action; resources fold a
   await page.click('.qfoot [data-zen]');
   await expect(page.locator('#v-zen .zt')).toHaveText('Reconcile');
   await page.keyboard.press('Escape');
-  // A quest without steps: Mark done and Focus on this.
+  // A task without steps: Mark done and Focus on this.
   await page.click('[data-crumb="-1"]');
   await app.openQuest('Call Sam');
   await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Mark done', 'Focus on this']);
@@ -96,11 +96,11 @@ test('articles, flows and web links can be linked, opened and removed; a step sh
   await page.click('#v-today .open >> text="Reconcile"');
   await expect(page.locator('#resd .resrow')).toHaveCount(3);
   await expect(page.locator('#resd [data-unlink]')).toHaveCount(0);
-  await expect(page.locator('#resd summary')).toContainText("the quest's");
-  // Opening the article from here, and its ‹ comes back to the quest.
+  await expect(page.locator('#resd summary')).toContainText("the task's");
+  // Opening the article from here, and its ‹ comes back to the task.
   await page.click('#resd [data-sart="a1"]');
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Weekly report procedure');
-  await expect(page.locator('#v-knowledge [data-kbback]')).toHaveText('‹ Back to the quest');
+  await expect(page.locator('#v-knowledge [data-kbback]')).toHaveText('‹ Back to the task');
   await page.click('#v-knowledge [data-kbback]');
   await expect(page.locator('#v-today h1')).toHaveText('Reconcile');
 
@@ -162,7 +162,7 @@ test('a renamed article keeps its link; a deleted article or flow shows as gone 
   await app.openQuest('Weekly reporting');
   const rows = page.locator('#resd .resrow');
   await expect(rows.nth(0)).toContainText('Weekly report procedure (v2)');
-  await expect(rows.nth(1)).toContainText('Flow removed');
+  await expect(rows.nth(1)).toContainText('Automation removed');
   await expect(rows.nth(1).locator('a')).toHaveCount(0);
   await page.click('#resd .resrow >> nth=1 >> [data-unlink]');
   await expect(rows).toHaveCount(1);
@@ -177,7 +177,7 @@ test('a renamed article keeps its link; a deleted article or flow shows as gone 
   expect((await app.state()).quests[0].links).toEqual([{ id: 'l1', kind: 'kb', ref: 'a1' }]);
 });
 
-test('resources travel with the quest to the Inbox, to Upcoming and back, and into a repeat’s copies', async ({
+test('resources travel with the task to the Inbox, to Upcoming and back, and into a repeat’s copies', async ({
   app,
   page,
 }) => {
@@ -217,7 +217,7 @@ test('resources travel with the quest to the Inbox, to Upcoming and back, and in
   ]);
 });
 
-test('the primary action follows the quest’s state: waiting, every step ticked, finished', async ({
+test('the primary action follows the task’s state: waiting, every step ticked, finished', async ({
   app,
   page,
 }) => {
@@ -240,14 +240,14 @@ test('the primary action follows the quest’s state: waiting, every step ticked
     save();
     renderAll();
   });
-  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Finish quest']);
+  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Finish task']);
   await page.click('.qfoot [data-finish]');
   await expect(page.locator('.facts .qnext b')).toHaveText('Finished');
-  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Reopen quest']);
+  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Reopen task']);
   await expect(page.locator('#resd')).toHaveCount(1); // (resources still there to add)
 });
 
-test('review fixes: a repeating quest’s resources follow it onto the template; junk template links are dropped', async ({
+test('review fixes: a repeating task’s resources follow it onto the template; junk template links are dropped', async ({
   app,
   page,
 }) => {

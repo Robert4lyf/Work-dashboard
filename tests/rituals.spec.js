@@ -7,14 +7,14 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 23, 9, 0, 30));
 });
 
-test('quests carried over for 3+ days ask for a decision each morning', async ({ app, page }) => {
+test('tasks carried over for 3+ days ask for a decision each morning', async ({ app, page }) => {
   for (const t of ['Old report', 'Old email', 'Old call', 'Old idea', 'Fresh']) await app.addQuest(t);
   expect((await app.state()).quests.every(q => q.since === '2026-09-23')).toBe(true);
   await app.setState(s => s.quests.slice(0, 4).forEach(q => (q.since = '2026-09-19')));
   await page.reload();
   // One folded line (the rows don't carry an age badge); open it to decide.
   const card = page.locator('#v-today .carried');
-  await expect(card.locator('summary')).toContainText('4 quests carried over');
+  await expect(card.locator('summary')).toContainText('4 tasks carried over');
   await expect(page.locator('#v-today .row .tag.old')).toHaveCount(0);
   await card.locator('summary').click();
   await expect(card.locator('.crow')).toHaveCount(4);
@@ -32,7 +32,7 @@ test('quests carried over for 3+ days ask for a decision each morning', async ({
   expect(s.later[0].since).toBeUndefined();
   expect(s.inbox[0].text).toBe('Old call');
 
-  // Back on Today, a moved quest starts counting again; a kept one asks again tomorrow.
+  // Back on Today, a moved task starts counting again; a kept one asks again tomorrow.
   await page.clock.setSystemTime(new Date(2026, 8, 24, 9));
   await page.reload();
   s = await app.state();
@@ -41,14 +41,14 @@ test('quests carried over for 3+ days ask for a decision each morning', async ({
   await expect(card).toContainText('Old report 5 days');
 });
 
-test('waiting is on a subquest: set from the quest, shown on Today and the Waiting tab, not Next up', async ({
+test('waiting is on a step: set from the task, shown on Today and the Waiting tab, not Next up', async ({
   app,
   page,
 }) => {
   await app.addQuest('Budget review');
   await app.addQuest('Write report');
   await app.openQuest('Budget review');
-  // On a quest, "Waiting on someone?" adds a subquest (named by "For what") that waits.
+  // On a task, "Waiting on someone?" adds a step (named by "For what") that waits.
   await page.click('#waitd summary');
   await page.fill('#wwho', 'Sam');
   await page.fill('#wnote', 'Q3 figures');
@@ -62,7 +62,7 @@ test('waiting is on a subquest: set from the quest, shown on Today and the Waiti
     wait: { who: 'Sam', note: '', due: '2026-09-23', since: '2026-09-23' },
   });
   await expect(page.locator('#v-today .list .row')).toContainText('Q3 figures');
-  await expect(page.locator('#waitd summary')).toContainText('Add it as a subquest'); // (ready for another)
+  await expect(page.locator('#waitd summary')).toContainText('Add it as a step'); // (ready for another)
   // The step's own page edits its waiting.
   await page.click('#v-today .list .open >> text="Q3 figures"');
   await expect(page.locator('#waitd summary')).toHaveText('Waiting on Sam');
@@ -101,7 +101,7 @@ test('waiting is on a subquest: set from the quest, shown on Today and the Waiti
   // Waiting rows look different (dark orange); others don't.
   await expect(page.locator('#v-today .row.waiting')).toHaveCount(1);
   await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
-  // It's blocked, so Next up moves on to the next quest.
+  // It's blocked, so Next up moves on to the next task.
   await expect(page.locator('#hnow')).toContainText('Write report');
   await expect(page.locator('#attd > summary')).toContainText('1 today');
   await expect(page.locator('#attd [data-wgo]')).toContainText('Chase Sam today');
@@ -134,13 +134,13 @@ test('waiting is on a subquest: set from the quest, shown on Today and the Waiti
   expect(sc.children[0]).toMatchObject({ text: 'Hear back', wait: { who: 'Legal' } });
   await app.go('waiting');
 
-  // "Got it" puts it back on the list as a normal quest.
+  // "Got it" puts it back on the list as a normal task.
   await v.locator('.row', { hasText: 'Budget review' }).locator('[data-waitclear]').click();
   s = await app.state();
   expect(s.quests[0].children[0].wait).toBeUndefined();
   await expect(page.locator('#hnow')).toContainText('Q3 figures');
   await expect(v.locator('.row')).toHaveCount(1);
-  // Ticking one off from the Waiting tab finishes it (and its quest, its only step).
+  // Ticking one off from the Waiting tab finishes it (and its task, its only step).
   await v.locator('[data-toggle]').click();
   expect((await app.state()).quests.find(q => q.text === 'Signed contract').children[0].done).toBe(true);
   await expect(v.locator('.empty')).toContainText('Nothing to chase');
@@ -161,7 +161,7 @@ test('an inbox item can be marked waiting from its details', async ({ app, page 
   expect((await app.state()).inbox[0].wait).toBeUndefined();
 });
 
-test('a quest set waiting before this waits through a step; it gets a chase notification, and skips the carried-over card', async ({
+test('a task set waiting before this waits through a step; it gets a chase notification, and skips the carried-over card', async ({
   app,
   page,
 }) => {
@@ -210,7 +210,7 @@ test('old promises become quests: waiting ones with a waiting step, "I owe" ones
   expect(s.quests[1].wait).toBeUndefined();
 });
 
-test('interruptions sync as their own rows; waiting travels with its quest', async ({ app, page }) => {
+test('interruptions sync as their own rows; waiting travels with its task', async ({ app, page }) => {
   const r = await page.evaluate(() => {
     S.interrupts.push({ id: 'i1', t: Date.now(), q: null, why: 'Call' });
     S.quests.push(fix({ id: 'q1', text: 'x', children: [{ id: 's1', text: 'y', wait: { who: 'Sam' } }] }));
@@ -223,7 +223,7 @@ test('interruptions sync as their own rows; waiting travels with its quest', asy
   expect(r.back.quests[0].children[0].wait.who).toBe('Sam');
 });
 
-test('a quest with a step waiting on someone shows as waiting too', async ({ app, page }) => {
+test('a task with a step waiting on someone shows as waiting too', async ({ app, page }) => {
   await app.addQuest('Budget');
   await app.openQuest('Budget');
   await app.addSub('Get figures');
@@ -235,15 +235,15 @@ test('a quest with a step waiting on someone shows as waiting too', async ({ app
   const row = page.locator('#v-today .row', { hasText: 'Budget' });
   await expect(row).toHaveClass(/waiting/);
   await expect(row.locator('.tag.wait')).toHaveText('Waiting on Sam');
-  // The rest of the quest carries on: Next up skips the waiting step.
+  // The rest of the task carries on: Next up skips the waiting step.
   await expect(page.locator('#hnow')).toContainText('Write summary');
-  // Once the step is back, the quest isn't waiting.
+  // Once the step is back, the task isn't waiting.
   await app.setState(s => delete s.quests[0].children[0].wait);
   await page.reload();
   await expect(row).not.toHaveClass(/waiting/);
 });
 
-test('waiting quests sit at the bottom of Today, and return to their place', async ({ app, page }) => {
+test('waiting tasks sit at the bottom of Today, and return to their place', async ({ app, page }) => {
   for (const t of ['Budget', 'Report', 'Email']) await app.addQuest(t);
   await app.setState(
     s =>
@@ -264,7 +264,7 @@ test('waiting quests sit at the bottom of Today, and return to their place', asy
   await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
 });
 
-test("a quest's steps keep their order on its page, a waiting one too; only finished ones go last", async ({
+test("a task's steps keep their order on its page, a waiting one too; only finished ones go last", async ({
   app,
   page,
 }) => {
@@ -287,5 +287,5 @@ test("a quest's steps keep their order on its page, a waiting one too; only fini
   await expect(rows).toHaveText(['Final proposal', 'Respond to Megan', 'Kickoff']);
   await page.click('#reorder');
   await expect(rows).toHaveText(['Final proposal', 'Respond to Megan', 'Kickoff']);
-  // (Today's list still puts the waiting quest below the rest: see above.)
+  // (Today's list still puts the waiting task below the rest: see above.)
 });

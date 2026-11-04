@@ -1,4 +1,4 @@
-/* desktop: on wide screens quests can be dragged within Today to reorder them. Today, Inbox
+/* desktop: on wide screens tasks can be dragged within Today to reorder them. Today, Inbox
    and Focus are separate pages, as on a phone. */
 const wideMQ = matchMedia('(min-width: 1100px)');
 const dragAttr = key => (wideMQ.matches ? ` draggable="true" data-drag="${key}"` : '');
@@ -26,7 +26,7 @@ function moveToInbox(id) {
 }
 
 let dragging = null,
-  dragRank = null; // the dragged quest's group, worked out once per drag
+  dragRank = null; // the dragged task's group, worked out once per drag
 // Where a drop would land for the current drag, or null if it can't land here.
 function dropZone(target, y) {
   if (!dragging || !target.closest) return null;
@@ -36,7 +36,7 @@ function dropZone(target, y) {
   const other = find(rowEl.dataset.drag.slice(2)),
     me = find(id);
   // Reordering only within the same list, and (outside Reorder mode, where waiting and finished
-  // quests, and finished steps, are shown lower down) within the same group, so a drop lands where
+  // tasks, and finished steps, are shown lower down) within the same group, so a drop lands where
   // it looks.
   if (!me || me.arr !== other.arr || me.n === other.n) return null;
   const steps = me.parents.length > 0;

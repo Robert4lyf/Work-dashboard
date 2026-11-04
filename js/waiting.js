@@ -1,9 +1,9 @@
-/* waiting: a subquest (or an Inbox item) can wait on someone, n.wait = { who, note (what for),
+/* waiting: a step (or an Inbox item) can wait on someone, n.wait = { who, note (what for),
    due (when to chase next), since (when asked), expect (when a reply was promised), last (the
-   latest follow-up) }. A quest itself doesn't: it shows as waiting through its steps. Waiting
+   latest follow-up) }. A task itself doesn't: it shows as waiting through its steps. Waiting
    steps aren't "Next up"; the Waiting Centre lists them all, by urgency or by person.
    Follow-ups are records of their own (S.follows, kind 'follow': { id, n, t, d, k, note }),
-   appended and never edited, so the quest's row stays small and two devices adding one each
+   appended and never edited, so the task's row stays small and two devices adding one each
    keep both. k: start, chase (a follow-up), expect (a new promised date), resolve, reopen. */
 const FOLLOW_KINDS = ['start', 'chase', 'expect', 'resolve', 'reopen'];
 const FOLLOW_MAX = 200; // characters in a follow-up's note
@@ -18,7 +18,7 @@ function openWaiting(ns, trail = [], out = []) {
 }
 function waitingNodes() {
   const out = openWaiting(S.quests);
-  // Upcoming quests and quests back in the Inbox: their waiting steps too.
+  // Upcoming tasks and tasks back in the Inbox: their waiting steps too.
   S.later.forEach(n => openWaiting([n]).forEach(x => out.push({ ...x, start: n.start })));
   S.inbox.forEach(i => {
     if (i.wait) out.push({ n: i, trail: [], inbox: true });
@@ -26,7 +26,7 @@ function waitingNodes() {
   });
   return out;
 }
-// A step, quest or Inbox item by id, wherever it is (Today, Upcoming, or in the Inbox).
+// A step, task or Inbox item by id, wherever it is (Today, Upcoming, or in the Inbox).
 function findWaitable(id) {
   const it = S.inbox.find(x => x.id === id);
   return (
@@ -47,13 +47,13 @@ function chaseTag(w) {
 }
 const waitBadge = n =>
   n.wait ? `<span class="tag wait">Waiting${n.wait.who ? ' on ' + esc(n.wait.who) : ''}</span>` : '';
-// Open steps somewhere under a quest that are waiting on someone.
+// Open steps somewhere under a task that are waiting on someone.
 function waitingSteps(n) {
   return openWaiting(n.children).map(x => x.n);
 }
 // Waiting on someone, itself or through one of its steps (such rows show dark orange).
 const showsWaiting = n => !isDone(n) && !!(n.wait || waitingSteps(n).length);
-// A quest with a waiting step shows as waiting too, naming who (or how many steps).
+// A task with a waiting step shows as waiting too, naming who (or how many steps).
 function stepWaitBadge(n) {
   const ws = waitingSteps(n);
   if (!ws.length) return '';
@@ -74,7 +74,7 @@ function addFollow(id, k, note = '') {
   });
 }
 // A waiting item's history goes with it when its wait moves to another node (an Inbox item
-// taken to Today waits through a step of its own; a quest moved to the Inbox the other way).
+// taken to Today waits through a step of its own; a task moved to the Inbox the other way).
 function rekeyFollows(from, to) {
   if (!from || !to || from === to) return;
   S.follows.forEach(f => {
@@ -104,14 +104,14 @@ function followList(id, limit = 6) {
     )
     .join('')}${fs.length > limit ? `<li class="hint">and ${fs.length - limit} earlier</li>` : ''}</ul>`;
 }
-// On a quest's page: set it waiting, change the details (saved as each is changed), or stop
-// waiting. On a quest (top): adds a waiting subquest, named by "For what". With history: the
+// On a task's page: set it waiting, change the details (saved as each is changed), or stop
+// waiting. On a task (top): adds a waiting step, named by "For what". With history: the
 // follow-ups so far, and a way to record one (or to reopen a resolved item).
 function waitPanel(n, top) {
   const w = n.wait || {},
     hist = followList(n.id),
     resolved = !n.wait && !top && followsFor(n.id).some(f => f.k === 'resolve');
-  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}${n.wait ? ` data-held="1" data-waitid="${n.id}"` : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : top ? 'Waiting on someone? Add it as a subquest' : 'Waiting on someone?'}</summary>
+  return `<details id="waitd"${panels.waitd || n.wait ? ' open' : ''}${n.wait ? ` data-held="1" data-waitid="${n.id}"` : ''}><summary>${n.wait ? 'Waiting' + (w.who ? ' on ' + esc(w.who) : '') : top ? 'Waiting on someone? Add it as a step' : 'Waiting on someone?'}</summary>
     <label class="f" for="wwho">Who</label><input class="fld" id="wwho" maxlength="60" value="${esc(w.who || '')}" list="wholist" autocomplete="off">
     <label class="f" for="wnote">For what</label><input class="fld" id="wnote" maxlength="160" value="${esc(w.note || '')}" autocomplete="off">
     <label class="f" for="wdue">Chase on</label><input class="fld" type="date" id="wdue" value="${w.due || ''}">
@@ -133,7 +133,7 @@ function whoList() {
   return `<datalist id="wholist">${people.map(w => `<option value="${esc(w)}">`).join('')}</datalist>`;
 }
 // The waiting panel's fields, as they are now.
-// `quiet`: a detail changed on a quest already waiting. Saved without redrawing the panel, which
+// `quiet`: a detail changed on a task already waiting. Saved without redrawing the panel, which
 // would take the field out from under a tap or Tab that's moving on (only its heading and the
 // badges change, in place).
 function saveWaitPanel(id, quiet) {
@@ -172,13 +172,13 @@ function setWaiting(id, w) {
     r.n.wait = { since: (r.n.wait && r.n.wait.since) || today(), ...w };
     if (!r.n.wait.expect) delete r.n.wait.expect; // (only kept when set: see cleanWait)
   } else delete r.n.wait;
-  // A quest (not an Inbox item) waits through a step: one is added. One that was finished isn't
+  // A task (not an Inbox item) waits through a step: one is added. One that was finished isn't
   // any more (settle takes back its "done"), like adding any other step.
   let stepped = null;
   if (w && !S.inbox.includes(r.n) && !r.parents.length) {
     r.n.done = false;
     stepped = waitToStep(r.n);
-    if (stepped) toast('Added a waiting subquest');
+    if (stepped) toast('Added a waiting step');
   }
   // The history: asked (or asked again), or resolved.
   const target = stepped || r.n;
@@ -245,14 +245,14 @@ function followMessage(id) {
   const r = findWaitable(id);
   if (!r.n || !r.n.wait) return '';
   const w = r.n.wait,
-    quest = r.parents.length ? r.parents[0].text : '',
+    task = r.parents.length ? r.parents[0].text : '',
     last = followsFor(id)
       .filter(f => f.k === 'chase' && f.note)
       .pop(),
     lines = [
       `Hi${w.who ? ' ' + w.who.split(/\s+/)[0] : ''},`,
       '',
-      `Following up on: ${r.n.text}${quest ? ' (for ' + quest + ')' : ''}.`,
+      `Following up on: ${r.n.text}${task ? ' (for ' + task + ')' : ''}.`,
       [w.since ? 'Asked ' + niceDate(w.since) : '', w.expect ? 'reply expected by ' + niceDate(w.expect) : '']
         .filter(Boolean)
         .join('; ') + (w.since || w.expect ? '.' : ''),
@@ -264,7 +264,7 @@ function followMessage(id) {
     ];
   return lines.filter((l, i) => l !== '' || lines[i - 1] !== '').join('\n');
 }
-// A waiting item's actions, in a sheet (the Waiting Centre's rows and the quest page).
+// A waiting item's actions, in a sheet (the Waiting Centre's rows and the task page).
 function openWaitActions(id) {
   const r = findWaitable(id);
   if (!r.n || !r.n.wait) return;

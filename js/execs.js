@@ -90,8 +90,8 @@ function execLine(x) {
     when = x.status === 'requested' ? x.at : x.upd;
   return `<span class="xst x-${st}">${EXEC_GLYPH[st]} ${EXEC_WORD[st]}</span> ${esc(whenLabel(when))}${x.msg ? ': ' + esc(x.msg) : ''}`;
 }
-// The newest execution of a flow (for a quest, if given; since a time, if given). `exact`:
-// only executions with that quest (none, when q is empty), rather than any.
+// The newest execution of a flow (for a task, if given; since a time, if given). `exact`:
+// only executions with that task (none, when q is empty), rather than any.
 function latestExec(flow, q, since = 0, exact = false) {
   return (
     S.execs
@@ -219,9 +219,9 @@ async function revokeExecToken() {
   toast('Token revoked: reports are refused from now on');
 }
 function renderExecSettings() {
-  let h = '<h2 style="margin-top:26px" id="execsec">Flows and automations</h2>';
+  let h = '<h2 style="margin-top:26px" id="execsec">Automation result tracking</h2>';
   h +=
-    '<p class="hint" style="margin:0 0 8px">A flow\'s button can only ask Power Automate Desktop to run it; the app can\'t see what happened. With an execution token, the flow (or a PowerShell script) reports Running, Succeeded or Failed back, and each launch shows its real result. The token can do nothing else: it can\'t read or change anything.</p>';
+    '<p class="hint" style="margin:0 0 8px">A desktop automation\'s button can only ask Power Automate Desktop to run it; the app can\'t see what happened. With a tracking token, the automation (or a PowerShell script) reports Running, Succeeded or Failed back, and each attempt shows its real result. The token can do nothing else: it can\'t read or change anything.</p>';
   if (!S.track && !execToken) return h + '<button class="btn" id="xnew">Create execution token</button>';
   if (S.track && !execToken)
     h +=
@@ -236,7 +236,7 @@ function renderExecSettings() {
       row('token', execToken, 'xtoken');
   h += S.flows.length
     ? `<p class="hint" style="margin:8px 0 2px">Flow ids (the <code>flow</code> value):</p>${S.flows.map(f => `<div class="caprow"><span>${esc(f.name)}</span><code>${esc(f.id)}</code></div>`).join('')}`
-    : '<p class="hint">Add a flow under Knowledge > Flows first.</p>';
+    : '<p class="hint">Add a desktop automation under Knowledge > Processes first.</p>';
   h += `<p class="hint">POST JSON <code>{"token":"…","flow":"<id>","status":"running|succeeded|failed|cancelled","message":"…"}</code> to the report URL with the apikey header. The report is matched to the newest launch of that flow still waiting to hear. Power Automate Desktop and PowerShell examples are in the README.</p>
     <div class="acts"><button class="btn" id="xnew">${execToken ? 'New token' : 'Create token'}</button><button class="btn" id="xrevoke">Revoke</button></div></details>`;
   return h;
@@ -253,7 +253,7 @@ function flowStatus(f) {
 function flowStatusLine(f) {
   const x = latestExec(f.id);
   if (!x) return S.track ? '<span class="hint">No launches yet</span>' : '';
-  return `${execLine(x)} <button class="linkbtn" data-xdet="${x.id}">Execution details</button>`;
+  return `${execLine(x)} <button class="linkbtn" data-xdet="${x.id}">Attempt details</button>`;
 }
 // Executions of a flow, newest first, in a sheet.
 function openExecHistory(flowId) {
@@ -264,7 +264,7 @@ function openExecHistory(flowId) {
       .slice(0, 30);
   if (!f) return;
   popSheet(
-    `<h2 id="sheettitle">${esc(f.name)}</h2><p class="hint qahint">${xs.length ? plural(xs.length, 'launch') + (S.track ? '' : ' (tracking is off)') : S.track ? 'No launches recorded yet.' : 'Tracking is off: turn it on under Settings > Flows and automations.'}${
+    `<h2 id="sheettitle">${esc(f.name)}</h2><p class="hint qahint">${xs.length ? plural(xs.length, 'launch') + (S.track ? '' : ' (tracking is off)') : S.track ? 'No launches recorded yet.' : 'Tracking is off: turn it on under Settings > Automation result tracking.'}${
       !navigator.onLine ? ' Offline: as last synced.' : ''
     }</p><div class="qalist">${xs
       .map(
@@ -279,13 +279,13 @@ function openExecHistory(flowId) {
 }
 const questName = id => {
   const r = find(id) || find(id, S.later);
-  return r ? r.n.text : 'a quest since removed';
+  return r ? r.n.text : 'a task since removed';
 };
 function execSummary(x) {
   const f = S.flows.find(y => y.id === x.flow);
   return [
     `Flow: ${f ? f.name : x.flow} (${x.flow})`,
-    `Execution: ${x.id}${x.ref ? ' · run ' + x.ref : ''}`,
+    `Attempt: ${x.id}${x.ref ? ' · run ' + x.ref : ''}`,
     `Launched: ${new Date(x.at).toLocaleString()}`,
     `Status: ${EXEC_WORD[execState(x)]}${x.msg ? ': ' + x.msg : ''}`,
     ...x.ev.map(e => `  ${new Date(e.t).toLocaleString()} ${e.s}${e.m ? ': ' + e.m : ''}`),
@@ -298,9 +298,9 @@ function openExecDetail(id) {
   const f = S.flows.find(y => y.id === x.flow),
     st = execState(x);
   popSheet(
-    `<h2 id="sheettitle">${esc(f ? f.name : 'Flow ' + x.flow)}</h2><p class="xhead">${execLine(x)}</p><p class="hint qahint">Launched ${esc(whenLabel(x.at))}${x.unreq ? ' (reported by the flow, not launched here)' : ''}${x.q ? ' · for ' + esc(questName(x.q)) : ''}${
+    `<h2 id="sheettitle">${esc(f ? f.name : 'Automation ' + x.flow)}</h2><p class="xhead">${execLine(x)}</p><p class="hint qahint">Launched ${esc(whenLabel(x.at))}${x.unreq ? ' (reported by the automation, not launched here)' : ''}${x.q ? ' · for ' + esc(questName(x.q)) : ''}${
       st === 'unconfirmed'
-        ? '. Nothing was reported: the flow may not have started, or its report never arrived.'
+        ? '. Nothing was reported: the automation may not have started, or its report never arrived.'
         : ''
     }${!navigator.onLine ? ' · Offline: as last synced.' : ''}</p>${
       x.ev.length
@@ -346,7 +346,7 @@ function execClick(d, b) {
     const x = S.execs.find(y => y.id === d.xinbox),
       f = x && S.flows.find(y => y.id === x.flow);
     if (!x) return;
-    const text = `Flow failed: ${f ? f.name : x.flow}`;
+    const text = `Automation failed: ${f ? f.name : x.flow}`;
     S.inbox.unshift({
       id: uid(),
       text: text.slice(0, 200),

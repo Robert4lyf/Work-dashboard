@@ -42,7 +42,7 @@ const alloc = (page, span) =>
     };
   }, span);
 
-test('estimates: steps replace the quest’s, what’s left is the estimate less focus time, junk is dropped', async ({
+test('estimates: steps replace the task’s, what’s left is the estimate less focus time, junk is dropped', async ({
   app,
   page,
 }) => {
@@ -74,7 +74,7 @@ test('estimates: steps replace the quest’s, what’s left is the estimate less
     320,
     '7h 0m · 5h 20m left',
   ]);
-  // The chip on the quest page sets it (a preset, or typed); the steps' parent says to set theirs.
+  // The chip on the task page sets it (a preset, or typed); the steps' parent says to set theirs.
   await app.openQuest('Small');
   await expect(page.locator('[data-estpick="q2"]')).toHaveText('Estimate 30m');
   await page.click('[data-estpick="q2"]');
@@ -119,12 +119,12 @@ test('the forecast is the same every time: due first, split across days, overrun
   expect(d1[2]).toBe(overrun > 0 ? overrun : 0);
   expect(f.none).toEqual(['No estimate']);
   expect(f.load).toBe(420 + 30 + 60 + 120 + 15 * 6);
-  expect(f.recs.join('\n')).toContain('1 quest without an estimate is left out');
-  if (overrun > 0) expect(f.recs[0]).toMatch(/^Tomorrow is over by/);
+  expect(f.recs.join('\n')).toContain('1 task has no estimate.');
+  if (overrun > 0) expect(f.recs[0]).toMatch(/^Tomorrow is overloaded by/);
   // Twice the same.
   expect(await alloc(page, 7)).toEqual(f);
   expect(await alloc(page, 14)).toEqual(await alloc(page, 14));
-  // Later quests from their start day; nothing before.
+  // Later tasks from their start day; nothing before.
   const f14 = await alloc(page, 14);
   expect(f14.days.slice(0, 3).some(d => d[3].some(x => x.startsWith('Later')))).toBe(false);
   expect(f14.days.slice(3).some(d => d[3].some(x => x.startsWith('Later')))).toBe(true);
@@ -155,7 +155,12 @@ test('the forecast is the same every time: due first, split across days, overrun
   expect(h.days.map(d => d[0])).toEqual([300, 300, 480, 60, 0, 0, 0]);
   expect(h.days[2][2]).toBe(180);
   expect(h.recs[0]).toMatch(
-    /^.+ is over by 3h 0m: 8h 0m planned against 5h 0m \(Alpha 4h 0m, Beta 1h 0m, Beta 3h 0m\)\. Moving Beta to .+ would fit \(4h 0m free that day\), after its due date\. ->Beta$/,
+    /^.+ is overloaded by 3h 0m\. Beta could move to .+, which is after its due date\. ->Beta$/,
+  );
+  expect(await page.evaluate(() => recommendations(allocate(7))[0].more)).toBe(
+    '8h 0m estimated against 5h 0m capacity: Alpha 4h 0m, Beta 1h 0m, Beta 3h 0m. ' +
+      (await page.evaluate(() => dayLabel(shift(today(), 3)))) +
+      ' has 4h 0m free.',
   );
   await app.go('review');
   await page.click('[data-rsub="forecast"]');
@@ -184,7 +189,7 @@ test('capacity is assumed until set, then synced as its own record; accuracy com
   });
   await app.go('review');
   await page.click('[data-rsub="forecast"]');
-  await expect(page.locator('#v-review')).toContainText('capacity assumed');
+  await expect(page.locator('#v-review')).toContainText('Capacity uses assumed defaults');
   await expect(page.locator('.rec.cap')).toBeVisible();
   await page.click('#capd summary');
   await page.fill('[data-cap="1"]', '120');
@@ -192,8 +197,8 @@ test('capacity is assumed until set, then synced as its own record; accuracy com
   const s = await app.state();
   expect(s.cap).toEqual([0, 120, 300, 300, 300, 300, 0]);
   expect(await page.evaluate(() => toRecords(S).has('meta:cap'))).toBe(true);
-  await expect(page.locator('#v-review')).not.toContainText('capacity assumed');
-  // Finishing a quest with an estimate records it with the focus time on it.
+  await expect(page.locator('#v-review')).not.toContainText('assumed defaults');
+  // Finishing a task with an estimate records it with the focus time on it.
   await page.evaluate(() => {
     S.sessions.push({ tag: 'work', mins: 90, t: Date.now(), q: 'q1', p: '' });
     const bf = snapshot();
@@ -204,7 +209,7 @@ test('capacity is assumed until set, then synced as its own record; accuracy com
   expect(log[0]).toMatchObject({ id: 'q1', est: 60, m: 90 });
   await page.click('#accd summary');
   await expect(page.locator('#accd')).toContainText(
-    '1 finished quest with an estimate took 1h 30m of focus time against 1h 0m estimated; the typical quest took 1.5× its estimate, and 0 of 1 came within a quarter of it. Estimates tend to run low.',
+    '1 finished task with an estimate took 1h 30m of focus time against 1h 0m estimated; the typical task took 1.5× its estimate, and 0 of 1 came within a quarter of it. Estimates tend to run low.',
   );
   // Junk capacity is dropped.
   await page.evaluate(() => {

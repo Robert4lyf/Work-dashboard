@@ -36,12 +36,12 @@ test('Process inbox walks the items: Today, Later, Waiting, Delete and Skip, wit
 }) => {
   await page.click('[data-triagestart]');
   await expect(page.locator('#v-inbox .tprog')).toHaveText('0 of 4 processed');
-  // The first item, with its notes (links clickable) and subquests.
+  // The first item, with its notes (links clickable) and steps.
   await expect(card(page).locator('.ttitle')).toHaveText('Supplier onboarding');
   await expect(card(page).locator('.tnotes a')).toHaveAttribute('href', 'https://example.com/x');
   await expect(card(page).locator('.tsubs li')).toHaveCount(2);
   await expect(page.locator('#v-inbox #iform')).toHaveCount(0); // (no capture box in triage)
-  // Today: the quest keeps its notes and subquests; the next item shows.
+  // Today: the task keeps its notes and steps; the next item shows.
   await page.click('[data-tdo="today"]');
   let s = await app.state();
   expect(s.quests[0]).toMatchObject({ text: 'Supplier onboarding' });

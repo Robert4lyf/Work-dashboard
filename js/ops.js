@@ -2,18 +2,18 @@
    launch most, what's coming, and what just happened, all read from the records: nothing here
    runs on its own. Opened from Today's chip or the header (no tab of its own), or #/ops.
    Pins (S.pins, synced as meta:pins) are what you launch most: a workflow, a procedure, a flow
-   (a deliberate tap on its link, as everywhere), a quest or a page. The two routines are lists
+   (a deliberate tap on its link, as everywhere), a task or a page. The two routines are lists
    of buttons, nothing more: starting the day doesn't start anything, finishing it doesn't
    finish anything. The status line says how fresh the records are: offline, or when they were
    last synced; signed out, they're this device's only. */
-const PIN_KINDS = { wf: 'Workflow', kb: 'Procedure', flow: 'Flow', q: 'Quest', view: 'Page' },
+const PIN_KINDS = { wf: 'Process', kb: 'Guide', flow: 'Desktop automation', q: 'Task', view: 'Page' },
   PIN_VIEWS = [
     ['today', 'Today'],
     ['inbox', 'Inbox'],
     ['waiting', 'Waiting Centre'],
     ['forecast', 'Forecast'],
     ['insights', 'Insights'],
-    ['workflows', 'Workflows'],
+    ['workflows', 'Processes'],
   ],
   PINS_MAX = 12;
 let opsEdit = false; // pins being reordered
@@ -79,15 +79,17 @@ function attentionItems() {
     add = (sev, text, sub, act, attrs) => rows.push({ sev, text, sub, act, attrs });
   S.wruns
     .filter(r => r.status === 'failed' && !r.ack)
-    .forEach(r => add(0, r.name, 'Workflow failed: ' + r.err, 'Open failed stage', `data-wfopen="${r.id}"`));
+    .forEach(r =>
+      add(0, r.name, 'Process failed: ' + r.err, 'Open the failed step', `data-wfopen="${r.id}"`),
+    );
   execFailures()
     .filter(x => !execRun(x))
     .forEach(x =>
       add(
         0,
-        (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
-        'Flow failed' + (x.msg ? ': ' + x.msg : ''),
-        'Open execution details',
+        (S.flows.find(f => f.id === x.flow) || {}).name || 'Automation',
+        'Automation failed' + (x.msg ? ': ' + x.msg : ''),
+        'Open automation details',
         `data-xdet="${x.id}"`,
       ),
     );
@@ -97,13 +99,13 @@ function attentionItems() {
       const r = execRun(x),
         when = 'Launched ' + whenLabel(x.at) + ', no word since';
       if (r && !WRUN_FINAL.includes(r.status))
-        add(1, r.name, when + ' from its automation', 'Open workflow', `data-wfopen="${r.id}"`);
+        add(1, r.name, when + ' from its automation', 'Open process', `data-wfopen="${r.id}"`);
       else if (!r)
         add(
           1,
-          (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
+          (S.flows.find(f => f.id === x.flow) || {}).name || 'Automation',
           when,
-          'Open execution details',
+          'Open automation details',
           `data-xdet="${x.id}"`,
         );
     });
@@ -112,8 +114,8 @@ function attentionItems() {
     ns.forEach(n => {
       if (isDone(n)) return;
       if (n.due && n.due < t)
-        add(1, n.text, 'Overdue, due ' + niceDate(n.due), 'Open quest', `data-open="${n.id}"`);
-      else if (n.due === t) today2.push([n.text, 'Due today', 'Open quest', `data-open="${n.id}"`]);
+        add(1, n.text, 'Overdue, due ' + niceDate(n.due), 'Open task', `data-open="${n.id}"`);
+      else if (n.due === t) today2.push([n.text, 'Due today', 'Open task', `data-open="${n.id}"`]);
       w(n.children);
     });
   })(S.quests);
@@ -134,7 +136,7 @@ function attentionItems() {
   today2.forEach(r => add(2, ...r));
   S.wruns
     .filter(r => r.status === 'ready')
-    .forEach(r => add(2, r.name, 'Workflow ready to start', 'Start workflow', `data-wfopen="${r.id}"`));
+    .forEach(r => add(2, r.name, 'Process ready to start', 'Start process', `data-wfopen="${r.id}"`));
   if (S.inbox.length >= 10)
     add(
       3,
@@ -160,7 +162,7 @@ function attentionCounts(items) {
 }
 // One item as a row: what it is, why, and (on the right) what tapping it does.
 function attentionRow(i) {
-  // (not a .row in a .list: those are Today's quests)
+  // (not a .row in a .list: those are Today's tasks)
   return `<div class="attrow sev${i.sev}"><button class="open" ${i.attrs}><span>${esc(i.text)}</span><small>${esc(i.sub)} · <em class="attgo">${esc(i.act)} &rsaquo;</em></small></button></div>`;
 }
 function opsProgress() {
@@ -178,13 +180,13 @@ function opsProgress() {
   S.runs
     .filter(r => !r.fin && procOf(r.art))
     .sort((a, b) => b.at - a.at)
-    .forEach(r => rows.push({ text: procOf(r.art).title, sub: 'Procedure · ' + runLine(r), runopen: r.id }));
+    .forEach(r => rows.push({ text: procOf(r.art).title, sub: 'Guide · ' + runLine(r), runopen: r.id }));
   S.execs
     .filter(x => !EXEC_TERMINAL.includes(x.status) && !execStale(x))
     .sort((a, b) => b.at - a.at)
     .forEach(x =>
       rows.push({
-        text: (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
+        text: (S.flows.find(f => f.id === x.flow) || {}).name || 'Automation',
         sub: EXEC_WORD[x.status] + ' · ' + whenLabel(x.at),
         xdet: x.id,
       }),
@@ -225,7 +227,7 @@ function opsComing() {
           ? `${hm(day.load)} planned of ${hm(day.cap)}${day.load > day.cap ? ' (over)' : ''}`
           : '',
         due.length ? 'due: ' + due.join(', ') : '',
-        wfs.length ? 'workflows: ' + wfs.map(w => w.name).join(', ') : '',
+        wfs.length ? 'processes: ' + wfs.map(w => w.name).join(', ') : '',
         chase.length ? 'chase: ' + chase.join(', ') : '',
       ]
         .filter(Boolean)
@@ -246,7 +248,7 @@ function opsOutcomes() {
       rows.push({
         t: r.fin || r.at,
         text: r.name,
-        sub: 'Workflow ' + WRUN_WORD[r.status].toLowerCase() + (r.err ? ': ' + r.err : ''),
+        sub: 'Process ' + WRUN_WORD[r.status].toLowerCase() + (r.err ? ': ' + r.err : ''),
         k: r.status === 'succeeded' ? 'ok' : 'bad',
         wfopen: r.id,
       }),
@@ -256,8 +258,8 @@ function opsOutcomes() {
     .forEach(x =>
       rows.push({
         t: x.upd,
-        text: (S.flows.find(f => f.id === x.flow) || {}).name || 'Flow',
-        sub: 'Flow ' + x.status + (x.msg ? ': ' + x.msg : ''),
+        text: (S.flows.find(f => f.id === x.flow) || {}).name || 'Automation',
+        sub: 'Automation ' + x.status + (x.msg ? ': ' + x.msg : ''),
         k: x.status === 'succeeded' ? 'ok' : 'bad',
         xdet: x.id,
       }),
@@ -331,7 +333,8 @@ function renderPins() {
       })
       .join('')}</div>`;
   else
-    h += '<p class="hint">Pin what you launch most: a workflow, a procedure, a flow, a quest or a page.</p>';
+    h +=
+      '<p class="hint">Pin what you use most: a process, a guide, a desktop automation, a task or a page.</p>';
   h += `<div class="acts"><button class="btn sm" data-pinadd="1">Pin something</button>${S.pins.length ? `<button class="btn sm" data-pinedit="1" aria-pressed="${opsEdit}">${opsEdit ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
   return h;
 }
@@ -401,9 +404,9 @@ function routineSheet(kind) {
     items = [
       nx ? [`Save your place on ${nx.q.text}`, `data-saveplace="${nx.q.id}"`, ''] : null,
       [`Waiting: ${chase ? plural(chase, 'chase') + ' due' : 'nothing to chase'}`, 'data-goto="waiting"', ''],
-      [`Workflows under way: ${open}`, 'data-goto="ops"', ''],
+      [`Processes under way: ${open}`, 'data-goto="ops"', ''],
       [`Tomorrow: ${hm(f.days[1].load)} planned of ${hm(f.days[1].cap)}`, 'data-rsub="forecast"', ''],
-      [`Copy today's summary (${plural(done, 'quest')} finished)`, 'data-opscopy="1"', ''],
+      [`Copy today's summary (${plural(done, 'task')} finished)`, 'data-opscopy="1"', ''],
       S.timer ? ['A session is running: stop it from Focus', 'data-goto="focus"', ''] : null,
     ];
   }

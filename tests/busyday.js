@@ -1,4 +1,4 @@
-// A realistic busy day (Phase 1 usability scenarios), built in the page as saved data: 20 quests,
+// A realistic busy day (Phase 1 usability scenarios), built in the page as saved data: 20 tasks,
 // a Top 3, deadlines (two overdue), two waiting commitments to chase, a workflow that failed on its
 // flow stage (one incident: the run and its flow execution), a flow that failed on its own, an
 // automation under way, a saved place, and an Inbox. Run through app.setState, so `s` is the data.

@@ -39,7 +39,7 @@ test('categories are tiles, sub-categories inside them, articles A to Z', async 
   await expect(v.locator('.kbcatname')).toHaveText('Day care commissioning');
   await expect(v.locator('.kbrow')).toHaveText(['Article 1', 'Weekly returns']);
   await expect(v.locator('.kbcrumbs')).toContainText('Processes');
-  await v.locator('.kbcrumbs button', { hasText: 'Knowledge' }).click();
+  await v.locator('.kbcrumbs button', { hasText: 'Reference' }).click();
   await expect(v.locator('#kbtree .tile', { hasText: 'Processes' })).toHaveText('Processes 2');
 
   // Reading one: the text as written, with its link clickable and its place shown.
@@ -71,7 +71,7 @@ test('categories are tiles, sub-categories inside them, articles A to Z', async 
   await expect(v.locator('#kbtree')).toBeVisible();
 
   // Renaming, in a sheet; Escape closes it without renaming.
-  await v.locator('.kbcrumbs button', { hasText: 'Knowledge' }).click();
+  await v.locator('.kbcrumbs button', { hasText: 'Reference' }).click();
   await v.locator('.tile', { hasText: 'Tools' }).click();
   await v.locator('[data-kbren]').click();
   await page.keyboard.press('Escape');
@@ -82,7 +82,7 @@ test('categories are tiles, sub-categories inside them, articles A to Z', async 
   await expect(v.locator('.kbcatname')).toHaveText('Systems');
 
   // Deleting a category takes what's in it (after a second tap), and can be undone.
-  await v.locator('.kbcrumbs button', { hasText: 'Knowledge' }).click();
+  await v.locator('.kbcrumbs button', { hasText: 'Reference' }).click();
   await v.locator('.tile', { hasText: 'Processes' }).click();
   const del = v.locator('[data-kbdelcat]');
   await del.click();
@@ -95,7 +95,7 @@ test('categories are tiles, sub-categories inside them, articles A to Z', async 
 });
 
 test('flows: a button per flow opens its Run URL; only Run URLs are accepted', async ({ app, page }) => {
-  await app.go('knowledge');
+  await app.processes();
   const v = page.locator('#v-knowledge');
   await page.fill('#flowname', 'Bad');
   await page.fill('#flowurl', 'javascript:alert(1)');

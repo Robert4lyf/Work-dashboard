@@ -1,4 +1,4 @@
-// Release A: quick actions: a row's ⋯ (and the quest page's) lists only the actions that fit.
+// Release A: quick actions: a row's ⋯ (and the task page's) lists only the actions that fit.
 const { test, expect } = require('./fixtures');
 
 const labels = page => page.$$eval('#sheet .qact', bs => bs.map(b => b.firstChild.textContent));
@@ -55,7 +55,7 @@ test('each state offers its own set: open, with steps, done, every step ticked, 
     renderAll();
   });
   await page.click('[aria-label="Actions: Report"]');
-  expect(await labels(page)).toContain('Finish quest');
+  expect(await labels(page)).toContain('Finish task');
   expect(await labels(page).then(l => l.filter(x => x.startsWith('Focus')))).toEqual([]);
   await page.click('#sheet [data-finish]');
   expect((await app.state()).quests.find(q => q.text === 'Report').done).toBe(true);
@@ -75,7 +75,7 @@ test('the actions act, with feedback and Undo; the sheet closes; scheduling uses
   await page.click('#sheet [data-sched]:has-text("Do tomorrow")');
   s = await app.state();
   expect(s.later.map(x => x.start)).toEqual(['2026-09-24', '2026-09-28']);
-  // Mark done from the sheet; the quest folds into Done today.
+  // Mark done from the sheet; the task folds into Done today.
   await page.click('#upd > summary');
   await page.click('#upd [data-now] >> nth=0');
   await page.click('[aria-label="Actions: Call Sam"]');
@@ -123,7 +123,7 @@ test('keyboard and screen reader: the sheet is a dialog, Tab stays useful, Escap
   await page.keyboard.press('Escape');
 });
 
-test('a sync redraw while a sheet is up leaves it; an action on a quest removed meanwhile does nothing', async ({
+test('a sync redraw while a sheet is up leaves it; an action on a task removed meanwhile does nothing', async ({
   app,
   page,
 }) => {
@@ -149,7 +149,7 @@ test('a sync redraw while a sheet is up leaves it; an action on a quest removed 
   await expect(page.locator('#sheettitle')).toHaveText('Report');
 });
 
-test('the board’s tiles and a quest page’s steps have the same ⋯; drag-to-reorder still works on desktop', async ({
+test('the board’s tiles and a task page’s steps have the same ⋯; drag-to-reorder still works on desktop', async ({
   app,
   page,
 }) => {

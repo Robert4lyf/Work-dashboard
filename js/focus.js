@@ -29,7 +29,7 @@ const timerLabel = t => {
   const q = t.q && find(t.q);
   return [t.tag, q && q.n.text].filter(Boolean).join(': ');
 };
-// What the next session is for: the quest picked here, else the header's recommendation.
+// What the next session is for: the task picked here, else the header's recommendation.
 function focusTarget() {
   if (S.focusQ === 'none') return null;
   if (S.focusQ && find(S.focusQ) && !isDone(find(S.focusQ).n)) return S.focusQ;
@@ -84,7 +84,7 @@ function renderZen() {
   let h = focusLocked()
     ? '<div class="zbody">'
     : '<button class="linkbtn zx" id="zenexit">Exit single-task</button><div class="zbody">';
-  // No step to do, but a quest with every step ticked: what's next for it?
+  // No step to do, but a task with every step ticked: what's next for it?
   const ask = !r && !timeUpShown() && S.quests.find(q => needsNext(q) && !q.wait);
   if (ask)
     h += `<p class="ztrail">${esc(ask.text)}</p><p class="zt">Every step is ticked. What's next?</p><div class="acts"><button class="btn green" data-asknext="${ask.id}">What's next?</button></div>`;
@@ -93,12 +93,12 @@ function renderZen() {
     const trail = r.parents.map(p => p.text).join(' / ');
     h += `${trail ? `<p class="ztrail">${esc(trail)}</p>` : ''}<p class="zt">${esc(r.n.text)}</p>`;
   }
-  // Where you left off on this quest (see resume.js), to pick up from.
+  // Where you left off on this task (see resume.js), to pick up from.
   const zq = r && (r.parents[0] || r.n);
   if (zq && zq.resume && !isDone(zq))
     h += `<p class="zplace"><small>Where you left off · ${esc(whenLabel(zq.resume.at))}</small>${zq.resume.note ? esc(zq.resume.note) : 'At: ' + esc((placeStep(zq) || {}).text || 'a step')}</p>`;
   h += afterPrompts();
-  // The session's quest (or the one shown): where "save my place" goes.
+  // The session's task (or the one shown): where "save my place" goes.
   const pq = t ? t.q : r && !timeUpShown() ? r.n.id : null;
   if (t) {
     h += `<div class="zclock" id="zclock">${mmss(remaining())}</div>
@@ -299,7 +299,7 @@ function notify(title, body) {
     else new Notification(title, o);
   } catch (e) {}
 }
-// Every quest, inbox item and template, for tag renames and deletes.
+// Every task, inbox item and template, for tag renames and deletes.
 function eachTagged(fn) {
   const w = n => {
     fn(n);

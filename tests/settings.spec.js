@@ -2,7 +2,7 @@ const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ app }) => app.open());
 
-test('tag rename and delete update quests; delete can be undone', async ({ app, page }) => {
+test('tag rename and delete update tasks; delete can be undone', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await app.setTag('Design');

@@ -1,4 +1,4 @@
-/* a quest's resources: what's needed to do the work, linked to the quest (n.links): Knowledge
+/* a task's resources: what's needed to do the work, linked to the task (n.links): Knowledge
    articles and flows by id (nothing is copied: a renamed article keeps its link, a deleted one
    shows as gone), and web links by address, http(s) only. Its steps share them. */
 const hostOf = u => {
@@ -24,38 +24,40 @@ function linkRow(l, qid, editable) {
     name = a ? a.title : 'removed article';
     const proc = a && a.steps && a.steps.length;
     body = a
-      ? `<button class="open" data-sart="${a.id}"><small>${proc ? 'Procedure' : 'Article'}</small><span>${esc(a.title)}</span></button>${proc ? procLinkLine(a.id, qid) : ''}`
+      ? `<button class="open" data-sart="${a.id}"><small>${proc ? 'Guide' : 'Article'}</small><span>${esc(a.title)}</span></button>${proc ? procLinkLine(a.id, qid) : ''}`
       : '<span class="open gone"><small>Article</small><span>Removed from Knowledge</span></span>';
   } else if (l.kind === 'flow') {
     const f = S.flows.find(x => x.id === l.ref);
-    name = f ? f.name : 'removed flow';
+    name = f ? f.name : 'removed automation';
     const x = f && latestExec(f.id, qid);
     body = f
       ? `<a class="open" href="${esc(f.url)}" data-flow="${f.id}" data-q="${qid}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}"><small>Flow</small><span>&#9654; ${esc(f.name)}</span></a>${
           x ? `<button class="linkbtn xmini" data-xdet="${x.id}">${execLine(x)}</button>` : ''
         }`
-      : '<span class="open gone"><small>Flow</small><span>Flow removed</span></span>';
+      : '<span class="open gone"><small>Automation</small><span>Automation removed</span></span>';
   } else
     body = `<a class="open" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"><small>Link</small><span>${esc(l.label || hostOf(l.url))}</span></a>`;
   return `<div class="row resrow" data-link="${l.id}">${body}${editable ? `<button class="x" data-unlink="${qid}" data-linkid="${l.id}" aria-label="Remove resource: ${esc(name)}">×</button>` : ''}</div>`;
 }
-// On a quest's page: its resources, open when there are any, with the ways to add one.
+// On a task's page: its resources, open when there are any, with the ways to add one.
 function renderLinks(n) {
   const ls = n.links || [],
     open = panels.resd ?? ls.length > 0;
   let h = `<details id="resd" class="resd"${open ? ' open' : ''}><summary>Resources${ls.length ? ` <small>${ls.length}</small>` : ' <small class="hint">none yet</small>'}</summary>`;
   if (ls.length) h += `<div class="list box reslist">${ls.map(l => linkRow(l, n.id, true)).join('')}</div>`;
-  else h += '<p class="hint reshint">The article, flow or web page this quest needs, a tap away.</p>';
-  h += `<div class="chips resadd"><button class="chip" data-resadd="kb" data-id="${n.id}">+ Article</button><button class="chip" data-resadd="flow" data-id="${n.id}">+ Flow</button><button class="chip" data-resadd="url" data-id="${n.id}">+ Web link</button></div></details>`;
+  else
+    h +=
+      '<p class="hint reshint">The article, desktop automation or web page this task needs, a tap away.</p>';
+  h += `<div class="chips resadd"><button class="chip" data-resadd="kb" data-id="${n.id}">+ Article</button><button class="chip" data-resadd="flow" data-id="${n.id}">+ Automation</button><button class="chip" data-resadd="url" data-id="${n.id}">+ Web link</button></div></details>`;
   return h;
 }
-// On a step's page: the quest's resources, to use (changed on the quest's page).
+// On a step's page: the task's resources, to use (changed on the task's page).
 function renderInheritedLinks(q) {
   const ls = q.links || [];
   if (!ls.length) return '';
-  return `<details id="resd" class="resd"${(panels.resd ?? true) ? ' open' : ''}><summary>Resources <small>${ls.length}, the quest's</small></summary><div class="list box reslist">${ls.map(l => linkRow(l, q.id, false)).join('')}</div></details>`;
+  return `<details id="resd" class="resd"${(panels.resd ?? true) ? ' open' : ''}><summary>Resources <small>${ls.length}, the task's</small></summary><div class="list box reslist">${ls.map(l => linkRow(l, q.id, false)).join('')}</div></details>`;
 }
-// A repeating quest's template keeps the same resources (as it keeps the name and tag).
+// A repeating task's template keeps the same resources (as it keeps the name and tag).
 function mirrorLinks(n) {
   const t = tplFor(n);
   if (!t) return;
@@ -66,7 +68,7 @@ function addLink(qid, link) {
   const r = find(qid);
   if (!r || r.parents.length) return;
   const ls = r.n.links || [];
-  if (ls.length >= LINKS_MAX) return toast(`A quest can have up to ${LINKS_MAX} resources`, false, 3000);
+  if (ls.length >= LINKS_MAX) return toast(`A task can have up to ${LINKS_MAX} resources`, false, 3000);
   const same = ls.find(
     l => l.kind === link.kind && (link.kind === 'url' ? l.url === link.url : l.ref === link.ref),
   );
@@ -104,7 +106,7 @@ function openResourcePicker(kind, qid) {
       { labelledBy: 'sheettitle' },
     );
   popSheet(
-    `<h2 id="sheettitle">${kind === 'kb' ? 'Link an article' : 'Link a flow'}</h2>${
+    `<h2 id="sheettitle">${kind === 'kb' ? 'Link an article' : 'Link a desktop automation'}</h2>${
       kind === 'kb' && S.kb.length > 6
         ? `<input class="fld" type="search" id="resq" data-id="${qid}" placeholder="Search articles" aria-label="Search articles" autocomplete="off">`
         : ''
@@ -120,7 +122,7 @@ function resourceChoices(kind, qid) {
   if (kind === 'flow') {
     const fs = S.flows.filter(f => !linked.has(f.id)).sort((a, b) => byName(a.name, b.name));
     if (!S.flows.length) return '<p class="hint">No flows yet. Add one under Knowledge > Flows.</p>';
-    if (!fs.length) return '<p class="hint">Every flow is linked already.</p>';
+    if (!fs.length) return '<p class="hint">Every automation is linked already.</p>';
     return fs
       .map(
         f =>

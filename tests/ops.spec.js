@@ -165,7 +165,7 @@ test('the five lists come from the records; every row opens its thing; nothing r
   const coming = await rows(page, 4);
   expect(coming.length).toBeGreaterThan(0);
   expect(coming.length).toBeLessThanOrEqual(3); // (briefly: the Forecast has the rest)
-  await expect(page.locator('#v-ops .opsec').nth(4)).toContainText('workflows: Weekly report');
+  await expect(page.locator('#v-ops .opsec').nth(4)).toContainText('processes: Weekly report');
   // Drawing it changed nothing.
   expect(await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })))).toBe(before);
   // Rows open their things.
@@ -275,8 +275,8 @@ test('routines are lists of buttons; the day summary copies; the status line is 
   const fin = await page.locator('#sheet .qact').allTextContents();
   expect(fin[0]).toBe('Save your place on Tomorrow');
   expect(fin[1]).toBe('Waiting: 1 chase due');
-  expect(fin[2]).toBe('Workflows under way: 1'); // (the failed one isn't under way)
-  expect(fin[4]).toMatch(/^Copy today's summary \(0 quests finished\)$/);
+  expect(fin[2]).toBe('Processes under way: 1'); // (the failed one isn't under way)
+  expect(fin[4]).toMatch(/^Copy today's summary \(0 tasks finished\)$/);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.click('#sheet [data-opscopy]');
   await expect(page.locator('#toast')).toContainText('Copied');

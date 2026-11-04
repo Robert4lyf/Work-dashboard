@@ -21,7 +21,7 @@ test('single-task mode shows one step, ticks it off and moves on', async ({ app,
   await page.click('#v-zen [data-toggle]');
   await expect(page.locator('.zt')).toHaveText('Review');
   await page.click('#v-zen [data-toggle]');
-  // (the quest's last step: it asks what's next, and stays open)
+  // (the task's last step: it asks what's next, and stays open)
   await expect(page.locator('#sheettitle')).toHaveText("What's next?");
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   await expect(page.locator('.zt')).toHaveText('Email');
@@ -32,7 +32,7 @@ test('single-task mode shows one step, ticks it off and moves on', async ({ app,
 
 test('timer in single-task mode: start, pause, and Done saves the time', async ({ app, page }) => {
   await app.addQuest('Report');
-  await page.keyboard.press('Escape'); // leave the quest box so z is a shortcut
+  await page.keyboard.press('Escape'); // leave the task box so z is a shortcut
   await page.keyboard.press('z');
   await page.click('[data-zstart]');
   await expect(page.locator('#zclock')).toHaveText('25:00');

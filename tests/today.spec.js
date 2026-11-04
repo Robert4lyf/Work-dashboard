@@ -2,21 +2,21 @@ const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ app }) => app.open());
 
-test('completing a quest logs it, sinks it and moves Next up', async ({ app, page }) => {
+test('completing a task logs it, sinks it and moves Next up', async ({ app, page }) => {
   for (const t of ['A', 'B', 'C']) await app.addQuest(t);
   await expect(page.locator('#hnow b')).toHaveText('A');
   await page.click('[aria-label="Mark done: A"]');
   expect(await app.order()).toEqual(['B', 'C', 'A']);
   await expect(page.locator('#hnow b')).toHaveText('B');
   expect((await app.state()).log.map(x => x.text)).toEqual(['A']);
-  // Finished quests fold away under "Done today"; open it to un-tick one.
+  // Finished tasks fold away under "Done today"; open it to un-tick one.
   await page.click('#donesec > summary');
   await page.click('[aria-label="Mark done: A"]');
   expect((await app.state()).log).toEqual([]);
   expect(await app.order()).toEqual(['B', 'C', 'A']);
 });
 
-test('reorder: Top makes a quest Next up; open items stay above done ones', async ({ app, page }) => {
+test('reorder: Top makes a task Next up; open items stay above done ones', async ({ app, page }) => {
   for (const t of ['A', 'B', 'C']) await app.addQuest(t);
   await page.click('[aria-label="Mark done: A"]');
   await page.click('#reorder');
@@ -33,7 +33,7 @@ test('reorder: Top makes a quest Next up; open items stay above done ones', asyn
   await expect(page.locator('.row.done [data-top]')).toHaveCount(0);
 });
 
-test('subquests: next step, sinking, and header tick', async ({ app, page }) => {
+test('steps: next step, sinking, and header tick', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await app.addSub('Draft');
@@ -70,7 +70,7 @@ test('a row’s ⋯ offers Inbox or Delete among its actions; delete can be undo
   expect(s.inbox[0].text).toBe('Plan trip');
 });
 
-test('tags are set on the quest and shown on its row', async ({ app, page }) => {
+test('tags are set on the task and shown on its row', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await app.setTag('Design');
@@ -111,7 +111,7 @@ test('Today has no add box: new work comes in through the Inbox', async ({ app, 
   await page.press('#iin', 'Enter');
   await page.click('#v-inbox [data-promote]');
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Plan offsite']);
-  // On Today, n captures to the Inbox; on a quest's page it adds a subquest.
+  // On Today, n captures to the Inbox; on a task's page it adds a step.
   await app.go('today');
   await page.keyboard.press('n');
   await expect(page.locator('#iin')).toBeFocused();
@@ -170,11 +170,11 @@ test('deep hunt: typing survives background redraws, in fields with or without a
 
   // The waiting panel's fields before it's set (kept until "Set waiting"): after two redraws too.
   await page.evaluate(() => {
-    S.quests = [fix({ id: 'q', text: 'Quest one' })];
+    S.quests = [fix({ id: 'q', text: 'Task one' })];
     save();
   });
   await app.go('today');
-  await app.openQuest('Quest one');
+  await app.openQuest('Task one');
   if (!(await page.locator('#wwho').isVisible())) await page.click('#waitd summary');
   await page.fill('#wwho', 'Pat');
   await page.fill('#wnote', 'the report');

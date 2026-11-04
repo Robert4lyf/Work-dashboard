@@ -32,7 +32,7 @@ test('repeat panel: presets, weekdays, monthly and off', async ({ app, page }) =
   expect((await app.state()).templates[0].monthDay).toBe(31);
 });
 
-test('a repeating quest is on Today only on its days: missed days are not caught up', async ({
+test('a repeating task is on Today only on its days: missed days are not caught up', async ({
   app,
   page,
 }) => {

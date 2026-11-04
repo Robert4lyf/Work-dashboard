@@ -1,6 +1,6 @@
 /* inbox */
-const expanded = new Set(); // inbox items showing their subquest editor
-// An inbox item as a quest, keeping its tag, waiting details (as a step) and any subquests.
+const expanded = new Set(); // inbox items showing their step editor
+// An inbox item as a task, keeping its tag, waiting details (as a step) and any steps.
 function inboxToNode(it) {
   const n = it.node || fix({ id: uid(), text: it.text });
   n.tag = it.tag || n.tag;
@@ -10,7 +10,7 @@ function inboxToNode(it) {
   delete n.wait;
   if (it.wait) {
     n.wait = it.wait;
-    const step = waitToStep(n); // (as a quest, the waiting is a step's)
+    const step = waitToStep(n); // (as a task, the waiting is a step's)
     if (step) rekeyFollows(it.id, step.id); // (its follow-ups too)
   }
   return n;
@@ -47,9 +47,9 @@ function renderInbox() {
     const kids = it.node ? it.node.children : [],
       c = it.node ? count(it.node) : 0,
       open = expanded.has(it.id);
-    h += `<div class="item" data-id="${it.id}"><p><button class="ititle" data-steps="${it.id}" aria-expanded="${open}">${esc(it.text)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button> ${tagBadge(it.tag)}${waitBadge(it)}${it.node ? stepWaitBadge(it.node) : ''}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</p>`;
+    h += `<div class="item" data-id="${it.id}"><p><button class="ititle" data-steps="${it.id}" aria-expanded="${open}">${esc(it.text)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button> ${tagBadge(it.tag)}${waitBadge(it)}${it.node ? stepWaitBadge(it.node) : ''}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}</p>`;
     if (open) {
-      // Its subquests, added here before it goes to Today (they move with it).
+      // Its steps, added here before it goes to Today (they move with it).
       if (kids.length) {
         h += '<ul class="subs">';
         kids.forEach(
@@ -58,7 +58,7 @@ function renderInbox() {
         );
         h += '</ul>';
       }
-      h += `<form class="addrow" data-subfor="${it.id}"><input id="is-${it.id}" data-keep maxlength="120" placeholder="Add a subquest" aria-label="New subquest for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
+      h += `<form class="addrow" data-subfor="${it.id}"><input id="is-${it.id}" data-keep maxlength="120" placeholder="Add a step" aria-label="New step for ${esc(it.text)}" autocomplete="off"><button class="btn">Add</button></form>`;
       // Then waiting.
       h += `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">`;
     }

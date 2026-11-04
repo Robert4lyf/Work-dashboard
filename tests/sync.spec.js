@@ -296,7 +296,7 @@ test('each item is its own row, and changes reach the other device live', async 
   await a.add('Email');
   await a.sync();
   await expect.poll(async () => texts(await b.state())).toEqual(['Email', 'Report']);
-  // Only the changed rows travel: adding one quest writes the quest, the list order and the
+  // Only the changed rows travel: adding one task writes the task, the list order and the
   // inbox item it came from.
   const before = srv.seq;
   await a.add('Third');
@@ -476,7 +476,7 @@ test('health check, signed in: sync, live updates and optional parts', async ({ 
   expect(a.errors).toEqual([]);
 });
 
-test('the daily reset waits for the server: a quest reopened elsewhere yesterday survives', async ({
+test('the daily reset waits for the server: a task reopened elsewhere yesterday survives', async ({
   browser,
 }) => {
   const srv = server();
@@ -992,7 +992,7 @@ test('deep hunt: a device whose clock is behind still gets its edits in, and nev
   for (const d of [a, b]) expect(d.errors).toEqual([]);
 });
 
-test('deep hunt: the day’s reset keeps a quest another device finished today', async ({ browser }) => {
+test('deep hunt: the day’s reset keeps a task another device finished today', async ({ browser }) => {
   const srv = server();
   const a = await device(browser, srv);
   const b = await device(browser, srv);
@@ -1020,7 +1020,7 @@ test('deep hunt: the day’s reset keeps a quest another device finished today',
 test('deep hunt: signing in keeps a device’s own notes and Knowledge when asked to', async ({ browser }) => {
   const srv = server();
   const a = await device(browser, srv);
-  await a.add('Account quest');
+  await a.add('Account task');
   await a.sync();
   const b = await device(
     browser,
@@ -1038,7 +1038,7 @@ test('deep hunt: signing in keeps a device’s own notes and Knowledge when aske
   const s = await b.state();
   expect(s.notes).toBe('my notes');
   expect(s.kbcats.map(c => c.name)).toEqual(['Mine']);
-  expect(texts(s)).toEqual(['Account quest']);
+  expect(texts(s)).toEqual(['Account task']);
   expect((await a.state()).notes).toBe('my notes');
 });
 
@@ -1161,7 +1161,7 @@ test('a new day: one device’s reset clears yesterday’s top 3, a choice made 
   for (const d of [a, b]) expect((await d.state()).top3.ids).toEqual([ids[1]]);
 });
 
-test('a saved place and resources travel with the quest’s row; the newer edit of either wins', async ({
+test('a saved place and resources travel with the task’s row; the newer edit of either wins', async ({
   browser,
 }) => {
   const srv = server();
@@ -1301,7 +1301,7 @@ test('a launch on one device, reports from a script: both devices show the same 
   // Both devices count the same failure, once.
   for (const d of [a, b]) await expect(d.page.locator('#attd')).toContainText('Needs attention 1');
   for (const d of [a, b])
-    await expect(d.page.locator('#v-today .attn [data-xdet]')).toContainText('Flow failed');
+    await expect(d.page.locator('#v-today .attn [data-xdet]')).toContainText('Automation failed');
   await unfold(b.page, 'attd');
   await b.page.click('#v-today .attn [data-xdet]');
   await b.page.click('#sheet [data-xack]');
@@ -1537,7 +1537,7 @@ test('Release C: a recurring workflow’s run is made once across devices, a run
   });
   await a.sync();
   const b = await device(browser, srv);
-  // Both devices roll the day over: one ready run (same id), one quest from the rule, and the
+  // Both devices roll the day over: one ready run (same id), one task from the rule, and the
   // rule's log says so once.
   for (const d of [a, b])
     await d.page.evaluate(() => {
@@ -1604,8 +1604,8 @@ test('Release C: a recurring workflow’s run is made once across devices, a run
   await settle(a, b);
   for (const d of [a, b]) {
     const s = await d.state();
-    expect(s.wruns[0]).toMatchObject({ status: 'failed', err: 'Flow failed: Login failed' });
-    expect(s.inbox.map(i => i.text)).toEqual(['Look at Thursday reporting: Flow failed: Login failed']);
+    expect(s.wruns[0]).toMatchObject({ status: 'failed', err: 'Automation failed: Login failed' });
+    expect(s.inbox.map(i => i.text)).toEqual(['Look at Thursday reporting: Automation failed: Login failed']);
     expect(s.rlog.filter(l => l.r === 'r1' && l.out === 'done')).toHaveLength(1);
   }
   await a.page.evaluate(() => {
@@ -1620,7 +1620,7 @@ test('Release C: a recurring workflow’s run is made once across devices, a run
     [a, b].map(d =>
       d.page.evaluate(() =>
         [...toRecords(S).keys()]
-          .filter(k => /^(wrun|rlog|inbox|quest):/.test(k))
+          .filter(k => /^(wrun|rlog|inbox|task):/.test(k))
           .sort()
           .map(k => k + ':' + hashOf(toRecords(S).get(k))),
       ),
@@ -1659,7 +1659,7 @@ test('Release C: a device on the previous version leaves workflow, rule, capacit
   for (const k of ['workflow:w1', 'rule:r1', 'meta:cap', 'meta:pins']) expect(srv.rows.get(k)).toBeTruthy();
   // The older copy doesn't know these kinds: `knownKey` is false for them, so a sync from it
   // neither reads nor deletes them (as Release B's test shows for kbsteps). It does rewrite
-  // the quest from the keys it knows, keeping fields it doesn't understand (est) as data.
+  // the task from the keys it knows, keeping fields it doesn't understand (est) as data.
   expect(
     await a.page.evaluate(() =>
       ['workflow:w1', 'rule:r1', 'rlog:x', 'wrun:y', 'meta:cap', 'meta:pins'].map(knownKey),

@@ -11,6 +11,10 @@
   --blue: #29adff;
   --plum: #7e2553;
   --pink-ink: var(--plum); /* pink as text: readable on the light background */
+  --green-ink: #0a7a2a; /* green and blue as text, likewise */
+  --blue-ink: #0b5fa5;
+  --paper: var(--panel);
+  --focus: var(--ink); /* the focus ring: ink on the light background, yellow on the dark */
   color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   --on-accent: #1d2b53;
   --head-ink: #fff1e8;
@@ -34,6 +38,9 @@
     --edge: #000000;
     --wait-ink: #fdba74;
     --pink-ink: var(--pink);
+    --green-ink: var(--green);
+    --blue-ink: var(--blue);
+    --focus: var(--yellow);
     color-scheme: dark;
   }
 }
@@ -74,6 +81,9 @@
   --edge: #000000;
   --wait-ink: #fdba74;
   --pink-ink: var(--pink);
+  --green-ink: var(--green);
+  --blue-ink: var(--blue);
+  --focus: var(--yellow);
   color-scheme: dark;
 }
 html {
@@ -104,7 +114,7 @@ textarea {
   color: inherit;
 }
 :focus-visible {
-  outline: 3px dashed var(--yellow);
+  outline: 3px dashed var(--focus);
   outline-offset: 3px;
 }
 section[tabindex='-1']:focus-visible {
@@ -962,6 +972,7 @@ nav button[aria-current='page'] {
   display: block;
   background: none;
   border: 0;
+  min-height: 40px;
   padding: 8px 0 0;
   margin-top: 6px;
   color: var(--pink-ink);
@@ -1146,8 +1157,8 @@ textarea.fld {
   cursor: pointer;
 }
 .day {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: 2px solid var(--edge);
   background: var(--panel);
@@ -2816,7 +2827,7 @@ details.more > details {
   font-weight: 600;
 }
 .w-succeeded {
-  color: var(--green);
+  color: var(--green-ink);
 }
 .w-failed,
 .w-cancelled {
@@ -2824,7 +2835,7 @@ details.more > details {
 }
 .w-awaiting_user,
 .w-ready {
-  color: var(--blue);
+  color: var(--blue-ink);
 }
 .w-awaiting_automation,
 .w-waiting,
@@ -2848,9 +2859,8 @@ details.more > details {
 .wacts {
   flex-wrap: wrap;
 }
-.wlist li.skipped .pjump,
-.wlist li.failed .pjump {
-  opacity: 0.7;
+.wlist li.skipped .pjump {
+  opacity: 0.85;
 }
 .wlist li.failed .pjump {
   color: var(--pink-ink);
@@ -2865,8 +2875,8 @@ details.more > details {
 }
 
 /* Release C: rules */
-.rulerow.off .open {
-  opacity: 0.6;
+.rulerow.off .open > span {
+  opacity: 0.8;
 }
 .rlprev {
   margin: 10px 0 4px;
@@ -2984,10 +2994,22 @@ details.more > details {
 .ibar {
   flex: 1 1 0;
   min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: none;
+  border: 0;
+}
+.ibar .ifill {
+  display: block;
   min-height: 2px;
   background: var(--blue);
   border: 1px solid var(--ink);
   border-bottom: 0;
+}
+.ibar.picked .ifill {
+  background: var(--pink);
 }
 .ilabel {
   margin: 8px 0 2px;
@@ -3205,4 +3227,237 @@ details.more > details {
 }
 .attsum[open] + .attfail {
   border-top-width: 1.5px;
+}
+
+/* Phase 2: Knowledge in two views, the "+ New" sheet, the process overview */
+.kbtabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.kbtabs .viewsw {
+  margin: 0;
+}
+.kbsec {
+  margin: 0 0 18px;
+}
+.kbsec .kbhead {
+  margin-top: 0;
+}
+.kbsec .sechead .kbhead {
+  margin: 0;
+}
+.newlist .qact b {
+  display: block;
+}
+.newlist .qact small {
+  display: block;
+  color: var(--muted);
+  white-space: normal;
+}
+.kbdesc {
+  margin: 0 0 8px;
+}
+.kbsub {
+  margin: 16px 0 6px;
+  font-size: 1em;
+}
+.wfstate {
+  margin: 8px 0 12px;
+}
+.wfstate p {
+  margin: 0 0 8px;
+}
+.wfstate.w-failed {
+  border-color: var(--pink);
+}
+.wprev li {
+  padding: 4px 0;
+}
+.wfacts {
+  margin-top: 14px;
+}
+
+/* Phase 2: the process editor's step row, the run card's "what happens next" */
+.wfaddrow {
+  margin: 8px 0 4px;
+}
+.pstep .pnext {
+  margin: 6px 0 8px;
+}
+.tplprev {
+  margin: 4px 0 10px;
+}
+
+/* Phase 3: findings, key numbers, tappable bars; the forecast headline */
+.findings {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.finding {
+  border: 2px solid var(--ink);
+  border-left-width: 6px;
+  padding: 8px 10px;
+  background: var(--paper);
+}
+.finding.sev0 {
+  border-left-color: var(--pink);
+}
+.finding.sev1 {
+  border-left-color: var(--yellow, #ffec27);
+}
+.finding.sev2 {
+  border-left-color: var(--blue);
+}
+.finding b {
+  display: block;
+  margin: 0 0 2px;
+}
+.finding p {
+  margin: 0 0 8px;
+}
+.findnone {
+  margin: 0 0 14px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.stat {
+  border: 2px solid var(--ink);
+  padding: 8px 10px;
+  background: var(--paper);
+  min-width: 0;
+}
+.stat small {
+  display: block;
+  color: var(--muted);
+}
+.stat b {
+  display: block;
+  font-size: 1.3em;
+}
+.stat b small {
+  display: inline;
+  font-size: 0.6em;
+  font-weight: 400;
+}
+.stat span {
+  display: block;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+.ibar {
+  padding: 0;
+  cursor: pointer;
+}
+.ipick {
+  margin: 4px 0 8px;
+}
+.itab {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+.itab th,
+.itab td {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--muted);
+}
+#idetail h3 {
+  margin: 12px 0 4px;
+  font-size: 1em;
+}
+.fchead {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px 12px;
+  margin: 0 0 8px;
+}
+.fhl b {
+  display: block;
+  font-size: 1.3em;
+}
+.fhl small {
+  color: var(--muted);
+}
+.fhl.over b {
+  color: var(--pink-ink);
+}
+.fhl.none b {
+  color: var(--muted);
+}
+.fcov {
+  margin: 0 0 12px;
+}
+.rday.picked .rbar {
+  outline: 2px dashed var(--ink);
+}
+.recmore {
+  margin: -2px 0 6px;
+}
+.fday .late {
+  color: var(--pink-ink);
+}
+
+/* Phase 3: one line of help, dismissable; touch targets; the rule list's lines */
+.hintbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 8px 4px 8px 10px;
+  border-left: 4px solid var(--blue);
+  background: var(--paper);
+  font-size: 0.92em;
+}
+.hintbox span {
+  flex: 1;
+}
+.hintbox .x {
+  margin: -6px 0 0;
+}
+.x,
+.mv {
+  min-width: 40px;
+  min-height: 40px;
+}
+.mv {
+  width: 40px;
+  height: 40px;
+}
+.rulewhen {
+  font-style: italic;
+}
+.rlwhen {
+  margin: -4px 0 8px;
+}
+#rldry p {
+  margin: 6px 0;
+}
+.rulerow .ok {
+  color: var(--green-ink);
+}
+
+/* Phase 3: findings say their weight in words; the radar has a legend */
+.fsev {
+  display: inline-block;
+  font-size: 0.75em;
+  color: var(--muted);
+  margin: 0 0 2px;
+}
+.rlegend {
+  margin: 4px 0 10px;
+}
+
+/* the editor's Steps heading reads as a section head */
+.kbimghead h3 {
+  margin: 0;
+  font-size: inherit;
 }

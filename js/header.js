@@ -1,5 +1,5 @@
 /* header */
-// The first unfinished step of the first unfinished quest, in list order. Quests with a waiting
+// The first unfinished step of the first unfinished task, in list order. Tasks with a waiting
 // step come last, as they're listed on Today.
 function nextStep() {
   const free = [],
@@ -13,7 +13,7 @@ function nextStep() {
 }
 // What to work on next, by one rule, so the header, Focus, single-task mode and the checklists
 // agree (a running session is shown instead, by the header itself): a place saved today or
-// yesterday (the newest), else the first Top 3 quest with a step to do, else the first step in
+// yesterday (the newest), else the first Top 3 task with a step to do, else the first step in
 // list order. Nothing is reordered, chosen or started by it. `why` says which: 'place', 'top3'
 // (with its rank) or 'list'.
 function recommend() {

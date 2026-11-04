@@ -1,11 +1,11 @@
-/* search: one box for everything (quests, Upcoming, the Inbox, notes, knowledge, flows and
+/* search: one box for everything (tasks, Upcoming, the Inbox, notes, knowledge, flows and
    what's been done), opened from the header. */
 let searchQ = '';
 const SEARCH_MAX = 20; // per group
 function renderSearch() {
   setHTML(
     $('#v-search'),
-    `<h2>Search</h2><input class="fld" type="search" id="sq" placeholder="Quests, inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
+    `<h2>Search</h2><input class="fld" type="search" id="sq" placeholder="Tasks, inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
   );
 }
 function openSearch() {
@@ -61,7 +61,7 @@ function searchResults() {
       `<button class="soonrow srow" ${attrs}><span>${esc(title)}${sub ? `<br><small class="hint">${sub}</small>` : ''}</span></button>`,
     group = (name, rows) => rows.length && groups.push([name, rows]);
 
-  // Quests (steps too), with where they sit and any waiting details.
+  // Tasks (steps too), with where they sit and any waiting details.
   const qs = [];
   (function w(ns, trail) {
     ns.forEach(n => {
@@ -105,7 +105,7 @@ function searchResults() {
       .map(l => `<button class="soonrow srow" data-goto="notes"><span>${snippet(l, q)}</span></button>`),
   );
   group(
-    'Knowledge',
+    'Reference',
     S.kb
       .filter(a => has(a.title) || has(a.body))
       .sort((a, b) => byName(a.title, b.title))
@@ -113,19 +113,43 @@ function searchResults() {
         row(
           `data-sart="${a.id}"`,
           a.title,
-          [esc(kbTrail(a.cat).join(' › ') || 'Uncategorised'), !has(a.title) ? snippet(a.body, q) : '']
+          [
+            a.steps && a.steps.length ? 'Guide · follow' : 'Article · read',
+            esc(kbTrail(a.cat).join(' › ') || 'Uncategorised'),
+            !has(a.title) ? snippet(a.body, q) : '',
+          ]
             .filter(Boolean)
             .join(' · '),
         ),
       ),
   );
   group(
-    'Flows',
+    'Processes',
+    S.workflows
+      .filter(w => !w.archived && (has(w.name) || has(w.desc)))
+      .sort((a, b) => byName(a.name, b.name))
+      .map(w => {
+        const o = wfOpenRun(w.id);
+        return row(
+          `data-wfview="${w.id}"`,
+          w.name,
+          [
+            o ? 'Process · continue' : 'Process · start',
+            plural(w.stages.length, 'step'),
+            !has(w.name) ? snippet(w.desc, q) : '',
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        );
+      }),
+  );
+  group(
+    'Desktop automations',
     S.flows
       .filter(f => has(f.name))
       .map(
         f =>
-          `<div class="srow"><a class="btn blue sm" href="${esc(f.url)}" data-flow="${f.id}">${esc(f.name)}</a> <small class="hint">runs the flow</small></div>`,
+          `<div class="srow"><a class="btn blue sm" href="${esc(f.url)}" data-flow="${f.id}">&#9654; ${esc(f.name)}</a> <small class="hint">Desktop automation · launches on this computer</small></div>`,
       ),
   );
   // What's been done (the log keeps about four months).

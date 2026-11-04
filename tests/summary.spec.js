@@ -1,4 +1,4 @@
-// A quest's summary: optional, written by you under its name; Claude drafts one only on asking.
+// A task's summary: optional, written by you under its name; Claude drafts one only on asking.
 const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ app }) => {
@@ -76,7 +76,7 @@ test('Summarise (AI): asks once what is sent, offers a draft; yours stays unless
   await stub(page, { summary: 'Visits are organised. Waiting on Rob H for the survey.' });
   await page.evaluate(() => renderToday());
   await page.click('[data-sumai]');
-  await expect(page.locator('#sheetform')).toContainText("quest's name, its steps");
+  await expect(page.locator('#sheetform')).toContainText("task's name, its steps");
   expect(await page.evaluate(() => window.sent.length)).toBe(0);
   await page.click('#sheetok');
   await expect(page.locator('.sumdraft .sumtext')).toHaveText(

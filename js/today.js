@@ -12,7 +12,7 @@ const dots =
 // A row's (or tile's) ⋯: its quick actions, in a sheet (see actions.js).
 const moreBtn = n =>
   `<button class="qmore" data-qact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button>`;
-// A quest with a saved place (see resume.js): a quiet mark on its row.
+// A task with a saved place (see resume.js): a quiet mark on its row.
 const placeMark = n => (n.resume && !isDone(n) ? '<span class="tag place">Saved place</span>' : '');
 function dueTag(n) {
   if (!n.due || isDone(n)) return '';
@@ -24,7 +24,7 @@ function row(n, i, len, sib) {
   const d = isDone(n),
     kids = n.children.length;
   let left;
-  // A quest with steps opens (its bar, below its name, shows how far it's got); one without is ticked.
+  // A task with steps opens (its bar, below its name, shows how far it's got); one without is ticked.
   if (kids)
     left = `<button class="meter" data-open="${n.id}" aria-label="Open ${esc(n.text)}">${chevron}</button>`;
   else {
@@ -51,8 +51,8 @@ function row(n, i, len, sib) {
     : moreBtn(n);
   return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
 }
-// A quest's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
-// and any waiting marked. Every one ticked but the quest not finished: a last block asks what's next.
+// A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
+// and any waiting marked. Every one ticked but the task not finished: a last block asks what's next.
 function stepBar(n) {
   const req = n.children.filter(c => !c.opt),
     set = req.length ? req : n.children,
@@ -70,18 +70,18 @@ function stepBar(n) {
     `${done.length} of ${set.length} steps done` +
     (waiting ? `, ${waiting} waiting` : '') +
     (ask ? ", what's next?" : '');
-  // (a <b>, not a <span>: the quest's name is the row's span)
+  // (a <b>, not a <span>: the task's name is the row's span)
   return `<b class="stepbar${blocks.length > 15 ? ' many' : ''}" role="img" aria-label="${label}">${blocks.map(b => `<i${b ? ` class="${b}"` : ''}></i>`).join('')}</b>`;
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder (and,
-// for Today's quests, the List / Board switch).
+// for Today's tasks, the List / Board switch).
 function listHead(title, ns, views) {
   const sw = views
     ? `<span class="viewsw" role="group" aria-label="Show as">${['list', 'board'].map(v => `<button class="chip" data-tview="${v}" aria-pressed="${todayView === v}">${v === 'list' ? 'List' : 'Board'}</button>`).join('')}</span>`
     : '';
   return `<div class="sechead"><h2>${title}</h2>${sw}${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
 }
-/* Today as a board: a lane per stage, a tile per quest. The choice is this device's own. */
+/* Today as a board: a lane per stage, a tile per task. The choice is this device's own. */
 const TVIEW = 'dashboard-today-view';
 let todayView = (() => {
   try {
@@ -134,9 +134,9 @@ function board(ns) {
     )
     .join('')}</div>`;
 }
-// One card, one row per quest. Waiting ones show below the rest (above finished ones); their
+// One card, one row per task. Waiting ones show below the rest (above finished ones); their
 // place in the real order is kept, so they move back up when the wait is over.
-// (A quest's steps keep their order, waiting or not: it's the order they're done in. Only
+// (A task's steps keep their order, waiting or not: it's the order they're done in. Only
 // finished ones go last.)
 const listRank = (n, steps) => (isDone(n) ? 2 : !steps && showsWaiting(n) ? 1 : 0);
 function list(ns, doneApart, steps) {
@@ -184,7 +184,7 @@ function drawToday() {
   // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. Today's work.
   let h = renderAttention() + renderTop3() + renderCarried();
   const asBoard = todayView === 'board' && qs.length;
-  h += listHead("Today's quests", asBoard ? [] : qs, qs.length > 0);
+  h += listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0);
   h += asBoard ? board(qs) : list(qs, true);
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
@@ -204,7 +204,7 @@ function drawToday() {
   more += renderWaitingSection() + renderUpcoming();
   const reps = S.templates.filter(repeats);
   if (reps.length) {
-    more += `<details id="repd"${panels.repd ? ' open' : ''}><summary>Repeating quests <small>${reps.length}</small></summary>`;
+    more += `<details id="repd"${panels.repd ? ' open' : ''}><summary>Repeating tasks <small>${reps.length}</small></summary>`;
     reps.forEach(t => {
       more += `<div class="rep"><span>${esc(t.text)}${t.monthDay ? ` <small class="hint">(also monthly on the ${ord(t.monthDay)})</small>` : ''}</span><div class="days">`;
       WEEK.forEach(
@@ -223,10 +223,10 @@ function drawToday() {
 function quickActions() {
   if (!S.flows.length) return '';
   const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
-  return `<details id="flowsd"${panels.flowsd ? ' open' : ''}><summary>Flows <small>${flows.length}</small></summary><div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div></details>`;
+  return `<details id="flowsd"${panels.flowsd ? ' open' : ''}><summary>Desktop automations <small>${flows.length}</small></summary><div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div></details>`;
 }
 // Things being waited on that aren't on Today's list (in the Inbox, or on Upcoming), folded away
-// under it; quests on the list already say so themselves. The chip at the top opens the full view.
+// under it; tasks on the list already say so themselves. The chip at the top opens the full view.
 function renderWaitingSection() {
   const all = waitingSorted().filter(x => x.inbox || x.start);
   if (!all.length) return '';
@@ -252,7 +252,7 @@ function renderAttention() {
   }${fails.length ? `<div class="attlist box attfail">${fails.map(attentionRow).join('')}</div>` : ''}${cc}</div>`;
 }
 
-/* carried over: quests on Today for STALE days or more get a decision each morning */
+/* carried over: tasks on Today for STALE days or more get a decision each morning */
 const STALE = 3;
 const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
 // (Not one only waiting on others: every step left is waiting.)
@@ -263,10 +263,10 @@ function renderCarried() {
   // One line, folded: open it to decide on each (the weekly review asks too).
   const qs = carried();
   return qs.length
-    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'quest')} carried over <small>for a while: keep, move or drop</small></summary>${carriedRows(qs)}</details>`
+    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'task')} carried over <small>for a while: keep, move or drop</small></summary>${carriedRows(qs)}</details>`
     : '';
 }
-// A carried-over quest with its decisions (also used by the weekly review).
+// A carried-over task with its decisions (also used by the weekly review).
 function carriedRows(qs) {
   const b = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
   return qs
@@ -277,7 +277,7 @@ function carriedRows(qs) {
     .join('');
 }
 
-/* upcoming: top-level quests scheduled for a later day (S.later, each with a start date) */
+/* upcoming: top-level tasks scheduled for a later day (S.later, each with a start date) */
 const nextMonday = () => shift(today(), (8 - new Date().getDay()) % 7 || 7);
 function laterPicker(kind, id) {
   const b = (when, label) =>
@@ -289,13 +289,13 @@ function renderUpcoming() {
   let h = `<details id="upd"${panels.upd ? ' open' : ''}><summary>Upcoming (${S.later.length})</summary>`;
   S.later.forEach(n => {
     const c = count(n);
-    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} subquest${c === 1 ? '' : 's'}</span>` : ''}</div>
+    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}</div>
       <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
       <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
   });
   return h + '</details>';
 }
-// Move a top-level quest ('q') or inbox item ('i') to Upcoming.
+// Move a top-level task ('q') or inbox item ('i') to Upcoming.
 function schedule(kind, id, date) {
   if (!date || date <= today()) return;
   let n;
@@ -327,7 +327,7 @@ function renderNode({ n, parents }) {
     q = parents[0] || n; // (the quest: a step's page shares its resources and saved place)
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; Today</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
-  // The facts: what's set on this quest, each a tap to change. First what you're here for: how
+  // The facts: what's set on this task, each a tap to change. First what you're here for: how
   // far it's got and what's next.
   h += `</div><div class="node box facts"><h1>${esc(n.text)}</h1>`;
   if (kids) {
@@ -356,7 +356,7 @@ function renderNode({ n, parents }) {
     h += `<p class="qnext"><small>Next</small><b>Every step is ticked: what's next?</b></p>`;
   else if (kids && onlyWaiting(n))
     h += `<p class="qnext"><small>Next</small><b>Nothing until you hear back</b></p>`;
-  // Where you left off (the quest's; on a step's page, when it's this step or no step).
+  // Where you left off (the task's; on a step's page, when it's this step or no step).
   if (q.resume && !isDone(q) && placeFits(q, n)) h += placeCard(q);
   // Its summary, under its name: where it's at, written by you (or drafted by Claude, on asking).
   if (top)
@@ -366,16 +366,16 @@ function renderNode({ n, parents }) {
     h += `<details id="tagd" class="tagd"${panels.tagd ? ' open' : ''}><summary>Tag: ${n.tag ? tagBadge(n.tag) : '<span class="hint">none</span>'}</summary>${tagPicker('q', n.id, n.tag)}</details>`;
   h += waitPanel(n, top);
   h += '</div>';
-  // Every step ticked: what's next? (Add it below, or finish the quest.)
+  // Every step ticked: what's next? (Add it below, or finish the task.)
   if (top && needsNext(n))
-    h += `<div class="ask box nextask"><p><b>Every step is ticked.</b> What's next? Add it below, or finish the quest.</p><div class="acts"><button class="btn green" data-finish="${n.id}">Finish quest</button><button class="btn" data-unsure="${n.id}">Not sure yet</button></div></div>`;
-  // What the work needs: articles, flows, web pages (see links.js). A step shares its quest's.
+    h += `<div class="ask box nextask"><p><b>Every step is ticked.</b> What's next? Add it below, or finish the task.</p><div class="acts"><button class="btn green" data-finish="${n.id}">Finish task</button><button class="btn" data-unsure="${n.id}">Not sure yet</button></div></div>`;
+  // What the work needs: articles, flows, web pages (see links.js). A step shares its task's.
   h += top ? renderLinks(n) + questWorkflows(n.id) : renderInheritedLinks(q);
-  // The steps come first: they're what you work through. (A quest has steps; a step doesn't.)
+  // The steps come first: they're what you work through. (A task has steps; a step doesn't.)
   if (top) {
-    h += listHead('Subquests', n.children);
+    h += listHead('Steps', n.children);
     h += list(n.children, false, true);
-    h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a subquest" aria-label="New subquest" autocomplete="off"><button class="btn">Add</button></form>`;
+    h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a step" aria-label="New step" autocomplete="off"><button class="btn">Add</button></form>`;
     h += suggestBox(n);
   }
   // Everything else, folded away.
@@ -400,9 +400,9 @@ function renderNode({ n, parents }) {
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${md === i + 1 ? ' selected' : ''}>${ord(i + 1)}${i + 1 > 28 ? ' (or last day)' : ''}</option>`).join('')}</select>
       </details>`;
   }
-  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this quest</button></div>`;
+  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this task</button></div>`;
   h += '</details>';
-  // Always to hand: the one thing to do next (see primaryAction), a tick for a step or a quest
+  // Always to hand: the one thing to do next (see primaryAction), a tick for a step or a task
   // without steps, and the rest of its actions.
   const pa = primaryAction(n, parents);
   h += '<div class="qfoot acts">';
@@ -414,7 +414,7 @@ function renderNode({ n, parents }) {
   setHTML($('#v-today'), h);
 }
 
-/* Summarise (AI): the quest's name, its steps (ticked, waiting and on whom) and its summary go
+/* Summarise (AI): the task's name, its steps (ticked, waiting and on whom) and its summary go
    to the suggest-steps Supabase function, which asks Claude for a short plain-English summary of
    what's been done. It's offered as a draft: the summary is yours unless you choose to use it. */
 let sumAI = null; // { id, busy, text, error }
@@ -439,7 +439,7 @@ async function askSummary(id) {
     return sheet(
       {
         title: 'Summarise with AI',
-        text: "This sends this quest's name, its steps (which are ticked or waiting, and on whom) and its summary, and nothing else, to Anthropic's Claude to write a short summary. Only use it if your organisation allows this for work information.",
+        text: "This sends this task's name, its steps (which are ticked or waiting, and on whom) and its summary, and nothing else, to Anthropic's Claude to write a short summary. Only use it if your organisation allows this for work information.",
         ok: 'Continue',
       },
       () => {
@@ -492,7 +492,7 @@ function useSummary(how) {
   renderAll();
 }
 
-/* Suggest steps (AI): the quest's name and its steps' names (nothing else) go to the
+/* Suggest steps (AI): the task's name and its steps' names (nothing else) go to the
    suggest-steps Supabase function, which asks Claude for a few next steps. They're offered as a
    list to tick; only the ticked ones are added. Needs sync signed in (the function checks it). */
 let suggest = null; // { id, busy, items: [{ text, on }], error }
@@ -527,7 +527,7 @@ async function askSuggest(id) {
     return sheet(
       {
         title: 'Suggest steps with AI',
-        text: "This sends this quest's name and its steps' names, and nothing else, to Anthropic's Claude to suggest next steps. Only use it if your organisation allows this for work information.",
+        text: "This sends this task's name and its steps' names, and nothing else, to Anthropic's Claude to suggest next steps. Only use it if your organisation allows this for work information.",
         ok: 'Continue',
       },
       () => {

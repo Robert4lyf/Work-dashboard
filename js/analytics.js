@@ -14,7 +14,7 @@ const median = xs => {
   return s[Math.floor(s.length / 2)];
 };
 const daysWord = n => (n === 1 ? '1 day' : n + ' days');
-// "12 quests finished, against 9 the period before (up 33%)". The same words every time.
+// "12 tasks finished, against 9 the period before (up 33%)". The same words every time.
 function trendLine(now, before, what, fmt = String) {
   const w = n => (Array.isArray(what) ? (n === 1 ? what[0] : what[1]) : what);
   if (!now && !before) return `No ${w(0).replace(/^of /, '')} in either period.`;
@@ -77,7 +77,15 @@ function workflowStats(p) {
     withOutcome = now.ok + now.failed,
     perWf = {};
   runs.forEach(r => {
-    const w = (perWf[r.wf] = perWf[r.wf] || { name: r.name, n: 0, ok: 0, failed: 0, durs: [], stages: {} });
+    const w = (perWf[r.wf] = perWf[r.wf] || {
+      id: r.wf,
+      name: r.name,
+      n: 0,
+      ok: 0,
+      failed: 0,
+      durs: [],
+      stages: {},
+    });
     w.n++;
     if (r.status === 'succeeded') {
       w.ok++;
@@ -123,7 +131,7 @@ function automationStats(p) {
     perFlow = {};
   xs.forEach(x => {
     const f = (perFlow[x.flow] = perFlow[x.flow] || {
-      name: (S.flows.find(y => y.id === x.flow) || {}).name || 'removed flow',
+      name: (S.flows.find(y => y.id === x.flow) || {}).name || 'removed automation',
       list: [],
     });
     f.list.push(x);
@@ -197,7 +205,7 @@ function insightLines(x) {
   L.push([
     'Productivity',
     [
-      trendLine(x.prod.done, x.prod.doneBefore, ['quest finished', 'quests finished']),
+      trendLine(x.prod.done, x.prod.doneBefore, ['task finished', 'tasks finished']),
       trendLine(x.prod.focusNow, x.prod.focusBefore, 'of focus time', hm) +
         (x.prod.focusNow ? ` About ${hm(Math.round(x.prod.focusNow / x.span))} a day.` : ''),
       trendLine(x.prod.inter, x.prod.interBefore, ['interruption noted', 'interruptions noted']),
@@ -205,15 +213,15 @@ function insightLines(x) {
   ]);
   const w = x.wf.now;
   L.push([
-    'Workflows',
+    'Processes',
     [
       w.n
         ? `${plural(w.n, 'run')} started: ${w.ok} succeeded, ${w.failed} failed, ${w.cancelled} cancelled, ${w.open} still under way. Success rate ${x.wf.rate}% of the ${plural(x.wf.withOutcome, 'run')} with an outcome (cancelled and unfinished runs aren't counted).`
-        : 'No workflow runs started this period.',
+        : 'No process runs started this period.',
       trendLine(w.n, x.wf.prev.n, ['run started', 'runs started']),
       ...x.wf.table.map(
         t =>
-          `${t.name}: ${plural(t.n, 'run')}, ${t.ok} succeeded, ${t.failed} failed${t.med ? `, a successful run typically takes ${hm(Math.max(1, Math.round(t.med / 60000)))}` : ''}${t.worst ? `; most failed stage: ${t.worst[0]} (${t.worst[1]})` : ''}.`,
+          `${t.name}: ${plural(t.n, 'run')}, ${t.ok} succeeded, ${t.failed} failed${t.med ? `, a successful run typically takes ${hm(Math.max(1, Math.round(t.med / 60000)))}` : ''}${t.worst ? `; most failed step: ${t.worst[0]} (${t.worst[1]})` : ''}.`,
       ),
     ],
   ]);
@@ -222,8 +230,8 @@ function insightLines(x) {
     'Automation',
     [
       a.n
-        ? `${a.n === 1 ? '1 flow launch' : a.n + ' flow launches'}: ${a.ok} verified succeeded, ${a.failed} verified failed, ${a.cancelled} cancelled, ${a.unconfirmed} unconfirmed (no word after a day), ${a.running} awaiting a result. Success rate ${a.rate}% of the ${plural(a.verified, 'verified result')}.${x.auto.lag ? ` A first report typically arrives ${hm(Math.max(1, Math.round(x.auto.lag / 60000)))} after the launch.` : ''}`
-        : 'No flow launches this period.',
+        ? `${a.n === 1 ? '1 automation launch' : a.n + ' automation launches'}: ${a.ok} verified succeeded, ${a.failed} verified failed, ${a.cancelled} cancelled, ${a.unconfirmed} unconfirmed (no word after a day), ${a.running} awaiting a result. Success rate ${a.rate}% of the ${plural(a.verified, 'verified result')}.${x.auto.lag ? ` A first report typically arrives ${hm(Math.max(1, Math.round(x.auto.lag / 60000)))} after the launch.` : ''}`
+        : 'No automation launches this period.',
       trendLine(a.n, x.auto.prev.n, ['launch', 'launches']),
       ...x.auto.table.map(
         t =>
@@ -319,27 +327,229 @@ function downloadText(name, text, type) {
     toast("Couldn't save the file on this device");
   }
 }
-/* the page */
+/* findings: the few things worth knowing, picked the same way every time from the records.
+   Each rule has a bar to clear (so a single failure, or 1 against 2, isn't a finding), says
+   what it rests on, and where to act. Order: severity (0 needs action, 1 worth a look, 2 a
+   trend), then the size of the evidence, then recency. At most three are shown. */
+function findings(x) {
+  const out = [],
+    p = x.p,
+    t = today();
+  // 1. A desktop automation failing repeatedly: at least 2 verified failures, and no more successes than failures.
+  x.auto.table.forEach(f => {
+    if (f.failed >= 2 && f.failed >= f.ok) {
+      const last = S.execs
+        .filter(e => (S.flows.find(y => y.id === e.flow) || {}).name === f.name && execState(e) === 'failed')
+        .sort((a, b) => b.upd - a.upd)[0];
+      out.push({
+        sev: 0,
+        n: f.failed,
+        at: last ? last.upd : 0,
+        title: `${f.name} keeps failing`,
+        why: `${f.failed} of ${f.verified} verified attempts failed in the last ${x.span} days (${f.ok} succeeded).`,
+        act: last ? ['Open the latest attempt', `data-xdet="${last.id}"`] : null,
+      });
+    }
+  });
+  // 2. One step of a process failing again and again: the same step failed in 2 or more runs.
+  x.wf.table.forEach(w => {
+    if (w.worst && w.worst[1] >= 2) {
+      const wf = wfById(w.id);
+      out.push({
+        sev: 0,
+        n: w.worst[1],
+        at: 0,
+        title: `“${w.worst[0]}” fails in ${w.name}`,
+        why: `That step failed in ${w.worst[1]} of ${plural(w.n, 'run')} started in the last ${x.span} days.`,
+        act: wf ? ['Open the process', `data-wfview="${wf.id}"`] : null,
+      });
+    }
+  });
+  // 3. Runs with no movement for three days or more (not paused on purpose).
+  const stuck = S.wruns
+    .filter(
+      r =>
+        !WRUN_FINAL.includes(r.status) &&
+        r.status !== 'paused' &&
+        r.status !== 'ready' &&
+        Date.now() - r.at > 3 * 864e5,
+    )
+    .sort((a, b) => a.at - b.at);
+  if (stuck.length)
+    out.push({
+      sev: 1,
+      n: stuck.length,
+      at: stuck[0].at,
+      title:
+        stuck.length === 1
+          ? `${stuck[0].name} hasn't moved for ${daysWord(Math.floor((Date.now() - stuck[0].at) / 864e5))}`
+          : `${stuck.length} processes haven't moved for 3 days or more`,
+      why:
+        stuck.length === 1
+          ? `Its current step is ${runStage(stuck[0]) ? '“' + runStage(stuck[0]).title + '”' : 'unknown'} (${runWord(stuck[0]).toLowerCase()}).`
+          : stuck
+              .map(r => r.name)
+              .slice(0, 3)
+              .join(', ') +
+            (stuck.length > 3 ? ', …' : '') +
+            '.',
+      act: ['Open the oldest', `data-wfopen="${stuck[0].id}"`],
+    });
+  // 4. Overdue work piling up: three or more open tasks past their due date.
+  const late = [];
+  (function w(ns) {
+    ns.forEach(n => {
+      if (isDone(n)) return;
+      if (n.due && n.due < t) late.push(n);
+      w(n.children);
+    });
+  })(S.quests);
+  if (late.length >= 3)
+    out.push({
+      sev: 1,
+      n: late.length,
+      at: Date.now(),
+      title: `${late.length} tasks are overdue`,
+      why: `The oldest was due ${dayLabel(late.map(n => n.due).sort()[0])}. Overdue work is counted from the tasks on Today, not from history.`,
+      act: ['See them in the Command Centre', 'data-goto="ops"'],
+    });
+  // 5. Waiting that needs chasing again and again: three or more follow-ups on one item in the period, still open.
+  const chased = {};
+  S.follows
+    .filter(f => f.k === 'chase' && inT(f.t, p.fromT, p.toT))
+    .forEach(f => (chased[f.n] = (chased[f.n] || 0) + 1));
+  Object.entries(chased)
+    .filter(([n, c]) => c >= 3 && findWaitable(n).n && findWaitable(n).n.wait)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 1)
+    .forEach(([n, c]) => {
+      const node = findWaitable(n).n;
+      out.push({
+        sev: 1,
+        n: c,
+        at: 0,
+        title: `Still waiting on ${node.wait.who || 'someone'} after ${plural(c, 'follow-up')}`,
+        why: `“${node.text}” has been followed up ${c} times in the last ${x.span} days and is still open.`,
+        act: ['Open in Waiting', `data-wgo="${n}"`],
+      });
+    });
+  // 6. Launches that never reported: two or more unconfirmed in the period (tracking on).
+  if (x.auto.now.unconfirmed >= 2)
+    out.push({
+      sev: 1,
+      n: x.auto.now.unconfirmed,
+      at: 0,
+      title: `${x.auto.now.unconfirmed} automation launches never reported a result`,
+      why: 'No report arrived within a day of the launch: the automation may not have started, or its report never reached the app.',
+      act: ['Check result tracking', 'data-gosec="execsec"'],
+    });
+  // 7. Estimates running low or high: five or more finished tasks with an estimate, and the typical one off by half.
+  if (x.acc.n >= 5 && (x.acc.median >= 1.5 || x.acc.median <= 0.5))
+    out.push({
+      sev: 2,
+      n: x.acc.n,
+      at: 0,
+      title: `Tasks take about ${x.acc.median.toFixed(1)}× their estimate (${x.acc.median >= 1.5 ? 'estimates run low' : 'estimates run high'})`,
+      why: `From ${plural(x.acc.n, 'finished task')} with an estimate and timer-measured focus time (work done without the timer isn't measured).`,
+      act: ['Open the Forecast', 'data-rsub="forecast"'],
+    });
+  // 8. A real change in what gets finished: at least five in each period, and a third more or less.
+  if (x.prod.done >= 5 && x.prod.doneBefore >= 5) {
+    const d = (x.prod.done - x.prod.doneBefore) / x.prod.doneBefore;
+    if (Math.abs(d) >= 1 / 3)
+      out.push({
+        sev: 2,
+        n: Math.abs(x.prod.done - x.prod.doneBefore),
+        at: 0,
+        title: `Tasks finished ${d > 0 ? 'up' : 'down'} ${Math.round(Math.abs(d) * 100)}% on the period before`,
+        why: `${x.prod.done} finished in the last ${x.span} days against ${x.prod.doneBefore} in the ${x.span} before.`,
+        act: ['See the history', 'data-rsub="log"'],
+      });
+  }
+  return out.sort((a, b) => a.sev - b.sev || b.n - a.n || b.at - a.at).slice(0, 3);
+}
+// How much there is to measure: with fewer than three recorded things in the period, the page
+// says what it can measure instead of showing empty sections.
+const insightsSparse = x =>
+  x.prod.done + x.wf.now.n + x.auto.now.n + x.wait.resolved + (x.prod.focusNow ? 1 : 0) < 2;
+/* the page: findings, the key numbers, two charts you can tap, then the detail folded */
+let insightPick = null; // the bar tapped: { key, d }
+function statTile(label, value, sub) {
+  return `<div class="stat"><small>${label}</small><b>${value}</b>${sub ? `<span>${sub}</span>` : ''}</div>`;
+}
+// "vs 9 before", only when both periods have enough to compare (three or more).
+function vsBefore(now, before, fmt = String) {
+  if (now < 3 && before < 3) return '';
+  if (!before) return 'none the period before';
+  const d = (now - before) / before;
+  return Math.abs(d) < 0.1 ? 'about the same as before' : `${d > 0 ? 'up' : 'down'} from ${fmt(before)}`;
+}
 function renderInsights() {
   const x = insights(insightSpan),
     max = Math.max(1, ...x.prod.days.map(d => d.done)),
-    fmax = Math.max(1, ...x.prod.days.map(d => d.focus));
+    fmax = Math.max(1, ...x.prod.days.map(d => d.focus)),
+    found = findings(x),
+    sparse = insightsSparse(x);
   let h = `<div class="chips">${INSIGHT_SPANS.map(s => `<button class="chip" data-ispan="${s}" aria-pressed="${s === insightSpan}">${s} days</button>`).join('')}</div>
-    <p class="hint">${esc(dayLabel(x.p.from))} to ${esc(dayLabel(x.p.to))}, against the ${x.span} days before. Counts come from this device's records as synced; rates say what they're a rate of.</p>`;
-  const bars = (key, m, label) =>
-    `<div class="ibars${x.span > 30 ? ' tight' : ''}" role="img" aria-label="${label}, each day">${x.prod.days.map(d => `<span class="ibar" title="${esc(dayLabel(d.d))}: ${d[key]}" style="height:${Math.round((d[key] / m) * 100)}%"></span>`).join('')}</div>`;
-  insightLines(x).forEach(([head, lines], i) => {
-    h += `<h2>${esc(head)}</h2>`;
-    if (i === 0)
-      h += `<p class="hint ilabel">Quests finished, each day</p>${bars('done', max, 'Quests finished')}<p class="hint ilabel">Focus time, each day</p>${bars('focus', fmax, 'Focus minutes')}`;
-    h += `<ul class="ilines">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`;
-  });
+    <p class="hint">${esc(dayLabel(x.p.from))} to today, against the ${x.span} days before. Counts are from this device's records as synced.</p>`;
+  // 1. Findings.
+  h += '<h2>What stands out</h2>';
+  if (found.length)
+    h += `<div class="findings">${found
+      .map(
+        f =>
+          `<div class="finding sev${f.sev}"><small class="fsev">${['Needs action', 'Worth a look', 'Trend'][f.sev]}</small><b>${esc(f.title)}</b><p>${esc(f.why)}</p>${f.act ? `<button class="btn sm" ${f.act[1]}>${esc(f.act[0])}</button>` : ''}</div>`,
+      )
+      .join('')}</div>`;
+  else if (sparse)
+    h += `<div class="box findnone"><p><b>Not much to measure yet.</b> Insights are counted from what you finish, the processes you run, the automations that report back and the waiting items you resolve.</p><p class="hint">As those build up, this page shows what stands out: automations that keep failing, process steps that fail, runs that stall, overdue work piling up, items chased again and again, estimates running low, and real changes in what gets finished. Each needs a few recorded cases before it's shown.</p></div>`;
+  else
+    h += `<p class="hint findnone">Nothing stands out in the last ${x.span} days: no automation or process step failing repeatedly, no stalled runs, no pile-up of overdue work, no item chased three times, and no large change in what gets finished.</p>`;
+  if (sparse) {
+    h += `<div class="acts"><button class="btn" data-iexport="text">Copy as text</button><button class="btn" data-iexport="csv">Save CSV</button></div>`;
+    return h;
+  }
+  // 2. The key numbers.
+  const w = x.wf.now,
+    a = x.auto.now;
+  h += `<h2>Key numbers</h2><div class="stats">${statTile('Tasks finished', x.prod.done, vsBefore(x.prod.done, x.prod.doneBefore))}${statTile('Focus time (timer)', hm(x.prod.focusNow), vsBefore(x.prod.focusNow, x.prod.focusBefore, hm))}${statTile('Process runs', w.n ? `${w.ok} <small>of ${w.n} completed</small>` : '0', w.n ? `${w.failed} failed · ${w.cancelled} cancelled · ${w.open} under way` : '')}${statTile('Automation attempts', a.n ? `${a.ok} <small>of ${a.verified} verified ok</small>` : '0', a.n ? `${a.failed} failed · ${a.unconfirmed} unconfirmed · ${a.running} awaiting` : '')}</div>`;
+  // 3. Two charts, a bar a day; a tap says the day's number (no hover needed).
+  const bars = (key, m, label, unit) =>
+    `<div class="ibars${x.span > 30 ? ' tight' : ''}" role="group" aria-label="${label}, each day">${x.prod.days
+      .map(
+        d =>
+          `<button class="ibar${insightPick && insightPick.key === key && insightPick.d === d.d ? ' picked' : ''}" data-ibar="${key}" data-d="${d.d}" aria-label="${esc(dayLabel(d.d))}: ${unit(d[key])}" aria-pressed="${insightPick && insightPick.key === key && insightPick.d === d.d}"><span class="ifill" style="height:${Math.round((d[key] / m) * 100)}%"></span></button>`,
+      )
+      .join(
+        '',
+      )}</div><p class="hint ipick" aria-live="polite">${insightPick && insightPick.key === key ? `${esc(dayLabel(insightPick.d))}: ${unit((x.prod.days.find(d => d.d === insightPick.d) || {})[key] || 0)}` : 'Tap a bar for its number.'}</p>`;
+  h += `<h2>Trends</h2><p class="hint ilabel">Tasks finished, each day</p>${bars('done', max, 'Tasks finished', n => plural(n, 'task'))}<p class="hint ilabel">Focus time, each day (timer)</p>${bars('focus', fmax, 'Focus minutes', hm)}`;
+  h += `<details id="itable"${panels.itable ? ' open' : ''}><summary>As a table</summary><table class="itab"><caption class="hint">Tasks finished and focus time, by day</caption><thead><tr><th scope="col">Day</th><th scope="col">Finished</th><th scope="col">Focus</th></tr></thead><tbody>${
+    x.prod.days
+      .filter(d => d.done || d.focus)
+      .map(d => `<tr><td>${esc(dayLabel(d.d))}</td><td>${d.done}</td><td>${hm(d.focus)}</td></tr>`)
+      .join('') || '<tr><td colspan="3">Nothing recorded</td></tr>'
+  }</tbody></table></details>`;
+  // 4. The detail, folded: the same sentences the text export carries.
+  h += `<details id="idetail"${panels.idetail ? ' open' : ''}><summary>Details</summary>${insightLines(x)
+    .map(
+      ([head, lines]) =>
+        `<h3>${esc(head)}</h3><ul class="ilines">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`,
+    )
+    .join('')}</details>`;
+  // 5. Exports.
   h += `<div class="acts"><button class="btn" data-iexport="text">Copy as text</button><button class="btn" data-iexport="csv">Save CSV</button></div><p class="hint">Exports hold these counts only: no tokens, keys or account details.</p>`;
   return h;
 }
 function insightClick(d) {
   if (d.ispan) {
     insightSpan = +d.ispan;
+    insightPick = null;
+    renderReview();
+  }
+  if (d.ibar) {
+    insightPick =
+      insightPick && insightPick.key === d.ibar && insightPick.d === d.d ? null : { key: d.ibar, d: d.d };
     renderReview();
   }
   if (d.iexport === 'text') copyText(insightsText());

@@ -110,7 +110,7 @@ test('notices queued for the timer, deadlines and Upcoming, and kept in step', a
   ]);
   const due = (await page.evaluate(() => window.__notices)).find(n => n.key.startsWith('due:'));
   expect(new Date(due.at).toISOString()).toBe('2026-09-24T08:00:00.000Z'); // 9am UK time
-  // Finishing the quest and stopping the timer removes their notices.
+  // Finishing the task and stopping the timer removes their notices.
   await page.evaluate(() => {
     S.quests[0].done = true;
     S.timer = null;
@@ -287,7 +287,7 @@ test("the app's notice sync leaves alerts sent by scripts alone", async ({ brows
     window.__notices.push({
       key: 'alert:abc',
       at: new Date().toISOString(),
-      title: 'Flow failed',
+      title: 'Automation failed',
       sent_at: null,
     });
     window.__notices.push({

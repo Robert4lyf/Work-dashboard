@@ -1,4 +1,4 @@
-// Release A: today's top 3, chosen from Today's quests each day.
+// Release A: today's top 3, chosen from Today's tasks each day.
 const { test, expect } = require('./fixtures');
 
 const setDay = async (page, y, m, d) => {
@@ -12,7 +12,7 @@ test.beforeEach(async ({ app, page }) => {
   await app.open();
   await page.evaluate(() => {
     S.quests = ['A', 'B', 'C', 'D'].map((t, i) =>
-      fix({ id: 'q' + t, text: 'Quest ' + t, children: i === 1 ? [fix({ id: 'sB', text: 'Step B1' })] : [] }),
+      fix({ id: 'q' + t, text: 'Task ' + t, children: i === 1 ? [fix({ id: 'sB', text: 'Step B1' })] : [] }),
     );
     save();
     renderAll();
@@ -36,9 +36,9 @@ test('one, two and three can be chosen, in order; the fourth is refused; the lis
   // Full: the rest can't be picked until one is taken out.
   await expect(page.locator('#sheet [data-t3tog="qD"]')).toBeDisabled();
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
-  expect(await titles(page)).toEqual(['Quest C', 'Quest A', 'Quest B']);
-  expect(await app.order()).toEqual(['Quest A', 'Quest B', 'Quest C', 'Quest D']); // (the list keeps its order)
-  await expect(page.locator('#hnow b')).toHaveText('Quest A'); // (Next up is still the list's first)
+  expect(await titles(page)).toEqual(['Task C', 'Task A', 'Task B']);
+  expect(await app.order()).toEqual(['Task A', 'Task B', 'Task C', 'Task D']); // (the list keeps its order)
+  await expect(page.locator('#hnow b')).toHaveText('Task A'); // (Next up is still the list's first)
   // Each row: progress, and a way to work on it.
   await expect(page.locator('.t3row[data-t3="qB"] small')).toHaveText('0 of 1 steps · Next: Step B1');
   await expect(page.locator('.t3row[data-t3="qA"] small')).toHaveText('To do');
@@ -46,7 +46,7 @@ test('one, two and three can be chosen, in order; the fourth is refused; the lis
   await expect(page.locator('#v-zen .zt')).toHaveText('Step B1');
   await page.keyboard.press('Escape');
   await page.click('.t3row[data-t3="qA"] .open');
-  await expect(page.locator('#v-today h1')).toHaveText('Quest A');
+  await expect(page.locator('#v-today h1')).toHaveText('Task A');
 });
 
 test('replace, reorder and clear from the picker; add and remove from a row’s actions', async ({
@@ -64,17 +64,17 @@ test('replace, reorder and clear from the picker; add and remove from a row’s 
   await expect(page.locator('#sheet [data-t3up="qD"]')).toBeDisabled();
   await page.keyboard.press('Escape');
   expect((await app.state()).top3.ids).toEqual(['qD', 'qA', 'qB']);
-  expect(await titles(page)).toEqual(['Quest D', 'Quest A', 'Quest B']);
+  expect(await titles(page)).toEqual(['Task D', 'Task A', 'Task B']);
   // From a row's ⋯: take one out, put one in; a full top 3 opens the picker instead.
-  await page.click('[aria-label="Actions: Quest A"]');
+  await page.click('[aria-label="Actions: Task A"]');
   await page.click('#sheet [data-top3]');
   await expect(page.locator('#toast')).toContainText('Removed from Top 3');
   expect((await app.state()).top3.ids).toEqual(['qD', 'qB']);
-  await page.click('[aria-label="Actions: Quest C"]');
+  await page.click('[aria-label="Actions: Task C"]');
   await expect(page.locator('#sheet [data-top3]')).toHaveText('Add to Top 3');
   await page.click('#sheet [data-top3]');
   expect((await app.state()).top3.ids).toEqual(['qD', 'qB', 'qC']);
-  await page.click('[aria-label="Actions: Quest A"]');
+  await page.click('[aria-label="Actions: Task A"]');
   await page.click('#sheet [data-top3]');
   await expect(page.locator('#sheettitle')).toHaveText('Top 3 for today');
   await expect(page.locator('#sheet .qahint')).toContainText('Top 3 is full');
@@ -89,26 +89,26 @@ test('a finished priority shows as done; a moved or deleted one drops out; back 
   page,
 }) => {
   await page.evaluate(() => setTop3(['qA', 'qB', 'qC']));
-  await page.click('[aria-label="Mark done: Quest A"]');
+  await page.click('[aria-label="Mark done: Task A"]');
   const a = page.locator('.t3row[data-t3="qA"]');
   await expect(a).toHaveClass(/done/);
   await expect(a.locator('.tag.done')).toHaveText('Done');
   await expect(a.locator('.btn')).toHaveCount(0);
   // Moved to tomorrow: out of the top 3 (the record keeps it, so Today again brings it back).
-  await page.click('[aria-label="Actions: Quest B"]');
+  await page.click('[aria-label="Actions: Task B"]');
   await page.click('#sheet [data-sched]:has-text("Do tomorrow")');
-  expect(await titles(page)).toEqual(['Quest A', 'Quest C']);
+  expect(await titles(page)).toEqual(['Task A', 'Task C']);
   expect((await app.state()).top3.ids).toEqual(['qA', 'qB', 'qC']);
   await page.click('#upd > summary');
   await page.click('#upd [data-now]');
-  expect(await titles(page)).toEqual(['Quest A', 'Quest B', 'Quest C']);
+  expect(await titles(page)).toEqual(['Task A', 'Task B', 'Task C']);
   // Deleted: gone from the top 3; Undo brings it back.
-  await page.click('[aria-label="Actions: Quest C"]');
+  await page.click('[aria-label="Actions: Task C"]');
   await page.click('#sheet [data-delnow]');
-  expect(await titles(page)).toEqual(['Quest A', 'Quest B']);
+  expect(await titles(page)).toEqual(['Task A', 'Task B']);
   await page.click('#undo');
-  expect(await titles(page)).toEqual(['Quest A', 'Quest B', 'Quest C']);
-  // Every quest done: the empty line doesn't nag.
+  expect(await titles(page)).toEqual(['Task A', 'Task B', 'Task C']);
+  // Every task done: the empty line doesn't nag.
   await page.evaluate(() => {
     S.quests.forEach(q => {
       q.done = true;
@@ -127,7 +127,7 @@ test('a new day starts with no top 3; yesterday’s isn’t carried over, and a 
 }) => {
   await page.evaluate(() => setTop3(['qA', 'qB']));
   await page.reload();
-  expect(await titles(page)).toEqual(['Quest A', 'Quest B']);
+  expect(await titles(page)).toEqual(['Task A', 'Task B']);
   await setDay(page, 2026, 9, 24);
   await expect(page.locator('#v-today .top3empty')).toBeVisible();
   expect((await app.state()).top3).toBeNull();
