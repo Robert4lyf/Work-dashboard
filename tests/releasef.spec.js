@@ -629,3 +629,138 @@ test.describe('Checkpoint 3: QA fixes', () => {
     await expect(page.locator('#reorder')).toHaveCount(0);
   });
 });
+
+test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
+  const ratio = (page, a, b) =>
+    page.evaluate(
+      ([a, b]) => {
+        const rgb = s => (s.match(/[\d.]+/g) || []).map(Number).slice(0, 3);
+        const lum = c =>
+          c
+            .map(v => v / 255)
+            .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+            .reduce((x, v, i) => x + v * [0.2126, 0.7152, 0.0722][i], 0);
+        const [x, y] = [lum(rgb(a)), lum(rgb(b))];
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+      },
+      [a, b],
+    );
+  for (const font of ['', 'large'])
+    test(`320px${font ? ', Larger text' : ''}: names on Scheduled, Waiting and Reorder rows keep their words`, async ({
+      app,
+      page,
+    }) => {
+      await page.setViewportSize({ width: 320, height: 800 });
+      await page.clock.install({ time: new Date(2026, 10, 4, 11, 0) });
+      await app.open();
+      await page.evaluate(
+        f => localStorage.setItem('dashboard-look', JSON.stringify(f ? { font: f } : {})),
+        font,
+      );
+      await app.setState(eDay);
+      await page.reload();
+      const widths = sel => page.$$eval(sel, x => x.map(e => Math.round(e.getBoundingClientRect().width)));
+      // (about 70px before: the name squeezed beside the time, Done and ⋯)
+      for (const w of await widths('#v-today .secrow .open > span')) expect(w).toBeGreaterThan(160);
+      // The header's label on one line.
+      const lab = await page.evaluate(() => {
+        const cs = getComputedStyle(document.querySelector('header'), '::before');
+        return parseFloat(cs.height) / parseFloat(cs.lineHeight || cs.fontSize * 1.2);
+      });
+      expect(lab).toBeLessThan(2);
+      await page.click('#reorder');
+      for (const w of await widths('#v-today .list .row .open > span')) expect(w).toBeGreaterThan(160);
+      // A label is one line, never broken mid-word.
+      for (const h of await page.$$eval('#v-today .list .tag', x =>
+        x.map(e => e.getBoundingClientRect().height),
+      ))
+        expect(h).toBeLessThan(26);
+    });
+
+  test('Command Centre shows its whole name, also with Larger text and nothing needing attention', async ({
+    app,
+    page,
+  }) => {
+    for (const [w, font, data] of [
+      [390, 'large', true],
+      [320, '', false],
+      [320, 'large', false],
+    ]) {
+      await page.setViewportSize({ width: w, height: 800 });
+      await page.clock.install({ time: new Date(2026, 10, 4, 11, 0) });
+      await app.open();
+      await page.evaluate(
+        f => localStorage.setItem('dashboard-look', JSON.stringify(f ? { font: f } : {})),
+        font,
+      );
+      if (data) await app.setState(eDay);
+      else await app.setState(s => (s.quests = []));
+      await page.reload();
+      const cc = page.locator('#v-today .attcc');
+      expect(await cc.evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
+    }
+  });
+
+  test('dark, and automatic dark: the focus ring and the sync dot show on the yellow header', async ({
+    app,
+    page,
+  }) => {
+    for (const [theme, scheme] of [
+      ['dark', 'light'],
+      ['', 'dark'],
+    ]) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await app.open();
+      await page.evaluate(
+        t => localStorage.setItem('dashboard-look', JSON.stringify(t ? { theme: t } : {})),
+        theme,
+      );
+      await page.reload();
+      await page.focus('#searchBtn');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Shift+Tab');
+      const [ring, dot, bg] = await page.evaluate(() => [
+        getComputedStyle(document.activeElement).outlineColor,
+        getComputedStyle(document.querySelector('#syncBtn'), '::before').backgroundColor,
+        getComputedStyle(document.querySelector('header')).backgroundColor,
+      ]);
+      expect(await ratio(page, ring, bg)).toBeGreaterThan(3);
+      expect(await ratio(page, dot, bg)).toBeGreaterThan(3);
+    }
+  });
+
+  test('the attention panel is outlined like the other panels; Due today is not the current-work yellow', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    expect(await page.$eval('#v-today .attsum > summary', e => getComputedStyle(e).borderTopWidth)).toBe(
+      '3px',
+    );
+    const due = await page.$eval('#v-today .tag.now', e => getComputedStyle(e).backgroundColor);
+    const yellow = await page.$eval('header', e => getComputedStyle(e).backgroundColor);
+    expect(due).not.toBe(yellow);
+  });
+
+  test("Reorder's buttons say which task they move; the keyboard stays on the row after Top", async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page);
+    await page.click('#reorder');
+    await expect(page.locator('#v-today [data-top="c"]')).toHaveAttribute(
+      'aria-label',
+      'Move to top: Charlie',
+    );
+    await expect(page.locator('#v-today [data-up="c"]')).toHaveAttribute('aria-label', 'Move up: Charlie');
+    await page.focus('#v-today [data-top="c"]');
+    await page.keyboard.press('Enter');
+    expect(await page.evaluate(() => S.quests[0].id)).toBe('c');
+    expect(
+      await page.evaluate(() => {
+        const a = document.activeElement;
+        return a !== document.body && a.closest('[data-qid]') && a.closest('[data-qid]').dataset.qid;
+      }),
+    ).toBe('c');
+  });
+});

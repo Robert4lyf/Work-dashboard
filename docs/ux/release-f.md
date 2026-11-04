@@ -19,7 +19,10 @@ Where each section starts (Scenario A, px from the top of the page):
 | 390 × 844 | Top 3 | Scheduled | Waiting | Today's tasks |
 | --- | --- | --- | --- | --- |
 | Before | 527 | 809 | 3036 | 1147 |
-| After | 473 | 745 | 1048 | 1408 |
+| After | 477 | 749 | 1052 | 1412 |
+
+(Measurements for every size are in `release-f/*-measure.json`. Nothing scrolls sideways at
+320, 360, 390, 412, 1000, 1240, 1440 or 1920px.)
 
 Density came from overhead, not from smaller text or targets: the Today title and date share a
 line; tighter section bars; one 12px step between sections; a narrow time column on Scheduled
@@ -121,6 +124,43 @@ tap's write.
 The wrapper (and its copy in `sync.spec.js`) now checks `typeof storeDone`, and a regression test
 slows every write to the store and reloads. With writes held for 150ms, copies of the two tests
 failed 6 times in 20 before the fix and 0 times in 100 after. The app itself was right.
+
+## Adversarial QA
+
+Six passes, run in parallel on the checkpoints. The UI/mobile, visual and accessibility passes
+were one reviewer; state and sync another; code quality a static audit. The workflow and
+flaky-test work were reviewed against their own adversarial tests. Every confirmed defect was
+fixed with a regression test that fails without the fix:
+
+- **Top 3:** a choice that took a free place by itself could be pushed out when the choice it
+  stood in for came back. It now keeps its place (`settleTop3`).
+- **Top 3:** inside `meta:top3`, the set-aside choices would have been written back without
+  them by an older copy of the app. They're now their own record.
+- **Top 3:** the open picker didn't follow a sync, so a tap could undo the other device's
+  choice. Take out could keep a choice in the three.
+- **Top 3:** a scheduled choice couldn't be taken out from its own actions.
+- **Reorder:** offered with only one task to reorder. Its buttons didn't say which task they
+  move. The keyboard was lost after Top.
+- **320px:** Scheduled and Waiting names were squeezed to about 70px and broken mid-word; so
+  were names and labels in Reorder. The header's label wrapped (a later rule cancelled the fix
+  meant for it). Command Centre was cut short with Larger text.
+- **Dark and automatic dark:** the focus ring was yellow on the yellow header and on Top 3's
+  turquoise, and the sync dot was hard to see. Both are now dark on the coloured bars.
+- **Outlines and colour:** the attention panel's outline was 1px (a later rule won), now 3px.
+  Due today and Chase today were filled with the current-work yellow, now outlined. Time passed
+  was yellow in dark, now ink.
+- **CSS:** dead and contradicting rules removed. Stale comments and the README updated.
+- **Workflows:** a stale Launch opened the automation and counted a launch. It's now refused like
+  the other stage actions.
+- **Tests:** a test clicked through the fixed tab bar in CI, and the flaky reload helper is
+  described above.
+
+Looked at and left as it is:
+
+- The full header (with its tick and Focus) stays on a task's page. Tests rely on it there,
+  and it's the quickest way to tick the step.
+- App-wide touch targets of 40px (⋯, chips, section links) predate this release. They're
+  unchanged rather than enlarged across every screen at once.
 
 ## Known limitations
 

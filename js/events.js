@@ -452,8 +452,16 @@ document.addEventListener('click', e => {
     (d.up || d.down || d.top) &&
     moveAmong(d.up || d.down || d.top, d.up ? 'up' : d.down ? 'down' : 'top')
   ) {
+    const id = d.up || d.down || d.top;
     save();
     renderAll();
+    // (the button tapped may now be disabled, at the top or the bottom: the keyboard stays on the
+    // moved row, on a move that can still be made)
+    if (!document.activeElement || document.activeElement === document.body) {
+      const row = document.querySelector(`#v-today [data-qid="${CSS.escape(id)}"]`),
+        f = row && (row.querySelector('.mv:not([disabled])') || row.querySelector('.open'));
+      if (f) f.focus({ preventScroll: true });
+    }
   }
   if (b.id === 'reorder') {
     reorder = !reorder;
