@@ -65,3 +65,11 @@ suggested to move; without an estimate it's listed as unestimated).
 - "Later today" turns to "Time passed" at the next redraw, not on the minute.
 - A copy of the app from before this release that changes an Upcoming task's day moves `start`
   but not `scheduled.date`.
+
+## Look
+
+Vivid and modern, replacing Release D's neutral palette (same tokens, new values in `styles.css`):
+violet accent `#6d28d9`; a violet→blue gradient on the header, primary buttons, the current tab
+and Top 3 numbers; lilac-tinted page `#f4f3fb`; saturated status colours; pill tags; 16px cards
+with soft violet shadows; a coloured sign on each Today section (Top 3, Scheduled, Today's tasks,
+Waiting). Dark mode uses the same roles on `#0f0e1a`. All text pairs checked to WCAG AA.

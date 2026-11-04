@@ -1,37 +1,38 @@
 :root {
   /* Release D design tokens ("calm productivity"). Surfaces and text */
-  --bg: #f5f6f8; /* the page */
+  --bg: #f4f3fb; /* the page */
   --panel: #ffffff; /* cards, sheets, the tab bar */
-  --panel-2: #eef1f4; /* quiet fills: tracks, code, pressed rows */
-  --ink: #1f2a3d; /* text: 13:1 on the page */
-  --muted: #586274; /* secondary text: 5.7:1 on the page */
+  --panel-2: #efedf8; /* quiet fills: tracks, code, pressed rows */
+  --ink: #1e1b3a; /* text: 13:1 on the page */
+  --muted: #5b5a73; /* secondary text: 5.7:1 on the page */
   /* lines */
-  --line: #e3e7ec; /* dividers between rows */
-  --edge: #d3d9e1; /* card and button outlines */
-  --edge-strong: #7f8a99; /* form fields: 3:1 against their surface */
+  --line: #e7e4f3; /* dividers between rows */
+  --edge: #dcd8ee; /* card and button outlines */
+  --edge-strong: #857fa3; /* form fields: 3:1 against their surface */
   /* actions: one accent, used for the primary action and the current selection */
-  --accent: #2c6e79;
-  --accent-hover: #245b64;
-  --accent-soft: #e2eff1;
-  --accent-ink: #235962; /* accent as text (links) */
+  --accent: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent-soft: #ede9fe;
+  --accent-ink: #5b21b6; /* accent as text (links) */
   --on-accent: #ffffff;
+  --grad: linear-gradient(135deg, #6d28d9 0%, #4f46e5 55%, #2563eb 100%);
   /* status: a text colour and a quiet fill each; always with a word or glyph, never colour alone */
-  --ok: #276d43;
-  --ok-soft: #e3f2e8;
-  --warn: #8a5a00;
-  --warn-soft: #fbf0d6;
-  --err: #b2443a;
-  --err-soft: #fbe8e5;
-  --wait: #a54a17;
-  --wait-soft: #fcebdf;
-  --info: #2f63a3;
-  --info-soft: #e5eef9;
+  --ok: #166534;
+  --ok-soft: #dcfce7;
+  --warn: #92400e;
+  --warn-soft: #fef3c7;
+  --err: #b91c1c;
+  --err-soft: #fee2e2;
+  --wait: #b23a0a;
+  --wait-soft: #ffedd5;
+  --info: #1d4ed8;
+  --info-soft: #dbeafe;
   /* tag swatches (a tag's colour is stored as one of these names): mid tones under dark text */
-  --pink: #f0a3bd;
-  --blue: #93c1ea;
-  --orange: #f3c07a;
-  --green: #9dd3ab;
-  --yellow: #f1d877;
+  --pink: #f472b6;
+  --blue: #60a5fa;
+  --orange: #fb923c;
+  --green: #4ade80;
+  --yellow: #facc15;
   /* older names, kept for the rules still using them */
   --pink-ink: var(--err);
   --green-ink: var(--ok);
@@ -40,14 +41,14 @@
   --paper: var(--panel);
   --head-ink: var(--ink);
   --head-track: var(--panel-2);
-  --focus: #2c6e79;
+  --focus: #6d28d9;
   color-scheme: light; /* the browser's own parts (time pickers, scrollbars) to match */
   /* shape, depth */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-xs: 5px;
-  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-2: 0 10px 32px rgba(16, 24, 40, 0.18);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
+  --shadow-1: 0 1px 3px rgba(76, 29, 149, 0.06), 0 6px 18px rgba(76, 29, 149, 0.06);
+  --shadow-2: 0 14px 40px rgba(46, 16, 101, 0.25);
   /* type: the system's own UI font (no download, works offline, reads well at small sizes) */
   --display: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --body: var(--display);
@@ -63,19 +64,19 @@
 /* Dark: the same roles, lighter text on deep neutral surfaces. Set by the system, or chosen. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #12161c;
-    --panel: #1b2129;
-    --panel-2: #252c36;
-    --ink: #e7ebf0;
-    --muted: #a3adba;
-    --line: #2b333e;
-    --edge: #364050;
-    --edge-strong: #7a8596;
-    --accent: #5fb3bf;
-    --accent-hover: #7cc6d1;
-    --accent-soft: #1d3a3f;
-    --accent-ink: #7cc6d1;
-    --on-accent: #0b1a1d;
+    --bg: #0f0e1a;
+    --panel: #1a1830;
+    --panel-2: #24213f;
+    --ink: #ede9fe;
+    --muted: #a6a3c2;
+    --line: #2a2747;
+    --edge: #36325a;
+    --edge-strong: #8a85ad;
+    --accent: #a78bfa;
+    --accent-hover: #c4b5fd;
+    --accent-soft: #2a2450;
+    --accent-ink: #c4b5fd;
+    --on-accent: #140f2b;
     --ok: #6cc48f;
     --ok-soft: #183325;
     --warn: #e2b45a;
@@ -86,26 +87,28 @@
     --wait-soft: #3b2415;
     --info: #8ab8ec;
     --info-soft: #1b2b40;
-    --focus: #7cc6d1;
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --grad: linear-gradient(135deg, #4c1d95 0%, #3730a3 55%, #1e40af 100%);
+    --grad: linear-gradient(135deg, #4c1d95 0%, #3730a3 55%, #1e40af 100%);
+    --focus: #c4b5fd;
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.25);
     --shadow-2: 0 10px 32px rgba(0, 0, 0, 0.55);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #12161c;
-  --panel: #1b2129;
-  --panel-2: #252c36;
-  --ink: #e7ebf0;
-  --muted: #a3adba;
-  --line: #2b333e;
-  --edge: #364050;
-  --edge-strong: #7a8596;
-  --accent: #5fb3bf;
-  --accent-hover: #7cc6d1;
-  --accent-soft: #1d3a3f;
-  --accent-ink: #7cc6d1;
-  --on-accent: #0b1a1d;
+  --bg: #0f0e1a;
+  --panel: #1a1830;
+  --panel-2: #24213f;
+  --ink: #ede9fe;
+  --muted: #a6a3c2;
+  --line: #2a2747;
+  --edge: #36325a;
+  --edge-strong: #8a85ad;
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-soft: #2a2450;
+  --accent-ink: #c4b5fd;
+  --on-accent: #140f2b;
   --ok: #6cc48f;
   --ok-soft: #183325;
   --warn: #e2b45a;
@@ -116,8 +119,9 @@
   --wait-soft: #3b2415;
   --info: #8ab8ec;
   --info-soft: #1b2b40;
-  --focus: #7cc6d1;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --grad: linear-gradient(135deg, #4c1d95 0%, #3730a3 55%, #1e40af 100%);
+  --focus: #c4b5fd;
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.25);
   --shadow-2: 0 10px 32px rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
@@ -174,15 +178,15 @@ section[tabindex='-1']:focus-visible {
 
 /* header */
 header {
-  background: var(--panel);
-  color: var(--ink);
-  border: 1px solid var(--edge);
-  box-shadow: var(--shadow-1);
+  background: var(--grad);
+  color: #ffffff;
+  border: 0;
+  box-shadow: 0 10px 28px rgba(76, 29, 149, 0.28);
   padding: 10px 12px 8px;
   margin-bottom: 16px;
   border-radius: var(--radius);
 }
-.now {
+header .now {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -190,7 +194,8 @@ header {
   min-height: 34px;
 }
 .now .check {
-  border-color: var(--edge);
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.12);
 }
 .now .go {
   flex: 1;
@@ -199,7 +204,7 @@ header {
   background: none;
   border: 0;
   padding: 0;
-  color: var(--head-ink);
+  color: #ffffff;
   text-align: left;
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -211,7 +216,7 @@ header {
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: var(--fs-xs);
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.94);
 }
 .now .go b {
   display: -webkit-box;
@@ -233,13 +238,13 @@ header {
 .hprog {
   height: 3px;
   border: 0;
-  background: var(--head-track);
+  background: rgba(255, 255, 255, 0.22);
   border-radius: 2px;
   overflow: hidden;
 }
 .hprog div {
   height: 100%;
-  background: var(--accent);
+  background: #ffffff;
   transition: width 0.3s ease;
 }
 .hfoot {
@@ -259,6 +264,20 @@ header {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+/* controls on the gradient: white, the primary one solid */
+header .btn {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+header .btn.green {
+  background: #ffffff;
+  color: #5b21b6;
+  border-color: #ffffff;
+}
+header .syncbtn[data-state='error'] {
+  color: #ffffff;
 }
 /* Compact (away from Today): one line, the current work as a way back to it, then the running
    timer's Pause if there is one, search and sync. The label stays for screen readers. */
@@ -301,7 +320,7 @@ header.compact .now .go {
 /* (only before the work itself: not before 'All done for today') */
 header.compact .now .go[data-open] b::before {
   content: 'Now: ';
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
 }
 header.compact .now .go b {
@@ -370,7 +389,7 @@ header.compact .now .go:has(.clk) small {
   background: none;
   border: 0;
   padding: 2px 0;
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.94);
   cursor: pointer;
 }
 .hbtns {
@@ -390,7 +409,7 @@ header.compact .now .go:has(.clk) small {
   gap: 6px;
   background: none;
   border: 0;
-  color: var(--muted);
+  color: #ffffff;
   padding: 2px 0;
   font-size: var(--fs-sm);
   cursor: pointer;
@@ -482,8 +501,7 @@ h2 {
     border-color: var(--edge-strong);
   }
   .btn.green:hover {
-    background: var(--accent-hover);
-    border-color: var(--accent-hover);
+    filter: brightness(1.08);
   }
 }
 .btn[disabled] {
@@ -497,9 +515,9 @@ h2 {
   border-color: transparent;
 }
 .btn.green {
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: var(--accent);
+  background: var(--grad);
+  color: #ffffff;
+  border-color: transparent;
 }
 .btn.blue {
   background: var(--accent-soft);
@@ -805,16 +823,16 @@ nav button {
   white-space: nowrap;
 }
 nav button[aria-current='page'] {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--grad);
+  color: #ffffff;
 }
 .badge {
   display: inline-block;
   min-width: 20px;
   margin-left: 4px;
   padding: 0 6px;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: #e11d48;
+  color: #ffffff;
   border: 0;
   font-size: var(--fs-xs);
   border-radius: 999px;
@@ -1058,8 +1076,8 @@ nav button[aria-current='page'] {
 .tag {
   display: inline-block;
   border: 1px solid transparent;
-  border-radius: var(--radius-xs);
-  padding: 0 6px;
+  border-radius: 999px;
+  padding: 0 8px;
   font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1.6;
@@ -2474,8 +2492,8 @@ details.more > details {
   display: grid;
   place-items: center;
   border: 0;
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--grad);
+  color: #ffffff;
   font-size: var(--fs-xs);
   font-weight: 700;
   border-radius: 50%;
@@ -3121,6 +3139,57 @@ details.more > details {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0 12px;
+}
+/* Today's sections, each with its colour and sign */
+.top3 .sechead h2::before,
+#schedhead::before,
+#v-today > .sechead > h2::before,
+#waithead::before {
+  content: '';
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  margin-right: 8px;
+  vertical-align: -6px;
+  border-radius: 8px;
+}
+.top3 .sechead h2::before {
+  background:
+    url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203.5l2.6%205.3%205.9.9-4.2%204.1%201%205.8L12%2016.9l-5.3%202.7%201-5.8-4.2-4.1%205.9-.9z%22%2F%3E%3C%2Fsvg%3E')
+      center / 16px no-repeat,
+    linear-gradient(135deg, #f59e0b, #f97316);
+}
+#schedhead::before {
+  background:
+    url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%228.5%22%2F%3E%3Cpath%20d%3D%22M12%207.5V12l3%202%22%2F%3E%3C%2Fsvg%3E')
+      center / 16px no-repeat,
+    linear-gradient(135deg, #3b82f6, #06b6d4);
+}
+#v-today > .sechead > h2 {
+  white-space: nowrap;
+}
+#v-today > .sechead {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+#v-today > .sechead > h2::before {
+  background:
+    url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M5%2012.5l4.5%204.5L19%207.5%22%2F%3E%3C%2Fsvg%3E')
+      center / 16px no-repeat,
+    var(--grad);
+}
+#waithead::before {
+  background:
+    url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%203.5h10M7%2020.5h10M8%203.5c0%205%208%205%208%208.5s-8%203.5-8%208.5M16%203.5c0%205-8%205-8%208.5s8%203.5%208%208.5%22%2F%3E%3C%2Fsvg%3E')
+      center / 15px no-repeat,
+    linear-gradient(135deg, #f97316, #ef4444);
+}
+/* a scheduled time in a coloured chip; a Waiting row with its orange rule */
+.schedrow .stime {
+  color: var(--info);
+}
+.wrow {
+  box-shadow: inset 3px 0 0 #f97316;
 }
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {
