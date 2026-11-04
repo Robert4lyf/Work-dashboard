@@ -215,6 +215,9 @@ function pruneRuns2() {
 }
 const wfById = id => S.workflows.find(w => w.id === id) || null;
 const wrunById = id => S.wruns.find(r => r.id === id) || null;
+// The process run a guide run was opened from (a guide followed as a step: its q is 'wr-' + the
+// run's id), by id. Such a guide run is that process's work, not work of its own.
+const guideParent = pr => (/^wr-/.test(pr.q || '') ? wrunById(pr.q.slice(3)) : null);
 const runStage = r => r.def.find(s => s.id === r.cur) || null;
 const runLog = (r, k, m = '') => {
   r.log.push({ t: Date.now(), k, m: txt(m, 200) });
@@ -222,6 +225,26 @@ const runLog = (r, k, m = '') => {
   r.at = Date.now();
 };
 /* the pure rules of movement. Each returns '' when done, or why not. */
+// A step's guide or automation was removed: it can only be finished by hand or skipped.
+const stageGone = s =>
+  (s.type === 'procedure' && !procOf(s.kb)) || (s.type === 'flow' && !S.flows.some(f => f.id === s.flow));
+// Skipping is a step's own setting (off unless chosen), or the way past a step whose resource is gone.
+const canSkip = s => !!s && (!!s.skip || stageGone(s));
+// What a run's state lets you do, as wfact names: the one primary action ('step': the current
+// step's own actions lead) and the others. The page offers only these, so nothing it shows is
+// refused by the rules above. (Tested against them state by state.)
+function runActions(r) {
+  const s = runStage(r);
+  if (r.status === 'ready') return { primary: 'begin', more: ['cancel'] };
+  if (r.status === 'paused') return { primary: 'resume', more: ['cancel', 'copy'] };
+  if (r.status === 'failed')
+    return {
+      primary: s ? 'retry' : '',
+      more: [...(canSkip(s) ? ['skip'] : []), 'inbox', ...(r.ack ? [] : ['ack']), 'cancel', 'copy'],
+    };
+  if (WRUN_OVER.includes(r.status)) return { primary: '', more: ['copy'] };
+  return { primary: 'step', more: ['pause', 'cancel', 'copy'] };
+}
 // Where a run stands, from its current stage and what that stage holds.
 function settleRun(r) {
   if (WRUN_FINAL.includes(r.status) || r.status === 'paused' || r.status === 'ready') return;
@@ -298,9 +321,7 @@ function completeStage(r, sid, { o = 'done', note = '', pick } = {}) {
   if (r.status === 'ready') return 'the run has not started';
   const s = runStage(r);
   if (!s || s.id !== sid) return 'not the current step';
-  const gone =
-    (s.type === 'procedure' && !procOf(s.kb)) || (s.type === 'flow' && !S.flows.some(f => f.id === s.flow));
-  if (o === 'skipped' && !s.skip && !gone) return "this step can't be skipped";
+  if (o === 'skipped' && !canSkip(s)) return "this step can't be skipped";
   if (s.type === 'decide' && o === 'done' && !(s.choices || [])[pick]) return 'choose first';
   const out = { o, at: Date.now() };
   if (note) out.note = txt(note, 300);
@@ -332,6 +353,7 @@ function failStage(r, sid, err) {
   const s = runStage(r);
   if (!s || s.id !== sid) return 'not the current step';
   r.status = 'failed';
+  delete r.ack; // (a new failure is news, whatever was acknowledged before)
   r.err = txt(err, 300) || 'Failed';
   r.st[sid] = { o: 'failed', at: Date.now(), note: r.err, ...(r.live.exec ? { exec: r.live.exec } : {}) };
   runLog(r, 'failed', r.err);
@@ -346,6 +368,7 @@ function retryStage(r, sid) {
   if (!s || s.id !== sid) return 'not the current step';
   const tries = (r.live.tries || 0) + 1;
   delete r.st[sid];
+  delete r.ack;
   r.live = { tries };
   r.err = '';
   r.status = 'running';
@@ -554,6 +577,20 @@ function wfClick(d, b) {
   const s = runStage(r),
     was = r.status;
   let why = '';
+  // Only what the run's state allows (a tap on a page drawn before a sync changed the run).
+  const can = runActions(r),
+    act = d.wfact;
+  if (
+    act &&
+    (RUN_ACTS.includes(act)
+      ? act !== can.primary && !can.more.includes(act)
+      : act === 'skip'
+        ? !can.more.includes('skip') && !(can.primary === 'step' && canSkip(s))
+        : can.primary !== 'step')
+  ) {
+    toast(`Not now: the process is ${runWord(r).toLowerCase()}`, false, 3000);
+    return renderKnowledge();
+  }
   if (d.wfact === 'begin') why = beginRun(r);
   else if (d.wfact === 'done') {
     if (s && s.type === 'verify' && !(r.live.checks || []).filter(Boolean).length && s.checks.length)
@@ -596,7 +633,8 @@ function wfClick(d, b) {
         () => {
           const rr = wrunById(r.id);
           if (!rr) return toast('That run is gone', false, 3000);
-          retryStage(rr, s.id);
+          const why2 = retryStage(rr, s.id);
+          if (why2) toast("Couldn't: " + why2, false, 3000);
           save();
           renderKnowledge();
         },
@@ -614,8 +652,11 @@ function wfClick(d, b) {
         danger: true,
       },
       () => {
-        cancelRun(r, 'cancelled by you');
-        emitRun(r);
+        const rr = wrunById(r.id); // (the run as it is now: a sync pull may have replaced it)
+        if (!rr) return toast('That run is gone', false, 3000);
+        const why2 = cancelRun(rr, 'cancelled by you');
+        if (why2) toast("Couldn't cancel: " + why2, false, 3000);
+        else emitRun(rr);
         save();
         renderKnowledge();
       },
@@ -688,6 +729,8 @@ function wfClick(d, b) {
   renderKnowledge();
   if (r.status === 'succeeded') toast('Process completed');
 }
+// (actions on the run as a whole; the rest belong to its current step)
+const RUN_ACTS = ['begin', 'resume', 'retry', 'pause', 'cancel', 'ack', 'inbox', 'copy'];
 let kbRunBackWf = null; // a procedure opened from a workflow run: its ‹ goes back to the run
 function runSummary(r) {
   return [
@@ -717,15 +760,19 @@ function wfRunView(r) {
   let h = `<button class="linkbtn" data-wfback="1">‹ ${wfFrom === 'today' ? 'Today' : wfFrom === 'ops' ? 'Command Centre' : wfFrom ? 'Back' : wfView && wfById(wfView) ? esc(wfById(wfView).name) : 'Processes'}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(r.name)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div>
     <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · step ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}</p>`;
-  if (r.err && r.status === 'failed')
-    h += `<div class="ask box werr"><p><b>Failed.</b> ${esc(r.err)}</p></div>`;
+  const can = runActions(r),
+    b = (act, label, cls = '') =>
+      `<button class="btn ${cls}" data-wrun="${r.id}" data-wfact="${act}">${label}</button>`;
   if (r.status === 'ready')
-    h += `<div class="pstep box"><h3>Ready to start</h3>${r.def.length ? `<p class="ptext">First: ${esc(r.def[0].title)}</p>` : ''}<div class="acts"><button class="btn green" data-wrun="${r.id}" data-wfact="begin">Start</button><button class="btn" data-wrun="${r.id}" data-wfact="cancel">Cancel</button></div></div>`;
+    h += `<div class="pstep box"><h3>Ready to start</h3>${r.def.length ? `<p class="ptext">First: ${esc(r.def[0].title)}</p>` : ''}<div class="acts">${b('begin', 'Start', 'green')}${b('cancel', 'Cancel')}</div></div>`;
   else if (r.status === 'paused')
-    h += `<div class="pstep box"><h3>Paused</h3>${s ? `<p class="ptext">At: ${esc(s.title)}</p>` : ''}<div class="acts"><button class="btn green" data-wrun="${r.id}" data-wfact="resume">Resume</button><button class="btn" data-wrun="${r.id}" data-wfact="cancel">Cancel</button></div></div>`;
+    h += `<div class="pstep box"><h3>Paused</h3>${s ? `<p class="ptext">At: ${esc(s.title)}</p>` : ''}<div class="acts">${b('resume', 'Resume', 'green')}${b('cancel', 'Cancel the run')}</div></div>`;
   else if (final)
-    h += `<div class="pstep box done"><h3>${WRUN_WORD[r.status]}${r.fin ? ' · ' + esc(whenLabel(r.fin)) : ''}</h3><div class="acts">${r.status === 'failed' && !r.ack ? `<button class="btn" data-wrun="${r.id}" data-wfact="ack">Acknowledge</button>` : ''}${r.status === 'failed' ? `<button class="btn" data-wrun="${r.id}" data-wfact="inbox">Add to the Inbox</button>` : ''}<button class="btn" data-wrun="${r.id}" data-wfact="copy">Copy summary</button>${q ? `<button class="btn blue" data-open="${q.n.id}">Back to the task</button>` : ''}</div></div>`;
+    h += `<div class="pstep box done"><h3>${WRUN_WORD[r.status]}${r.fin ? ' · ' + esc(whenLabel(r.fin)) : ''}</h3>${r.err ? `<p class="hint">${esc(r.err)}</p>` : ''}<div class="acts">${b('copy', 'Copy summary')}${q ? `<button class="btn blue" data-open="${q.n.id}">Back to the task</button>` : ''}</div></div>`;
   else if (s) h += stageCard(r, s, i);
+  else if (r.status === 'failed')
+    // (failed with no step to try again: only its record, and the way out)
+    h += `<div class="pstep box failed"><div class="werr"><p><b>Failed.</b> ${esc(r.err || 'Failed')}</p></div><div class="acts">${b('cancel', 'Cancel the run')}${b('copy', 'Copy summary')}</div></div>`;
   // Every stage, with its outcome.
   h += `<ol class="plist runlist wlist">${r.def
     .map((st, j) => {
@@ -733,8 +780,17 @@ function wfRunView(r) {
       return `<li class="${o ? o.o : st === s ? 'cur' : ''}"><span class="pjump">${st.type !== 'manual' ? `<small>${WF_TYPE_NAME[st.type]}</small>` : ''}${o ? (o.o === 'done' ? '✓ ' : o.o === 'skipped' ? '↷ ' : '✗ ') : st === s ? '▶ ' : ''}${esc(st.title)}${o && o.note ? ` <small>· ${esc(o.note)}</small>` : ''}</span></li>`;
     })
     .join('')}</ol>`;
-  if (!final && r.status !== 'ready')
-    h += `<div class="links"><button class="linkbtn" data-wrun="${r.id}" data-wfact="${r.status === 'paused' ? 'resume' : 'pause'}">${r.status === 'paused' ? 'Resume' : 'Pause'}</button><button class="linkbtn" data-wrun="${r.id}" data-wfact="cancel">Cancel the run</button><button class="linkbtn" data-wrun="${r.id}" data-wfact="copy">Copy summary</button></div>`;
+  // The run's own secondary actions (a failed run keeps them under its Other options instead).
+  const foot = {
+    pause: 'Pause',
+    cancel: 'Cancel the run',
+    copy: 'Copy summary',
+  };
+  if (can.primary === 'step' || r.status === 'paused')
+    h += `<div class="links runfoot">${can.more
+      .filter(a => foot[a] && !(r.status === 'paused' && a === 'cancel'))
+      .map(a => `<button class="linkbtn" data-wrun="${r.id}" data-wfact="${a}">${foot[a]}</button>`)
+      .join('')}</div>`;
   if (r.log.length)
     h += `<details id="wlogd"${panels.wlogd ? ' open' : ''}><summary>What happened <small>${r.log.length}</small></summary><ul class="flist">${r.log
       .slice()
@@ -753,14 +809,36 @@ function stageCard(r, s, i) {
       `<button class="btn ${cls}" data-wrun="${id}" data-wfact="${act}" ${extra}>${label}</button>`;
   let body = s.text ? `<p class="ptext">${kbLinkify(s.text)}</p>` : '',
     acts = '';
-  const failed = r.status === 'failed';
+  const failed = r.status === 'failed',
+    skip = canSkip(s) ? b('skip', 'Skip') : '';
   let next = '';
   if (failed) {
-    next = 'Try the step again (a fresh attempt), skip it with a reason, or cancel the run.';
-    acts = `${b('retry', 'Try again', 'green')}${s.skip ? b('skip', 'Skip') : ''}${b('cancel', 'Cancel the run')}${r.ack ? '' : b('ack', 'Acknowledge')}${b('inbox', 'Add to the Inbox')}`;
+    // What went wrong first, then the one way forward; the rest under Other options.
+    const o = r.st[s.id],
+      x = o && o.exec && S.execs.find(e => e.id === o.exec);
+    body =
+      `<div class="werr"><p><b>This step failed.</b> ${esc(r.err || 'Failed')}</p>${x ? `<p class="hint xline">Last attempt: ${execLine(x)}</p>` : ''}</div>` +
+      (s.type === 'flow' && o && o.exec
+        ? '<p class="hint wwarn"><b>Check before trying again:</b> the last attempt may already have done some of its work. Trying again launches the automation afresh; the earlier attempt stays in the history.</p>'
+        : '') +
+      body;
+    next = r.ack
+      ? 'Acknowledged: it stays failed until it is tried again, skipped or cancelled.'
+      : 'Fix the cause, then try the step again.';
+    const more = runActions(r).more,
+      label = {
+        skip: 'Skip this step',
+        inbox: 'Add to the Inbox for later',
+        ack: 'Acknowledge (stays failed)',
+        cancel: 'Cancel the run',
+        copy: 'Copy details',
+      };
+    acts = b('retry', 'Try again', 'green');
+    const opts = more.map(a => b(a, label[a])).join('');
+    return `<div class="pstep box failed"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}<p class="hint pnext">${next}</p><div class="acts wacts">${acts}</div><details class="moreopts" id="wfmore"${panels.wfmore ? ' open' : ''}><summary>Other options</summary><div class="acts wacts">${opts}</div><p class="hint">Acknowledging only stops the failure being flagged on Today and in the Command Centre; it doesn't fix it.</p></details></div>`;
   } else if (s.type === 'manual') {
     next = 'Marking it done moves the process to the next step.';
-    acts = `${b('done', 'Mark done', 'green')}${s.skip ? b('skip', 'Skip') : ''}${b('fail', 'Report a problem')}`;
+    acts = `${b('done', 'Mark done', 'green')}${skip}${b('fail', 'Report a problem')}`;
   } else if (s.type === 'verify') {
     const ticks = r.live.checks || [];
     body += `<div class="wchecks">${(s.checks || [])
@@ -773,16 +851,19 @@ function stageCard(r, s, i) {
     next = all
       ? 'Every check is ticked: Verified moves the process on.'
       : 'Tick every check, then Verified moves the process on.';
-    acts = `${b('done', 'Verified', 'green', all ? '' : 'disabled')}${s.skip ? b('skip', 'Skip') : ''}${b('fail', 'Check failed')}`;
+    acts = `${b('done', 'Verified', 'green', all ? '' : 'disabled')}${skip}${b('fail', 'Check failed')}`;
   } else if (s.type === 'decide') {
-    next = 'Your choice decides which step comes next.';
+    // (only say a choice changes the way on when one of them does)
+    next = (s.choices || []).some(c => c.next && r.def.some(x => x.id === c.next))
+      ? 'Your choice decides which step comes next.'
+      : 'Your choice is recorded in the history, then the process moves on to the next step.';
     acts =
       (s.choices || [])
         .map(
           (c, j) =>
             `<button class="btn blue" data-wrun="${id}" data-wfact="pick" data-pick="${j}">${esc(c.label)}</button>`,
         )
-        .join('') + (s.skip ? b('skip', 'Skip') : '');
+        .join('') + skip;
   } else if (s.type === 'procedure') {
     const a = procOf(s.kb),
       pr = r.live.run && S.runs.find(x => x.id === r.live.run);
@@ -790,14 +871,14 @@ function stageCard(r, s, i) {
       ? `<p class="hint">Guide: ${esc(a.title)}${pr ? ' · ' + esc(runLine(pr)) : ''}</p>`
       : '<p class="hint"><span class="tag gone">Guide removed</span> Finish this step by hand, or skip it.</p>';
     next = a ? 'Finishing the guide completes this step.' : '';
-    acts = `${a ? b('procedure', pr ? 'Continue the guide' : 'Follow the guide', 'blue') : ''}${pr && pr.fin ? b('done', 'Mark done', 'green') : ''}${s.skip || !a ? b('skip', 'Skip') : ''}`;
+    acts = `${a ? b('procedure', pr ? 'Continue the guide' : 'Follow the guide', 'blue') : ''}${pr && pr.fin ? b('done', 'Mark done', 'green') : ''}${skip}`;
   } else if (s.type === 'flow') {
     const f = S.flows.find(x => x.id === s.flow),
       x = r.live.exec && S.execs.find(e => e.id === r.live.exec);
     if (!f) {
       body +=
         '<p class="hint"><span class="tag gone">Automation removed</span> Confirm the result by hand, or skip.</p>';
-      acts = `${b('confirmflow', 'It succeeded', 'green', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}${s.skip ? b('skip', 'Skip') : ''}`;
+      acts = `${b('confirmflow', 'It succeeded', 'green', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}${skip}`;
     } else if (x && !EXEC_TERMINAL.includes(x.status) && !execStale(x)) {
       body += `<p class="hint xline">${execLine(x)}</p><p class="hint">This step completes on its own when the automation reports its result.</p>`;
       acts = `${b('confirmflow', 'It succeeded (checked by hand)', '', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}`;
@@ -810,7 +891,7 @@ function stageCard(r, s, i) {
         x || !S.track
           ? `${b('confirmflow', 'It succeeded (checked by hand)', '', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}`
           : ''
-      }${s.skip ? b('skip', 'Skip') : ''}`;
+      }${skip}`;
     }
   } else if (s.type === 'wait') {
     const wn = stageWaitNode(r);
@@ -822,9 +903,9 @@ function stageCard(r, s, i) {
       : r.live.wait
         ? ''
         : 'Start waiting makes a waiting item to chase; the reply completes this step.';
-    acts = `${wn ? b('received', 'Mark reply received', 'green') : r.live.wait ? b('received', 'Mark reply received', 'green') : b('waititem', 'Start waiting' + (s.who ? ' on ' + esc(s.who) : ''), 'blue')}${s.skip ? b('skip', 'Skip') : ''}`;
+    acts = `${wn ? b('received', 'Mark reply received', 'green') : r.live.wait ? b('received', 'Mark reply received', 'green') : b('waititem', 'Start waiting' + (s.who ? ' on ' + esc(s.who) : ''), 'blue')}${skip}`;
   }
-  return `<div class="pstep box${failed ? ' failed' : ''}"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}${next ? `<p class="hint pnext">${next}</p>` : ''}<div class="acts wacts">${acts}</div></div>`;
+  return `<div class="pstep box"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}${next ? `<p class="hint pnext">${next}</p>` : ''}<div class="acts wacts">${acts}</div></div>`;
 }
 /* definitions: the list under Knowledge, and the editor (a stage list) */
 const WF_TEMPLATES = [
@@ -832,7 +913,7 @@ const WF_TEMPLATES = [
     name: 'Simple checklist',
     desc: 'Plain steps, done one after another.',
     stages: [
-      ['manual', 'Read the instructions', ''],
+      ['manual', 'Read the instructions', '', [], '', [], true],
       ['manual', 'Do the work', ''],
       ['manual', 'Tidy up and file it', ''],
     ],
@@ -854,22 +935,28 @@ const WF_TEMPLATES = [
   },
   {
     name: 'Approval process',
-    desc: 'Prepare the request, wait for the answer, act on it.',
+    // (the decision is recorded, not branched on: both answers go on to the same follow-up step,
+    // and the template says so rather than suggesting two paths)
+    desc: 'Prepare the request, wait for the answer, record the decision and follow it up.',
     stages: [
       ['manual', 'Prepare the request', ''],
-      ['wait', 'Waiting for the answer', '', [], ''],
+      ['wait', 'Waiting for the answer', '', [], 'Approver'],
       [
         'decide',
-        'Outcome',
-        '',
+        'Record the decision',
+        'Your answer is kept in the run’s history.',
         [],
         '',
         [
           ['Approved', ''],
-          ['Rejected: rework', ''],
+          ['Rejected', ''],
         ],
       ],
-      ['manual', 'Act on it', ''],
+      [
+        'manual',
+        'Follow up on the decision',
+        'Approved: act on it. Rejected: rework the request, then run this process again.',
+      ],
     ],
   },
   {
@@ -934,12 +1021,13 @@ function templateToWorkflow(t) {
     kb: '',
     q: '',
   };
-  w.stages = t.stages.map(([type, title, text, checks, who, choices]) => {
+  // (steps are required unless the example says otherwise: only a step it's sensible to pass over)
+  w.stages = t.stages.map(([type, title, text, checks, who, choices, skip]) => {
     const s = { id: uid(), type, title, text: text || '' };
     if (type === 'verify') s.checks = checks || [];
     if (type === 'wait') s.who = who || '';
     if (type === 'decide') s.choices = (choices || []).map(([label, next]) => ({ label, next: next || '' }));
-    if (type === 'manual' || type === 'verify') s.skip = true;
+    if (skip) s.skip = true;
     return s;
   });
   return w;
@@ -1011,7 +1099,7 @@ function wfStagesList() {
   return `<ol class="plist editlist">${ss
     .map(
       (s, i) =>
-        `<li><button class="pjump" type="button" data-wfstage="${s.id}" aria-label="Step: ${esc(s.title)}. Change what happens at this step">${esc(s.title)}${s.type !== 'manual' ? ` <small>· ${WF_TYPE_NAME[s.type]}</small>` : ''}</button><span class="pmv"><button class="mv" type="button" data-wfup="${s.id}" aria-label="Move up"${i === 0 ? ' disabled' : ''}>&#9650;</button><button class="mv" type="button" data-wfdown="${s.id}" aria-label="Move down"${i === ss.length - 1 ? ' disabled' : ''}>&#9660;</button><button class="x" type="button" data-wfdel="${s.id}" aria-label="Remove step: ${esc(s.title)}">×</button></span></li>`,
+        `<li><button class="pjump" type="button" data-wfstage="${s.id}" aria-label="Step: ${esc(s.title)}${s.skip ? ' (can be skipped)' : ''}. Change what happens at this step">${esc(s.title)}${s.type !== 'manual' || s.skip ? ` <small>${[s.type !== 'manual' ? WF_TYPE_NAME[s.type] : '', s.skip ? 'can be skipped' : ''].filter(Boolean).join(' · ')}</small>` : ''}</button><span class="pmv"><button class="mv" type="button" data-wfup="${s.id}" aria-label="Move up"${i === 0 ? ' disabled' : ''}>&#9650;</button><button class="mv" type="button" data-wfdown="${s.id}" aria-label="Move down"${i === ss.length - 1 ? ' disabled' : ''}>&#9660;</button><button class="x" type="button" data-wfdel="${s.id}" aria-label="Remove step: ${esc(s.title)}">×</button></span></li>`,
     )
     .join('')}</ol>`;
 }
@@ -1022,7 +1110,8 @@ function addTypedStep() {
   const title = txt(i.value, 120);
   if (!title) return i.focus();
   if (wfEdit.stages.length >= WF_STAGES_MAX) return toast(`At most ${WF_STAGES_MAX} steps`, false, 3000);
-  wfEdit.stages.push({ id: uid(), type: 'manual', title, text: '', skip: true });
+  // (a new step is required: skipping is a choice made on the step, never the default)
+  wfEdit.stages.push({ id: uid(), type: 'manual', title, text: '' });
   i.value = '';
   wfRenderStages();
   if (wfEdit.stages.length === 1) {
@@ -1068,7 +1157,6 @@ function openStageForm(id) {
       type: 'manual',
       title: '',
       text: '',
-      skip: true,
     },
     opt = (list, cur, none) =>
       `<option value=""${cur ? '' : ' selected'}>${none}</option>` +
@@ -1092,7 +1180,7 @@ function openStageForm(id) {
     <div data-for="verify"><label class="f" for="wschecks">Checks, one per line</label><textarea class="fld" id="wschecks" rows="3" maxlength="2000">${esc((s.checks || []).join('\n'))}</textarea></div>
     <div data-for="wait"><label class="f" for="wswho">Waiting on whom</label><input class="fld" id="wswho" maxlength="60" value="${esc(s.who || '')}" list="wholist" autocomplete="off">${whoList()}</div>
     <div data-for="decide"><label class="f" for="wschoices">Choices, one per line <small class="hint">(add " -> step" to jump)</small></label><textarea class="fld" id="wschoices" rows="3" maxlength="1000">${esc((s.choices || []).map(c => c.label + (c.next ? ' -> ' + ((wfEdit.stages.find(x => x.id === c.next) || {}).title || '') : '')).join('\n'))}</textarea>${others.length ? `<p class="hint">Steps: ${others.map(([, t]) => esc(t)).join(' · ')}</p>` : ''}</div>
-    <label class="optbox"><input type="checkbox" id="wsskip"${s.skip ? ' checked' : ''}>May be skipped (with a reason)</label>
+    <details class="wsadv" id="wsadv"${s.skip ? ' open' : ''}><summary>Advanced</summary><label class="optbox"><input type="checkbox" id="wsskip"${s.skip ? ' checked' : ''}>Allow skipping this step (with a reason)</label><p class="hint">Off: the step must be done (or the process cancelled). A step whose guide or automation is removed can always be skipped.</p></details>
     <div class="acts"><button class="btn green" id="sheetok">${s.id ? 'Save step' : 'Add step'}</button><button class="btn" type="button" data-sheetclose="1">Cancel</button></div></form>`,
     { labelledBy: 'sheettitle' },
   );
@@ -1110,7 +1198,8 @@ function saveStageForm(id) {
   const type = $('#wstype').value,
     title = txt($('#wstitle').value, 120);
   if (!WF_TYPES.includes(type) || !title) return;
-  const s = { id: id || uid(), type, title, text: txt($('#wstext').value, 1000), skip: $('#wsskip').checked };
+  const s = { id: id || uid(), type, title, text: txt($('#wstext').value, 1000) };
+  if ($('#wsskip').checked) s.skip = true; // (stored only when chosen)
   if (type === 'procedure') s.kb = $('#wskb').value;
   if (type === 'flow') s.flow = $('#wsflow').value;
   if (type === 'verify')

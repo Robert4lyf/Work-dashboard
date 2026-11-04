@@ -1,7 +1,7 @@
 // Phases 2 and 3: regression tests for the defects the adversarial passes found.
 const { test, expect } = require('./fixtures');
 
-test('audit: back closes an article shown over a process overview first; a typed step counts on Save; a step added with options may be skipped', async ({
+test('audit: back closes an article shown over a process overview first; a typed step counts on Save; a step added with options is required unless skipping is chosen', async ({
   app,
   page,
 }) => {
@@ -35,7 +35,9 @@ test('audit: back closes an article shown over a process overview first; a typed
   expect((await app.state()).workflows[0].stages.map(s => s.title)).toEqual(['A', 'Typed last']);
   await page.click('[data-wfedit="w1"]');
   await page.click('#wfstageadd');
-  await expect(page.locator('#wsskip')).toBeChecked();
+  // (Release D: required by default; skipping is an advanced choice on the step)
+  await expect(page.locator('#wsadv')).not.toHaveAttribute('open', '');
+  await expect(page.locator('#wsskip')).not.toBeChecked();
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   await page.click('[data-wfcancel]');
   // Archived processes are listed, folded, and come back.

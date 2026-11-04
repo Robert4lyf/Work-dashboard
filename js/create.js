@@ -34,29 +34,52 @@ const KB_VIEWS = [
 function kbTabs() {
   return `<div class="kbtabs"><div class="chips viewsw" role="group" aria-label="Knowledge view">${KB_VIEWS.map(([k, l]) => `<button class="chip" data-kbview="${k}" aria-pressed="${kbView === k}">${l}</button>`).join('')}</div><button class="btn sm newbtn" data-newsheet="1" aria-haspopup="dialog" aria-label="New: a task, a process, an article or a desktop automation">+ New</button></div>`;
 }
-// Processes: what's under way first (one tap to continue), then the processes and guides you can
-// follow again, then the desktop automations. A guide is an article with steps: listed here
-// because it's followed, read under Reference because it's an article. Same record, no copy.
+// Processes: what needs you first (failed runs), then what's under way (one tap to continue),
+// then the processes and guides you can follow again, then the desktop automations. A guide is an
+// article with steps: listed here because it's followed, read under Reference because it's an
+// article. Same record, no copy. A guide being followed as a step of a process run (its run's q
+// is 'wr-' + that run's id) shows through that run, not as work of its own.
+function kbActivity() {
+  const open = S.wruns.filter(r => !WRUN_OVER.includes(r.status)),
+    failed = open.filter(r => r.status === 'failed').sort((a, b) => !!a.ack - !!b.ack || b.at - a.at),
+    going = open.filter(r => r.status !== 'failed').sort((a, b) => b.at - a.at),
+    pruns = S.runs.filter(r => !r.fin && procOf(r.art) && !guideParent(r)).sort((a, b) => b.at - a.at);
+  return { failed, going, pruns };
+}
+// One process run in the activity lists: its state in words, its step, and the one action.
+function activityRow(r) {
+  const s = runStage(r),
+    pr = s && s.type === 'procedure' && r.live.run && S.runs.find(x => x.id === r.live.run),
+    act =
+      r.status === 'failed'
+        ? 'Fix'
+        : r.status === 'ready'
+          ? 'Start'
+          : r.status === 'paused'
+            ? 'Resume'
+            : 'Continue',
+    word = r.status === 'failed' && r.ack ? 'Failed · acknowledged' : runWord(r);
+  return `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${word}</span>${s ? ' · ' + esc(s.title) : ''}${pr ? ' (guide: ' + esc(runLine(pr)) + ')' : ''}${r.status === 'failed' && r.err ? ' · ' + esc(r.err) : ''} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm ${r.status === 'failed' ? 'pink' : 'green'}" data-wfopen="${r.id}" aria-label="${act}: ${esc(r.name)}">${act}</button></div>`;
+}
 function kbProcesses() {
-  const runs = S.wruns.filter(r => !WRUN_OVER.includes(r.status)).sort((a, b) => b.at - a.at),
-    pruns = S.runs.filter(r => !r.fin && procOf(r.art)).sort((a, b) => b.at - a.at),
+  const { failed, going, pruns } = kbActivity(),
     ws = S.workflows.filter(w => !w.archived).sort((a, b) => byName(a.name, b.name)),
     guides = S.kb.filter(a => a.steps && a.steps.length).sort((a, b) => byName(a.title, b.title)),
-    arch = S.workflows.filter(w => w.archived).length;
+    arch = S.workflows.filter(w => w.archived).length,
+    busy = going.length + pruns.length;
   let h = '';
-  if (runs.length || pruns.length)
-    h += `<section class="kbsec" aria-labelledby="wfhead"><h2 class="kbhead" id="wfhead">In progress <small>${runs.length + pruns.length}</small></h2><div class="list box">${runs
-      .map(
-        r =>
-          `<div class="row"><button class="open" data-wfopen="${r.id}"><span>${esc(r.name)}</span><small><span class="wst w-${r.status}">${runWord(r)}</span>${runStage(r) ? ' · ' + esc(runStage(r).title) : ''} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm ${r.status === 'failed' ? 'pink' : 'green'}" data-wfopen="${r.id}" aria-label="${r.status === 'failed' ? 'Fix' : r.status === 'ready' ? 'Start' : 'Continue'}: ${esc(r.name)}">${r.status === 'failed' ? 'Fix' : r.status === 'ready' ? 'Start' : 'Continue'}</button></div>`,
-      )
+  if (failed.length)
+    h += `<section class="kbsec" aria-labelledby="wfattn"><h2 class="kbhead" id="wfattn">Needs attention <small>${failed.length}</small></h2><div class="list box attnlist">${failed.map(activityRow).join('')}</div></section>`;
+  if (busy)
+    h += `<section class="kbsec" aria-labelledby="wfhead"><h2 class="kbhead" id="wfhead">In progress <small>${busy}</small></h2><div class="list box">${going
+      .map(activityRow)
       .join('')}${pruns
       .map(r => {
         const a = procOf(r.art);
         return `<div class="row"><button class="open" data-runopen="${r.id}"><span>${esc(a.title)}</span><small>Guide · ${esc(runLine(r))} · ${esc(whenLabel(r.at))}</small></button><button class="btn sm green" data-runopen="${r.id}" aria-label="Continue the guide: ${esc(a.title)}">Continue</button></div>`;
       })
       .join('')}</div></section>`;
-  h += `<section class="kbsec" aria-labelledby="${runs.length || pruns.length ? 'wfprocs' : 'wfhead'}"><div class="sechead"><h2 class="kbhead" id="${runs.length || pruns.length ? 'wfprocs' : 'wfhead'}">Processes</h2><button class="linkbtn" data-newproc="1">+ New process</button></div>`;
+  h += `<section class="kbsec" aria-labelledby="${busy ? 'wfprocs' : 'wfhead'}"><div class="sechead"><h2 class="kbhead" id="${busy ? 'wfprocs' : 'wfhead'}">Processes</h2><button class="linkbtn" data-newproc="1">+ New process</button></div>`;
   h += ws.length
     ? `<div class="list box">${ws.map(processRow).join('')}</div>`
     : '<p class="hint kbempty">A process is a checklist you can run again, with an automation, a guide, a check, a wait or a decision on any step that needs one. <button class="linkbtn" data-newproc="1">Make your first one</button>, from an example or from scratch.</p>';

@@ -200,7 +200,10 @@ test('the run page says what each step does and what moving on means; buttons sa
   await page.click('[data-wfact="waititem"]');
   await expect(page.locator('[data-wfact="received"]')).toHaveText('Mark reply received');
   await page.click('[data-wfact="received"]');
-  await expect(page.locator('.pstep .pnext')).toHaveText('Your choice decides which step comes next.');
+  // (no choice jumps anywhere: the page says the choice is recorded, not that it branches)
+  await expect(page.locator('.pstep .pnext')).toHaveText(
+    'Your choice is recorded in the history, then the process moves on to the next step.',
+  );
   await page.click('[data-wfact="pick"]');
   await expect(page.locator('#v-knowledge')).toContainText('Completed');
   expect(app.errors).toEqual([]);

@@ -216,6 +216,7 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   expect(r.st.s3).toMatchObject({ o: 'failed', note: 'Wrong period' });
   // Skip isn't offered for a stage that can't be: Check can't, Prepare could.
   await expect(page.locator('[data-wfact="skip"]')).toHaveCount(0);
+  await page.click('#wfmore summary'); // (the failure's less common options)
   await page.click('[data-wfact="inbox"]');
   expect(await page.evaluate(() => S.inbox[0].text)).toBe('Process failed: Thursday report');
   expect((await run(page)).ack).toBe(1);

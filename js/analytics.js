@@ -79,7 +79,7 @@ function workflowStats(p) {
   runs.forEach(r => {
     const w = (perWf[r.wf] = perWf[r.wf] || {
       id: r.wf,
-      name: r.name,
+      name: (wfById(r.wf) || {}).name || r.name, // (as it is called now; by id, so a rename keeps its runs)
       n: 0,
       ok: 0,
       failed: 0,
@@ -98,15 +98,15 @@ function workflowStats(p) {
       if (s) w.stages[s.title] = (w.stages[s.title] || 0) + 1;
     });
   });
-  const table = Object.values(perWf)
+  // Every process (findings look at all of them), and the busiest six for the table.
+  const all = Object.values(perWf)
     .sort((a, b) => b.n - a.n)
-    .slice(0, 6)
     .map(w => ({
       ...w,
       med: median(w.durs),
       worst: Object.entries(w.stages).sort((a, b) => b[1] - a[1])[0] || null,
     }));
-  return { now, prev, withOutcome, rate: pctOf(now.ok, withOutcome), table };
+  return { now, prev, withOutcome, rate: pctOf(now.ok, withOutcome), all, table: all.slice(0, 6) };
 }
 function automationStats(p) {
   const xs = S.execs.filter(x => inT(x.at, p.fromT, p.toT)),
@@ -129,18 +129,20 @@ function automationStats(p) {
     prev = by(before),
     lag = median(xs.filter(x => x.ev.length).map(x => Math.max(0, x.ev[0].t - x.at))),
     perFlow = {};
+  // Grouped by the automation's id (two can share a name; a renamed one keeps its history), named
+  // as it is called now.
   xs.forEach(x => {
     const f = (perFlow[x.flow] = perFlow[x.flow] || {
+      id: x.flow,
       name: (S.flows.find(y => y.id === x.flow) || {}).name || 'removed automation',
       list: [],
     });
     f.list.push(x);
   });
-  const table = Object.values(perFlow)
-    .map(f => ({ name: f.name, ...by(f.list) }))
-    .sort((a, b) => b.n - a.n)
-    .slice(0, 6);
-  return { now, prev, lag, table };
+  const all = Object.values(perFlow)
+    .map(f => ({ id: f.id, name: f.name, ...by(f.list), list: f.list }))
+    .sort((a, b) => b.n - a.n);
+  return { now, prev, lag, all, table: all.slice(0, 6) };
 }
 function waitingStats(p) {
   // Resolved in the period: each with how long from its (latest earlier) start or reopen.
@@ -336,11 +338,11 @@ function findings(x) {
     p = x.p,
     t = today();
   // 1. A desktop automation failing repeatedly: at least 2 verified failures, and no more successes than failures.
-  x.auto.table.forEach(f => {
+  // (every automation, not just the table's six; the attempt linked is this automation's own
+  // latest failure in the period, by id)
+  x.auto.all.forEach(f => {
     if (f.failed >= 2 && f.failed >= f.ok) {
-      const last = S.execs
-        .filter(e => (S.flows.find(y => y.id === e.flow) || {}).name === f.name && execState(e) === 'failed')
-        .sort((a, b) => b.upd - a.upd)[0];
+      const last = f.list.filter(e => execState(e) === 'failed').sort((a, b) => b.upd - a.upd)[0];
       out.push({
         sev: 0,
         n: f.failed,
@@ -352,7 +354,7 @@ function findings(x) {
     }
   });
   // 2. One step of a process failing again and again: the same step failed in 2 or more runs.
-  x.wf.table.forEach(w => {
+  x.wf.all.forEach(w => {
     if (w.worst && w.worst[1] >= 2) {
       const wf = wfById(w.id);
       out.push({
