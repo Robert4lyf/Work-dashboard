@@ -2588,6 +2588,25 @@ details.more > details {
 .t3prow .qact .t3n {
   background: var(--panel);
 }
+/* chosen, set aside (scheduled or waiting): named, with a way to take it out */
+.t3kept {
+  min-height: 48px;
+  padding: 6px 4px 6px 12px;
+  border-top: 1px solid var(--line);
+}
+.t3kname {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.t3kname small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.top3 .t3back {
+  padding: 0 12px;
+}
 .t3prow .qact[aria-pressed='true'] .t3n {
   background: var(--accent);
   color: var(--on-accent);

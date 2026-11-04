@@ -193,11 +193,18 @@ function fix(n) {
 }
 // Today's top 3: up to three of Today's tasks, by id, for one calendar day. (Its own synced
 // record: see toRecords. Shown only on its day; the tasks themselves aren't changed.)
+// (held: chosen ones set aside, scheduled or only waiting, which don't hold one of the three
+// places; see top3.js. Never one of the three as well.)
 function cleanTop3(t) {
   if (!t || typeof t !== 'object') return null;
   const day = cleanDay(t.day),
-    ids = (Array.isArray(t.ids) ? t.ids : []).filter(okRef).filter((x, i, a) => a.indexOf(x) === i);
-  return day && ids.length ? { day, ids: ids.slice(0, TOP3_MAX) } : null;
+    uniq = a => (Array.isArray(a) ? a : []).filter(okRef).filter((x, i, l) => l.indexOf(x) === i),
+    ids = uniq(t.ids).slice(0, TOP3_MAX),
+    held = uniq(t.held)
+      .filter(x => !ids.includes(x))
+      .slice(0, 20);
+  if (!day || (!ids.length && !held.length)) return null;
+  return held.length ? { day, ids, held } : { day, ids };
 }
 function norm(s) {
   S = Object.assign(

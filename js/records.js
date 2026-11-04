@@ -36,7 +36,8 @@ function toRecords(s) {
   if (s.notes) m.set('meta:notes', { text: s.notes });
   // Today's top 3, its own record (not in prefs: choosing it mustn't fight a prefs change made
   // elsewhere). Only while there is one; clearing it deletes the record.
-  if (s.top3) m.set('meta:top3', { day: s.top3.day, ids: s.top3.ids });
+  if (s.top3)
+    m.set('meta:top3', { day: s.top3.day, ids: s.top3.ids, ...(s.top3.held ? { held: s.top3.held } : {}) });
   // Capacity per weekday (Release C): its own record, only once set.
   if (s.cap) m.set('meta:cap', { days: s.cap });
   // Quick-launch pins (Release C): their own record, only once there are any.

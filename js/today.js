@@ -153,6 +153,28 @@ function list(ns, doneApart, steps) {
     h += `<details id="donesec"${panels.donesec ? ' open' : ''}><summary>Done today <small>${done.length}</small></summary><div class="list box">${done.map((c, i) => row(c, i, ns.length, ns)).join('')}</div></details>`;
   return h;
 }
+// Today's list: what can be worked on, and what's finished today (not what's scheduled or only
+// waiting: those are in their own sections).
+const todayWork = qs => qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
+/* Reordering a list that shows only some of the tasks under it (Today's, without the scheduled
+   and waiting ones). There is one order, S.quests; the list is the tasks it shows, in that order.
+   Up and down move a task past its neighbour in the list (to just before it, or just after it),
+   and Top to just before the list's first: the hidden tasks stay where they are among the rest,
+   none is dropped or copied, and the same moves give the same order on every device. Elsewhere
+   (a task's steps, all shown) it's an ordinary swap. */
+function moveAmong(id, how) {
+  const r = find(id);
+  if (!r) return false;
+  const arr = r.arr,
+    shown = arr === S.quests ? todayWork(arr) : arr,
+    k = shown.indexOf(r.n);
+  if (k < 0) return false;
+  const to = how === 'top' ? shown[0] : how === 'up' ? shown[k - 1] : shown[k + 1];
+  if (!to || to === r.n) return false;
+  arr.splice(arr.indexOf(r.n), 1);
+  arr.splice(arr.indexOf(to) + (how === 'down' ? 1 : 0), 0, r.n);
+  return true;
+}
 function renderToday() {
   // (each lane of the board keeps where it was scrolled to across a redraw)
   const laneX = {};
@@ -201,8 +223,8 @@ function drawToday() {
   }
   const qs = S.quests,
     // (what can be worked on, and what's finished today; scheduled tasks and ones only waiting
-    // have sections of their own. Reordering shows them all: it's the one order underneath.)
-    work = reorder ? qs : qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
+    // have sections of their own, in Reorder too: see moveAmong)
+    work = todayWork(qs);
   todayTitle();
   // Today's work: the list (or board), or why there's none.
   const asBoard = todayView === 'board' && work.length;

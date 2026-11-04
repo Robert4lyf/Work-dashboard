@@ -216,3 +216,300 @@ test.describe('Checkpoint 2: contrast in every appearance', () => {
       for (const [c, b] of sheet) expect(await r2(c, b)).toBeGreaterThan(4.5);
     });
 });
+
+/* Checkpoint 3: Top 3 and Reorder. Five plain tasks a–e (and, for Reorder, a scheduled one and a
+   waiting one in between). Changes made "elsewhere" are made on the state and redrawn. */
+const five = s => {
+  const k = (id, text, x = {}) => ({ id, text, done: false, children: [], ...x });
+  s.quests = [k('a', 'Alpha'), k('b', 'Bravo'), k('c', 'Charlie'), k('d', 'Delta'), k('e', 'Echo')];
+  s.top3 = { day: today(), ids: ['a', 'b', 'c'] };
+};
+async function plain(app, page, fn = five) {
+  await page.clock.install({ time: new Date(2026, 10, 4, 9, 0) });
+  await app.open();
+  await app.setState(fn);
+  await page.reload();
+}
+const t3names = page => page.$$eval('#v-today .top3 .t3row .open > span', x => x.map(e => e.textContent));
+const elsewhere = (page, fn) =>
+  page.evaluate(src => {
+    new Function(src)();
+    save();
+    inBackground(() => renderAll());
+  }, `(${fn})()`);
+const t3 = page => page.evaluate(() => JSON.parse(JSON.stringify(S.top3)));
+
+test.describe('Checkpoint 3: Top 3 with set-aside choices', () => {
+  test('one becoming scheduled is set aside, frees its place, and another can be chosen', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page);
+    expect(await t3names(page)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+    await elsewhere(page, () => (S.quests[1].scheduled = { date: today(), time: '15:00' }));
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie']);
+    await expect(page.locator('#v-today .t3out')).toContainText('Set aside (scheduled): Bravo');
+    await page.click('[data-top3pick]');
+    // Delta can be chosen: Bravo doesn't hold one of the three.
+    await expect(page.locator('#sheet [data-t3tog="d"]')).toBeEnabled();
+    await expect(page.locator('#sheet .t3kept')).toContainText('Bravo');
+    await page.click('#sheet [data-t3tog="d"]');
+    await page.keyboard.press('Escape');
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] });
+  });
+
+  test('one becoming waiting: the same; back again with a free place, it takes it by itself', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page);
+    await elsewhere(page, () => (S.quests[2].wait = { who: 'Sam', note: '', since: today() }));
+    expect(await t3names(page)).toEqual(['Alpha', 'Bravo']);
+    await expect(page.locator('#v-today .t3out')).toContainText('Set aside (waiting): Charlie');
+    // The reply comes: nothing took its place, so it's back where it was.
+    await elsewhere(page, () => delete S.quests[2].wait);
+    expect(await t3names(page)).toEqual(['Alpha', 'Bravo', 'Charlie']);
+    await expect(page.locator('#v-today .t3out, #v-today .t3back')).toHaveCount(0);
+  });
+
+  test('back again with the three places full: nothing is pushed out; bringing it back is a choice', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page);
+    await elsewhere(page, () => (S.quests[1].scheduled = { date: today() }));
+    await page.click('[data-top3pick]');
+    await page.click('#sheet [data-t3tog="d"]');
+    await page.keyboard.press('Escape');
+    await elsewhere(page, () => delete S.quests[1].scheduled);
+    // Alpha, Charlie, Delta stay; Bravo is offered back.
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
+    await expect(page.locator('#v-today .t3back')).toContainText('Bravo can be worked on again');
+    await page.click('#v-today [data-t3back="b"]');
+    await expect(page.locator('#sheet .qahint')).toHaveText(
+      'Top 3 is full. Take one out to bring back Bravo.',
+    );
+    await page.click('#sheet [data-t3tog="c"]');
+    await page.keyboard.press('Escape');
+    expect(await t3names(page)).toEqual(['Alpha', 'Delta', 'Bravo']);
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd'], held: ['b'] });
+    // (stored as chosen; shown in the free place. Taken out, it's gone for good.)
+    await page.click('[data-top3pick]');
+    await page.click('#sheet [data-t3tog="b"]');
+    await page.keyboard.press('Escape');
+    expect(await t3names(page)).toEqual(['Alpha', 'Delta']);
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd'] });
+  });
+
+  test('a set-aside one can be taken out; a finished one keeps its place; a deleted one goes', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page);
+    await elsewhere(page, () => (S.quests[1].scheduled = { date: today() }));
+    await page.click('[data-top3pick]');
+    await page.click('#sheet [data-t3drop="b"]');
+    await expect(page.locator('#sheet .t3kept')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c'] });
+    // Alpha done: still one of the three, marked Done.
+    await page.click('#v-today .list [data-toggle="a"]');
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie']);
+    await expect(page.locator('#v-today .t3row.done')).toHaveCount(1);
+    // Charlie deleted elsewhere: its place is free.
+    await elsewhere(page, () => (S.quests = S.quests.filter(q => q.id !== 'c')));
+    expect(await t3names(page)).toEqual(['Alpha']);
+    await page.click('[data-top3pick]');
+    await expect(page.locator('#sheet [data-t3tog="d"]')).toBeEnabled();
+  });
+
+  test('a new day starts with none, held or not; the record syncs whole and is cleaned on load', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page, {
+      toString: () =>
+        `function (s) { (${five})(s); s.quests[1].scheduled = { date: today() }; s.top3 = { day: today(), ids: ['a', 'c', 'd'], held: ['b'] }; }`,
+    });
+    // Synced as one record, held and all.
+    expect(
+      await page.evaluate(() => {
+        const r = toRecords(S).get('meta:top3');
+        return [r, fromRecords(toRecords(S)).top3];
+      }),
+    ).toEqual([
+      { day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] },
+      { day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] },
+    ]);
+    // Junk or merged records: no duplicates, at most three, none held twice.
+    expect(
+      await page.evaluate(() => [
+        cleanTop3({ day: today(), ids: ['a', 'a', 'b', 'c', 'd'], held: ['b', 'e', 'e', 7] }),
+        cleanTop3({ day: today(), ids: [], held: ['b'] }),
+        cleanTop3({ day: 'x', ids: ['a'] }),
+      ]),
+    ).toEqual([
+      { day: '2026-11-04', ids: ['a', 'b', 'c'], held: ['e'] },
+      { day: '2026-11-04', ids: [], held: ['b'] },
+      null,
+    ]);
+    // The next morning: nothing chosen.
+    await page.clock.setFixedTime(new Date(2026, 10, 5, 8, 0));
+    await page.reload();
+    expect(await t3(page)).toBeNull();
+    await expect(page.locator('#v-today .top3empty')).toHaveCount(1);
+  });
+
+  test('two devices: the newer choice wins whole, held included', async ({ app, page }) => {
+    await plain(app, page);
+    // Device B chose later: it set Bravo aside and chose Echo. Its record replaces this one.
+    const merged = await page.evaluate(() => {
+      const mine = toRecords(S),
+        theirs = new Map(mine);
+      theirs.set('meta:top3', { day: today(), ids: ['a', 'c', 'e'], held: ['b'] });
+      return fromRecords(theirs).top3;
+    });
+    expect(merged).toEqual({ day: '2026-11-04', ids: ['a', 'c', 'e'], held: ['b'] });
+  });
+});
+
+test.describe('Checkpoint 3: Reorder with scheduled and waiting tasks hidden', () => {
+  // a (to do), b (scheduled), c (to do), d (waiting), e (to do)
+  const mixed = s => {
+    const k = (id, text, x = {}) => ({ id, text, done: false, children: [], ...x });
+    s.quests = [
+      k('a', 'Alpha'),
+      k('b', 'Bravo', { scheduled: { date: today(), time: '15:00' } }),
+      k('c', 'Charlie'),
+      k('d', 'Delta', { wait: { who: 'Sam', note: '', since: today() } }),
+      k('e', 'Echo'),
+    ];
+  };
+  const order = page => page.evaluate(() => S.quests.map(q => q.id).join(''));
+  const listed = page => page.$$eval('#v-today .list .row', x => x.map(e => e.dataset.qid).join(''));
+  test('only the tasks to work on are listed; moves keep the hidden ones where they were', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page, mixed);
+    await page.click('#reorder');
+    expect(await listed(page)).toBe('ace');
+    // Bravo and Delta are still in their own sections, once each.
+    await expect(page.locator('#v-today .schedrow[data-qid="b"]')).toHaveCount(1);
+    await expect(page.locator('#v-today .list [data-qid="b"], #v-today .list [data-qid="d"]')).toHaveCount(0);
+    await page.click('#v-today [data-up="c"]');
+    expect(await order(page)).toBe('cabde');
+    expect(await listed(page)).toBe('cae');
+    // (down: to just after the next one listed; Bravo, hidden, keeps its place after Alpha)
+    await page.click('#v-today [data-down="c"]');
+    expect(await order(page)).toBe('acbde');
+    await page.click('#v-today [data-down="a"]');
+    expect(await order(page)).toBe('cabde');
+    await page.click('#v-today [data-top="e"]');
+    expect(await order(page)).toBe('ecabd');
+    expect(await listed(page)).toBe('eca');
+    await page.reload();
+    expect(await order(page)).toBe('ecabd');
+  });
+
+  test('rapid moves, a tick, and tasks coming back into the list mid-reorder', async ({ app, page }) => {
+    await plain(app, page, mixed);
+    await page.click('#reorder');
+    // Rapid: three downs on Alpha land it last among the listed; nothing lost or doubled.
+    for (let i = 0; i < 3; i++)
+      await page
+        .locator('#v-today [data-down="a"]')
+        .click({ force: true })
+        .catch(() => {});
+    expect(await listed(page)).toBe('cea');
+    expect((await order(page)).split('').sort().join('')).toBe('abcde');
+    // A tick while reordering: Charlie done, still in place, still movable below the open ones.
+    await page.click('#v-today .list [data-toggle="c"]');
+    expect(await listed(page)).toContain('c');
+    // Delta's reply comes, Bravo is unscheduled: both come back into the list at their places.
+    await elsewhere(page, () => {
+      // (a task's own wait is kept as its "Hear back" step: the reply clears that)
+      delete S.quests.find(q => q.id === 'd').children[0].wait;
+      delete S.quests.find(q => q.id === 'b').scheduled;
+    });
+    const o = await order(page);
+    expect(await listed(page)).toBe(o);
+    expect(o.length).toBe(5);
+  });
+
+  test('from the board back to the list, Reorder lists the same tasks', async ({ app, page }) => {
+    await plain(app, page, mixed);
+    await page.click('[data-tview="board"]');
+    await expect(page.locator('#reorder')).toHaveCount(0);
+    await page.click('[data-tview="list"]');
+    await page.click('#reorder');
+    expect(await listed(page)).toBe('ace');
+  });
+});
+
+test.describe('Android scenarios (390 × 844)', () => {
+  test('B: a meeting rescheduled stays scheduled, never Focus work; to tomorrow it goes to Upcoming', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.click('#v-today .schedrow[data-qid="m2"] .qmore');
+    await page.click('#sheet [data-schedset="m2"]');
+    await page.fill('#schedtime', '16:30');
+    await page.click('#sheetok');
+    await expect(page.locator('#v-today .schedrow[data-qid="m2"] .stime')).toHaveText('16:30');
+    let s = await app.state();
+    const m2 = s.quests.find(q => q.id === 'm2');
+    expect(m2.done).toBe(false);
+    expect(m2.scheduled).toEqual({ date: '2026-11-04', time: '16:30' });
+    // Not Focus work, not offered for Top 3, not the header's next task.
+    expect(await page.evaluate(() => canAct(S.quests.find(q => q.id === 'm2')))).toBe(false);
+    expect(await page.evaluate(() => (recommend() || {}).q && recommend().q.id)).not.toBe('m2');
+    await page.click('[data-top3pick]');
+    await expect(page.locator('#sheet [data-t3tog="m2"]')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    // To tomorrow: off Today, on Upcoming with its schedule; it survives a reload and a sync copy.
+    await page.evaluate(() => setSchedule('m2', shift(today(), 1), '09:00'));
+    await expect(page.locator('#v-today .schedrow[data-qid="m2"]')).toHaveCount(0);
+    await page.reload();
+    s = await app.state();
+    const up = s.later.find(q => q.id === 'm2');
+    expect(up.scheduled).toEqual({ date: '2026-11-05', time: '09:00' });
+    expect(up.start).toBe('2026-11-05');
+    expect(
+      await page.evaluate(() => fromRecords(toRecords(S)).later.find(q => q.id === 'm2').scheduled),
+    ).toEqual({
+      date: '2026-11-05',
+      time: '09:00',
+    });
+  });
+
+  test('C: a follow-up is recorded, then the reply: it leaves Waiting and its task can be chosen', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    const row = page.locator('#v-today .waitsec2 .wrow[data-wid="b1a"]');
+    await row.locator('[data-chase]').click();
+    await page.fill('#funote', 'Rang the IT desk');
+    await page.click('#sheetok');
+    // Still waiting (now chased again in two days), history kept.
+    await expect(row).toHaveCount(1);
+    let s = await app.state();
+    expect(s.follows.filter(f => f.n === 'b1a').map(f => f.k)).toContain('chase');
+    await page.click('[data-top3pick]');
+    await expect(page.locator('#sheet [data-t3tog="b1"]')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await row.locator('[data-waitclear]').click();
+    await expect(row).toHaveCount(0);
+    s = await app.state();
+    expect(s.follows.filter(f => f.n === 'b1a').map(f => f.k)).toEqual(
+      expect.arrayContaining(['chase', 'resolve']),
+    );
+    // Its task is on the list now, and can be one of the Top 3.
+    await expect(page.locator('#v-today .list .row[data-qid="b1"]')).toHaveCount(1);
+    await page.click('[data-top3pick]');
+    await expect(page.locator('#sheet [data-t3tog="b1"]')).toHaveCount(1);
+  });
+});
