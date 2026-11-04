@@ -868,7 +868,7 @@ nav button[aria-current='page'] {
   margin-bottom: 14px;
 }
 .row,
-.srow {
+.secrow {
   display: flex;
   align-items: center;
   gap: 12px;

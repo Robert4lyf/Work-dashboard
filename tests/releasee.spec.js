@@ -239,7 +239,7 @@ test('11–12: a schedule is checked, kept through reload, backup and restore, a
   expect(app.errors).toEqual([]);
 });
 
-test('13–14: a scheduled copy of a repeating task isn’t doubled or swept away; a past one stays to be resolved, without being called overdue', async ({
+test('13–14: a scheduled copy of a repeating task isn’t swept away, and the next day’s copy still comes; a past one stays to be resolved, without being called overdue', async ({
   app,
   page,
 }) => {
@@ -261,8 +261,10 @@ test('13–14: a scheduled copy of a repeating task isn’t doubled or swept awa
     renderAll();
   });
   const s = await app.state();
-  // Yesterday's unresolved meeting is still there to resolve; no second copy made beside it.
-  expect(s.quests.filter(q => q.tpl === 'tp').map(q => q.id)).toEqual(['tp-2026-11-04']);
+  // Yesterday's unresolved meeting is still there to resolve, and today's copy is made (once).
+  expect(s.quests.filter(q => q.tpl === 'tp').map(q => q.id)).toEqual(['tp-2026-11-04', 'tp-2026-11-05']);
+  await page.evaluate(() => rollover());
+  expect((await app.state()).quests.filter(q => q.tpl === 'tp')).toHaveLength(2);
   const past = page.locator('#v-today .schedrow[data-qid="tp-2026-11-04"]');
   await expect(past).toContainText('Yesterday: not marked done');
   await expect(past).not.toContainText('Overdue');
@@ -319,5 +321,101 @@ test('race: a schedule sheet confirmed after the task was finished elsewhere, or
   const s = await app.state();
   expect(s.quests.find(q => q.id === 'q6').scheduled).toBeUndefined();
   expect(s.timer.q).toBe('q6a');
+  expect(app.errors).toEqual([]);
+});
+
+test('sync: a task in both Today and Upcoming after a move raced an edit is kept once: the finished copy, else where the newest Today order puts it', async ({
+  app,
+  page,
+}) => {
+  await day(app, page);
+  const r = await page.evaluate(() => {
+    const build = (todayHasIt, todayDone, laterDone) => {
+      const s = JSON.parse(JSON.stringify(S));
+      const x = s.quests.find(q => q.id === 'q7');
+      x.done = todayDone;
+      x.notes = 'edited on B';
+      const moved = {
+        ...JSON.parse(JSON.stringify(x)),
+        done: laterDone,
+        notes: '',
+        start: shift(today(), 1),
+        scheduled: { date: shift(today(), 1), time: '09:30' },
+      };
+      s.later.push(moved);
+      const m = toRecords(s);
+      const o = m.get('meta:order');
+      m.set('meta:order', { ...o, quests: todayHasIt ? o.quests : o.quests.filter(id => id !== 'q7') });
+      const out = fromRecords(m, today());
+      return [out.quests.filter(q => q.id === 'q7').length, out.later.filter(q => q.id === 'q7').length];
+    };
+    return {
+      movedLater: build(false, false, false), // (A moved it to tomorrow; B edited the Today copy)
+      movedToday: build(true, false, false), // (A brought it to Today; B edited the Upcoming copy)
+      doneOnB: build(false, true, false), // (B finished it meanwhile)
+    };
+  });
+  expect(r).toEqual({ movedLater: [0, 1], movedToday: [1, 0], doneOnB: [1, 0] });
+  expect(app.errors).toEqual([]);
+});
+
+test('audit fixes: review, Focus, Resume, Top 3, Continue and Forecast use the same rule; the Inbox drops a schedule', async ({
+  app,
+  page,
+}) => {
+  await day(app, page);
+  const r = await page.evaluate(() => {
+    const m2 = S.quests.find(q => q.id === 'm2'),
+      b1 = S.quests.find(q => q.id === 'b1');
+    m2.since = shift(today(), -5); // (on Today for days, but scheduled: not carried over)
+    b1.resume = { note: 'Asked IT', at: Date.now(), step: 'b1a' };
+    S.top3 = null;
+    save();
+    go('focus');
+    const focusOpts = [...document.querySelectorAll('#fq option')].map(o => o.value);
+    go('today');
+    const acts = questActions('b1', true).map(a => a.label);
+    location.hash = '';
+    followRoute({ kind: 'continue', id: '' });
+    const cont = path[0];
+    go('today');
+    // A scheduled task with steps, every one ticked: Finish task, not Reschedule.
+    S.quests.push(
+      fix({
+        id: 'ms',
+        text: 'Agenda meeting',
+        scheduled: { date: today(), time: '16:00' },
+        children: [{ id: 'ms1', text: 'Agenda', done: true }],
+      }),
+    );
+    const msAct = primaryAction(S.quests.find(q => q.id === 'ms')).label;
+    const cov = coverage(allocate(7));
+    moveToInbox('m3');
+    const inboxed = S.inbox.find(i => i.text === 'First-aid training').node;
+    return {
+      stale: carried().map(q => q.id),
+      reviewHasM2: renderReview
+        ? ((reviewSub = 'week'),
+          renderReview(),
+          document.querySelector('#v-review').textContent.includes('Supplier review call 5 days'))
+        : null,
+      focusOpts,
+      acts,
+      cont,
+      msAct,
+      cov: [cov.est, cov.total],
+      inboxedSched: inboxed.scheduled,
+    };
+  });
+  expect(r.stale).not.toContain('m2');
+  expect(r.reviewHasM2).toBe(false);
+  expect(r.focusOpts).not.toContain('b1');
+  expect(r.focusOpts).not.toContain('b1a');
+  expect(r.acts).not.toContain('Resume work');
+  expect(r.acts).not.toContain('Add to Top 3');
+  expect(r.cont).not.toBe('b1');
+  expect(r.msAct).toBe('Finish task');
+  expect(r.cov[0]).toBeGreaterThanOrEqual(1); // (the estimated meeting counts as estimated)
+  expect(r.inboxedSched).toBeUndefined();
   expect(app.errors).toEqual([]);
 });

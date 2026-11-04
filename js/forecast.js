@@ -258,7 +258,7 @@ function accuracyText(a) {
 // works"): every relevant task estimated; some unestimated (a quarter or fewer of the tasks in
 // view); much of it incomplete (more than a quarter); and whether capacity is assumed.
 function coverage(f) {
-  const est = f.items.filter(x => !x.fixed).length,
+  const est = f.items.filter(x => !x.fixed || x.sched).length,
     un = f.none.length,
     total = est + un;
   let k = 'all',

@@ -48,14 +48,14 @@ function questActions(id, fromList) {
   }
   if (!d) {
     if (S.timer && topOf(S.timer.q) === q) act('Resume focus', 'data-pause="1"', 'go');
-    else if (q.resume && placeFits(q, n))
+    else if (q.resume && placeFits(q, n) && canAct(q))
       act('Resume work', `data-resume="${q.id}"`, 'go', placeLine(q.resume));
     else {
       const t = focusLeaf(n);
       if (t) act(t === n ? 'Focus on this' : 'Focus: ' + t.text, `data-zen="1" data-q="${t.id}"`, 'go');
     }
   }
-  if (top && !d && S.quests.includes(n))
+  if (top && !d && S.quests.includes(n) && (inTop3(id) || canAct(n)))
     act(inTop3(id) ? 'Remove from Top 3' : 'Add to Top 3', `data-top3="${id}"`);
   if (!d) act(q.resume ? 'Update saved place' : 'Save my place', `data-saveplace="${id}"`);
   if (q.resume && !isDone(q)) act('Clear saved place', `data-clearplace="${q.id}"`);
@@ -92,12 +92,14 @@ function primaryAction(n, parents = []) {
       : { label: 'Back to focus', attrs: 'data-zen="1"', cls: 'blue' };
   // (a scheduled task is marked done, or rescheduled; it isn't worked on in a focus session)
   if (q.scheduled)
-    return !n.children.length
-      ? { label: 'Mark done', attrs: `data-toggle="${n.id}"`, cls: 'green' }
-      : top
-        ? { label: 'Reschedule', attrs: `data-schedset="${n.id}"`, cls: 'blue' }
-        : null;
-  if (q.resume && placeFits(q, n))
+    return top && needsNext(n)
+      ? { label: 'Finish task', attrs: `data-finish="${n.id}"`, cls: 'green' }
+      : !n.children.length
+        ? { label: 'Mark done', attrs: `data-toggle="${n.id}"`, cls: 'green' }
+        : top
+          ? { label: 'Reschedule', attrs: `data-schedset="${n.id}"`, cls: 'blue' }
+          : null;
+  if (q.resume && placeFits(q, n) && canAct(q))
     return { label: 'Resume work', attrs: `data-resume="${q.id}"`, cls: 'green' };
   if (top && needsNext(n)) return { label: 'Finish task', attrs: `data-finish="${n.id}"`, cls: 'green' };
   // (only waiting: what's waited on first, a follow-up if one is due, else the reply)

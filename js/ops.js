@@ -209,7 +209,7 @@ function opsProgress() {
       }),
     );
   S.quests
-    .filter(q => q.resume && !isDone(q))
+    .filter(q => q.resume && canAct(q))
     .sort((a, b) => b.resume.at - a.resume.at)
     .forEach(q => rows.push({ text: q.text, sub: 'Saved place: ' + q.resume.note, open: q.id }));
   return rows;

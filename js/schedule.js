@@ -97,7 +97,7 @@ function openScheduleSheet(id) {
   $('#scheddate').focus();
 }
 document.addEventListener('submit', e => {
-  if (e.target.id !== 'schedform') return;
+  if (e.target.id !== 'schedform' || !window.appReady) return;
   e.preventDefault();
   e.stopImmediatePropagation();
   const id = e.target.dataset.id,
@@ -165,7 +165,7 @@ function renderScheduledToday() {
         done = !n.children.length
           ? `<button class="btn sm" data-toggle="${n.id}" aria-label="Mark done: ${esc(n.text)}">Done</button>`
           : '';
-      return `<div class="srow schedrow sch-${st.k}" data-qid="${n.id}"><span class="stime">${esc(schedWhen(n))}</span><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${esc(st.label)}${n.due ? ' · ' + dueTag(n) : ''}</small></button>${done}${moreBtn(n)}</div>`;
+      return `<div class="secrow schedrow sch-${st.k}" data-qid="${n.id}"><span class="stime">${esc(schedWhen(n))}</span><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${esc(st.label)}${n.due ? ' · ' + dueTag(n) : ''}</small></button>${done}${moreBtn(n)}</div>`;
     })
     .join('');
   return `<section class="todaysec schedsec" aria-labelledby="schedhead"><div class="sechead"><h2 id="schedhead">Scheduled <small>${ns.length}</small></h2></div><div class="slist box">${rows}</div></section>`;
@@ -205,7 +205,7 @@ function renderWaitingToday() {
         const act = chase
           ? `<button class="btn sm blue" data-chase="${n.id}">Follow up</button>`
           : `<button class="btn sm" data-waitclear="${n.id}">Reply received</button>`;
-        return `<div class="srow wrow" data-wid="${n.id}"><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${meta}${meta ? ' ' : ''}${chaseTag(w) || (w.due ? '' : '<span class="tag">No chase date</span>')}</small></button>${act}<button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
+        return `<div class="secrow wrow" data-wid="${n.id}"><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${meta}${meta ? ' ' : ''}${chaseTag(w) || (w.due ? '' : '<span class="tag">No chase date</span>')}</small></button>${act}<button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
       })
       .join('');
   return `<section class="todaysec waitsec2" aria-labelledby="waithead"><div class="sechead"><h2 id="waithead">Waiting <small>${ws.length}</small></h2><button class="linkbtn" data-goto="waiting">View all${all > ws.length ? ' ' + all : ''}</button></div><div class="slist box">${rows}</div></section>`;

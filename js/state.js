@@ -516,8 +516,10 @@ function rollover() {
       const hit =
         t.days.includes(wd) || (t.monthDay && (t.monthDay === dd || (t.monthDay > end && dd === end)));
       const gone = sync2.gone && sync2.gone['quest:' + t.id + '-' + d]; // done and cleared elsewhere
+      // (an earlier day's scheduled copy, kept to be marked done, isn't today's)
+      const kept = q => q.scheduled && q.scheduled.date < d && q.id !== t.id + '-' + d;
       const has = // (a copy moved to Upcoming or the Inbox still counts, or it would come back doubled)
-        S.quests.some(q => q.tpl === t.id || q.text === t.text) ||
+        S.quests.some(q => (q.tpl === t.id || q.text === t.text) && !kept(q)) ||
         S.later.some(q => q.tpl === t.id) ||
         S.inbox.some(i => i.node && i.node.tpl === t.id);
       if (hit && !gone && !has) {
