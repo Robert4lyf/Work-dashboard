@@ -9,9 +9,14 @@ function gExtra(s) {
     steps = (id, names) => names.map((n, i) => k(`${id}s${i}`, n));
   s.quests.push(
     k('g1', 'Renew parking permit', { due: shift(t, -2) }),
-    k('g2', 'Quarterly safeguarding return', { children: steps('g2', ['Gather figures', 'Draft', 'Send']), due: t }),
+    k('g2', 'Quarterly safeguarding return', {
+      children: steps('g2', ['Gather figures', 'Draft', 'Send']),
+      due: t,
+    }),
     k('g3', 'Book room for team away day'),
-    k('g4', 'Reply to Harpenden about the boundary query', { children: steps('g4', ['Read the file', 'Reply']) }),
+    k('g4', 'Reply to Harpenden about the boundary query', {
+      children: steps('g4', ['Read the file', 'Reply']),
+    }),
     k('g5', 'Update the risk register'),
     {
       id: 'g6',
