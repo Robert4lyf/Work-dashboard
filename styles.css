@@ -3356,6 +3356,10 @@ nav button[aria-current='page'] {
   body {
     padding-left: 232px;
   }
+  /* (single-task mode hides the sidebar: its room goes too, so the task sits in the middle) */
+  body.zen {
+    padding-left: 0;
+  }
   nav {
     top: 0;
     bottom: 0;

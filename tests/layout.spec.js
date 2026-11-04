@@ -121,4 +121,16 @@ test.describe('a wide desktop: Today in two columns', () => {
     // (no tab bar to clear on a desktop: at the end of the page it follows what's above it)
     expect(f.y).toBeGreaterThanOrEqual(more.y + more.height - 1);
   });
+
+  test('single-task mode sits in the middle of the window, the sidebar gone', async ({ app, page }) => {
+    await day(app, page);
+    await page.evaluate(() => setZen(true));
+    await expect(page.locator('nav')).toBeHidden();
+    const z = await box(page, '#v-zen'),
+      // (the page's width less the scrollbar's gutter)
+      vw = await page.evaluate(() => document.body.getBoundingClientRect().width);
+    expect(Math.abs(z.x + z.width / 2 - vw / 2)).toBeLessThan(2);
+    await page.evaluate(() => setZen(false));
+    await expect(page.locator('nav')).toBeVisible();
+  });
 });
