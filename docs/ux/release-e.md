@@ -32,9 +32,8 @@ are scheduled (a meeting is a task; its steps, if any, are its agenda).
   day puts it on Upcoming (`start` = the date) exactly as Do later would, keeping `scheduled`;
   the morning's reset brings it back to Today with its schedule. Changing an Upcoming task's day,
   or bringing it to Today, moves its scheduled date with it.
-- Nothing completes it but you: a passed time, or an earlier day, is shown as an outcome still
-  to record ("Time passed: record the outcome", "Past scheduled date (…): review the outcome").
-  It stays until marked done, rescheduled or turned back into ordinary work.
+- Nothing completes it but you: a passed time shows "Time passed", an earlier day "<day>: not
+  marked done". It stays until marked done, rescheduled or unscheduled.
 - Synced, backed up and restored as part of its task's record, like the task's other fields.
 
 ## The actionability rules (`js/schedule.js`)
@@ -54,3 +53,15 @@ task only waiting offers its follow-up or its reply), Today's list and board (th
 both), carried over (never a scheduled task), attention (a past scheduled task is a reminder,
 not an overdue deadline) and Forecast (a scheduled estimate is fixed to its day and never
 suggested to move; without an estimate it's listed as unestimated).
+
+## Known limitations
+
+- Sync is newer-edit-wins per record. A task moved between Today and Upcoming on one device
+  while edited on another is kept once (the finished copy, else where the newest Today order puts
+  it), but the losing copy's edit is lost. Rescheduling offline while another device edits the
+  same task: the newer edit wins whole.
+- The daily reset's changes are dated midnight: an edit made after midnight elsewhere wins.
+- Only tasks are scheduled, not steps; a scheduled task's steps aren't offered as work.
+- "Later today" turns to "Time passed" at the next redraw, not on the minute.
+- A copy of the app from before this release that changes an Upcoming task's day moves `start`
+  but not `scheduled.date`.

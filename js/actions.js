@@ -62,7 +62,9 @@ function questActions(id, fromList) {
   if (!n.children.length) act(d ? 'Mark not done' : 'Mark done', `data-toggle="${id}"`);
   else if (top && needsNext(n)) act('Finish task', `data-finish="${id}"`);
   else if (top && d) act('Reopen task', `data-reopen="${id}"`);
-  if (top && !d && S.quests.includes(n)) act('Schedule', `data-schedset="${id}"`);
+  // (not during a focus session on it: it would be refused on Save)
+  if (top && !d && S.quests.includes(n) && !(S.timer && topOf(S.timer.q) === n))
+    act('Schedule', `data-schedset="${id}"`);
   if (top && !d && S.quests.includes(n)) {
     act('Do tomorrow', `data-sched="${id}" data-kind="q" data-when="${shift(today(), 1)}"`);
     act('Do next week', `data-sched="${id}" data-kind="q" data-when="${nextMonday()}"`);

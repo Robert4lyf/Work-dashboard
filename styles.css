@@ -3072,6 +3072,14 @@ details.more > details {
 .todaysec {
   margin: 0 0 18px;
 }
+.schedrow .stime small {
+  display: block;
+  font-weight: 600;
+  color: var(--muted);
+}
+.schedpick {
+  cursor: pointer;
+}
 .schedrow .stime {
   flex: none;
   min-width: 3.3em;

@@ -355,6 +355,9 @@ function renderNode({ n, parents }) {
     meta =
       (n.opt ? '<span class="tag opt">Optional</span>' : '') +
       dueTag(n) +
+      (isScheduled(n) && top
+        ? `<button class="tag sched schedpick" data-schedset="${n.id}" aria-label="Scheduled ${esc(schedWhen(n))}: change">Scheduled ${esc(schedWhen(n))}</button>`
+        : '') +
       (n.wait ? `<span class="tag wait">Waiting on ${esc(n.wait.who || 'someone')}</span>` : '') +
       (!d && !n.wait && kids ? stepWaitBadge(n) : '') +
       (m ? `<span class="tag est">Focus ${hm(m)}</span>` : '') +

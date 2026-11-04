@@ -419,3 +419,36 @@ test('audit fixes: review, Focus, Resume, Top 3, Continue and Forecast use the s
   expect(r.inboxedSched).toBeUndefined();
   expect(app.errors).toEqual([]);
 });
+
+test('UI fixes: a scheduled task’s page says when; dates sit above times; a Waiting row opens its task and back returns to Today', async ({
+  app,
+  page,
+}) => {
+  await day(app, page);
+  await page.click('#v-today .schedrow[data-qid="m2"] .open');
+  await expect(page.locator('.facts .tag.sched')).toHaveText('Scheduled 14:00');
+  await page.click('.facts [data-schedset="m2"]');
+  await expect(page.locator('#schedtime')).toHaveValue('14:00');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => history.back());
+  // A Waiting row: its task's page, and back to Today in one step.
+  await page.click('#v-today .wrow[data-wid="b1a"] .open');
+  expect(await page.evaluate(() => path)).toEqual(['b1']);
+  await page.evaluate(() => history.back());
+  await expect(page.locator('#v-today .schedsec')).toBeVisible();
+  // Next day: an earlier day's row shows its date above its time.
+  await page.clock.setFixedTime(new Date(2026, 10, 5, 9, 0));
+  await page.evaluate(() => {
+    rollover();
+    renderAll();
+  });
+  await expect(page.locator('#v-today .schedrow[data-qid="m1"] .stime small')).toHaveText('4 Nov');
+  await expect(page.locator('#v-today .schedrow[data-qid="m4"] .stime')).toHaveText('09:15');
+  // Schedule isn't offered during a focus session on the task.
+  await page.evaluate(() => {
+    S.timer = { id: 't', end: Date.now() + 6e5, left: 6e5, tag: '', mins: 25, q: 'q6a' };
+    save();
+  });
+  expect(await page.evaluate(() => questActions('q6').map(a => a.label))).not.toContain('Schedule');
+  expect(app.errors).toEqual([]);
+});
