@@ -355,10 +355,12 @@ header.compact .now .go:has(.clk) {
 }
 header.compact .now .go:has(.clk) small {
   position: static;
+  display: block;
   width: auto;
   height: auto;
   clip: auto;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
   min-width: 0;
 }
@@ -1680,10 +1682,6 @@ body.zen nav {
   padding: 5px 10px;
   font-size: var(--fs-sm);
 }
-.attn .chip {
-  padding: 3px 10px;
-  font-size: var(--fs-sm);
-}
 .chip.warn {
   background: var(--err-soft);
   color: var(--err);
@@ -1710,7 +1708,7 @@ nav .badge[hidden] {
 /* carried over */
 .carried {
   padding: 10px 14px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 .carried > summary {
   font-size: var(--fs);
@@ -2506,11 +2504,7 @@ details.more > details {
 }
 /* the top 3 on Today */
 .top3 {
-  padding: 10px 14px 6px;
   margin-bottom: 12px;
-}
-.top3 .sechead {
-  margin-bottom: 2px;
 }
 .t3row {
   display: flex;
@@ -2564,7 +2558,7 @@ details.more > details {
   justify-content: space-between;
   gap: 4px 12px;
   padding: 8px 14px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 .top3empty .linkbtn {
   color: var(--ink);
@@ -2603,9 +2597,6 @@ details.more > details {
   display: block;
   color: var(--muted);
   font-size: var(--fs-sm);
-}
-.top3 .t3back {
-  padding: 0 12px;
 }
 .t3prow .qact[aria-pressed='true'] .t3n {
   background: var(--accent);
@@ -3203,8 +3194,9 @@ details.more > details {
 }
 
 /* Structured brutalist: Today's sections are labelled panels, each under a bar of its own colour
-   (yellow: what you're on and what's at a time; red: what needs you and the task list; turquoise: Top 3
-   and waiting), with its sign; heavy black outlines; a sidebar on a desktop. */
+   (yellow: what you're on; red: only what has failed or is overdue; turquoise: the Top 3; neutral:
+   routine sections, scheduled, waiting and the list), with its sign; heavy outlines; a sidebar on
+   a desktop. */
 .ptitle {
   display: flex;
   flex-wrap: wrap;
@@ -3274,13 +3266,16 @@ details.more > details {
   padding: 0;
   border-width: 3px;
 }
-.top3 > .sechead {
-  border: 0 !important;
-  border-bottom: 3px solid var(--edge) !important;
+#v-today .top3 > .sechead {
+  border-width: 0 0 3px;
 }
 .top3 .t3list,
-.top3 .t3out {
+.top3 .t3out,
+.top3 .t3back {
   padding: 0 12px;
+}
+.top3 .t3back {
+  margin: 8px 0;
 }
 .schedsec {
   --bar: var(--sec-routine);
@@ -3331,10 +3326,6 @@ header:not(.compact)::before {
     12px center / 20px no-repeat;
 }
 /* what needs you: a red panel */
-.attsum > summary,
-.attsum > .attsumline {
-  border-width: 3px;
-}
 .attsum > summary b::before,
 .attsum > .attsumline b::before {
   content: '';
@@ -3746,7 +3737,6 @@ nav button[aria-current='page'] {
    Centre beside it, and the secondary sections folded at the end. */
 .attn {
   position: relative;
-  gap: 6px;
   margin: 0 0 12px;
 }
 .attn.attnone {
@@ -3772,7 +3762,7 @@ nav button[aria-current='page'] {
   min-height: 48px;
   box-sizing: border-box;
   padding: 11px 150px 11px 12px;
-  border: 1px solid var(--edge);
+  border: 3px solid var(--edge);
   background: var(--panel);
   border-radius: var(--radius);
 }

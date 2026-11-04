@@ -154,6 +154,7 @@ function applyRows(rows, firstSync, keep, holdCursor) {
   if (changed) {
     dropUndo();
     norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt }));
+    settleTop3();
     // The task on screen went (in the rows, not through the day's reset or a chosen replace).
     const open = !firstSync && path.length && !find(path[path.length - 1]);
     if (!persistLocal()) toast("Couldn't save: this device is out of storage", false, 4000);

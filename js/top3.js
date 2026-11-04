@@ -7,8 +7,10 @@
    Release F: a chosen task that's now scheduled, or only waiting, is set aside: still chosen,
    but it doesn't hold one of the three places, so another can be picked. Choosing (or taking
    out) moves the set-aside ones from ids to held. One that can be worked on again takes a free
-   place by itself (nothing is pushed out to make room); with none free, Top 3 offers to bring it
-   back, which is yours to do. Finished ones keep their place for the day. */
+   place by itself (nothing is pushed out to make room), and keeps it (see settleTop3); with none
+   free, Top 3 offers to bring it back, which is yours to do. Finished ones keep their place for
+   the day. (held is synced as a record of its own, so a copy of the app from before this, which
+   doesn't know it, leaves it alone.) */
 const t3Live = q => isDone(q) || canAct(q);
 // { active: up to three, in order; aside: chosen, can't be worked on now; back: set aside, can be
 // again, waiting for a free place }
@@ -30,9 +32,19 @@ function top3State() {
     (canAct(q) ? back : aside).push(q);
   });
   while (active.length < TOP3_MAX && back.length) active.push(back.shift());
-  // (more than three to work on comes only from an older or merged record: the first three)
-  back.unshift(...active.splice(TOP3_MAX));
   return { active, aside, back };
+}
+// One that took a free place by itself keeps it: written down (with whatever was set aside moved
+// to held), so a choice coming back later finds the three places taken and is offered back
+// rather than pushing it out. Run as the state is saved or taken in from a sync, never while
+// drawing. The same rows give the same result on every device.
+function settleTop3() {
+  const t = S.top3 && S.top3.day === today() ? S.top3 : null;
+  if (!t) return;
+  const st = top3State();
+  if (!st.active.some(q => !t.ids.includes(q.id))) return;
+  const held = [...st.aside, ...st.back].map(q => q.id).slice(0, TOP3_HELD);
+  S.top3 = { day: t.day, ids: st.active.map(q => q.id), ...(held.length ? { held } : {}) };
 }
 // The chosen tasks to work on (or done today), in order: what the header, Focus and Forecast rank.
 const top3Ids = () => top3State().active.map(q => q.id);
@@ -49,7 +61,9 @@ function setTop3(ids, { drop = [] } = {}) {
     .map(q => q.id)
     .filter(id => !ids.includes(id) && !drop.includes(id) && !isDone(S.quests.find(q => q.id === id)));
   // (a finished one taken out of the three isn't held: it's done)
-  const keep = held.filter(id => st.aside.some(q => q.id === id) || st.back.some(q => q.id === id));
+  const keep = held
+    .filter(id => st.aside.some(q => q.id === id) || st.back.some(q => q.id === id))
+    .slice(0, TOP3_HELD);
   S.top3 = ids.length || keep.length ? { day: today(), ids, ...(keep.length ? { held: keep } : {}) } : null;
   save();
   renderToday();

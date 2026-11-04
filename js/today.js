@@ -229,7 +229,8 @@ function drawToday() {
   // Today's work: the list (or board), or why there's none.
   const asBoard = todayView === 'board' && work.length;
   let tasks =
-    listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0) + (asBoard ? board(work) : list(work, true));
+    listHead("Today's tasks", asBoard ? [] : work, qs.length > 0) +
+    (asBoard ? board(work) : list(work, true));
   if (qs.length && !work.length) tasks += '<p class="hint nowork">Nothing to act on now.</p>';
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)

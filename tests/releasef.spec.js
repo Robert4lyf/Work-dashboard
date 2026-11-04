@@ -293,8 +293,9 @@ test.describe('Checkpoint 3: Top 3 with set-aside choices', () => {
     await page.click('#sheet [data-t3tog="c"]');
     await page.keyboard.press('Escape');
     expect(await t3names(page)).toEqual(['Alpha', 'Delta', 'Bravo']);
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd'], held: ['b'] });
-    // (stored as chosen; shown in the free place. Taken out, it's gone for good.)
+    // (it took the free place, and keeps it: written down as one of the three)
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd', 'b'] });
+    // Taken out, it's gone for good.
     await page.click('[data-top3pick]');
     await page.click('#sheet [data-t3tog="b"]');
     await page.keyboard.press('Escape');
@@ -332,15 +333,31 @@ test.describe('Checkpoint 3: Top 3 with set-aside choices', () => {
       toString: () =>
         `function (s) { (${five})(s); s.quests[1].scheduled = { date: today() }; s.top3 = { day: today(), ids: ['a', 'c', 'd'], held: ['b'] }; }`,
     });
-    // Synced as one record, held and all.
+    // Synced as two records: the three, and the set-aside ones (which a copy of the app from
+    // before Release F doesn't know, so leaves alone).
     expect(
       await page.evaluate(() => {
-        const r = toRecords(S).get('meta:top3');
-        return [r, fromRecords(toRecords(S)).top3];
+        const m = toRecords(S);
+        return [m.get('meta:top3'), m.get('meta:top3held'), fromRecords(m).top3];
       }),
     ).toEqual([
+      { day: '2026-11-04', ids: ['a', 'c', 'd'] },
+      { day: '2026-11-04', held: ['b'] },
       { day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] },
-      { day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] },
+    ]);
+    // An older copy rewrites meta:top3 (its own choice, without held): the held ones survive; a
+    // held record from another day is ignored.
+    expect(
+      await page.evaluate(() => {
+        const m = toRecords(S);
+        m.set('meta:top3', { day: today(), ids: ['a', 'e'] });
+        const one = fromRecords(m).top3;
+        m.set('meta:top3held', { day: '2026-11-03', held: ['b'] });
+        return [one, fromRecords(m).top3];
+      }),
+    ).toEqual([
+      { day: '2026-11-04', ids: ['a', 'e'], held: ['b'] },
+      { day: '2026-11-04', ids: ['a', 'e'] },
     ]);
     // Junk or merged records: no duplicates, at most three, none held twice.
     expect(
@@ -361,13 +378,41 @@ test.describe('Checkpoint 3: Top 3 with set-aside choices', () => {
     await expect(page.locator('#v-today .top3empty')).toHaveCount(1);
   });
 
+  test('one that took a free place keeps it when the choice it stood in for comes back', async ({
+    app,
+    page,
+  }) => {
+    // Bravo chosen, Delta set aside earlier; both waiting.
+    await plain(app, page, {
+      toString: () =>
+        `function (s) { (${five})(s); s.top3 = { day: today(), ids: ['a', 'b', 'c'], held: ['d'] }; }`,
+    });
+    await elsewhere(page, () => {
+      S.quests[1].wait = { who: 'Sam', note: '', since: today() };
+      S.quests[3].wait = { who: 'Kim', note: '', since: today() };
+    });
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie']);
+    // Delta's reply: it takes the free place, and that's written down.
+    await elsewhere(page, () => delete S.quests[3].wait);
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] });
+    // Bravo's reply: Delta stays; Bravo is offered back.
+    await elsewhere(page, () => delete S.quests[1].wait);
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
+    await expect(page.locator('#v-today .t3back')).toContainText('Bravo can be worked on again');
+    // (the same after a sync brings the change in rather than an edit here)
+    await page.reload();
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
+  });
+
   test('two devices: the newer choice wins whole, held included', async ({ app, page }) => {
     await plain(app, page);
     // Device B chose later: it set Bravo aside and chose Echo. Its record replaces this one.
     const merged = await page.evaluate(() => {
       const mine = toRecords(S),
         theirs = new Map(mine);
-      theirs.set('meta:top3', { day: today(), ids: ['a', 'c', 'e'], held: ['b'] });
+      theirs.set('meta:top3', { day: today(), ids: ['a', 'c', 'e'] });
+      theirs.set('meta:top3held', { day: today(), held: ['b'] });
       return fromRecords(theirs).top3;
     });
     expect(merged).toEqual({ day: '2026-11-04', ids: ['a', 'c', 'e'], held: ['b'] });

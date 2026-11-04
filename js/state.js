@@ -3,6 +3,7 @@ const SUMMARY_MAX = 600;
 const RESUME_MAX = 400; // a saved place's note
 const LINKS_MAX = 20; // resources linked to a task
 const TOP3_MAX = 3;
+const TOP3_HELD = 20; // (set-aside choices kept for the day: see top3.js)
 const TAGS = [
   ['Design', 'var(--pink)'],
   ['Meetings', 'var(--blue)'],
@@ -202,7 +203,7 @@ function cleanTop3(t) {
     ids = uniq(t.ids).slice(0, TOP3_MAX),
     held = uniq(t.held)
       .filter(x => !ids.includes(x))
-      .slice(0, 20);
+      .slice(0, TOP3_HELD);
   if (!day || (!ids.length && !held.length)) return null;
   return held.length ? { day, ids, held } : { day, ids };
 }
@@ -465,6 +466,7 @@ function save() {
   pruneRuns2();
   pruneRlog();
   stampSince();
+  if (typeof settleTop3 === 'function') settleTop3();
   S.editedAt = Date.now();
   dropUndo();
   // Not saved here: not marked as synced either, or after a reload the old copy would look
