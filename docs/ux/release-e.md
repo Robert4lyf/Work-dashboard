@@ -66,10 +66,11 @@ suggested to move; without an estimate it's listed as unestimated).
 - A copy of the app from before this release that changes an Upcoming task's day moves `start`
   but not `scheduled.date`.
 
-## Look
+## Look: Signal
 
-Vivid and modern, replacing Release D's neutral palette (same tokens, new values in `styles.css`):
-violet accent `#6d28d9`; a violet→blue gradient on the header, primary buttons, the current tab
-and Top 3 numbers; lilac-tinted page `#f4f3fb`; saturated status colours; pill tags; 16px cards
-with soft violet shadows; a coloured sign on each Today section (Top 3, Scheduled, Today's tasks,
-Waiting). Dark mode uses the same roles on `#0f0e1a`. All text pairs checked to WCAG AA.
+Replaces Release D's neutral palette (same tokens, new values in `styles.css`). White page, black
+ink, one signal yellow (`#ffd400`) for the header, the current tab, Top 3 numbers and the
+secondary action; black primary buttons; heavy uppercase section headings under a 4px rule;
+square corners and 2px black outlines, no shadows; solid status labels (red overdue, yellow
+today, orange waiting); scheduled times set large. Dark mode: the same on `#0a0a0a`, yellow
+unchanged. All text pairs checked to WCAG AA in both themes.
