@@ -38,6 +38,8 @@ function questActions(id, fromList) {
     if (!n.children.length) act('Mark done', `data-toggle="${id}"`, 'go');
     act('Reschedule', `data-schedset="${id}"`, '', schedWhen(n));
     act('Unschedule', `data-schedclear="${id}"`);
+    // (chosen for Top 3 before it was scheduled: set aside there, and can be taken out)
+    if (S.quests.includes(n) && inTop3(id)) act('Remove from Top 3', `data-top3="${id}"`);
     act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
     return a;
   }

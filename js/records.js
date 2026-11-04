@@ -36,7 +36,10 @@ function toRecords(s) {
   if (s.notes) m.set('meta:notes', { text: s.notes });
   // Today's top 3, its own record (not in prefs: choosing it mustn't fight a prefs change made
   // elsewhere). Only while there is one; clearing it deletes the record.
+  // (Release F: its set-aside choices in a record of their own, which a copy of the app from
+  // before them leaves alone rather than writing back without them)
   if (s.top3) m.set('meta:top3', { day: s.top3.day, ids: s.top3.ids });
+  if (s.top3 && s.top3.held) m.set('meta:top3held', { day: s.top3.day, held: s.top3.held });
   // Capacity per weekday (Release C): its own record, only once set.
   if (s.cap) m.set('meta:cap', { days: s.cap });
   // Quick-launch pins (Release C): their own record, only once there are any.
@@ -82,6 +85,12 @@ function toRecords(s) {
 }
 // Rebuild a state from records. Items missing from the saved order (added elsewhere) go at the
 // end, except inbox items, which go first like new captures.
+// The top 3 and its set-aside choices, from their two records (the held ones only for its day).
+function withHeld(t, h) {
+  if (!h || !h.day) return t || null;
+  if (t && t.day !== h.day) return t;
+  return { day: h.day, ids: (t && t.ids) || [], held: h.held };
+}
 function fromRecords(m, day) {
   const by = {};
   m.forEach((v, k) => (by[k.slice(0, k.indexOf(':'))] = by[k.slice(0, k.indexOf(':'))] || []).push(v));
@@ -125,7 +134,7 @@ function fromRecords(m, day) {
     rules: by.rule || [],
     rlog: (by.rlog || []).sort((a, b) => a.t - b.t),
     notes: (m.get('meta:notes') || {}).text || '',
-    top3: m.get('meta:top3') || null,
+    top3: withHeld(m.get('meta:top3'), m.get('meta:top3held')),
     cap: (m.get('meta:cap') || {}).days || null,
     pins: (m.get('meta:pins') || {}).pins || [],
     ...(m.get('meta:prefs') || {}),
@@ -197,6 +206,7 @@ const META_KEYS = [
   'score',
   'legacy',
   'top3',
+  'top3held',
   'track',
   'cap',
   'pins',

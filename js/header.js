@@ -26,12 +26,12 @@ function recommend() {
       n = st && !isDone(st) && !st.wait ? st : actionLeaf(placed);
     if (n) return { n, q: placed, why: 'place' };
   }
-  // (ranked as the Top 3 card shows them: scheduled and waiting ones are set aside there)
+  // (ranked as the Top 3 card shows them: top3Ids leaves out the set-aside ones)
   const ids = top3Ids();
   let rank = 0;
   for (let i = 0; i < ids.length; i++) {
     const q = S.quests.find(x => x.id === ids[i]);
-    if (!q || ['scheduled', 'waiting'].includes(taskState(q))) continue;
+    if (!q) continue;
     rank++;
     const n = actionLeaf(q);
     if (n) return { n, q, why: 'top3', rank };

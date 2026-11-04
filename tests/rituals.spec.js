@@ -257,9 +257,15 @@ test('waiting tasks sit under Waiting on Today, and return to their place', asyn
   await expect(rows).toHaveText(['Report', 'Email']);
   await expect(page.locator('#v-today .wrow')).toContainText('Budget');
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Report', 'Email']); // real order kept
-  // Reorder mode shows the real order.
+  // Reorder lists the same tasks (Release F: the waiting one stays under Waiting, not twice), and
+  // a move keeps it where it was in the real order.
   await page.click('#reorder');
-  await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
+  await expect(rows).toHaveText(['Report', 'Email']);
+  await expect(page.locator('#v-today .wrow')).toContainText('Budget');
+  await page.click('#v-today .row:has-text("Report") [data-down]');
+  expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Email', 'Report']);
+  await page.click('#v-today .row:has-text("Report") [data-up]');
+  expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Report', 'Email']);
   await page.click('#reorder');
   await app.setState(s => delete s.quests[0].children[0].wait);
   await page.reload();

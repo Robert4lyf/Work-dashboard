@@ -11,7 +11,9 @@ const test = base.test.extend({
       r => r.abort(),
     );
     // A reload waits for writes to the store to finish first, then, like opening, for the app to
-    // have started (it reads the store first).
+    // have started (it reads the store first). (storeDone is a top-level const, so it isn't on
+    // window: `window.storeDone` was never there, the wait never happened, and a write still under
+    // way when the page went was lost: the change just before the reload came back undone.)
     // With the sync library present (the service worker may have cached it), the app starts
     // deferred: the day's reset waits for the first auth event, which arrives a moment later.
     // A test acts only once that has happened, so the reset can't land mid-test.
@@ -23,7 +25,7 @@ const test = base.test.extend({
     };
     const reload = page.reload.bind(page);
     page.reload = async (...a) => {
-      await page.evaluate(() => (window.storeDone ? storeDone() : null)).catch(() => {});
+      await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null)).catch(() => {});
       const r = await reload(...a);
       await started();
       return r;

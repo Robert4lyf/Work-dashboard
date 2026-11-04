@@ -18,9 +18,14 @@
   --grad: #ffd60a;
   --on-status: #ffffff; /* text on a solid status colour */
   --signal: #ffd60a; /* the one highlight, the same in both themes */
-  --sec-yellow: #ffd60a; /* section bars: black type on each, in both themes */
+  /* Today's section bars, by what they hold (black type on the coloured ones, in both themes):
+     yellow is what you're on (and the current tab), red only what's gone wrong or overdue,
+     turquoise your priorities; routine sections (scheduled, waiting, the list) are neutral. */
+  --sec-yellow: #ffd60a;
   --sec-red: #ff5a3c;
-  --sec-blue: #12c2c2; /* turquoise, black type on it */
+  --sec-blue: #12c2c2; /* turquoise */
+  --sec-routine: var(--panel-2);
+  --sec-routine-ink: var(--ink);
   --on-signal: #111111;
   /* status: a text colour and a quiet fill each; always with a word or glyph, never colour alone */
   --ok: #11703a;
@@ -95,7 +100,6 @@
     --info-soft: #10223a;
     --grad: #ffd400;
     --on-status: #0a0a0a;
-    --grad: linear-gradient(135deg, #4c1d95 0%, #3730a3 55%, #1e40af 100%);
     --focus: #ffd400;
     --shadow-1: none;
     --shadow-2: 0 10px 32px rgba(0, 0, 0, 0.55);
@@ -174,6 +178,14 @@ textarea {
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
+/* (on the yellow header, the Top 3's turquoise, the red attention bar and the current tab, in
+   either theme: a black ring, which shows on all of them) */
+header :focus-visible,
+.top3 > .sechead :focus-visible,
+.attsum :is(summary, .attcc):focus-visible,
+nav button[aria-current='page']:focus-visible {
+  outline-color: #0a0a0a;
+}
 section[tabindex='-1']:focus-visible {
   outline: none; /* a view given the keyboard after its control went: no ring round the page */
 }
@@ -191,7 +203,7 @@ header {
   border: 2px solid #0a0a0a;
   box-shadow: none;
   padding: 10px 12px 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   border-radius: var(--radius);
 }
 header .now {
@@ -218,12 +230,13 @@ header .now {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
-/* The label on one line, the step on up to two: the whole step is on its page, a tap away. */
+/* The label and the step on up to two lines each: the whole step is on its page, a tap away. */
 .now .go small {
-  display: block;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
   font-size: var(--fs-xs);
   color: #0a0a0a;
 }
@@ -350,10 +363,12 @@ header.compact .now .go:has(.clk) {
 }
 header.compact .now .go:has(.clk) small {
   position: static;
+  display: block;
   width: auto;
   height: auto;
   clip: auto;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
   min-width: 0;
 }
@@ -364,6 +379,17 @@ header.compact .now .go:has(.clk) small {
   justify-content: space-between;
   gap: 10px;
   margin: 0 0 8px;
+}
+/* (the narrowest phones: the header's label on one line) */
+/* long names: two lines in a list, the whole name on the task's page */
+.t3row .open > span,
+.secrow .open > span,
+.list .row .open > span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 .hact {
   display: flex;
@@ -446,6 +472,22 @@ header.compact .now .go:has(.clk) small {
 }
 .syncbtn[data-state='error'] {
   color: var(--err);
+}
+header .syncbtn::before {
+  background: #0a0a0a;
+}
+header .syncbtn[data-state='ok']::before {
+  background: #0b6b31;
+}
+header .syncbtn[data-state='syncing']::before {
+  background: #1f3fb0;
+}
+header .syncbtn[data-state='offline']::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 2px #0a0a0a;
+}
+header .syncbtn[data-state='error']::before {
+  background: #b0001a;
 }
 .msg {
   margin: 14px 0 0;
@@ -537,10 +579,11 @@ h2 {
 }
 /* A row's own action in a list is a quiet one: the filled accent is kept for a page's primary
    action, so a list of rows doesn't read as a wall of buttons. */
-.list .row > .btn.green,
-.t3row .btn.green {
-  background: var(--signal);
-  color: var(--on-signal);
+.list .row > .btn:is(.green, .blue),
+.t3row .btn:is(.green, .blue),
+.secrow .btn:is(.green, .blue) {
+  background: var(--panel);
+  color: var(--ink);
   border-color: var(--edge);
 }
 
@@ -598,8 +641,8 @@ h2 {
 }
 .slot {
   border: 1.5px dashed var(--edge-strong);
-  padding: 14px;
-  margin-bottom: 14px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
   color: var(--muted);
   border-radius: var(--radius);
 }
@@ -1086,6 +1129,8 @@ nav button[aria-current='page'] {
 }
 .tag {
   display: inline-block;
+  white-space: nowrap;
+  overflow-wrap: normal;
   border: 1px solid transparent;
   border-radius: 0;
   padding: 0 8px;
@@ -1127,8 +1172,9 @@ nav button[aria-current='page'] {
   color: var(--on-status);
 }
 .tag.now {
-  background: var(--signal);
-  color: var(--on-signal);
+  background: var(--panel);
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
 }
 /* every step ticked, quest not finished: asking what's next */
 .tag.asknext {
@@ -1657,14 +1703,6 @@ body.zen nav {
   padding: 5px 10px;
   font-size: var(--fs-sm);
 }
-.attn {
-  gap: 6px;
-  margin-bottom: 16px;
-}
-.attn .chip {
-  padding: 3px 10px;
-  font-size: var(--fs-sm);
-}
 .chip.warn {
   background: var(--err-soft);
   color: var(--err);
@@ -1691,7 +1729,7 @@ nav .badge[hidden] {
 /* carried over */
 .carried {
   padding: 10px 14px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 .carried > summary {
   font-size: var(--fs);
@@ -2487,11 +2525,7 @@ details.more > details {
 }
 /* the top 3 on Today */
 .top3 {
-  padding: 10px 14px 6px;
-  margin-bottom: 18px;
-}
-.top3 .sechead {
-  margin-bottom: 2px;
+  margin-bottom: 12px;
 }
 .t3row {
   display: flex;
@@ -2545,7 +2579,7 @@ details.more > details {
   justify-content: space-between;
   gap: 4px 12px;
   padding: 8px 14px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 .top3empty .linkbtn {
   color: var(--ink);
@@ -2568,6 +2602,22 @@ details.more > details {
 }
 .t3prow .qact .t3n {
   background: var(--panel);
+}
+/* chosen, set aside (scheduled or waiting): named, with a way to take it out */
+.t3kept {
+  min-height: 48px;
+  padding: 6px 4px 6px 12px;
+  border-top: 1px solid var(--line);
+}
+.t3kname {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.t3kname small {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }
 .t3prow .qact[aria-pressed='true'] .t3n {
   background: var(--accent);
@@ -2737,6 +2787,45 @@ details.more > details {
     grid-column: 2;
     justify-self: start;
     max-width: none;
+  }
+  /* Today's Scheduled and Waiting rows: the name across the row, Done or Follow up and ⋯ under it */
+  .secrow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 4px 10px;
+  }
+  .secrow > .open {
+    grid-column: 2 / -1;
+  }
+  .wrow > .open {
+    grid-column: 1 / -1;
+  }
+  .secrow > .btn {
+    grid-row: 2;
+    grid-column: 2;
+    justify-self: start;
+  }
+  .wrow > .btn {
+    grid-column: 1 / 3;
+  }
+  .secrow > .qmore {
+    grid-row: 2;
+    grid-column: 3;
+  }
+  .schedrow > .stime {
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
+  /* Reorder: the move buttons on a line of their own, under the name */
+  .list .row:has(> .mv) {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .list .row:has(> .mv) > .open {
+    flex: 1 1 calc(100% - 64px);
+  }
+  .list .row:has(> .mv) > .mv:first-of-type {
+    margin-left: auto;
   }
 }
 .tdone .btn {
@@ -3106,7 +3195,7 @@ details.more > details {
 }
 /* Today (Release E): Scheduled and Waiting, sections like Top 3 and Today's tasks */
 .todaysec {
-  margin: 0 0 18px;
+  margin: 0 0 12px;
 }
 .schedrow .stime small {
   display: block;
@@ -3118,7 +3207,8 @@ details.more > details {
 }
 .schedrow .stime {
   flex: none;
-  min-width: 3.4em;
+  width: 3.2em;
+  line-height: 1.1;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
   color: var(--ink);
@@ -3131,7 +3221,7 @@ details.more > details {
 }
 .schedrow.sch-passed .open small,
 .schedrow.sch-past .open small {
-  color: var(--warn);
+  color: var(--ink);
   font-weight: 600;
 }
 .tag.sched {
@@ -3164,24 +3254,28 @@ details.more > details {
 }
 
 /* Structured brutalist: Today's sections are labelled panels, each under a bar of its own colour
-   (yellow: what you're on and what's at a time; red: what needs you and the task list; turquoise: Top 3
-   and waiting), with its sign; heavy black outlines; a sidebar on a desktop. */
+   (yellow: what you're on; red: only what has failed or is overdue; turquoise: the Top 3; neutral:
+   routine sections, scheduled, waiting and the list), with its sign; heavy outlines; a sidebar on
+   a desktop. */
 .ptitle {
-  margin: 2px 0 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 12px;
+  margin: 0 0 10px;
 }
 .ptitle[hidden] {
   display: none;
 }
 .ptitle b {
   display: block;
-  font-size: 44px;
+  font-size: 34px;
   font-weight: 900;
   letter-spacing: -0.035em;
   line-height: 1;
 }
 .ptitle span {
   display: block;
-  margin-top: 6px;
   font-size: var(--fs-sm);
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -3192,9 +3286,8 @@ details.more > details {
 #v-today .todaysec > .sechead,
 :is(#v-today, .tmain) > .sechead {
   margin: 0;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border: 3px solid var(--edge);
-  border-bottom-width: 3px;
   background: var(--bar);
   color: var(--bar-ink, #111111);
 }
@@ -3215,8 +3308,8 @@ details.more > details {
 :is(#v-today, .tmain) > .sechead > h2::before {
   content: '';
   flex: none;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   background: var(--bar-ink, #111111);
   -webkit-mask: var(--sign) center / contain no-repeat;
   mask: var(--sign) center / contain no-repeat;
@@ -3233,26 +3326,32 @@ details.more > details {
   padding: 0;
   border-width: 3px;
 }
-.top3 > .sechead {
-  border: 0 !important;
-  border-bottom: 3px solid var(--edge) !important;
+#v-today .top3 > .sechead {
+  border-width: 0 0 3px;
 }
 .top3 .t3list,
-.top3 .t3out {
+.top3 .t3out,
+.top3 .t3back {
   padding: 0 12px;
 }
+.top3 .t3back {
+  margin: 8px 0;
+}
 .schedsec {
-  --bar: var(--sec-yellow);
+  --bar: var(--sec-routine);
+  --bar-ink: var(--sec-routine-ink);
   --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223.5%22%20y%3D%225%22%20width%3D%2217%22%20height%3D%2215.5%22%20rx%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M3.5%2010h17M8%203v4M16%203v4%22%2F%3E%3C%2Fsvg%3E');
 }
 .waitsec2 {
-  --bar: var(--sec-blue);
+  --bar: var(--sec-routine);
+  --bar-ink: var(--sec-routine-ink);
   --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cpath%20d%3D%22M12%207v5l3.5%202%22%2F%3E%3C%2Fsvg%3E');
 }
 :is(#v-today, .tmain) > .sechead {
   flex-wrap: wrap;
   row-gap: 8px;
-  --bar: var(--sec-red);
+  --bar: var(--sec-routine);
+  --bar-ink: var(--sec-routine-ink);
   --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9%206h11M9%2012h11M9%2018h11M4%206h.5M4%2012h.5M4%2018h.5%22%2F%3E%3C%2Fsvg%3E');
 }
 #v-today .todaysec > .slist.box,
@@ -3276,29 +3375,23 @@ header:not(.compact) {
 header:not(.compact)::before {
   content: 'Current work / next action';
   display: block;
-  margin: 0 -12px 10px;
-  padding: 8px 12px 8px 44px;
+  margin: 0 -12px 8px;
+  padding: 6px 12px 6px 40px;
   border-bottom: 3px solid #111111;
   font-weight: 900;
   font-size: var(--fs);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   background: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%204.5l12%207.5-12%207.5z%22%2F%3E%3C%2Fsvg%3E')
-    14px center / 20px no-repeat;
+    12px center / 20px no-repeat;
+}
+/* (the narrowest phones: the header's label on one line, the short form of it) */
+@media (max-width: 359px) {
+  header:not(.compact)::before {
+    content: 'Current work';
+  }
 }
 /* what needs you: a red panel */
-.attsum > summary,
-.attsum > .attsumline {
-  border-width: 3px;
-}
-#v-today .attsum.sev0 > summary,
-#v-today .attsum.sev0 > .attsumline,
-#v-today .attsum.sev1 > summary,
-#v-today .attsum.sev1 > .attsumline {
-  background: var(--sec-red);
-  color: #111111;
-  border-color: var(--edge);
-}
 .attsum > summary b::before,
 .attsum > .attsumline b::before {
   content: '';
@@ -3710,7 +3803,7 @@ nav button[aria-current='page'] {
    Centre beside it, and the secondary sections folded at the end. */
 .attn {
   position: relative;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
 }
 .attn.attnone {
   display: flex;
@@ -3734,8 +3827,8 @@ nav button[aria-current='page'] {
   gap: 0 10px;
   min-height: 48px;
   box-sizing: border-box;
-  padding: 11px 150px 11px 12px;
-  border: 1px solid var(--edge);
+  padding: 11px calc(10.5 * var(--fs-xs) + 13px) 11px 12px;
+  border: 3px solid var(--edge);
   background: var(--panel);
   border-radius: var(--radius);
 }
@@ -3744,17 +3837,10 @@ nav button[aria-current='page'] {
   font-weight: 400;
   font-size: var(--fs-sm);
 }
-.attsum.sev0 > summary,
-.attsum.sev0 > .attsumline {
-  background: var(--err);
-  color: var(--on-status);
-  border-color: var(--err);
-}
-.attsum.sev1 > summary,
-.attsum.sev1 > .attsumline {
-  background: var(--warn-soft);
-  color: var(--ink);
-  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+.attsum:is(.sev0, .sev1) > :is(summary, .attsumline) {
+  background: var(--sec-red);
+  color: #111111;
+  border-color: var(--edge);
 }
 .attsum[open] > summary {
   border-bottom-width: 0;
@@ -3764,6 +3850,8 @@ nav button[aria-current='page'] {
 }
 .attsum > .attlist {
   margin: 0;
+  border-width: 3px;
+  border-top-width: 0;
 }
 .attrow {
   display: flex;
@@ -3778,7 +3866,7 @@ nav button[aria-current='page'] {
   right: 6px;
   /* a fixed width, and the summary keeps that much (and a gap) clear: whatever the font, the
      summary's words wrap rather than run under it */
-  width: 136px;
+  width: 10.5em;
   box-sizing: border-box;
   white-space: nowrap;
   overflow: hidden;
@@ -3794,6 +3882,8 @@ nav button[aria-current='page'] {
 }
 .attn.attnone .attcc {
   position: static;
+  flex: none;
+  width: auto;
 }
 .attrow .open > small {
   margin-top: 2px;

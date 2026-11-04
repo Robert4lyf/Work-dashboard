@@ -62,7 +62,7 @@ function forecastDays(span) {
 function forecastItems(span) {
   const t = today(),
     end = shift(t, span - 1),
-    top3 = S.top3 && S.top3.day === t ? S.top3.ids : [],
+    top3 = top3Ids(),
     items = [],
     none = [];
   S.quests.forEach((q, i) => {

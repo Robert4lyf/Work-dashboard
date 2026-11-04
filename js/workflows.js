@@ -190,7 +190,8 @@ function reconcileRuns() {
       return;
     if (r.status === 'ready') return;
     if (x.status === 'succeeded') {
-      if (completeStage(r, s.id, { note: x.msg ? 'Automation: ' + x.msg : '' }) === '') emitRun(r);
+      if (completeStage(r, s.id, { note: x.msg ? 'Automation: ' + x.msg : '', by: 'auto' }) === '')
+        emitRun(r);
     } else {
       failStage(
         r,
@@ -319,16 +320,51 @@ function nextStageId(r, s, pick) {
   const i = r.def.findIndex(x => x.id === s.id);
   return i >= 0 && i + 1 < r.def.length ? r.def[i + 1].id : '';
 }
+// Every check of a verification step ticked (one with none has nothing to tick).
+const checksDone = (r, s) => (s.checks || []).every((c, i) => (r.live.checks || [])[i]);
+// A guide step's guide, followed to its end.
+const guideDone = r => {
+  const pr = r.live.run && S.runs.find(x => x.id === r.live.run);
+  return !!(pr && pr.fin);
+};
+// An automation step's result is yours to confirm when its automation is gone, result tracking
+// is off, or there is an attempt to confirm (as the step's card offers it).
+const flowConfirmable = (r, s) =>
+  !S.flows.some(f => f.id === s.flow) ||
+  !S.track ||
+  !!(r.live.exec && S.execs.some(e => e.id === r.live.exec));
+const validPick = (s, pick) => Number.isInteger(pick) && pick >= 0 && pick < (s.choices || []).length;
+// How each kind of step may be done (`by`): by hand, a choice, the automation's own result or
+// your confirmation of it, the guide finished, the reply received. Left out, it is the engine's
+// own call; an automation step always says which.
+const STAGE_BY = {
+  manual: ['hand'],
+  verify: ['hand'],
+  decide: ['pick'],
+  procedure: ['hand', 'guide'],
+  flow: ['auto', 'confirm'],
+  wait: ['reply'],
+};
 // The current stage is done (or skipped): kept with what it held, and the run moves on.
-function completeStage(r, sid, { o = 'done', note = '', pick } = {}) {
+function completeStage(r, sid, { o = 'done', note = '', pick, by = '' } = {}) {
   if (WRUN_OVER.includes(r.status)) return 'the run is over';
   if (r.status === 'failed' && o !== 'skipped') return 'retry it first';
   if (r.status === 'paused') return 'the run is paused';
   if (r.status === 'ready') return 'the run has not started';
   const s = runStage(r);
   if (!s || s.id !== sid) return 'not the current step';
+  if (o !== 'done' && o !== 'skipped') return 'not an outcome';
   if (o === 'skipped' && !canSkip(s)) return "this step can't be skipped";
-  if (s.type === 'decide' && o === 'done' && !(s.choices || [])[pick]) return 'choose first';
+  if (o === 'done') {
+    if (by ? !STAGE_BY[s.type].includes(by) : s.type === 'flow') return "that isn't how this step is done";
+    if (s.type === 'decide' && !validPick(s, pick)) return 'choose first';
+    if (s.type !== 'decide' && pick !== undefined) return 'not a decision';
+    if (s.type === 'verify' && !checksDone(r, s)) return 'tick each check first';
+    if (s.type === 'procedure' && !guideDone(r)) return 'finish the guide first';
+    if (s.type === 'flow' && by === 'auto' && !r.live.exec) return 'no attempt to report on';
+    if (s.type === 'flow' && by === 'confirm' && !flowConfirmable(r, s)) return 'wait for its result';
+    if (s.type === 'wait' && stageWaitNode(r)) return 'still waiting';
+  }
   const out = { o, at: Date.now() };
   if (note) out.note = txt(note, 300);
   if (r.live.exec) out.exec = r.live.exec;
@@ -356,6 +392,7 @@ function completeStage(r, sid, { o = 'done', note = '', pick } = {}) {
 }
 function failStage(r, sid, err) {
   if (WRUN_FINAL.includes(r.status) || r.status === 'paused') return 'the run is over or paused';
+  if (r.status === 'ready') return 'the run has not started';
   const s = runStage(r);
   if (!s || s.id !== sid) return 'not the current step';
   r.status = 'failed';
@@ -398,7 +435,8 @@ function resumeRun(r) {
   if (p && s && s.type === 'flow') {
     // (the flow's result came while paused: applied now)
     delete r.live.pending;
-    if (p.k === 'exec_succeeded') completeStage(r, s.id, { note: p.msg ? 'Automation: ' + p.msg : '' });
+    if (p.k === 'exec_succeeded')
+      completeStage(r, s.id, { note: p.msg ? 'Automation: ' + p.msg : '', by: 'auto' });
     else
       failStage(
         r,
@@ -430,7 +468,8 @@ function onWorkflowEvent(ev) {
         return;
       }
       if (ev.k === 'exec_succeeded') {
-        if (completeStage(r, s.id, { note: ev.msg ? 'Automation: ' + ev.msg : '' }) === '') emitRun(r);
+        if (completeStage(r, s.id, { note: ev.msg ? 'Automation: ' + ev.msg : '', by: 'auto' }) === '')
+          emitRun(r);
       } else if (!WRUN_FINAL.includes(r.status)) {
         failStage(
           r,
@@ -445,13 +484,19 @@ function onWorkflowEvent(ev) {
   if (ev.k === 'proc_finished')
     S.wruns.forEach(r => {
       const s = runStage(r);
-      if (s && s.type === 'procedure' && r.live.run === ev.run && completeStage(r, s.id, {}) === '')
+      if (
+        s &&
+        s.type === 'procedure' &&
+        r.live.run === ev.run &&
+        completeStage(r, s.id, { by: 'guide' }) === ''
+      )
         emitRun(r);
     });
   if (ev.k === 'wait_resolved')
     S.wruns.forEach(r => {
       const s = runStage(r);
-      if (s && s.type === 'wait' && ev.node === r.live.wait && completeStage(r, s.id, {}) === '') emitRun(r);
+      if (s && s.type === 'wait' && ev.node === r.live.wait && completeStage(r, s.id, { by: 'reply' }) === '')
+        emitRun(r);
     });
 }
 // A run that just ended tells the rules (once per outcome: the key names it).
@@ -540,11 +585,19 @@ function openWorkflowRun(id) {
 }
 // A stage's "Launch" for a flow (the tap on its button): the execution, when tracked, is the
 // stage's own attempt; untracked, the launch is noted and the result is yours to confirm.
+// Whether a Launch drawn for this run's step still fits it: the same step, an automation, the
+// run neither finished nor paused.
+function wfLaunchFits(wrunId, stageId) {
+  const r = wrunById(wrunId),
+    s = r && runStage(r);
+  return (
+    !!s && s.id === stageId && s.type === 'flow' && !WRUN_FINAL.includes(r.status) && r.status !== 'paused'
+  );
+}
 function wfLaunched(wrunId, stageId, x) {
   const r = wrunById(wrunId),
     s = r && runStage(r);
-  if (!s || s.id !== stageId || s.type !== 'flow' || WRUN_FINAL.includes(r.status) || r.status === 'paused')
-    return;
+  if (!wfLaunchFits(wrunId, stageId)) return;
   if (x) r.live.exec = x.id;
   else r.live.launched = Date.now();
   runLog(r, 'launched', x ? '' : 'untracked');
@@ -581,66 +634,14 @@ function wfClick(d, b) {
   const r = d.wrun && wrunById(d.wrun);
   if (d.wrun && !r) return toast('That run is gone', false, 3000);
   if (!r) return wfEditClick(d, b);
-  const s = runStage(r),
-    was = r.status;
+  if (!d.wfact) return;
+  if (STAGE_ACTS[d.wfact]) return wfStageClick(r, d);
+  const was = r.status;
   let why = '';
   // Only what the run's state allows (a tap on a page drawn before a sync changed the run).
-  if (d.wfact && !runAllows(r, d.wfact)) return notNow(r);
+  if (!runAllows(r, d.wfact)) return notNow(r);
   if (d.wfact === 'begin') why = beginRun(r);
-  else if (d.wfact === 'done') {
-    if (s && s.type === 'verify' && !(r.live.checks || []).filter(Boolean).length && s.checks.length)
-      why = 'tick each check first';
-    else if (s && s.type === 'verify' && s.checks.some((c, i) => !(r.live.checks || [])[i]))
-      why = 'tick each check first';
-    else why = completeStage(r, s ? s.id : '');
-  } else if (d.wfact === 'pick') why = completeStage(r, s ? s.id : '', { pick: +d.pick });
-  else if (d.wfact === 'skip')
-    return sheet(
-      { title: 'Skip this step?', label: 'Why', ok: 'Skip', placeholder: 'Done by hand already' },
-      v => {
-        const rr = wrunById(r.id); // (the run as it is now: a sync pull may have replaced it)
-        if (!rr) return toast('That run is gone', false, 3000);
-        if (!runAllows(rr, 'skip', s ? s.id : '')) return notNow(rr);
-        const why2 = completeStage(rr, s ? s.id : '', { o: 'skipped', note: v || 'skipped' });
-        if (why2) toast("Couldn't skip: " + why2, false, 3000);
-        save();
-        renderKnowledge();
-      },
-    );
-  else if (d.wfact === 'fail')
-    return sheet({ title: 'What went wrong?', label: 'Error', ok: 'Mark failed', danger: true }, v => {
-      const rr = wrunById(r.id);
-      if (!rr) return toast('That run is gone', false, 3000);
-      if (!runAllows(rr, 'fail', s ? s.id : '')) return notNow(rr);
-      const why2 = failStage(rr, s ? s.id : '', v || 'Failed');
-      if (why2) toast(why2, false, 3000);
-      else emitRun(rr);
-      save();
-      renderKnowledge();
-    });
-  else if (d.wfact === 'retry') {
-    if (s && s.type === 'flow' && r.st[s.id] && r.st[s.id].exec)
-      return sheet(
-        {
-          title: 'Launch the automation again?',
-          text: 'The last attempt may already have done its work. Only retry if you have checked that it is safe to run again.',
-          ok: 'Retry',
-          danger: true,
-        },
-        () => {
-          const rr = wrunById(r.id);
-          if (!rr) return toast('That run is gone', false, 3000);
-          // (another device may have launched it again meanwhile: a retry now would drop that
-          // attempt, and its result with it)
-          if (!runAllows(rr, 'retry', s.id)) return notNow(rr);
-          const why2 = retryStage(rr, s.id);
-          if (why2) toast("Couldn't: " + why2, false, 3000);
-          save();
-          renderKnowledge();
-        },
-      );
-    why = retryStage(r, s ? s.id : '');
-  } else if (d.wfact === 'pause') why = pauseRun(r);
+  else if (d.wfact === 'pause') why = pauseRun(r);
   else if (d.wfact === 'resume') why = resumeRun(r);
   else if (d.wfact === 'cancel')
     return sheet(
@@ -675,18 +676,136 @@ function wfClick(d, b) {
     renderAll();
     return toast('Added to inbox');
   } else if (d.wfact === 'copy') return copyText(runSummary(r));
-  else if (d.wfact === 'check') {
+  wfAfter(r, was, why);
+}
+// After an action: what went wrong said, an ending told to the rules, the page redrawn.
+function wfAfter(r, was, why) {
+  if (why) toast("Couldn't: " + why, false, 3000);
+  if ((r.status === 'succeeded' || r.status === 'failed') && r.status !== was) emitRun(r);
+  save();
+  renderKnowledge();
+  if (r.status === 'succeeded') toast('Process completed');
+}
+// The current step's own actions (each drawn with the step's id, data-wstage), and the kinds of
+// step each belongs to. The rest act on the run as a whole.
+const STAGE_ACTS = {
+  done: ['manual', 'verify', 'procedure'],
+  pick: ['decide'],
+  check: ['verify'],
+  fail: ['manual', 'verify'],
+  skip: WF_TYPES,
+  retry: WF_TYPES,
+  confirmflow: ['flow'],
+  procedure: ['procedure'],
+  waititem: ['wait'],
+  received: ['wait'],
+};
+const MOVED = 'moved';
+// Whether a step's action still applies to the run as it is now: the step it was drawn for is
+// still the current one, it is that kind of step's action, the run's state allows it, and what
+// the step needs first is there. '' when it does; MOVED, 'status' or why not.
+function stageActWhy(r, act, sid, d = {}) {
+  const s = runStage(r);
+  if (!s || !sid || s.id !== sid || !(STAGE_ACTS[act] || []).includes(s.type)) return MOVED;
+  if (!runAllows(r, act, sid)) return 'status';
+  if (act === 'done' && s.type === 'verify' && !checksDone(r, s)) return 'tick each check first';
+  if (act === 'done' && s.type === 'procedure' && !guideDone(r)) return MOVED;
+  if (act === 'pick' && !validPick(s, +d.pick)) return MOVED;
+  if (act === 'check' && !(Number.isInteger(+d.i) && +d.i >= 0 && +d.i < (s.checks || []).length))
+    return MOVED;
+  if (act === 'confirmflow' && !flowConfirmable(r, s)) return MOVED;
+  if (act === 'waititem' && r.live.wait) return MOVED;
+  if (act === 'received' && !r.live.wait) return MOVED;
+  return '';
+}
+// The run, if the step's action still applies to it (checked on the tap, and again when a sheet
+// asked about it is answered: the run may have moved on meanwhile); else said so, and redrawn.
+function stageRunNow(id, act, sid, d) {
+  const r = wrunById(id);
+  if (!r) {
+    toast('That run is gone', false, 3000);
+    renderKnowledge();
+    return null;
+  }
+  const why = stageActWhy(r, act, sid, d);
+  if (!why) return r;
+  if (why === MOVED) movedOn();
+  else if (why === 'status') notNow(r);
+  else {
+    toast("Couldn't: " + why, false, 3000);
+    renderKnowledge();
+  }
+  return null;
+}
+function movedOn() {
+  toast('That step has moved on', false, 3000);
+  renderKnowledge();
+}
+function wfStageClick(r0, d) {
+  const act = d.wfact,
+    sid = d.wstage || '',
+    r = stageRunNow(r0.id, act, sid, d);
+  if (!r) return;
+  const s = runStage(r),
+    was = r.status;
+  let why = '';
+  if (act === 'done') why = completeStage(r, sid, { by: 'hand' });
+  else if (act === 'pick') why = completeStage(r, sid, { pick: +d.pick, by: 'pick' });
+  else if (act === 'skip')
+    return sheet(
+      { title: 'Skip this step?', label: 'Why', ok: 'Skip', placeholder: 'Done by hand already' },
+      v => {
+        const rr = stageRunNow(r.id, act, sid, d); // (the run as it is now: a pull may have replaced it)
+        if (!rr) return;
+        const why2 = completeStage(rr, sid, { o: 'skipped', note: v || 'skipped' });
+        if (why2) toast("Couldn't skip: " + why2, false, 3000);
+        save();
+        renderKnowledge();
+      },
+    );
+  else if (act === 'fail')
+    return sheet({ title: 'What went wrong?', label: 'Error', ok: 'Mark failed', danger: true }, v => {
+      const rr = stageRunNow(r.id, act, sid, d);
+      if (!rr) return;
+      const why2 = failStage(rr, sid, v || 'Failed');
+      if (why2) toast(why2, false, 3000);
+      else emitRun(rr);
+      save();
+      renderKnowledge();
+    });
+  else if (act === 'retry') {
+    if (s.type === 'flow' && r.st[sid] && r.st[sid].exec)
+      return sheet(
+        {
+          title: 'Launch the automation again?',
+          text: 'The last attempt may already have done its work. Only retry if you have checked that it is safe to run again.',
+          ok: 'Retry',
+          danger: true,
+        },
+        () => {
+          // (another device may have launched it again meanwhile: a retry now would drop that
+          // attempt, and its result with it)
+          const rr = stageRunNow(r.id, act, sid, d);
+          if (!rr) return;
+          const why2 = retryStage(rr, sid);
+          if (why2) toast("Couldn't: " + why2, false, 3000);
+          save();
+          renderKnowledge();
+        },
+      );
+    why = retryStage(r, sid);
+  } else if (act === 'check') {
     const i = +d.i;
     r.live.checks = r.live.checks || [];
     r.live.checks[i] = !r.live.checks[i];
     save();
     return renderKnowledge();
-  } else if (d.wfact === 'confirmflow') {
+  } else if (act === 'confirmflow') {
     // Tracking off, or no word after a day: the result, confirmed by you (and said so).
-    if (d.ok === 'yes') why = completeStage(r, s ? s.id : '', { note: 'Result confirmed by hand' });
-    else why = failStage(r, s ? s.id : '', 'Failed (confirmed by hand)');
-  } else if (d.wfact === 'procedure') {
-    if (!s || s.type !== 'procedure' || !procOf(s.kb)) return toast('That guide is gone', false, 3000);
+    if (d.ok === 'yes') why = completeStage(r, sid, { note: 'Result confirmed by hand', by: 'confirm' });
+    else why = failStage(r, sid, 'Failed (confirmed by hand)');
+  } else if (act === 'procedure') {
+    if (!procOf(s.kb)) return toast('That guide is gone', false, 3000);
     const pr = openRunFor(s.kb, 'wr-' + r.id) || null;
     if (!pr) {
       const nr = {
@@ -710,27 +829,22 @@ function wfClick(d, b) {
     kbRunBackWf = r.id;
     renderKnowledge();
     return window.scrollTo(0, 0);
-  } else if (d.wfact === 'waititem') {
-    if (!s || s.type !== 'wait') return;
+  } else if (act === 'waititem') {
     stageWaitItem(r, s);
     settleRun(r);
     runLog(r, 'waiting', s.who || '');
     save();
     return renderKnowledge();
-  } else if (d.wfact === 'received') {
+  } else if (act === 'received') {
     // The reply came (the item's been cleared elsewhere, or you say so): the stage is done.
     const wn = stageWaitNode(r);
     if (wn)
       setWaiting(wn.id, null); // (emits wait_resolved: the run moves on there)
-    else why = completeStage(r, s ? s.id : '', { note: 'received' });
+    else why = completeStage(r, sid, { note: 'received', by: 'reply' });
   }
-  if (why) toast("Couldn't: " + why, false, 3000);
-  if ((r.status === 'succeeded' || r.status === 'failed') && r.status !== was) emitRun(r);
-  save();
-  renderKnowledge();
-  if (r.status === 'succeeded') toast('Process completed');
+  wfAfter(r, was, why);
 }
-// (actions on the run as a whole; the rest belong to its current step)
+// (actions the run's state decides on its own; the rest, and retry too, belong to its current step)
 const RUN_ACTS = ['begin', 'resume', 'retry', 'pause', 'cancel', 'ack', 'inbox', 'copy'];
 // Whether the run as it is now allows `act` (and, given `sid`, still on that step): checked on the
 // tap, and again when a sheet asked about it is confirmed (another device may have moved it on).
@@ -831,9 +945,11 @@ function wfRunView(r) {
 }
 // The current stage: what to do, and the one action that moves it on.
 function stageCard(r, s, i) {
+  // (a step's own actions name the step they were drawn for: a tap after the run moved on is refused)
   const id = r.id,
+    ws = `data-wstage="${s.id}"`,
     b = (act, label, cls = '', extra = '') =>
-      `<button class="btn ${cls}" data-wrun="${id}" data-wfact="${act}" ${extra}>${label}</button>`;
+      `<button class="btn ${cls}" data-wrun="${id}" data-wfact="${act}"${STAGE_ACTS[act] ? ' ' + ws : ''} ${extra}>${label}</button>`;
   let body = s.text ? `<p class="ptext">${kbLinkify(s.text)}</p>` : '',
     acts = '';
   const failed = r.status === 'failed',
@@ -871,7 +987,7 @@ function stageCard(r, s, i) {
     body += `<div class="wchecks">${(s.checks || [])
       .map(
         (c, j) =>
-          `<label class="optbox"><input type="checkbox" data-wrun="${id}" data-wfact="check" data-i="${j}"${ticks[j] ? ' checked' : ''}>${esc(c)}</label>`,
+          `<label class="optbox"><input type="checkbox" data-wrun="${id}" data-wfact="check" ${ws} data-i="${j}"${ticks[j] ? ' checked' : ''}>${esc(c)}</label>`,
       )
       .join('')}</div>`;
     const all = s.checks.every((c, j) => ticks[j]);
@@ -888,7 +1004,7 @@ function stageCard(r, s, i) {
       (s.choices || [])
         .map(
           (c, j) =>
-            `<button class="btn blue" data-wrun="${id}" data-wfact="pick" data-pick="${j}">${esc(c.label)}</button>`,
+            `<button class="btn blue" data-wrun="${id}" data-wfact="pick" ${ws} data-pick="${j}">${esc(c.label)}</button>`,
         )
         .join('') + skip;
   } else if (s.type === 'procedure') {

@@ -495,6 +495,13 @@ document.addEventListener(
     const a = e.target.closest && e.target.closest('a[data-flow]'),
       f = a && S.flows.find(x => x.id === a.dataset.flow);
     if (!f) return;
+    // (a process's Launch drawn for a step the run has since left: not launched, nor recorded)
+    if (a.dataset.wrun && !wfLaunchFits(a.dataset.wrun, a.dataset.wstage || '')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      toast('That step has moved on', false, 3000);
+      return renderView();
+    }
     f.last = Date.now();
     // Tracked (Settings > Flows and automations): the tap is an execution, requested, until the
     // flow reports back. Nothing else runs it: only this tap.

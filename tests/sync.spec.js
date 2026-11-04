@@ -249,7 +249,8 @@ async function device(browser, srv, seed, opts = {}) {
   // (a reload waits for writes to the store, then for the app to have started)
   const reload = page.reload.bind(page);
   page.reload = async (...a) => {
-    await page.evaluate(() => (window.storeDone ? storeDone() : null)).catch(() => {});
+    // (storeDone is a top-level const, not on window: see tests/fixtures.js)
+    await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null)).catch(() => {});
     const r = await reload(...a);
     await page.waitForFunction(() => window.appReady === true);
     return r;

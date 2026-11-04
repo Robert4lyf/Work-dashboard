@@ -48,7 +48,7 @@ function row(n, i, len, sib) {
         ? '<span class="tag asknext">All ticked: what\'s next?</span>'
         : '');
   const right = reorder
-    ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
+    ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
   return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
 }
@@ -153,6 +153,28 @@ function list(ns, doneApart, steps) {
     h += `<details id="donesec"${panels.donesec ? ' open' : ''}><summary>Done today <small>${done.length}</small></summary><div class="list box">${done.map((c, i) => row(c, i, ns.length, ns)).join('')}</div></details>`;
   return h;
 }
+// Today's list: what can be worked on, and what's finished today (not what's scheduled or only
+// waiting: those are in their own sections).
+const todayWork = qs => qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
+/* Reordering a list that shows only some of the tasks under it (Today's, without the scheduled
+   and waiting ones). There is one order, S.quests; the list is the tasks it shows, in that order.
+   Up and down move a task past its neighbour in the list (to just before it, or just after it),
+   and Top to just before the list's first: the hidden tasks stay where they are among the rest,
+   none is dropped or copied, and the same moves give the same order on every device. Elsewhere
+   (a task's steps, all shown) it's an ordinary swap. */
+function moveAmong(id, how) {
+  const r = find(id);
+  if (!r) return false;
+  const arr = r.arr,
+    shown = arr === S.quests ? todayWork(arr) : arr,
+    k = shown.indexOf(r.n);
+  if (k < 0) return false;
+  const to = how === 'top' ? shown[0] : how === 'up' ? shown[k - 1] : shown[k + 1];
+  if (!to || to === r.n) return false;
+  arr.splice(arr.indexOf(r.n), 1);
+  arr.splice(arr.indexOf(to) + (how === 'down' ? 1 : 0), 0, r.n);
+  return true;
+}
 function renderToday() {
   // (each lane of the board keeps where it was scrolled to across a redraw)
   const laneX = {};
@@ -160,6 +182,10 @@ function renderToday() {
     .querySelectorAll('.blane')
     .forEach(l => (laneX[l.dataset.lane] = l.querySelector('.lanetiles').scrollLeft));
   drawToday();
+  // (an open Top 3 picker shows what Top 3 is now, after a sync or a change elsewhere: a tap on it
+  // then means what it shows)
+  if (document.querySelector('#sheet .t3pick'))
+    renderTop3Picker((document.querySelector('#sheet .qahint') || {}).textContent);
   for (const k in laneX) {
     const l = $(`#v-today .blane[data-lane="${k}"] .lanetiles`);
     if (l) l.scrollLeft = laneX[k];
@@ -201,28 +227,20 @@ function drawToday() {
   }
   const qs = S.quests,
     // (what can be worked on, and what's finished today; scheduled tasks and ones only waiting
-    // have sections of their own. Reordering shows them all: it's the one order underneath.)
-    work = reorder ? qs : qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
-  // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. what's scheduled;
-  // 4. Today's work; 5. what it's waiting on.
-  // (On a wide screen, two columns: what you work through on the left, under the header; what
-  // needs you, what's at a time and what you're waiting on down the right.)
+    // have sections of their own, in Reorder too: see moveAmong)
+    work = todayWork(qs);
   todayTitle();
-  const att = renderAttention(),
-    sched = renderScheduledToday(),
-    wait = renderWaitingToday(),
-    cols = colsMQ.matches;
-  let h = (cols ? '' : att) + renderTop3() + renderCarried() + (cols ? '' : sched);
+  // Today's work: the list (or board), or why there's none.
   const asBoard = todayView === 'board' && work.length;
-  h += listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0);
-  h += asBoard ? board(work) : list(work, true);
-  if (qs.length && !work.length) h += '<p class="hint nowork">Nothing to act on now.</p>';
-  if (!cols) h += wait;
+  let tasks =
+    listHead("Today's tasks", asBoard ? [] : work, qs.length > 0) +
+    (asBoard ? board(work) : list(work, true));
+  if (qs.length && !work.length) tasks += '<p class="hint nowork">Nothing to act on now.</p>';
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
-    h +=
+    tasks +=
       '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
-  // 4. The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
+  // The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
   // repeats, flows and alarms. (Overdue and due-today work is in Needs attention.)
   const soon = dueSoon().filter(s => s.t.length > 1 && s.n.due > today());
   let more = '';
@@ -248,8 +266,19 @@ function drawToday() {
     more += '</details>';
   }
   more += quickActions() + renderAlarms();
-  if (more) h += `<section class="todaymore" aria-label="More on Today">${more}</section>`;
-  if (cols) h = `<div class="tmain">${h}</div><div class="tside">${att + sched + wait}</div>`;
+  // The same sections either way, composed for the screen. On a phone, down the page: what needs
+  // attention, the Top 3, what's carried over, what's scheduled, what it's waiting on (above the
+  // list, so a long day doesn't bury it), Today's tasks, then the rest folded. On a wide screen, two
+  // columns: what you work through on the left under the header (Top 3, the list); what needs
+  // you, what's at a time and what you're waiting on down the right.
+  const att = renderAttention(),
+    top3 = renderTop3() + renderCarried(),
+    sched = renderScheduledToday(),
+    wait = renderWaitingToday(),
+    rest = more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '';
+  const h = colsMQ.matches
+    ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
+    : att + top3 + sched + wait + tasks + rest;
   setHTML($('#v-today'), h);
 }
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.

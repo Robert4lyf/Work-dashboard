@@ -446,23 +446,21 @@ document.addEventListener('click', e => {
       settle(bf);
     });
   }
-  if (d.up || d.down) {
-    const r = find(d.up || d.down);
-    if (!r) return;
-    const i = r.arr.indexOf(r.n),
-      j = d.up ? i - 1 : i + 1;
-    if (j < 0 || j >= r.arr.length) return;
-    [r.arr[i], r.arr[j]] = [r.arr[j], r.arr[i]];
+  // (past the next one shown: Today's list leaves out scheduled and waiting tasks, which keep
+  // their places in the order underneath; see moveAmong)
+  if (
+    (d.up || d.down || d.top) &&
+    moveAmong(d.up || d.down || d.top, d.up ? 'up' : d.down ? 'down' : 'top')
+  ) {
+    const id = d.up || d.down || d.top;
     save();
     renderAll();
-  }
-  if (d.top) {
-    const r = find(d.top);
-    if (r) {
-      r.arr.splice(r.arr.indexOf(r.n), 1);
-      r.arr.unshift(r.n);
-      save();
-      renderAll();
+    // (the button tapped may now be disabled, at the top or the bottom: the keyboard stays on the
+    // moved row, on a move that can still be made)
+    if (!document.activeElement || document.activeElement === document.body) {
+      const row = document.querySelector(`#v-today [data-qid="${CSS.escape(id)}"]`),
+        f = row && (row.querySelector('.mv:not([disabled])') || row.querySelector('.open'));
+      if (f) f.focus({ preventScroll: true });
     }
   }
   if (b.id === 'reorder') {

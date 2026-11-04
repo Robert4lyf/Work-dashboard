@@ -895,8 +895,8 @@ test('static audit fixes: a re-armed Delete is the same item’s; dark tags and 
       [...document.querySelectorAll('meta[name="theme-color"]')].map(m => [m.media, m.content]),
     ),
   ).toEqual([
-    ['', '#12161c'],
-    ['', '#12161c'],
+    ['', '#121212'],
+    ['', '#121212'],
   ]);
   await page.evaluate(() => setLook('theme', ''));
   expect(await page.evaluate(() => document.querySelector('meta[name="theme-color"]').media)).toContain(
