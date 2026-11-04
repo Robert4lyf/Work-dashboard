@@ -604,7 +604,8 @@ test('Forecast leads with the most significant finding; the rest and the unestim
   await expect(page.locator('#fnoned .chip').first()).toBeHidden();
   await page.click('#fnoned > summary');
   expect(await page.locator('#fnoned .chip').count()).toBeGreaterThan(6);
-  // Folds stay open through a redraw.
+  // Folds stay open through a redraw (once the browser's toggle event has recorded it).
+  await page.waitForFunction(() => panels.fnoned === true);
   await page.evaluate(() => inBackground(renderReview));
   await expect(page.locator('#fnoned')).toHaveAttribute('open', '');
   expect(app.errors).toEqual([]);
@@ -730,5 +731,102 @@ test('Scenario C: a complex process runs end to end (manual, guide, automation, 
   );
   await expect(page.locator('#v-knowledge .pstep.done h3')).toContainText('Completed');
   await expect(page.locator('#v-knowledge [data-wfact]')).toHaveText(['Copy summary']);
+  expect(app.errors).toEqual([]);
+});
+
+/* adversarial pass fixes */
+
+test('a confirmed sheet acts only if the run still allows it: a retry after another device relaunched is refused, so that attempt’s result still counts', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await seedStates(page);
+  await page.evaluate(() => openWorkflowRun('failed'));
+  await page.click('.pstep.failed [data-wfact="retry"]');
+  await expect(page.locator('#sheettitle')).toHaveText('Launch the automation again?');
+  // Meanwhile, another device retried and launched it: the run waits on that new attempt.
+  await page.evaluate(() => {
+    const r = wrunById('failed');
+    retryStage(r, 's2');
+    S.execs.push({
+      id: 'x9',
+      flow: 'f1',
+      at: Date.now(),
+      status: 'running',
+      msg: '',
+      upd: Date.now(),
+      ev: [],
+    });
+    wfLaunched(r.id, 's2', S.execs[S.execs.length - 1]);
+    S.wruns = S.wruns.map(x => JSON.parse(JSON.stringify(x))); // (as a pull replaces records)
+  });
+  await page.click('#sheetok');
+  await expect(page.locator('#toast')).toContainText('Not now');
+  let r = await page.evaluate(() => wrunById('failed'));
+  expect([r.status, r.live.exec]).toEqual(['awaiting_automation', 'x9']);
+  // Its result moves the run on.
+  await page.evaluate(() => onWorkflowEvent({ k: 'exec_succeeded', exec: 'x9', msg: '' }));
+  r = await page.evaluate(() => wrunById('failed'));
+  expect(r.cur).toBe('s3');
+  // A skip sheet confirmed after the run moved past that step does nothing.
+  await page.evaluate(() => openWorkflowRun('failskip'));
+  await page.click('#wfmore summary');
+  await page.click('.pstep.failed [data-wfact="skip"]');
+  await page.evaluate(() => cancelRun(wrunById('failskip'), 'elsewhere'));
+  await page.fill('#sheetin', 'x');
+  await page.click('#sheetok');
+  expect((await page.evaluate(() => wrunById('failskip'))).status).toBe('cancelled');
+  expect(app.errors).toEqual([]);
+});
+
+test('a guide run or an automation attempt left by a run that ended or moved on is listed as work of its own', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await app.setState(processDay);
+  await page.reload();
+  await page.evaluate(() => {
+    cancelRun(wrunById('r3'), 'test'); // (its guide, p1, left part-way)
+    cancelRun(wrunById('r2'), 'test'); // (its automation attempt, x3, still running)
+    save();
+  });
+  await app.processes();
+  await expect(page.locator('#wfhead + .list [data-runopen="p1"]').first()).toBeVisible();
+  const rows = await page.evaluate(() => opsProgress().map(r => r.text));
+  expect(rows).toEqual(expect.arrayContaining(['Month-end close checklist', 'Backup']));
+  expect(app.errors).toEqual([]);
+});
+
+test('re-saving a decision keeps the step it jumps to by id, when two steps share that name', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await page.evaluate(() => {
+    S.workflows = [
+      {
+        id: 'w1',
+        name: 'Twice',
+        ver: 1,
+        days: [],
+        monthDay: 0,
+        stages: [
+          { id: 'q', type: 'decide', title: 'Choose', choices: [{ label: 'Go', next: 'd' }] },
+          { id: 'c', type: 'manual', title: 'Check' },
+          { id: 'd', type: 'manual', title: 'Check' },
+        ],
+      },
+    ];
+    save();
+  });
+  await app.processes();
+  await page.click('[data-wfview="w1"]');
+  await page.click('[data-wfedit="w1"]');
+  await page.click('#wfstages [data-wfstage="q"]');
+  await page.click('#sheetok');
+  await page.click('#wfform .btn.green');
+  expect((await app.state()).workflows[0].stages[0].choices[0].next).toBe('d');
   expect(app.errors).toEqual([]);
 });

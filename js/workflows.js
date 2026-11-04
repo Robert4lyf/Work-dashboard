@@ -217,7 +217,12 @@ const wfById = id => S.workflows.find(w => w.id === id) || null;
 const wrunById = id => S.wruns.find(r => r.id === id) || null;
 // The process run a guide run was opened from (a guide followed as a step: its q is 'wr-' + the
 // run's id), by id. Such a guide run is that process's work, not work of its own.
-const guideParent = pr => (/^wr-/.test(pr.q || '') ? wrunById(pr.q.slice(3)) : null);
+// Only while that run is under way on the step following it: a guide run left behind by a
+// cancelled or finished run, or one it has moved past, is work of its own again.
+function guideParent(pr) {
+  const r = /^wr-/.test(pr.q || '') ? wrunById(pr.q.slice(3)) : null;
+  return r && !WRUN_OVER.includes(r.status) && r.live.run === pr.id ? r : null;
+}
 const runStage = r => r.def.find(s => s.id === r.cur) || null;
 const runLog = (r, k, m = '') => {
   r.log.push({ t: Date.now(), k, m: txt(m, 200) });
@@ -578,19 +583,7 @@ function wfClick(d, b) {
     was = r.status;
   let why = '';
   // Only what the run's state allows (a tap on a page drawn before a sync changed the run).
-  const can = runActions(r),
-    act = d.wfact;
-  if (
-    act &&
-    (RUN_ACTS.includes(act)
-      ? act !== can.primary && !can.more.includes(act)
-      : act === 'skip'
-        ? !can.more.includes('skip') && !(can.primary === 'step' && canSkip(s))
-        : can.primary !== 'step')
-  ) {
-    toast(`Not now: the process is ${runWord(r).toLowerCase()}`, false, 3000);
-    return renderKnowledge();
-  }
+  if (d.wfact && !runAllows(r, d.wfact)) return notNow(r);
   if (d.wfact === 'begin') why = beginRun(r);
   else if (d.wfact === 'done') {
     if (s && s.type === 'verify' && !(r.live.checks || []).filter(Boolean).length && s.checks.length)
@@ -605,6 +598,7 @@ function wfClick(d, b) {
       v => {
         const rr = wrunById(r.id); // (the run as it is now: a sync pull may have replaced it)
         if (!rr) return toast('That run is gone', false, 3000);
+        if (!runAllows(rr, 'skip', s ? s.id : '')) return notNow(rr);
         const why2 = completeStage(rr, s ? s.id : '', { o: 'skipped', note: v || 'skipped' });
         if (why2) toast("Couldn't skip: " + why2, false, 3000);
         save();
@@ -615,6 +609,7 @@ function wfClick(d, b) {
     return sheet({ title: 'What went wrong?', label: 'Error', ok: 'Mark failed', danger: true }, v => {
       const rr = wrunById(r.id);
       if (!rr) return toast('That run is gone', false, 3000);
+      if (!runAllows(rr, 'fail', s ? s.id : '')) return notNow(rr);
       const why2 = failStage(rr, s ? s.id : '', v || 'Failed');
       if (why2) toast(why2, false, 3000);
       else emitRun(rr);
@@ -633,6 +628,9 @@ function wfClick(d, b) {
         () => {
           const rr = wrunById(r.id);
           if (!rr) return toast('That run is gone', false, 3000);
+          // (another device may have launched it again meanwhile: a retry now would drop that
+          // attempt, and its result with it)
+          if (!runAllows(rr, 'retry', s.id)) return notNow(rr);
           const why2 = retryStage(rr, s.id);
           if (why2) toast("Couldn't: " + why2, false, 3000);
           save();
@@ -654,6 +652,7 @@ function wfClick(d, b) {
       () => {
         const rr = wrunById(r.id); // (the run as it is now: a sync pull may have replaced it)
         if (!rr) return toast('That run is gone', false, 3000);
+        if (!runAllows(rr, 'cancel')) return notNow(rr);
         const why2 = cancelRun(rr, 'cancelled by you');
         if (why2) toast("Couldn't cancel: " + why2, false, 3000);
         else emitRun(rr);
@@ -731,6 +730,20 @@ function wfClick(d, b) {
 }
 // (actions on the run as a whole; the rest belong to its current step)
 const RUN_ACTS = ['begin', 'resume', 'retry', 'pause', 'cancel', 'ack', 'inbox', 'copy'];
+// Whether the run as it is now allows `act` (and, given `sid`, still on that step): checked on the
+// tap, and again when a sheet asked about it is confirmed (another device may have moved it on).
+function runAllows(r, act, sid) {
+  const can = runActions(r),
+    s = runStage(r);
+  if (sid !== undefined && (!s || s.id !== sid)) return false;
+  if (RUN_ACTS.includes(act)) return act === can.primary || can.more.includes(act);
+  if (act === 'skip') return can.more.includes('skip') || (can.primary === 'step' && canSkip(s));
+  return can.primary === 'step';
+}
+function notNow(r) {
+  toast(`Not now: the process is ${runWord(r).toLowerCase()}`, false, 3000);
+  renderKnowledge();
+}
 let kbRunBackWf = null; // a procedure opened from a workflow run: its ‹ goes back to the run
 function runSummary(r) {
   return [
@@ -1216,9 +1229,12 @@ function saveStageForm(id) {
       .map(l => {
         const m = /^(.*?)\s*->\s*(.+)$/.exec(l),
           label = m ? m[1].trim() : l,
-          target =
-            m &&
-            wfEdit.stages.find(x => x.title.toLowerCase() === m[2].trim().toLowerCase() && x.id !== s.id);
+          named = x => m && x.title.toLowerCase() === m[2].trim().toLowerCase() && x.id !== s.id,
+          // (the jump the choice had, kept by id when its step still has that name: two steps
+          // can share a name, and the first of them isn't necessarily the one it jumped to)
+          was = ((wfEdit.stages.find(x => x.id === id) || {}).choices || []).find(c => c.label === label),
+          kept = was && was.next && wfEdit.stages.find(x => x.id === was.next && named(x)),
+          target = kept || wfEdit.stages.find(named);
         return { label, next: target ? target.id : '' };
       });
   if (type === 'procedure' && !s.kb) return toast('Choose the guide to follow', false, 3000);
