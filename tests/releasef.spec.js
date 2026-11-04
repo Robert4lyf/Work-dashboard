@@ -416,12 +416,12 @@ test.describe('Checkpoint 3: Reorder with scheduled and waiting tasks hidden', (
   test('rapid moves, a tick, and tasks coming back into the list mid-reorder', async ({ app, page }) => {
     await plain(app, page, mixed);
     await page.click('#reorder');
-    // Rapid: three downs on Alpha land it last among the listed; nothing lost or doubled.
-    for (let i = 0; i < 3; i++)
-      await page
-        .locator('#v-today [data-down="a"]')
-        .click({ force: true })
-        .catch(() => {});
+    // Rapid: three downs on Alpha in one go, each on the button as redrawn by the one before
+    // (the last is disabled by then); it lands last among the listed, nothing lost or doubled.
+    // (Clicked in the page, not through the pointer: the row can sit under the fixed tab bar.)
+    await page.evaluate(() => {
+      for (let i = 0; i < 3; i++) document.querySelector('#v-today [data-down="a"]').click();
+    });
     expect(await listed(page)).toBe('cea');
     expect((await order(page)).split('').sort().join('')).toBe('abcde');
     // A tick while reordering: Charlie done, still in place, still movable below the open ones.
