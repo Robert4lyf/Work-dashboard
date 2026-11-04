@@ -585,11 +585,19 @@ function openWorkflowRun(id) {
 }
 // A stage's "Launch" for a flow (the tap on its button): the execution, when tracked, is the
 // stage's own attempt; untracked, the launch is noted and the result is yours to confirm.
+// Whether a Launch drawn for this run's step still fits it: the same step, an automation, the
+// run neither finished nor paused.
+function wfLaunchFits(wrunId, stageId) {
+  const r = wrunById(wrunId),
+    s = r && runStage(r);
+  return (
+    !!s && s.id === stageId && s.type === 'flow' && !WRUN_FINAL.includes(r.status) && r.status !== 'paused'
+  );
+}
 function wfLaunched(wrunId, stageId, x) {
   const r = wrunById(wrunId),
     s = r && runStage(r);
-  if (!s || s.id !== stageId || s.type !== 'flow' || WRUN_FINAL.includes(r.status) || r.status === 'paused')
-    return;
+  if (!wfLaunchFits(wrunId, stageId)) return;
   if (x) r.live.exec = x.id;
   else r.live.launched = Date.now();
   runLog(r, 'launched', x ? '' : 'untracked');

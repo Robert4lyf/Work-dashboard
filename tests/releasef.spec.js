@@ -558,3 +558,74 @@ test.describe('Android scenarios (390 × 844)', () => {
     await expect(page.locator('#sheet [data-t3tog="b1"]')).toHaveCount(1);
   });
 });
+
+test.describe('Checkpoint 3: QA fixes', () => {
+  test('a returning choice never pushes out the one that took its place (scheduled, then done)', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page);
+    await elsewhere(page, () => (S.quests[1].scheduled = { date: today() }));
+    await page.click('[data-top3pick]');
+    await page.click('#sheet [data-t3tog="d"]');
+    await page.keyboard.press('Escape');
+    // Delta scheduled too; Bravo back: Bravo takes the free place, and keeps it.
+    await elsewhere(page, () => (S.quests[3].scheduled = { date: today() }));
+    await elsewhere(page, () => delete S.quests[1].scheduled);
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Bravo']);
+    // Delta back: offered back, nothing pushed out.
+    await elsewhere(page, () => delete S.quests[3].scheduled);
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Bravo']);
+    await expect(page.locator('#v-today .t3back')).toContainText('Delta can be worked on again');
+    // Or done instead: still nothing pushed out.
+    await elsewhere(page, () => (S.quests[3].done = true));
+    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Bravo']);
+  });
+
+  test('the open picker follows a sync, so a tap means what it shows; Take out takes out', async ({
+    app,
+    page,
+  }) => {
+    await plain(app, page);
+    await page.click('[data-top3pick]');
+    await expect(page.locator('#sheet [data-t3tog="d"]')).toHaveAttribute('aria-pressed', 'false');
+    // Another device takes Charlie out and chooses Delta; the picker shows it at once.
+    await elsewhere(page, () => (S.top3 = { day: today(), ids: ['a', 'b', 'd'] }));
+    await expect(page.locator('#sheet [data-t3tog="d"]')).toHaveAttribute('aria-pressed', 'true');
+    await page.click('#sheet [data-t3tog="d"]');
+    expect((await t3(page)).ids).toEqual(['a', 'b']);
+    await page.keyboard.press('Escape');
+    // A set-aside one that took a place meanwhile: Take out takes it out of the three too.
+    await elsewhere(page, () => {
+      S.top3 = { day: today(), ids: ['a', 'b', 'd'] };
+      S.quests[1].scheduled = { date: today() };
+    });
+    await page.click('[data-top3pick]');
+    await page.click('#sheet [data-t3tog="c"]');
+    await expect(page.locator('#sheet .t3kept')).toContainText('Bravo');
+    await elsewhere(page, () => delete S.quests[1].scheduled);
+    await page.evaluate(() => top3Click({ t3drop: 'b' }));
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd', 'c'] });
+  });
+
+  test('a scheduled task chosen for Top 3 can be taken out from its actions', async ({ app, page }) => {
+    await plain(app, page);
+    await elsewhere(page, () => (S.quests[1].scheduled = { date: today(), time: '15:00' }));
+    await page.click('#v-today .schedrow[data-qid="b"] .qmore');
+    await page.click('#sheet [data-top3="b"]');
+    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c'] });
+  });
+
+  test('Reorder is offered only with two tasks in the list to reorder', async ({ app, page }) => {
+    await plain(app, page, s => {
+      const k = (id, text, x = {}) => ({ id, text, done: false, children: [], ...x });
+      s.quests = [
+        k('a', 'Alpha'),
+        k('b', 'Bravo', { scheduled: { date: today() } }),
+        k('d', 'Delta', { wait: { who: 'Sam', note: '', since: today() } }),
+      ];
+    });
+    await expect(page.locator('#v-today .list .row')).toHaveCount(1);
+    await expect(page.locator('#reorder')).toHaveCount(0);
+  });
+});

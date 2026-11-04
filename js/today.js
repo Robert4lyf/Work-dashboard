@@ -182,6 +182,10 @@ function renderToday() {
     .querySelectorAll('.blane')
     .forEach(l => (laneX[l.dataset.lane] = l.querySelector('.lanetiles').scrollLeft));
   drawToday();
+  // (an open Top 3 picker shows what Top 3 is now, after a sync or a change elsewhere: a tap on it
+  // then means what it shows)
+  if (document.querySelector('#sheet .t3pick'))
+    renderTop3Picker((document.querySelector('#sheet .qahint') || {}).textContent);
   for (const k in laneX) {
     const l = $(`#v-today .blane[data-lane="${k}"] .lanetiles`);
     if (l) l.scrollLeft = laneX[k];

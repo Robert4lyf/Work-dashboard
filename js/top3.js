@@ -195,7 +195,11 @@ function top3Click(d) {
   if (d.top3) return toggleTop3(d.top3);
   if (d.t3back) return openTop3Picker(`Top 3 is full. Take one out to bring back ${top3Text(d.t3back)}.`);
   if (d.t3drop) {
-    setTop3(top3Ids(), { drop: [d.t3drop] });
+    // (out of the three as well, if it has taken a place since the picker was drawn)
+    setTop3(
+      top3Ids().filter(x => x !== d.t3drop),
+      { drop: [d.t3drop] },
+    );
     return renderTop3Picker();
   }
   if (d.t3tog) {

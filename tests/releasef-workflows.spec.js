@@ -682,3 +682,29 @@ test('two devices: a sheet held open on one while the other completes or cancels
   }
   expect([...a.errors, ...b.errors]).toEqual([]);
 });
+
+test('a Launch drawn for an automation step the run has left launches nothing and records nothing', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await seed(
+    page,
+    [
+      { id: 'a', type: 'flow', title: 'A', flow: 'f1' },
+      { id: 'b', type: 'flow', title: 'B', flow: 'f1' },
+    ],
+    { track: false, prep: 'beginRun(r);' },
+  );
+  const launch = page.locator('a[data-flow][data-wstage="a"]');
+  await expect(launch).toHaveCount(1);
+  // Another device confirmed A by hand; the page still shows A's Launch.
+  await pull(page, "completeStage(r, 'a', { by: 'confirm' });");
+  const before = await run(page);
+  expect(before.cur).toBe('b');
+  await launch.click();
+  await moved(page);
+  expect(await run(page)).toEqual(before);
+  expect(await page.evaluate(() => [S.execs.length, S.flows[0].last || 0])).toEqual([0, 0]);
+  await expect(page.locator('a[data-flow][data-wstage="b"]')).toHaveCount(1);
+});
