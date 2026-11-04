@@ -1,9 +1,12 @@
 const { test, expect } = require('./fixtures');
 
-test('font and colour choices apply at once and survive a reload', async ({ app, page }) => {
+test('text size and colour choices apply at once and survive a reload; the old font choice reads as standard', async ({
+  app,
+  page,
+}) => {
   await app.open();
   await app.go('account');
-  await page.click('[data-look="font"][data-val="plain"]');
+  await page.click('[data-look="font"][data-val="large"]');
   await page.click('[data-look="theme"][data-val="dark"]');
   const root = () =>
     page.evaluate(() => ({
@@ -12,19 +15,30 @@ test('font and colour choices apply at once and survive a reload', async ({ app,
       family: getComputedStyle(document.querySelector('h2')).fontFamily,
     }));
   let r = await root();
-  expect(r).toMatchObject({ font: 'plain', theme: 'dark' });
-  expect(r.family).not.toContain('Press Start');
+  expect(r).toMatchObject({ font: 'large', theme: 'dark' });
+  expect(r.family).toContain('system-ui');
+  expect(await page.evaluate(() => getComputedStyle(document.body).fontSize)).toBe('18px');
   await page.reload();
   r = await root();
-  expect(r).toMatchObject({ font: 'plain', theme: 'dark' });
+  expect(r).toMatchObject({ font: 'large', theme: 'dark' });
   // Appearance is per device: it is not part of the synced data.
-  expect(JSON.stringify(await app.state())).not.toContain('plain');
+  expect(JSON.stringify(await app.state())).not.toContain('large');
   await app.go('account');
   await page.click('[data-look="font"][data-val=""]');
   await page.click('[data-look="theme"][data-val=""]');
   r = await root();
   expect(r.font).toBeUndefined();
   expect(r.theme).toBeUndefined();
+  // A device that chose the old pixel or plain font: standard text, nothing to undo.
+  await page.evaluate(() =>
+    localStorage.setItem('dashboard-look', JSON.stringify({ font: 'plain', theme: 'dark' })),
+  );
+  await page.reload();
+  r = await root();
+  expect(r).toMatchObject({ theme: 'dark' });
+  expect(r.font).toBeUndefined();
+  await app.go('account');
+  await expect(page.locator('[data-look="font"][data-val=""]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('notes text follows the theme colour, so it stays readable in dark mode', async ({ app, page }) => {

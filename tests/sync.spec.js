@@ -1311,6 +1311,7 @@ test('a launch on one device, reports from a script: both devices show the same 
     await expect(d.page.locator('#v-today .attn')).toContainText('Nothing needs attention');
   // Revoked: reports stop; the records stay.
   await a.page.click('nav [data-v=account]');
+  await settle(a, b); // (a sync redraw between the two taps would un-arm it: let it land first)
   await a.page.click('#xrevoke');
   await expect(a.page.locator('#xrevoke')).toHaveText('Revoke?'); // (a two-tap confirmation)
   await a.page.evaluate(() => revokeExecToken()); // (a sync redraw mid-way would un-arm it)

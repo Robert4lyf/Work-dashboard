@@ -38,7 +38,7 @@ function clearInbox(id) {
 function renderInbox() {
   if (triage) return setHTML($('#v-inbox'), renderTriage());
   let h = `<div class="sechead"><h2>Inbox</h2>${S.inbox.length ? '<button class="linkbtn" data-triagestart="1">Process inbox</button>' : ''}</div>`;
-  h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn pink">Add</button></form>`;
+  h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn green">Add</button></form>`;
   if (!S.inbox.length)
     h +=
       '<div class="empty">Nothing captured. Type a thought above (or say it with the mic); sort it into Today later.</div>';
@@ -117,7 +117,7 @@ function receiveShare() {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const mic = !!SR;
 const micIcon =
-  '<svg viewBox="0 0 7 8" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M2 0h3v5H2zM0 3h1v2H0zM6 3h1v2H6zM1 5h5v1H1zM3 6h1v1H3zM1 7h5v1H1z"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>';
 let listening = false,
   rec = null;
 function toggleMic() {

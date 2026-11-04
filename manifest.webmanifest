@@ -1,13 +1,13 @@
 {
   "name": "Dashboard",
   "short_name": "Dashboard",
-  "description": "Quests, inbox and focus timer.",
+  "description": "Your work in one calm place: tasks, processes, waiting and focus.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#1D2B53",
-  "theme_color": "#1D2B53",
+  "background_color": "#f5f6f8",
+  "theme_color": "#f5f6f8",
   "icons": [
     {
       "src": "icons/icon-192.png",

@@ -4,11 +4,11 @@ let path = [],
   pending = null;
 const panels = {}; // which <details> panels are expanded, so re-renders keep them open
 const tick =
-  '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="#1D2B53" d="M5 1h1v1H5zM4 2h1v1H4zM3 3h1v1H3zM0 3h1v1H0zM1 4h1v1H1zM2 4h1v1H2z"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const chevron =
-  '<svg viewBox="0 0 6 6" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 0h2v1H1zM2 1h2v1H2zM3 2h2v2H3zM2 4h2v1H2zM1 5h2v1H1z"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
 const dots =
-  '<svg viewBox="0 0 8 2" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M0 0h2v2H0zM3 0h2v2H3zM6 0h2v2H6z"/></svg>';
+  '<svg viewBox="0 0 24 6" aria-hidden="true"><circle cx="3" cy="3" r="2.4" fill="currentColor"/><circle cx="12" cy="3" r="2.4" fill="currentColor"/><circle cx="21" cy="3" r="2.4" fill="currentColor"/></svg>';
 // A row's (or tile's) ⋯: its quick actions, in a sheet (see actions.js).
 const moreBtn = n =>
   `<button class="qmore" data-qact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button>`;
@@ -220,10 +220,13 @@ function drawToday() {
   setHTML($('#v-today'), h);
 }
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
-function quickActions() {
+// (`bare`: the buttons alone, for a page whose section already says what they are)
+function quickActions(bare = false) {
   if (!S.flows.length) return '';
-  const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
-  return `<details id="flowsd"${panels.flowsd ? ' open' : ''}><summary>Desktop automations <small>${flows.length}</small></summary><div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div></details>`;
+  const flows = [...S.flows].sort((a, b) => byName(a.name, b.name)),
+    chips = `<div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div>`;
+  if (bare) return chips;
+  return `<details id="flowsd"${panels.flowsd ? ' open' : ''}><summary>Desktop automations <small>${flows.length}</small></summary>${chips}</details>`;
 }
 // Things being waited on that aren't on Today's list (in the Inbox, or on Upcoming), folded away
 // under it; tasks on the list already say so themselves. The chip at the top opens the full view.

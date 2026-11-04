@@ -288,7 +288,7 @@ function renderForecast() {
         : `<button class="rday ${cls}${forecastDay === day.d ? ' picked' : ''}" data-fday="${day.d}" aria-label="${esc(label)}" aria-pressed="${forecastDay === day.d}"><span class="rbar" style="height:${hgt}%"></span><small>${WD[new Date(day.d + 'T12:00').getDay()].slice(0, forecastSpan > 7 ? 1 : 3)}</small></button>`;
     })
     .join('')}</div>`;
-  h += `<p class="hint rlegend">Green: room left · yellow: nearly full · pink: overloaded. ${forecastSpan > 14 ? 'Pick a day below for what is on it.' : 'Tap a day for what is on it.'}</p>`;
+  h += `<p class="hint rlegend">Teal: room left · amber: nearly full · red: overloaded (each bar's label says which). ${forecastSpan > 14 ? 'Pick a day below for what is on it.' : 'Tap a day for what is on it.'}</p>`;
   if (forecastSpan > 14)
     h += `<label class="f" for="fdaypick">Look at a day</label><select class="fld" id="fdaypick"><option value="">Choose a day</option>${f.days.map(day => `<option value="${day.d}"${forecastDay === day.d ? ' selected' : ''}>${esc(dayLabel(day.d))} · ${hm(day.load)} of ${hm(day.cap)}${day.load > day.cap ? ' (overloaded)' : ''}</option>`).join('')}</select>`;
   // The day picked: what's estimated on it, its deadlines, its capacity, what isn't estimated.

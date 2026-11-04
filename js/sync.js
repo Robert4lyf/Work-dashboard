@@ -548,10 +548,13 @@ async function clearHistory() {
 }
 // Per-device appearance, kept out of synced data (a phone and laptop can differ).
 const LOOK_KEY = 'dashboard-look';
+// (Release D: one typeface; the old pixel/plain font choice is read as Standard text, and only
+// Larger is kept as a font setting)
 let look = {};
 try {
   look = JSON.parse(localStorage.getItem(LOOK_KEY)) || {};
 } catch (e) {}
+if (look.font && look.font !== 'large') delete look.font;
 function setLook(k, v) {
   if (v) look[k] = v;
   else delete look[k];
@@ -579,8 +582,8 @@ function renderAccount() {
   const opt = (k, v, label) =>
     `<button class="chip" data-look="${k}" data-val="${v}" aria-pressed="${(look[k] || '') === v}">${label}</button>`;
   h += `<h2 style="margin-top:26px">Appearance</h2><p class="hint" style="margin:0 0 6px">This device only.</p>
-    <div class="chips">${opt('font', '', 'Pixel font')}${opt('font', 'plain', 'Plain font')}</div>
-    <div class="chips">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
+    <p class="f" id="lookthemel">Colours</p><div class="chips" role="group" aria-labelledby="lookthemel">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
+    <p class="f" id="looksizel">Text size</p><div class="chips" role="group" aria-labelledby="looksizel">${opt('font', '', 'Standard')}${opt('font', 'large', 'Larger')}</div>
 
     <label class="f" for="devname">This device's name (to choose where an alarm rings)</label><input class="fld" id="devname" value="${esc(thisDevice.name)}" maxlength="40" style="max-width:20em">${renderDevices()}`;
   h += '<h2 style="margin-top:26px" id="tagsec">Tags</h2>';
