@@ -133,6 +133,24 @@ test('Journey D: a guide from a reference article: follow some steps, leave, com
   expect(app.errors).toEqual([]);
 });
 
+// Journey D (and many others) reload straight after a change: the tests' reload must wait for the
+// store's writes first, or a write still under way is lost and the reload shows the step before.
+test('a reload in the tests waits for a slow write to the store', async ({ app, page }) => {
+  await app.open();
+  await page.evaluate(() => {
+    const real = writeKV; // (each write held up a second, as on a slow device)
+    writeKV = entries => {
+      const p = new Promise(r => setTimeout(r, 1000)).then(() => real(entries));
+      storeTail = storeTail.then(() => p);
+      return p;
+    };
+    S.notes = 'Written just before the reload';
+    save();
+  });
+  await page.reload();
+  expect(await page.evaluate(() => S.notes)).toBe('Written just before the reload');
+});
+
 test('Journey H: resume after an interruption: Today shows where work stopped, the task opens, its linked guide is a tap away', async ({
   app,
   page,
