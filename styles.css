@@ -304,6 +304,16 @@ header.compact .now .go small {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+header.compact .now .go {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+header.compact .now .go:not(:has(.clk)) b::before {
+  content: 'Now: ';
+  color: var(--muted);
+  font-weight: 500;
+}
 header.compact .now .go b {
   -webkit-line-clamp: 1;
   line-clamp: 1;
@@ -539,8 +549,8 @@ h2 {
 }
 .check {
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border: 1.5px solid var(--edge-strong);
   background: var(--panel);
   cursor: pointer;
@@ -648,6 +658,7 @@ h2 {
   text-align: left;
   cursor: pointer;
   overflow-wrap: anywhere;
+  min-height: 40px;
 }
 .ititle .chev {
   color: var(--muted);
@@ -780,6 +791,8 @@ nav {
   scroll-padding-inline: 44px; /* the current tab lands clear of the fades */
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  max-width: 640px;
+  margin: 0 auto;
 }
 .tabs::-webkit-scrollbar {
   display: none;
@@ -1048,8 +1061,8 @@ nav button[aria-current='page'] {
 }
 .meter {
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border: 1px solid var(--edge);
   display: grid;
   place-items: center;
@@ -1486,7 +1499,7 @@ textarea.fld {
 .uprow input.fld {
   width: auto;
   flex: 1 1 140px;
-  min-height: 0;
+  min-height: 40px;
   padding: 4px 8px;
 }
 .uprow {
@@ -2169,11 +2182,6 @@ details.more > details {
 }
 .open {
   min-height: 40px;
-}
-.check,
-.meter {
-  width: 40px;
-  height: 40px;
 }
 /* knowledge as tiles */
 .tiles {
@@ -2971,8 +2979,8 @@ details.more > details {
   flex: none;
 }
 .pmv .mv {
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   font-size: var(--fs-xs);
 }
 .procline {
@@ -3144,6 +3152,12 @@ details.more > details {
   font-size: 0.8em;
   border: 1px solid var(--edge-strong);
   background: var(--paper);
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+}
+.radar.empty {
+  height: 34px;
 }
 .radar {
   display: flex;

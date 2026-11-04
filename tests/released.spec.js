@@ -659,3 +659,76 @@ test('finding a process: by name or by state; results open the right thing; arch
   expect(s.workflows.find(w => w.id === 'wfa').archived).toBe(true);
   expect(app.errors).toEqual([]);
 });
+
+test('Scenario C: a complex process runs end to end (manual, guide, automation, check, wait, decision, a permitted skip) and its history says what happened', async ({
+  app,
+  page,
+}) => {
+  await app.open();
+  await app.setState(processDay);
+  await page.reload();
+  await page.evaluate(() => {
+    S.track = false; // (the automation's result confirmed by hand: a distinct, recorded outcome)
+    const w = wfById('wf2');
+    w.stages.splice(5, 0, {
+      id: 'm5b',
+      type: 'decide',
+      title: 'Ready to close?',
+      choices: [
+        { label: 'Yes', next: '' },
+        { label: 'Not yet', next: '' },
+      ],
+    });
+    S.wruns = S.wruns.filter(r => r.wf !== 'wf2');
+    S.runs = S.runs.filter(r => r.q !== 'wr-r3');
+    save();
+  });
+  await app.processes();
+  await page.click('#v-knowledge [data-wfstart="wf2"]');
+  const h3 = page.locator('#v-knowledge .pstep h3');
+  await expect(h3).toHaveText('Gather the statements');
+  await page.click('[data-wfact="done"]');
+  // The guide: followed inside the process, then back to it.
+  await expect(h3).toHaveText('Follow the close checklist');
+  await page.click('[data-wfact="procedure"]');
+  for (let i = 0; i < 3; i++) await page.click('[data-rundone]');
+  await page.click('[data-runfinish]');
+  await expect(h3).toHaveText('Import the invoices');
+  // The automation, tracking off: launched, then confirmed by hand.
+  await page.click('#v-knowledge a[data-flow="f5"]');
+  await page.click('[data-wfact="confirmflow"][data-ok="yes"]');
+  await expect(h3).toHaveText('Review');
+  await expect(page.locator('[data-wfact="done"]')).toBeDisabled();
+  for (const c of await page.locator('.wchecks input').all()) await c.check();
+  await page.click('[data-wfact="done"]');
+  await expect(h3).toHaveText('Approval');
+  await page.click('[data-wfact="waititem"]');
+  await expect(page.locator('#v-knowledge .pstep')).toContainText('Waiting on Finance director');
+  await page.click('[data-wfact="received"]');
+  await expect(h3).toHaveText('Ready to close?');
+  await page.click('[data-wfact="pick"][data-pick="0"]');
+  // The last step allows skipping: skipped with a reason, which ends the run.
+  await expect(h3).toHaveText('Close the month');
+  await page.click('[data-wfact="skip"]');
+  await page.fill('#sheetin', 'Closed by finance');
+  await page.click('#sheetok');
+  const r = await page.evaluate(() => S.wruns.find(x => x.wf === 'wf2'));
+  expect(r.status).toBe('succeeded');
+  expect(Object.fromEntries(Object.entries(r.st).map(([k, v]) => [k, [v.o, v.note || '']]))).toEqual({
+    m1: ['done', ''],
+    m2: ['done', ''],
+    m3: ['done', 'Result confirmed by hand'],
+    m4: ['done', ''],
+    m5: ['done', ''],
+    m5b: ['done', 'Yes'],
+    m6: ['skipped', 'Closed by finance'],
+  });
+  expect(r.st.m2.run).toBeTruthy();
+  expect(r.st.m5.wait).toBeTruthy();
+  expect(r.log.map(l => l.k)).toEqual(
+    expect.arrayContaining(['started', 'procedure', 'launched', 'waiting', 'skipped', 'succeeded']),
+  );
+  await expect(page.locator('#v-knowledge .pstep.done h3')).toContainText('Completed');
+  await expect(page.locator('#v-knowledge [data-wfact]')).toHaveText(['Copy summary']);
+  expect(app.errors).toEqual([]);
+});

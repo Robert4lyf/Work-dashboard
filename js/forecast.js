@@ -277,7 +277,7 @@ function renderForecast() {
   h += `<div class="box fchead"><div class="fhl"><b>${hm(f.load)}</b><small>estimated work</small></div><div class="fhl"><b>${hm(f.cap)}</b><small>capacity${f.assumed ? ' (assumed)' : ''}</small></div><div class="fhl${overDays.length ? ' over' : ''}"><b>${overDays.length}</b><small>${overDays.length === 1 ? 'day overloaded' : 'days overloaded'}</small></div><div class="fhl${f.none.length ? ' none' : ''}"><b>${f.none.length}</b><small>${f.none.length === 1 ? 'task not estimated' : 'tasks not estimated'}</small></div></div>
     ${overDays.length ? `<p class="fwarn" role="note"><b>Overloaded:</b> ${esc(dayLabel(overDays[0].d))} by ${hm(overDays[0].load - overDays[0].cap)}${overDays.length > 1 ? `, and ${plural(overDays.length - 1, 'more day')}` : ''}. What to do about it is below the radar.</p>` : ''}<p class="hint fcov fcov-${cov.k}">${esc(cov.text)}${f.assumed ? ' Capacity uses assumed defaults.' : ''}${f.none.length ? ' Unestimated work is not spare capacity.' : ''}</p>${f.none.length ? hintBox('fcest', 'Tasks without an estimate aren’t counted. The + Estimate chip on a task’s page sets one in a tap.') : ''}`;
   // The radar: a bar a day; tap one (or pick one, at 30 days) for what's on it.
-  h += `<h2>Workload radar</h2><div class="radar${forecastSpan > 14 ? ' tight' : ''}" role="group" aria-label="Estimated work against capacity, each day">${f.days
+  h += `<h2>Workload radar</h2>${f.load ? '' : '<p class="hint">Nothing estimated in these days yet: the bars fill in as tasks get estimates. A day still opens to what is due on it.</p>'}<div class="radar${forecastSpan > 14 ? ' tight' : ''}${f.load ? '' : ' empty'}" role="group" aria-label="Estimated work against capacity, each day">${f.days
     .map(day => {
       const r = day.cap ? day.load / day.cap : day.load ? 2 : 0,
         cls = !day.load ? 'none' : r > 1 ? 'over' : r > 0.8 ? 'tight' : 'ok',
@@ -288,7 +288,8 @@ function renderForecast() {
         : `<button class="rday ${cls}${forecastDay === day.d ? ' picked' : ''}" data-fday="${day.d}" aria-label="${esc(label)}" aria-pressed="${forecastDay === day.d}"><span class="rbar" style="height:${hgt}%"></span><small>${WD[new Date(day.d + 'T12:00').getDay()].slice(0, forecastSpan > 7 ? 1 : 3)}</small></button>`;
     })
     .join('')}</div>`;
-  h += `<p class="hint rlegend">Teal: room left · amber: nearly full · red: overloaded (each bar's label says which). ${forecastSpan > 14 ? 'Pick a day below for what is on it.' : 'Tap a day for what is on it.'}</p>`;
+  if (f.load)
+    h += `<p class="hint rlegend">Teal: room left · amber: nearly full · red: overloaded (each bar's label says which). ${forecastSpan > 14 ? 'Pick a day below for what is on it.' : 'Tap a day for what is on it.'}</p>`;
   if (forecastSpan > 14)
     h += `<label class="f" for="fdaypick">Look at a day</label><select class="fld" id="fdaypick"><option value="">Choose a day</option>${f.days.map(day => `<option value="${day.d}"${forecastDay === day.d ? ' selected' : ''}>${esc(dayLabel(day.d))} · ${hm(day.load)} of ${hm(day.cap)}${day.load > day.cap ? ' (overloaded)' : ''}</option>`).join('')}</select>`;
   // The day picked: what's estimated on it, its deadlines, its capacity, what isn't estimated.
