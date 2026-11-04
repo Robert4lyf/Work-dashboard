@@ -337,10 +337,14 @@ function restoreKbDraft() {
 }
 // An article being written is left only on purpose (a sheet asks, in place of confirm()).
 function leaveEditor(then) {
-  if (!kbEdit) return then();
+  const proc = !kbEdit && typeof wfEditDirty === 'function' && wfEditDirty();
+  if (!kbEdit && !proc) {
+    if (typeof wfEdit !== 'undefined') wfEdit = null;
+    return then();
+  }
   sheet(
     {
-      title: 'Leave this article?',
+      title: proc ? 'Leave this process?' : 'Leave this article?',
       text: 'Changes not saved will be lost.',
       ok: 'Leave',
       danger: true,
@@ -348,6 +352,7 @@ function leaveEditor(then) {
     },
     () => {
       kbEdit = null;
+      wfEdit = null;
       clearKbDraft();
       then();
     },
@@ -521,7 +526,7 @@ function kbClick(d, b) {
   }
   if (d.kbback) {
     const a = S.kb.find(x => x.id === kbArt);
-    if (a) kbCatOpen = kbCat(a.cat) ? a.cat : kbLost().includes(a) ? 'lost' : null;
+    if (a) kbCatOpen = kbView === 'proc' ? null : kbCat(a.cat) ? a.cat : kbLost().includes(a) ? 'lost' : null;
     kbArt = null;
     if (kbRunBack && S.runs.some(r => r.id === kbRunBack)) {
       kbRun = kbRunBack;

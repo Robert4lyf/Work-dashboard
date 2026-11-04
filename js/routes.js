@@ -180,6 +180,8 @@ function followRoute(r, first) {
       if (!wrunById(r.id)) return miss('process run', 'knowledge');
       return leaveEditor(() => {
         kbArt = kbRun = wfEdit = null;
+        kbView = 'proc';
+        if (view !== 'knowledge') go('knowledge'); // (so the run's ‹ goes to its process, not here)
         openWorkflowRun(r.id);
       });
     }

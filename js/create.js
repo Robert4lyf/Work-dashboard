@@ -106,6 +106,12 @@ function openNewSheet() {
 }
 function createClick(d, b) {
   if (d.hintoff) return hintOff(d.hintoff);
+  if (d.gosec) {
+    go('account');
+    const el = document.getElementById(d.gosec);
+    if (el) el.scrollIntoView({ block: 'start' });
+    return;
+  }
   if (d.kbview) {
     kbView = d.kbview;
     kbMoving = null;

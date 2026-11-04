@@ -441,7 +441,7 @@ function findings(x) {
       at: 0,
       title: `${x.auto.now.unconfirmed} automation launches never reported a result`,
       why: 'No report arrived within a day of the launch: the automation may not have started, or its report never reached the app.',
-      act: ['Check result tracking', 'data-goto="account"'],
+      act: ['Check result tracking', 'data-gosec="execsec"'],
     });
   // 7. Estimates running low or high: five or more finished tasks with an estimate, and the typical one off by half.
   if (x.acc.n >= 5 && (x.acc.median >= 1.5 || x.acc.median <= 0.5))

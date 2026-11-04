@@ -1046,8 +1046,11 @@ function appBack() {
     return true;
   }
   if (view === 'knowledge' && wfEdit) {
-    wfEdit = null;
-    renderKnowledge();
+    const back = wfEdit.id && wfById(wfEdit.id) ? wfEdit.id : null;
+    leaveEditor(() => {
+      wfView = back;
+      renderKnowledge();
+    });
     return true;
   }
   if (view === 'knowledge' && kbRun) {

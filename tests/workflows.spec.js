@@ -322,12 +322,14 @@ test('a definition edited later is a new version; a run under way keeps its own 
   expect(w.ver).toBe(3);
   expect(w.stages[7].title).toBe('Another flow');
   expect(w.stages.map(x => x.id).slice(0, 2)).toEqual(['s3', 's2']);
-  // Back (Android) leaves the editor without saving.
+  // Back (Android) with something typed asks first; Leave drops it without saving.
   await app.processes();
   await page.click('[data-wfview="w1"]');
   await page.click('[data-wfedit="w1"]');
   await page.fill('#wfname', 'Unsaved');
   await page.evaluate(() => history.back());
+  await expect(page.locator('#sheettitle')).toHaveText('Leave this process?');
+  await page.click('#sheetok');
   await expect(page.locator('#wfform')).toHaveCount(0);
   expect((await app.state()).workflows[0].name).toBe('Thursday report v2');
   await app.processes();

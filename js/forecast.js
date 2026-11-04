@@ -404,10 +404,13 @@ function capChange(el) {
   S.cap = [...capacity()];
   S.cap[wd] = Math.max(0, Math.min(960, v));
   save();
-  // (the redraw rebuilds the fields: the one the keyboard moved to gets it back)
-  const next =
-    document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.cap : null;
-  renderReview();
-  const back = next !== null && next !== undefined && $(`[data-cap="${next}"]`);
-  if (back) back.focus({ preventScroll: true });
+  // (the redraw rebuilds the fields, so it waits for the keyboard's move (Tab, Next) and then
+  // puts the keyboard back on the same field)
+  setTimeout(() => {
+    const next =
+      document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.cap : null;
+    renderReview();
+    const back = next !== null && next !== undefined && $(`[data-cap="${next}"]`);
+    if (back) back.focus({ preventScroll: true });
+  }, 0);
 }

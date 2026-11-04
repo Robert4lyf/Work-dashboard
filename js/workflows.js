@@ -566,7 +566,9 @@ function wfClick(d, b) {
     return sheet(
       { title: 'Skip this step?', label: 'Why', ok: 'Skip', placeholder: 'Done by hand already' },
       v => {
-        const why2 = completeStage(r, s ? s.id : '', { o: 'skipped', note: v || 'skipped' });
+        const rr = wrunById(r.id); // (the run as it is now: a sync pull may have replaced it)
+        if (!rr) return toast('That run is gone', false, 3000);
+        const why2 = completeStage(rr, s ? s.id : '', { o: 'skipped', note: v || 'skipped' });
         if (why2) toast("Couldn't skip: " + why2, false, 3000);
         save();
         renderKnowledge();
@@ -574,9 +576,11 @@ function wfClick(d, b) {
     );
   else if (d.wfact === 'fail')
     return sheet({ title: 'What went wrong?', label: 'Error', ok: 'Mark failed', danger: true }, v => {
-      const why2 = failStage(r, s ? s.id : '', v || 'Failed');
+      const rr = wrunById(r.id);
+      if (!rr) return toast('That run is gone', false, 3000);
+      const why2 = failStage(rr, s ? s.id : '', v || 'Failed');
       if (why2) toast(why2, false, 3000);
-      else emitRun(r);
+      else emitRun(rr);
       save();
       renderKnowledge();
     });
@@ -590,7 +594,9 @@ function wfClick(d, b) {
           danger: true,
         },
         () => {
-          retryStage(r, s.id);
+          const rr = wrunById(r.id);
+          if (!rr) return toast('That run is gone', false, 3000);
+          retryStage(rr, s.id);
           save();
           renderKnowledge();
         },
@@ -939,10 +945,12 @@ function templateToWorkflow(t) {
   return w;
 }
 const wfRuns = id => S.wruns.filter(r => r.wf === id).sort((a, b) => b.started - a.started);
+// (a failed run first: it needs you; else the newest under way)
 const wfOpenRun = id =>
   S.wruns
     .filter(r => r.wf === id && !WRUN_OVER.includes(r.status))
-    .sort((a, b) => b.started - a.started)[0] || null;
+    .sort((a, b) => (a.status === 'failed') - (b.status === 'failed') || a.started - b.started)
+    .reverse()[0] || null;
 /* a process's overview: what it's for, where it stands, and the one thing to do with it (start,
    continue or fix). Editing is a step further: the definition is for changing now and then, the
    overview for using. */
@@ -1023,6 +1031,17 @@ function addTypedStep() {
     const n = $('#wfstepin');
     if (n) n.focus();
   } else i.focus();
+}
+// Has the editor anything worth asking about before it's left?
+function wfEditDirty() {
+  if (!wfEdit) return false;
+  readWfForm();
+  if (wfEdit.typing) return true;
+  if (!wfEdit.id) return !!(wfEdit.name || wfEdit.desc || wfEdit.stages.length);
+  const cur = wfById(wfEdit.id);
+  if (!cur) return true;
+  const now = cleanWorkflow({ ...wfEdit, id: wfEdit.id, at: cur.at, ver: cur.ver });
+  return JSON.stringify(now) !== JSON.stringify(cur);
 }
 // What's typed in the editor, into the draft (so a redraw shows it).
 function readWfForm() {
@@ -1198,13 +1217,14 @@ function wfEditClick(d, b) {
   if (d.wfview) {
     const w = wfById(d.wfview);
     if (!w) return toast('That process is gone', false, 3000);
-    kbView = 'proc';
-    wfView = w.id;
-    wfEdit = null;
-    if (view !== 'knowledge') go('knowledge');
-    else renderKnowledge();
-    window.scrollTo(0, 0);
-    return;
+    return leaveEditor(() => {
+      kbView = 'proc';
+      wfView = w.id;
+      wfOpen = kbRun = kbArt = kbRunBackWf = null; // (whatever Knowledge was showing gives way)
+      if (view !== 'knowledge') go('knowledge');
+      else renderKnowledge();
+      window.scrollTo(0, 0);
+    });
   }
   if (d.wfback2) {
     wfView = null;
@@ -1235,6 +1255,7 @@ function wfEditClick(d, b) {
     });
     S.workflows.push(c);
     wfEdit = null;
+    wfView = c.id; // (the copy, to rename or edit)
     save();
     renderKnowledge();
     return toast('Duplicated');
