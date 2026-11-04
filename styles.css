@@ -18,9 +18,14 @@
   --grad: #ffd60a;
   --on-status: #ffffff; /* text on a solid status colour */
   --signal: #ffd60a; /* the one highlight, the same in both themes */
-  --sec-yellow: #ffd60a; /* section bars: black type on each, in both themes */
+  /* Today's section bars, by what they hold (black type on the coloured ones, in both themes):
+     yellow is what you're on (and the current tab), red only what's gone wrong or overdue,
+     turquoise your priorities; routine sections (scheduled, waiting, the list) are neutral. */
+  --sec-yellow: #ffd60a;
   --sec-red: #ff5a3c;
-  --sec-blue: #12c2c2; /* turquoise, black type on it */
+  --sec-blue: #12c2c2; /* turquoise */
+  --sec-routine: var(--panel-2);
+  --sec-routine-ink: var(--ink);
   --on-signal: #111111;
   /* status: a text colour and a quiet fill each; always with a word or glyph, never colour alone */
   --ok: #11703a;
@@ -95,7 +100,6 @@
     --info-soft: #10223a;
     --grad: #ffd400;
     --on-status: #0a0a0a;
-    --grad: linear-gradient(135deg, #4c1d95 0%, #3730a3 55%, #1e40af 100%);
     --focus: #ffd400;
     --shadow-1: none;
     --shadow-2: 0 10px 32px rgba(0, 0, 0, 0.55);
@@ -555,10 +559,11 @@ h2 {
 }
 /* A row's own action in a list is a quiet one: the filled accent is kept for a page's primary
    action, so a list of rows doesn't read as a wall of buttons. */
-.list .row > .btn.green,
-.t3row .btn.green {
-  background: var(--signal);
-  color: var(--on-signal);
+.list .row > .btn:is(.green, .blue),
+.t3row .btn:is(.green, .blue),
+.secrow .btn:is(.green, .blue) {
+  background: var(--panel);
+  color: var(--ink);
   border-color: var(--edge);
 }
 
@@ -3259,17 +3264,20 @@ details.more > details {
   padding: 0 12px;
 }
 .schedsec {
-  --bar: var(--sec-yellow);
+  --bar: var(--sec-routine);
+  --bar-ink: var(--sec-routine-ink);
   --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223.5%22%20y%3D%225%22%20width%3D%2217%22%20height%3D%2215.5%22%20rx%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M3.5%2010h17M8%203v4M16%203v4%22%2F%3E%3C%2Fsvg%3E');
 }
 .waitsec2 {
-  --bar: var(--sec-blue);
+  --bar: var(--sec-routine);
+  --bar-ink: var(--sec-routine-ink);
   --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cpath%20d%3D%22M12%207v5l3.5%202%22%2F%3E%3C%2Fsvg%3E');
 }
 :is(#v-today, .tmain) > .sechead {
   flex-wrap: wrap;
   row-gap: 8px;
-  --bar: var(--sec-red);
+  --bar: var(--sec-routine);
+  --bar-ink: var(--sec-routine-ink);
   --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9%206h11M9%2012h11M9%2018h11M4%206h.5M4%2012h.5M4%2018h.5%22%2F%3E%3C%2Fsvg%3E');
 }
 #v-today .todaysec > .slist.box,
@@ -3307,14 +3315,6 @@ header:not(.compact)::before {
 .attsum > summary,
 .attsum > .attsumline {
   border-width: 3px;
-}
-#v-today .attsum.sev0 > summary,
-#v-today .attsum.sev0 > .attsumline,
-#v-today .attsum.sev1 > summary,
-#v-today .attsum.sev1 > .attsumline {
-  background: var(--sec-red);
-  color: #111111;
-  border-color: var(--edge);
 }
 .attsum > summary b::before,
 .attsum > .attsumline b::before {
@@ -3762,17 +3762,10 @@ nav button[aria-current='page'] {
   font-weight: 400;
   font-size: var(--fs-sm);
 }
-.attsum.sev0 > summary,
-.attsum.sev0 > .attsumline {
-  background: var(--err);
-  color: var(--on-status);
-  border-color: var(--err);
-}
-.attsum.sev1 > summary,
-.attsum.sev1 > .attsumline {
-  background: var(--warn-soft);
-  color: var(--ink);
-  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+.attsum:is(.sev0, .sev1) > :is(summary, .attsumline) {
+  background: var(--sec-red);
+  color: #111111;
+  border-color: var(--edge);
 }
 .attsum[open] > summary {
   border-bottom-width: 0;

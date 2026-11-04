@@ -13,7 +13,7 @@ function themeBar() {
     if (!m.dataset.media) m.dataset.media = m.media || '';
     m.media = t ? '' : m.dataset.media;
     if (!m.dataset.color) m.dataset.color = m.content;
-    m.content = t === 'dark' ? '#12161c' : t === 'light' ? '#f5f6f8' : m.dataset.color;
+    m.content = t === 'dark' ? '#121212' : t === 'light' ? '#f7f3ea' : m.dataset.color;
   });
 }
 themeBar();
