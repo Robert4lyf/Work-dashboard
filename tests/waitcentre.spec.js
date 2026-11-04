@@ -89,13 +89,14 @@ test('record a follow-up: history, next chase date, promised reply; the copied m
   page,
 }) => {
   await app.go('waiting');
-  await page.click('[data-wact="s1"]');
+  await page.click('#v-waiting [data-wact="s1"]');
   await expect(page.locator('#sheet .qact')).toHaveText([
     'Record a follow-up',
     /Response received/,
     /Change the next chase date/,
     'Copy a follow-up message',
     'Open',
+    'Open the task: Q3 report',
   ]);
   await page.click('#sheet [data-chase]');
   await expect(page.locator('#funote')).toBeFocused();
@@ -116,7 +117,7 @@ test('record a follow-up: history, next chase date, promised reply; the copied m
     'followed up Today',
   );
   // A second follow-up, the date only.
-  await page.click('[data-wact="s1"]');
+  await page.click('#v-waiting [data-wact="s1"]');
   await page.click('#sheet [data-chasedate]');
   await expect(page.locator('#funote')).toHaveCount(0);
   await page.fill('#fudue', '2026-11-12');
@@ -263,8 +264,11 @@ test('review fixes: an Inbox item’s waiting details are checked; history follo
   expect(s.follows.filter(f => f.n === step.id).map(f => f.k)).toEqual(['chase']);
   expect(s.follows.some(f => f.n === 'i2')).toBe(false);
   // And back to the Inbox: the step's history stays with the step (the wait is the step's).
+  // (Release E: with only a waiting step, the task is under Waiting; its actions are on its page)
   await app.go('today');
-  await page.click('[aria-label="Actions: Plain"]');
+  await page.click(`#v-today .wrow [data-wact="${step.id}"]`);
+  await page.click(`#sheet [data-open="${s.quests.find(q => q.text === 'Plain').id}"]`);
+  await page.click('.qfoot .qmore');
   await page.click('#sheet [data-toinbox]');
   s = await app.state();
   expect(s.inbox[0].node.children[0].id).toBe(step.id);

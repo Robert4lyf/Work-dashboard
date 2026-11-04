@@ -15,7 +15,12 @@ function actionSheet(title, items, hint) {
   );
 }
 // The task or step the next focus session on `n` would be on: its next step, or itself.
-const focusLeaf = n => (n.children.length ? nextLeaf(n) : n);
+// (only what can be acted on now: not a scheduled task, nor a step waiting on someone)
+const focusLeaf = n => {
+  const r = find(n.id),
+    q = r && r.parents[0];
+  return q && q.scheduled ? null : actionLeaf(n);
+};
 // What can be done with a task (or a step) right now. `fromList`: opened from Today's list,
 // where opening the task is an action too.
 function questActions(id, fromList) {
@@ -28,6 +33,19 @@ function questActions(id, fromList) {
     a = [],
     act = (label, attrs, cls, hint) => a.push({ label, attrs, cls, hint });
   if (fromList) act('Open', `data-open="${id}"`);
+  // A scheduled task: its own actions (no Focus: it happens at its time).
+  if (top && !d && n.scheduled) {
+    if (!n.children.length) act('Mark done', `data-toggle="${id}"`, 'go', 'It happened: record it');
+    act('Reschedule', `data-schedset="${id}"`, '', schedWhen(n));
+    act('Not scheduled: back to ordinary work', `data-schedclear="${id}"`);
+    act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
+    return a;
+  }
+  if (!d && q.scheduled) {
+    if (!n.children.length) act('Mark done', `data-toggle="${id}"`);
+    act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
+    return a;
+  }
   if (!d) {
     if (S.timer && topOf(S.timer.q) === q) act('Resume focus', 'data-pause="1"', 'go');
     else if (q.resume && placeFits(q, n))
@@ -44,6 +62,8 @@ function questActions(id, fromList) {
   if (!n.children.length) act(d ? 'Mark not done' : 'Mark done', `data-toggle="${id}"`);
   else if (top && needsNext(n)) act('Finish task', `data-finish="${id}"`);
   else if (top && d) act('Reopen task', `data-reopen="${id}"`);
+  if (top && !d && S.quests.includes(n))
+    act('Schedule', `data-schedset="${id}"`, '', 'A meeting or appointment: a day, maybe a time');
   if (top && !d && S.quests.includes(n)) {
     act('Do tomorrow', `data-sched="${id}" data-kind="q" data-when="${shift(today(), 1)}"`);
     act('Do next week', `data-sched="${id}" data-kind="q" data-when="${nextMonday()}"`);
@@ -71,10 +91,23 @@ function primaryAction(n, parents = []) {
     return S.timer.left != null
       ? { label: 'Resume focus', attrs: 'data-pause="1"', cls: 'blue' }
       : { label: 'Back to focus', attrs: 'data-zen="1"', cls: 'blue' };
+  // (a scheduled task is marked done, or rescheduled; it isn't worked on in a focus session)
+  if (q.scheduled)
+    return !n.children.length
+      ? { label: 'Mark done', attrs: `data-toggle="${n.id}"`, cls: 'green' }
+      : top
+        ? { label: 'Reschedule', attrs: `data-schedset="${n.id}"`, cls: 'blue' }
+        : null;
   if (q.resume && placeFits(q, n))
     return { label: 'Resume work', attrs: `data-resume="${q.id}"`, cls: 'green' };
   if (top && needsNext(n)) return { label: 'Finish task', attrs: `data-finish="${n.id}"`, cls: 'green' };
-  if (top && onlyWaiting(n)) return { label: 'Review waiting', attrs: 'data-goto="waiting"', cls: 'blue' };
+  // (only waiting: what's waited on first, a follow-up if one is due, else the reply)
+  if (top && onlyWaiting(n)) {
+    const w = waitingSteps(n).sort((a, b) => (a.wait.due || '9').localeCompare(b.wait.due || '9'))[0];
+    return waitBucket(w.wait) === 'chase'
+      ? { label: 'Follow up: ' + w.text, attrs: `data-chase="${w.id}"`, cls: 'blue' }
+      : { label: 'Reply received: ' + w.text, attrs: `data-waitclear="${w.id}"`, cls: 'blue' };
+  }
   const t = focusLeaf(n);
   if (!t) return null;
   return {

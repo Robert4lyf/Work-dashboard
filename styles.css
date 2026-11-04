@@ -867,13 +867,15 @@ nav button[aria-current='page'] {
 .list {
   margin-bottom: 14px;
 }
-.row {
+.row,
+.srow {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 6px 10px 12px;
 }
-.list > * + * {
+.list > * + *,
+.slist > * + * {
   border-top: 1px solid var(--line);
 }
 .open {
@@ -3065,6 +3067,44 @@ details.more > details {
 .procfound,
 .procnone {
   margin: 0 0 8px;
+}
+/* Today (Release E): Scheduled and Waiting, sections like Top 3 and Today's tasks */
+.todaysec {
+  margin: 0 0 18px;
+}
+.schedrow .stime {
+  flex: none;
+  min-width: 4.2em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent-ink);
+}
+.schedrow.sch-passed .stime,
+.schedrow.sch-past .stime {
+  color: var(--muted);
+}
+.schedrow.sch-passed .open small,
+.schedrow.sch-past .open small {
+  color: var(--warn);
+  font-weight: 600;
+}
+.tag.sched {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.wrow .open small .tag {
+  margin-left: 2px;
+}
+.nowork {
+  margin: 0 0 14px;
+}
+.t3out {
+  margin: 8px 0 0;
+}
+.schedflds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
 }
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {

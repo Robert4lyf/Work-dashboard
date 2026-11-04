@@ -97,10 +97,10 @@ test('waiting is on a step: set from the task, shown on Today and the Waiting ta
   await page.fill('#wnote', '');
   await page.press('#wnote', 'Tab');
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .row .tag.wait')).toHaveText('Waiting on Sam');
-  // Waiting rows look different (dark orange); others don't.
-  await expect(page.locator('#v-today .row.waiting')).toHaveCount(1);
-  await expect(page.locator('#v-today .row.waiting')).toContainText('Budget review');
+  // (Release E: its only step waits, so the task is under Waiting, with who and its chase date)
+  await expect(page.locator('#v-today .row')).toHaveCount(1);
+  await expect(page.locator('#v-today .wrow')).toContainText('on Sam');
+  await expect(page.locator('#v-today .wrow')).toContainText('Budget review (nothing else to do yet)');
   // It's blocked, so Next up moves on to the next task.
   await expect(page.locator('#hnow')).toContainText('Write report');
   await expect(page.locator('#attd > summary')).toContainText('1 today');
@@ -243,7 +243,7 @@ test('a task with a step waiting on someone shows as waiting too', async ({ app,
   await expect(row).not.toHaveClass(/waiting/);
 });
 
-test('waiting tasks sit at the bottom of Today, and return to their place', async ({ app, page }) => {
+test('waiting tasks sit under Waiting on Today, and return to their place', async ({ app, page }) => {
   for (const t of ['Budget', 'Report', 'Email']) await app.addQuest(t);
   await app.setState(
     s =>
@@ -253,7 +253,9 @@ test('waiting tasks sit at the bottom of Today, and return to their place', asyn
   );
   await page.reload();
   const rows = page.locator('#v-today .list .row .open > span');
-  await expect(rows).toHaveText(['Report', 'Email', 'Budget']);
+  // (Release E: with nothing else to do, it's under Waiting rather than at the bottom of the list)
+  await expect(rows).toHaveText(['Report', 'Email']);
+  await expect(page.locator('#v-today .wrow')).toContainText('Budget');
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Report', 'Email']); // real order kept
   // Reorder mode shows the real order.
   await page.click('#reorder');

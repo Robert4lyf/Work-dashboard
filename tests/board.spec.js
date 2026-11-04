@@ -25,18 +25,19 @@ test.describe('desktop', () => {
     await expect(page.locator('#hnow b')).toHaveText('C');
   });
 
-  test('a waiting task (shown lower down) can only be dropped among the waiting ones', async ({
+  test('a task only waiting is under Waiting, out of the list; dragging the rest keeps its place', async ({
     app,
     page,
   }) => {
     await app.setState(s => (s.quests[0].wait = { who: 'Sam', note: '', due: '', since: '2026-09-23' }));
     await page.reload();
     const row = t => page.locator(`#v-today .row:has(.open > span:text-is("${t}"))`);
-    await expect(page.locator('#v-today .list .row .open > span')).toHaveText(['B', 'C', 'A']);
-    await row('C').dragTo(row('A'), { targetPosition: { x: 20, y: 5 } }); // across groups: ignored
-    expect((await app.state()).quests.map(q => q.text)).toEqual(['A', 'B', 'C']);
-    await row('C').dragTo(row('B'), { targetPosition: { x: 20, y: 5 } }); // within: reorders
-    await expect(page.locator('#v-today .list .row .open > span')).toHaveText(['C', 'B', 'A']);
+    // (Release E: A has nothing to do until Sam replies, so it's under Waiting, not in the list)
+    await expect(page.locator('#v-today .list .row .open > span')).toHaveText(['B', 'C']);
+    await expect(page.locator('#v-today .wrow')).toContainText('A');
+    await row('C').dragTo(row('B'), { targetPosition: { x: 20, y: 5 } });
+    await expect(page.locator('#v-today .list .row .open > span')).toHaveText(['C', 'B']);
+    expect((await app.state()).quests.map(q => q.text)).toEqual(['A', 'C', 'B']);
   });
 
   test('a running session shows only itself until paused', async ({ page }) => {
