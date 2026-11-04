@@ -203,26 +203,17 @@ function drawToday() {
     // (what can be worked on, and what's finished today; scheduled tasks and ones only waiting
     // have sections of their own. Reordering shows them all: it's the one order underneath.)
     work = reorder ? qs : qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
-  // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. what's scheduled;
-  // 4. Today's work; 5. what it's waiting on.
-  // (On a wide screen, two columns: what you work through on the left, under the header; what
-  // needs you, what's at a time and what you're waiting on down the right.)
   todayTitle();
-  const att = renderAttention(),
-    sched = renderScheduledToday(),
-    wait = renderWaitingToday(),
-    cols = colsMQ.matches;
-  let h = (cols ? '' : att) + renderTop3() + renderCarried() + (cols ? '' : sched);
+  // Today's work: the list (or board), or why there's none.
   const asBoard = todayView === 'board' && work.length;
-  h += listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0);
-  h += asBoard ? board(work) : list(work, true);
-  if (qs.length && !work.length) h += '<p class="hint nowork">Nothing to act on now.</p>';
-  if (!cols) h += wait;
+  let tasks =
+    listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0) + (asBoard ? board(work) : list(work, true));
+  if (qs.length && !work.length) tasks += '<p class="hint nowork">Nothing to act on now.</p>';
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)
-    h +=
+    tasks +=
       '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
-  // 4. The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
+  // The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
   // repeats, flows and alarms. (Overdue and due-today work is in Needs attention.)
   const soon = dueSoon().filter(s => s.t.length > 1 && s.n.due > today());
   let more = '';
@@ -248,8 +239,19 @@ function drawToday() {
     more += '</details>';
   }
   more += quickActions() + renderAlarms();
-  if (more) h += `<section class="todaymore" aria-label="More on Today">${more}</section>`;
-  if (cols) h = `<div class="tmain">${h}</div><div class="tside">${att + sched + wait}</div>`;
+  // The same sections either way, composed for the screen. On a phone, down the page: what needs
+  // attention, the Top 3, what's carried over, what's scheduled, what it's waiting on (above the
+  // list, so a long day doesn't bury it), Today's tasks, then the rest folded. On a wide screen, two
+  // columns: what you work through on the left under the header (Top 3, the list); what needs
+  // you, what's at a time and what you're waiting on down the right.
+  const att = renderAttention(),
+    top3 = renderTop3() + renderCarried(),
+    sched = renderScheduledToday(),
+    wait = renderWaitingToday(),
+    rest = more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '';
+  const h = colsMQ.matches
+    ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
+    : att + top3 + sched + wait + tasks + rest;
   setHTML($('#v-today'), h);
 }
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.

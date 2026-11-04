@@ -206,7 +206,7 @@ test('a running session wins; changing the Top 3 meanwhile leaves it alone', asy
   expect((await app.state()).timer.q).toBe('q5a');
 });
 
-test("Today's order: attention, Top 3, the work; secondary sections folded at the end", async ({
+test("Today's order: attention, Top 3, what it's waiting on, the work; the rest folded at the end", async ({
   app,
   page,
 }) => {
@@ -214,7 +214,9 @@ test("Today's order: attention, Top 3, the work; secondary sections folded at th
   const blocks = await page.$$eval('#v-today > *', els =>
     els.map(e => e.className.split(' ')[0] || e.tagName.toLowerCase()),
   );
-  expect(blocks.slice(0, 4)).toEqual(['attn', 'top3', 'sechead', 'list']);
+  // (Release F: Waiting above the list on a phone, so a long day doesn't bury it)
+  expect(blocks.slice(0, 5)).toEqual(['attn', 'top3', 'todaysec', 'sechead', 'list']);
+  await expect(page.locator('#v-today > .todaysec')).toHaveClass(/waitsec2/);
   expect(blocks[blocks.length - 1]).toBe('todaymore');
   // Flows, steps due soon and the rest are folded there, still a tap away.
   const more = page.locator('#v-today .todaymore');
@@ -226,12 +228,11 @@ test("Today's order: attention, Top 3, the work; secondary sections folded at th
   // Overdue and due-today work is in Needs attention, not repeated in Steps due soon.
   await more.locator('#soond > summary').click();
   await expect(more.locator('#soond')).not.toContainText('Overdue');
-  // The first task of the list is on the first screen of a phone.
-  const top = await page
-    .locator('#v-today > .list .row')
-    .first()
-    .evaluate(e => e.getBoundingClientRect().top);
-  expect(top).toBeLessThan(844 - 80);
+  // Top 3 and Waiting start on the first screen of a phone (above the tab bar).
+  for (const s of ['#v-today > .top3', '#v-today > .waitsec2']) {
+    const top = await page.locator(s).evaluate(e => e.getBoundingClientRect().top);
+    expect(top).toBeLessThan(844 - 80);
+  }
 });
 
 test('board mode keeps the same summary and Top 3 above it', async ({ app, page }) => {
