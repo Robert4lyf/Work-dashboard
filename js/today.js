@@ -165,6 +165,14 @@ function renderToday() {
     if (l) l.scrollLeft = laneX[k];
   }
 }
+// The page's title above the header: on Today's list only (a task's page has its own).
+function todayTitle() {
+  const el = $('#ptitle'),
+    d = new Date();
+  if (!el) return;
+  el.hidden = view !== 'today' || path.length > 0;
+  setIfChanged(el, `<b>Today</b><span>${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}</span>`);
+}
 function drawToday() {
   $('#v-today')
     .querySelectorAll('details[id]')
@@ -180,13 +188,17 @@ function drawToday() {
     arr = n.children;
   }
   path = ok;
-  if (path.length) return renderNode(find(path[path.length - 1]));
+  if (path.length) {
+    todayTitle();
+    return renderNode(find(path[path.length - 1]));
+  }
   const qs = S.quests,
     // (what can be worked on, and what's finished today; scheduled tasks and ones only waiting
     // have sections of their own. Reordering shows them all: it's the one order underneath.)
     work = reorder ? qs : qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
   // 1. What needs attention (one line, opening to the items); 2. the Top 3; 3. what's scheduled;
   // 4. Today's work; 5. what it's waiting on.
+  todayTitle();
   let h = renderAttention() + renderTop3() + renderCarried() + renderScheduledToday();
   const asBoard = todayView === 'board' && work.length;
   h += listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0);
