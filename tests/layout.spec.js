@@ -104,4 +104,21 @@ test.describe('a wide desktop: Today in two columns', () => {
       ),
     ).toBe(true);
   });
+
+  test("a task's actions sit at the foot of the window, never over the page's end", async ({ app, page }) => {
+    await app.open();
+    await page.evaluate(() => {
+      S.quests.push({ id: 'lq1', text: 'Aldenham query', children: [] });
+      norm(S);
+      path = ['lq1'];
+      renderAll();
+    });
+    await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+    const f = await box(page, '.qfoot'),
+      more = await box(page, '#v-today > details.more'),
+      vh = await page.evaluate(() => innerHeight);
+    expect(f.y + f.height).toBeLessThanOrEqual(vh + 1);
+    // (no tab bar to clear on a desktop: at the end of the page it follows what's above it)
+    expect(f.y).toBeGreaterThanOrEqual(more.y + more.height - 1);
+  });
 });

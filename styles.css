@@ -3260,6 +3260,14 @@ details.more > details {
   border-width: 3px;
   border-top: 0;
 }
+/* (a task's page: the box to add a step sits in the panel under its Steps bar) */
+#v-today > .sechead + .addrow {
+  margin-top: 0;
+  padding: 10px 12px;
+  border: 3px solid var(--edge);
+  border-top: 0;
+  background: var(--panel);
+}
 /* what you're on: the header, under its own label */
 header:not(.compact) {
   border-width: 3px;
@@ -3391,6 +3399,14 @@ nav button[aria-current='page'] {
   .wrap {
     max-width: 1180px;
     padding: 28px 28px 40px;
+  }
+  /* (a task's actions: no tab bar below to clear, so held at the foot of the window, as a bar of
+     their own rather than floating over the steps) */
+  .qfoot {
+    bottom: 0;
+    margin-top: 18px;
+    padding: 12px;
+    border: 3px solid var(--edge);
   }
   /* (a task's page, opened from Today, stays one column of reading width) */
   .wrap:has(> #v-today .node) {
