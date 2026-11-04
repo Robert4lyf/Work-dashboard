@@ -72,7 +72,7 @@ function renderTop3() {
     })
     .join('');
   const note = out.length
-    ? `<p class="hint t3out">${out.map(q => esc(q.text)).join(', ')} ${out.length === 1 ? 'is' : 'are'} ${out.every(q => q.scheduled) ? 'scheduled' : out.every(q => !q.scheduled) ? 'waiting' : 'scheduled or waiting'}: not shown as ${out.length === 1 ? 'a priority' : 'priorities'} until ${out.length === 1 ? 'it' : 'they'} can be worked on.</p>`
+    ? `<p class="hint t3out">Set aside (${out.some(q => q.scheduled) ? (out.every(q => q.scheduled) ? 'scheduled' : 'scheduled or waiting') : 'waiting'}): ${out.map(q => esc(q.text)).join(', ')}</p>`
     : '';
   return `<section class="top3 box" aria-label="Top 3 today"><div class="sechead"><h2>Top 3</h2><button class="linkbtn" data-top3pick="1">Change</button></div>${rows ? `<div class="t3list">${rows}</div>` : ''}${note}</section>`;
 }
@@ -96,7 +96,7 @@ function top3PickerHtml(hint) {
     h += `<div class="t3prow"><button class="qact" type="button" data-stay="1" data-t3tog="${q.id}" aria-pressed="false"${full ? ' disabled' : ''}><span class="t3n" aria-hidden="true"></span>${esc(q.text)}</button></div>`;
   });
   if (held.length)
-    h += `<p class="hint t3held">Not offered, as they can't be worked on now: ${held.map(q => esc(q.text) + ' (' + (q.scheduled ? 'scheduled' : 'waiting') + ')').join(', ')}.</p>`;
+    h += `<p class="hint t3held">Not available: ${held.map(q => esc(q.text) + ' (' + (q.scheduled ? 'scheduled' : 'waiting') + ')').join(', ')}.</p>`;
   if (!chosen.length && !rest.length) h += '<p class="hint">Nothing on Today to choose from.</p>';
   h += `</div><div class="acts"><button class="btn green" type="button" data-sheetclose="1">Done</button>${ids.length ? '<button class="btn" type="button" data-stay="1" data-t3none="1">Clear</button>' : ''}</div>`;
   return h;

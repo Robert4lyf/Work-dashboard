@@ -35,9 +35,9 @@ function questActions(id, fromList) {
   if (fromList) act('Open', `data-open="${id}"`);
   // A scheduled task: its own actions (no Focus: it happens at its time).
   if (top && !d && n.scheduled) {
-    if (!n.children.length) act('Mark done', `data-toggle="${id}"`, 'go', 'It happened: record it');
+    if (!n.children.length) act('Mark done', `data-toggle="${id}"`, 'go');
     act('Reschedule', `data-schedset="${id}"`, '', schedWhen(n));
-    act('Not scheduled: back to ordinary work', `data-schedclear="${id}"`);
+    act('Unschedule', `data-schedclear="${id}"`);
     act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
     return a;
   }
@@ -62,8 +62,7 @@ function questActions(id, fromList) {
   if (!n.children.length) act(d ? 'Mark not done' : 'Mark done', `data-toggle="${id}"`);
   else if (top && needsNext(n)) act('Finish task', `data-finish="${id}"`);
   else if (top && d) act('Reopen task', `data-reopen="${id}"`);
-  if (top && !d && S.quests.includes(n))
-    act('Schedule', `data-schedset="${id}"`, '', 'A meeting or appointment: a day, maybe a time');
+  if (top && !d && S.quests.includes(n)) act('Schedule', `data-schedset="${id}"`);
   if (top && !d && S.quests.includes(n)) {
     act('Do tomorrow', `data-sched="${id}" data-kind="q" data-when="${shift(today(), 1)}"`);
     act('Do next week', `data-sched="${id}" data-kind="q" data-when="${nextMonday()}"`);

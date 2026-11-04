@@ -51,12 +51,9 @@ function schedStatus(n) {
     t = today();
   if (!s) return null;
   if (s.date > t) return { k: 'later', label: dayLabel(s.date) + (s.time ? ', ' + s.time : '') };
-  if (s.date < t)
-    return { k: 'past', label: `Past scheduled date (${dayLabel(s.date)}): review the outcome` };
-  if (!s.time) return { k: 'today', label: 'Today, no set time' };
-  return s.time > nowHM()
-    ? { k: 'soon', label: 'Later today' }
-    : { k: 'passed', label: 'Time passed: record the outcome' };
+  if (s.date < t) return { k: 'past', label: `${dayLabel(s.date)}: not marked done` };
+  if (!s.time) return { k: 'today', label: 'Today' };
+  return s.time > nowHM() ? { k: 'soon', label: 'Later today' } : { k: 'passed', label: 'Time passed' };
 }
 // The time (or day) column of a scheduled row.
 const schedWhen = n =>
@@ -87,12 +84,12 @@ function openScheduleSheet(id) {
   const n = r.n,
     s = n.scheduled || {};
   popSheet(
-    `<form id="schedform" data-id="${n.id}"><h2 id="sheettitle">Schedule</h2><p class="hint qahint">${esc(n.text)}: a meeting or anything else that happens at a set time. Kept apart from your work until you mark it done.</p>
+    `<form id="schedform" data-id="${n.id}"><h2 id="sheettitle">Schedule</h2><p class="hint qahint">${esc(n.text)}</p>
     <div class="schedflds"><div><label class="f" for="scheddate">Date</label><input class="fld" type="date" id="scheddate" required min="${today()}" value="${esc(s.date && s.date >= today() ? s.date : today())}"></div>
     <div><label class="f" for="schedtime">Time <small class="hint">(optional)</small></label><input class="fld" type="time" id="schedtime" value="${esc(s.time || '')}"></div></div>
     <div class="acts"><button class="btn green" id="sheetok">${n.scheduled ? 'Save' : 'Schedule'}</button><button class="btn" type="button" data-sheetclose="1">Cancel</button></div>${
       n.scheduled
-        ? `<div class="links"><button class="linkbtn" type="button" data-schedclear="${n.id}">Not scheduled: back to ordinary work</button></div>`
+        ? `<div class="links"><button class="linkbtn" type="button" data-schedclear="${n.id}">Unschedule</button></div>`
         : ''
     }</form>`,
     { labelledBy: 'sheettitle' },
@@ -148,7 +145,7 @@ function clearSchedule(id) {
   delete r.n.scheduled;
   save();
   renderAll();
-  toast(find(id) ? 'Back on your list' : 'No longer scheduled (still on Upcoming)');
+  toast('Unscheduled');
 }
 function schedClick(d) {
   if (d.schedset) return openScheduleSheet(d.schedset);
@@ -199,8 +196,8 @@ function renderWaitingToday() {
           only = q && taskState(q) === 'waiting',
           meta = [
             w.who ? 'on ' + esc(w.who) : '',
-            q && q !== n ? `${esc(q.text)}${only ? ' (nothing else to do yet)' : ''}` : '',
-            w.expect && w.expect >= today() ? 'reply promised ' + esc(dayLabel(w.expect)) : '',
+            q && q !== n ? `${esc(q.text)}` : '',
+            w.expect && w.expect >= today() ? 'reply by ' + esc(dayLabel(w.expect)) : '',
           ]
             .filter(Boolean)
             .join(' · ');

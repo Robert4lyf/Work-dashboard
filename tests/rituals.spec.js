@@ -100,7 +100,7 @@ test('waiting is on a step: set from the task, shown on Today and the Waiting ta
   // (Release E: its only step waits, so the task is under Waiting, with who and its chase date)
   await expect(page.locator('#v-today .row')).toHaveCount(1);
   await expect(page.locator('#v-today .wrow')).toContainText('on Sam');
-  await expect(page.locator('#v-today .wrow')).toContainText('Budget review (nothing else to do yet)');
+  await expect(page.locator('#v-today .wrow')).toContainText('Budget review');
   // It's blocked, so Next up moves on to the next task.
   await expect(page.locator('#hnow')).toContainText('Write report');
   await expect(page.locator('#attd > summary')).toContainText('1 today');

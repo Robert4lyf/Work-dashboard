@@ -191,8 +191,7 @@ function drawToday() {
   const asBoard = todayView === 'board' && work.length;
   h += listHead("Today's tasks", asBoard ? [] : qs, qs.length > 0);
   h += asBoard ? board(work) : list(work, true);
-  if (qs.length && !work.length)
-    h += '<p class="hint nowork">Nothing to act on right now: what\'s left is scheduled or waiting.</p>';
+  if (qs.length && !work.length) h += '<p class="hint nowork">Nothing to act on now.</p>';
   h += renderWaitingToday();
   // New work comes in through the Inbox; Today is what you've chosen from it.
   if (!qs.length)

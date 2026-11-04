@@ -22,7 +22,7 @@ test('1–2: a 14:00 meeting is under Scheduled, never the next task; after 14:0
   await expect(sched(page).locator('.stime')).toHaveText(['10:30', '14:00', 'Any time']);
   await expect(sched(page).nth(0)).toContainText('Later today');
   await expect(sched(page).nth(1)).toContainText('Later today');
-  await expect(sched(page).nth(2)).toContainText('Today, no set time');
+  await expect(sched(page).nth(2)).toContainText('Today');
   // Not in Today's tasks, not recommended, not in the Focus picker, not offered for Top 3.
   expect(await listNames(page)).not.toContain('Supplier review call');
   const rec = await page.evaluate(() => recommend().q.text);
@@ -42,15 +42,15 @@ test('1–2: a 14:00 meeting is under Scheduled, never the next task; after 14:0
     'Open',
     /^Mark done/,
     /^Reschedule/,
-    'Not scheduled: back to ordinary work',
+    'Unschedule',
     /^Delete/,
   ]);
   await page.keyboard.press('Escape');
   // 14:05: still there, unfinished, asking for the outcome. Nothing completes it on its own.
   await page.clock.setFixedTime(new Date(2026, 10, 4, 14, 5));
   await page.evaluate(() => renderAll());
-  await expect(sched(page).nth(0)).toContainText('Time passed: record the outcome');
-  await expect(sched(page).nth(1)).toContainText('Time passed: record the outcome');
+  await expect(sched(page).nth(0)).toContainText('Time passed');
+  await expect(sched(page).nth(1)).toContainText('Time passed');
   expect((await app.state()).quests.find(q => q.id === 'm2').done).toBe(false);
   await page.click('#v-today .schedrow[data-qid="m2"] [data-toggle]');
   const s = await app.state();
@@ -112,7 +112,7 @@ test('5–8: a task only waiting is under Waiting and out of the list, its place
   // Fully waiting: under Waiting, not in Today's tasks.
   expect(await listNames(page)).not.toContain('Finance system access');
   const it = waitRows(page).filter({ hasText: 'IT to grant access' });
-  await expect(it).toContainText('Finance system access (nothing else to do yet)');
+  await expect(it).toContainText('Finance system access');
   await expect(it).toContainText('on IT');
   await expect(it).toContainText('Chase today');
   await expect(it.locator('[data-chase]')).toHaveText('Follow up'); // (one action: a follow-up is due)
@@ -149,7 +149,7 @@ test('9: Top 3, the header and Focus skip scheduled and waiting work; a chosen o
   await expect(page.locator('.top3 .t3row')).toHaveCount(1);
   await expect(page.locator('.top3 .t3row')).toContainText('Q4 budget report');
   await expect(page.locator('.top3 .t3out')).toContainText(
-    'Supplier review call, Finance system access are scheduled or waiting',
+    'Set aside (scheduled or waiting): Supplier review call, Finance system access',
   );
   expect((await app.state()).top3.ids).toEqual(['m2', 'b1', 'q4']); // (still chosen)
   await expect(page.locator('#hnow small')).toContainText('Top 3 priority 1');
@@ -264,10 +264,10 @@ test('13–14: a scheduled copy of a repeating task isn’t doubled or swept awa
   // Yesterday's unresolved meeting is still there to resolve; no second copy made beside it.
   expect(s.quests.filter(q => q.tpl === 'tp').map(q => q.id)).toEqual(['tp-2026-11-04']);
   const past = page.locator('#v-today .schedrow[data-qid="tp-2026-11-04"]');
-  await expect(past).toContainText('Past scheduled date (Yesterday): review the outcome');
+  await expect(past).toContainText('Yesterday: not marked done');
   await expect(past).not.toContainText('Overdue');
   const att = await page.evaluate(() => attentionItems().filter(i => i.text === 'Weekly sync'));
-  expect(att.map(i => [i.sev, i.sub])).toEqual([[3, 'Scheduled yesterday: review the outcome']]);
+  expect(att.map(i => [i.sev, i.sub])).toEqual([[3, 'Scheduled yesterday: not marked done']]);
   // Nor is it a carried-over task to keep, move or drop.
   expect(await page.evaluate(() => carried().map(q => q.id))).not.toContain('tp-2026-11-04');
   // Back to ordinary work: on Today's list again.

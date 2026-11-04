@@ -140,7 +140,7 @@ function attentionItems() {
       add(
         3,
         q.text,
-        `Scheduled ${dayLabel(q.scheduled.date).replace(/^Yesterday$/, 'yesterday')}: review the outcome`,
+        `Scheduled ${dayLabel(q.scheduled.date).replace(/^Yesterday$/, 'yesterday')}: not marked done`,
         'Open task',
         `data-open="${q.id}"`,
       ),
