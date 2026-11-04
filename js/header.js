@@ -6,7 +6,7 @@ function nextStep() {
     blocked = [];
   S.quests.forEach(q => !isDone(q) && !q.wait && (showsWaiting(q) ? blocked : free).push(q));
   for (const q of [...free, ...blocked]) {
-    const n = q.children.length ? nextLeaf(q) : q;
+    const n = actionLeaf(q); // (not a scheduled one, nor one only waiting: see schedule.js)
     if (n) return { n, q };
   }
   return null;
@@ -21,17 +21,20 @@ function recommend() {
     placed = S.quests
       .filter(q => q.resume && !isDone(q) && fmt(new Date(q.resume.at)) >= since)
       .sort((a, b) => b.resume.at - a.resume.at)[0];
-  if (placed) {
+  if (placed && !placed.scheduled) {
     const st = placeStep(placed),
-      n = st && !isDone(st) && !st.wait ? st : focusLeaf(placed);
+      n = st && !isDone(st) && !st.wait ? st : actionLeaf(placed);
     if (n) return { n, q: placed, why: 'place' };
   }
+  // (ranked as the Top 3 card shows them: scheduled and waiting ones are set aside there)
   const ids = top3Ids();
+  let rank = 0;
   for (let i = 0; i < ids.length; i++) {
     const q = S.quests.find(x => x.id === ids[i]);
-    if (!q || isDone(q) || q.wait) continue;
-    const n = q.children.length ? nextLeaf(q) : q;
-    if (n) return { n, q, why: 'top3', rank: i + 1 };
+    if (!q || ['scheduled', 'waiting'].includes(taskState(q))) continue;
+    rank++;
+    const n = actionLeaf(q);
+    if (n) return { n, q, why: 'top3', rank };
   }
   const nx = nextStep();
   return nx ? { ...nx, why: 'list' } : null;
@@ -58,7 +61,7 @@ function renderHeader() {
     acts = `<button class="btn sm ${paused ? 'green' : 'blue'}" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`;
   } else {
     const nx = recommend(),
-      ask = !nx && S.quests.find(q => needsNext(q) && !q.wait); // (every step ticked: what's next?)
+      ask = !nx && S.quests.find(q => needsNext(q) && !q.wait && !q.scheduled); // (every step ticked: what's next?)
     if (ask) {
       h = `<button class="go" data-open="${ask.id}"><small>Every step ticked in ${esc(ask.text)}</small><b>${full ? "What's next?" : esc(ask.text) + ": what's next?"}</b></button>`;
     } else if (nx && nx.why === 'place') {
@@ -71,8 +74,13 @@ function renderHeader() {
       // (compact: no tick, so a quick tap on another page can't finish a step by mistake)
       h = `${full ? `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button>` : ''}<button class="go" data-open="${nx.n.id}"><small>${label}${where}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
       if (full) acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
-    } else
-      h = `<button class="go" data-v="today"><small>Next task</small><b>${S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
+    } else {
+      // (unfinished, but none of it to act on now: say what it's waiting for, not that it's done)
+      const sc = S.quests.filter(isScheduled).length,
+        wt = S.quests.filter(q => taskState(q) === 'waiting').length,
+        why = [sc ? sc + ' scheduled' : '', wt ? wt + ' waiting' : ''].filter(Boolean).join(' · ');
+      h = `<button class="go" data-v="today"><small>${why ? 'Next task · ' + why : 'Next task'}</small><b>${why ? 'Nothing to act on right now' : S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
+    }
   }
   setIfChanged($('#hnow'), h); // unchanged: left alone, keeping keyboard focus
   setIfChanged($('#hact'), acts);

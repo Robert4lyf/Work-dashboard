@@ -67,32 +67,38 @@ function forecastItems(span) {
     none = [];
   S.quests.forEach((q, i) => {
     if (isDone(q)) return;
+    // A scheduled task happens on its day: fixed there, never moved to make room. One from an
+    // earlier day is an outcome to record, not work to plan; one past the view isn't in it.
+    if (q.scheduled && (q.scheduled.date < t || q.scheduled.date > end)) return;
     const min = remEst(q);
     if (!min) return none.push(q);
     items.push({
       id: q.id,
       text: q.text,
       min,
-      from: t,
+      from: q.scheduled ? q.scheduled.date : t,
       due: q.due && q.due < t ? t : q.due || '',
       late: !!(q.due && q.due < t),
       top: top3.includes(q.id) ? 0 : 1,
       i,
+      ...(q.scheduled ? { fixed: true, sched: q.scheduled } : {}),
     });
   });
   S.later.forEach((q, i) => {
-    if (!q.start || q.start > end) return;
+    const from = q.scheduled ? q.scheduled.date : q.start;
+    if (!from || from > end || from < t) return;
     const min = remEst(q);
     if (!min) return none.push(q);
     items.push({
       id: q.id,
       text: q.text,
       min,
-      from: q.start,
+      from,
       due: q.due || '',
       top: 1,
       i: 1000 + i,
       later: true,
+      ...(q.scheduled ? { fixed: true, sched: q.scheduled } : {}),
     });
   });
   // Repeating tasks on their days (after today: today's copy is on the list already).
@@ -310,7 +316,7 @@ function renderForecast() {
     const over = open.load - open.cap;
     h += `<div class="box fday"><h3>${esc(dayLabel(open.d))}</h3><p class="hint">${hm(open.load)} estimated · ${hm(open.cap)} capacity${over > 0 ? ` · <b class="late">over by ${hm(over)}</b>` : open.cap ? ` · ${hm(open.cap - open.load)} free` : ''}</p>${
       open.items.length
-        ? `<ul class="flist">${open.items.map(x => `<li><small>${hm(x.take)}${x.over ? ' over' : ''}</small><span>${x.fixed ? esc(x.text) + ' <small>(repeats)</small>' : `<button class="linkbtn" data-open="${x.id}">${esc(x.text)}</button>`}${x.due ? ` <small>due ${esc(dayLabel(x.due))}</small>` : ''}</span></li>`).join('')}</ul>`
+        ? `<ul class="flist">${open.items.map(x => `<li><small>${hm(x.take)}${x.over ? ' over' : ''}</small><span>${x.sched ? `<button class="linkbtn" data-open="${x.id}">${esc(x.text)}</button> <small>(scheduled${x.sched.time ? ' ' + x.sched.time : ''}: fixed to this day)</small>` : x.fixed ? esc(x.text) + ' <small>(repeats)</small>' : `<button class="linkbtn" data-open="${x.id}">${esc(x.text)}</button>`}${x.due ? ` <small>due ${esc(dayLabel(x.due))}</small>` : ''}</span></li>`).join('')}</ul>`
         : '<p class="hint">Nothing estimated for this day.</p>'
     }${dueHere.length ? `<p class="hint">Due this day: ${dueHere.map(n => `<button class="linkbtn" data-open="${n.id}">${esc(n.text)}</button>`).join(', ')}</p>` : ''}${
       unest.length

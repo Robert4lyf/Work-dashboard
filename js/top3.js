@@ -20,7 +20,9 @@ function toggleTop3(id) {
   if (ids.includes(id)) {
     setTop3(ids.filter(x => x !== id));
     toast('Removed from Top 3');
-  } else if (ids.length >= TOP3_MAX) openTop3Picker(`Top 3 is full. Take one out to add ${q.text}.`);
+  } else if (!canAct(q))
+    toast(`${q.scheduled ? 'Scheduled' : 'Waiting'}: not a priority to work on now`, false, 3000);
+  else if (ids.length >= TOP3_MAX) openTop3Picker(`Top 3 is full. Take one out to add ${q.text}.`);
   else {
     setTop3([...ids, id]);
     toast('Added to Top 3');
@@ -49,21 +51,30 @@ function top3Action(n) {
 }
 function renderTop3() {
   const ids = top3Ids(),
-    open = S.quests.filter(q => !isDone(q));
+    open = S.quests.filter(canAct);
   if (!ids.length) {
     // Nothing chosen: one quiet line, only while there's something to choose from.
     return open.length
       ? `<div class="slot top3empty"><span>What matters most today?</span><button class="linkbtn" data-top3pick="1">Pick your Top 3</button></div>`
       : '';
   }
-  const rows = ids
+  // (a chosen task now scheduled, or only waiting, isn't a priority to work on: it's left out here,
+  // still chosen, and comes back when it can be worked on again; nothing takes its place)
+  const out = ids
+      .map(id => S.quests.find(q => q.id === id))
+      .filter(q => ['scheduled', 'waiting'].includes(taskState(q))),
+    shown = ids.filter(id => !out.some(q => q.id === id));
+  const rows = shown
     .map((id, i) => {
       const n = S.quests.find(q => q.id === id),
         d = isDone(n);
       return `<div class="t3row${d ? ' done' : ''}" data-t3="${n.id}"><span class="t3n" aria-hidden="true">${i + 1}</span><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${progressLine(n)}</small></button>${d ? `<span class="tag done">Done</span>` : top3Action(n)}</div>`;
     })
     .join('');
-  return `<section class="top3 box" aria-label="Top 3 today"><div class="sechead"><h2>Top 3</h2><button class="linkbtn" data-top3pick="1">Change</button></div><div class="t3list">${rows}</div></section>`;
+  const note = out.length
+    ? `<p class="hint t3out">${out.map(q => esc(q.text)).join(', ')} ${out.length === 1 ? 'is' : 'are'} ${out.every(q => q.scheduled) ? 'scheduled' : out.every(q => !q.scheduled) ? 'waiting' : 'scheduled or waiting'}: not shown as ${out.length === 1 ? 'a priority' : 'priorities'} until ${out.length === 1 ? 'it' : 'they'} can be worked on.</p>`
+    : '';
+  return `<section class="top3 box" aria-label="Top 3 today"><div class="sechead"><h2>Top 3</h2><button class="linkbtn" data-top3pick="1">Change</button></div>${rows ? `<div class="t3list">${rows}</div>` : ''}${note}</section>`;
 }
 /* choosing: a sheet listing Today's open tasks; tap to add or take out, in order; the chosen
    ones can be moved up and down. Each tap is saved as it's made. */
@@ -73,7 +84,9 @@ function openTop3Picker(hint) {
 function top3PickerHtml(hint) {
   const ids = top3Ids(),
     chosen = ids.map(id => S.quests.find(q => q.id === id)),
-    rest = S.quests.filter(q => !isDone(q) && !ids.includes(q.id)),
+    rest = S.quests.filter(q => canAct(q) && !ids.includes(q.id)),
+    // (scheduled ones, and ones only waiting, can't be worked on now: listed, not choosable)
+    held = S.quests.filter(q => !isDone(q) && !canAct(q) && !ids.includes(q.id)),
     full = ids.length >= TOP3_MAX;
   let h = `<h2 id="sheettitle">Top 3 for today</h2><p class="hint qahint">${esc(hint || "Up to three of Today's tasks, most important first. Tap to choose.")}</p><div class="t3pick">`;
   chosen.forEach((q, i) => {
@@ -82,6 +95,8 @@ function top3PickerHtml(hint) {
   rest.forEach(q => {
     h += `<div class="t3prow"><button class="qact" type="button" data-stay="1" data-t3tog="${q.id}" aria-pressed="false"${full ? ' disabled' : ''}><span class="t3n" aria-hidden="true"></span>${esc(q.text)}</button></div>`;
   });
+  if (held.length)
+    h += `<p class="hint t3held">Not offered, as they can't be worked on now: ${held.map(q => esc(q.text) + ' (' + (q.scheduled ? 'scheduled' : 'waiting') + ')').join(', ')}.</p>`;
   if (!chosen.length && !rest.length) h += '<p class="hint">Nothing on Today to choose from.</p>';
   h += `</div><div class="acts"><button class="btn green" type="button" data-sheetclose="1">Done</button>${ids.length ? '<button class="btn" type="button" data-stay="1" data-t3none="1">Clear</button>' : ''}</div>`;
   return h;

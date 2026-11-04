@@ -32,7 +32,9 @@ const timerLabel = t => {
 // What the next session is for: the task picked here, else the header's recommendation.
 function focusTarget() {
   if (S.focusQ === 'none') return null;
-  if (S.focusQ && find(S.focusQ) && !isDone(find(S.focusQ).n)) return S.focusQ;
+  // (a chosen task since scheduled, or a step now waiting on someone, isn't one to focus on)
+  const f = S.focusQ && find(S.focusQ);
+  if (f && !isDone(f.n) && !f.n.wait && !(f.parents[0] || f.n).scheduled) return S.focusQ;
   const nx = recommend();
   return nx ? nx.n.id : null;
 }
@@ -139,7 +141,8 @@ function renderFocus() {
       opts = [];
     (function w(ns, trail) {
       ns.forEach(n => {
-        if (isDone(n)) return;
+        // (not a scheduled task, nor a step waiting on someone: nothing to focus on there now)
+        if (isDone(n) || n.scheduled || n.wait) return;
         const tr = [...trail, n.text];
         opts.push([n.id, tr.join(' / ')]);
         w(n.children, tr);
