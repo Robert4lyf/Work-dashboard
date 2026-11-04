@@ -218,8 +218,9 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   await expect(page.locator('[data-wfact="skip"]')).toHaveCount(0);
   await page.click('#wfmore summary'); // (the failure's less common options)
   await page.click('[data-wfact="inbox"]');
-  expect(await page.evaluate(() => S.inbox[0].text)).toBe('Process failed: Thursday report');
-  expect((await run(page)).ack).toBe(1);
+  // (Release G: the item is that failure's, with its step; the acknowledgement names the failure)
+  expect(await page.evaluate(() => S.inbox[0].text)).toBe('Process failed: Thursday report · Check');
+  expect((await run(page)).ack).toBe('2');
   expect(await page.evaluate(() => renderAttention())).not.toContain('Process failed');
   await page.click('[data-wfact="retry"]');
   expect((await run(page)).status).toBe('awaiting_user');

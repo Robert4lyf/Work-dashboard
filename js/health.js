@@ -41,6 +41,7 @@ async function runHealth() {
       lastSync ? new Date(lastSync).toLocaleString() : 'Not yet',
       'Tap Sync now; if it keeps failing, re-run supabase-setup.sql.',
     );
+    await wrunHealth(add); // (Release G: process runs checked by the server, see sync.js)
     add(
       'Live updates',
       liveStatus === 'SUBSCRIBED' ? true : liveStatus ? false : null,

@@ -139,12 +139,18 @@ function applyRows(rows, firstSync, keep, holdCursor) {
       (sync2.gone = sync2.gone || {})[r.key] = 1;
     const h = r.deleted ? null : recHash(r.key, r.data),
       mine = sync2.dirty[r.key];
+    // A process run changed here and not yet taken by the server isn't replaced by what it has:
+    // the server decides between the two (see pushRuns), unless its check isn't installed.
+    if (mine && isWrunKey(r.key) && !wrunCasOff()) continue;
     if (mine && mine.at > Number(r.edited_at)) continue; // (not taken in: fetched again next time)
     (sync2.at = sync2.at || {})[r.key] = Number(r.seq); // (this version is here now)
     (sync2.et = sync2.et || {})[r.key] = Number(r.edited_at) || 0; // (and when it was made)
     delete sync2.dirty[r.key];
     if (h === null) delete sync2.synced[r.key];
     else sync2.synced[r.key] = h;
+    // (a run's revision as stored, the base of the next change made here; what was noted for a
+    // version replaced is of no further use)
+    if (isWrunKey(r.key)) tookRunRow(r);
     if (h === null ? recs.has(r.key) : recHash(r.key, recs.get(r.key)) !== h) {
       if (h === null) recs.delete(r.key);
       else recs.set(r.key, r.data);
@@ -153,7 +159,8 @@ function applyRows(rows, firstSync, keep, holdCursor) {
   }
   if (changed) {
     dropUndo();
-    norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt }));
+    // (with this device's own refused run changes, which aren't records: see wfConflict)
+    norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt, wconflicts: S.wconflicts }));
     settleTop3();
     // The task on screen went (in the rows, not through the day's reset or a chosen replace).
     const open = !firstSync && path.length && !find(path[path.length - 1]);
@@ -210,8 +217,10 @@ async function firstSync() {
   markDirty();
 }
 async function pushDirty() {
-  const keys = Object.keys(sync2.dirty);
+  let keys = Object.keys(sync2.dirty);
   if (!keys.length) return;
+  // Process runs first, each through the server's check (or, without it, with the rest).
+  if (!wrunCasOff()) keys = await pushRuns(keys);
   const uid_ = session.user.id;
   for (let i = 0; i < keys.length; i += 500) {
     // Read now, with the dirty marks: edits made while an earlier batch was sending are in both.
@@ -265,6 +274,9 @@ async function pushDirty() {
       else sync2.synced[k] = d.h;
       (sync2.et = sync2.et || {})[k] = d.at;
       if (!again) delete sync2.dirty[k];
+      // (newer edit wins: nothing to replay, and a change still waiting to be sent through the
+      // function is older than this one)
+      if (isWrunKey(k)) tookRunRow({ key: k, data: d.h === null ? null : recs.get(k) });
     });
     saveSyncState();
     for (let j = 0; j < lost.length; j += 100) {
@@ -291,6 +303,183 @@ function clean(row) {
   const j = JSON.stringify(row.data),
     c = j.replace(/(?<!\\)((?:\\\\)*)\\u(?:0000|d[89a-f][0-9a-f]{2})/gi, '$1');
   return c === j ? row : { ...row, data: JSON.parse(c) };
+}
+/* Release G: process runs go through cockpit_put_wrun (supabase/release-g-runs.sql). A change to
+   a run is sent with the revision it was made to (its base): the server takes it only if that is
+   still the revision it has, and the run is then one revision higher, so two devices can't write
+   over each other's changes. Each change sent has an id (sync2.wop, kept until it's answered), so
+   one sent again after its answer was lost is applied once. Refused: the server's run is taken
+   here, and this device's version kept as a conflict to decide on (see wfConflict). Without the
+   function on the server, runs sync like everything else (the newer edit wins) and the health
+   check says so; it's asked again every half hour. Nothing here ever launches anything. */
+let wrunCas = { on: null, at: 0 }; // the server has the function: true, false (when last asked), or null (not known yet)
+const isWrunKey = k => k.startsWith('wrun:');
+const wrunCasOff = () => wrunCas.on === false && Date.now() - wrunCas.at < 30 * 60e3;
+// (PostgREST: no such function. A 404 is that too, from older versions.)
+const fnMissing = (error, status) => status === 404 || ['PGRST202', '42883'].includes(error && error.code);
+const rowRev = d => (d && Number.isInteger(d.rev) && d.rev > 0 ? d.rev : 0);
+// The revision this device's version of a run was changed from: the server's, as last taken in
+// or accepted here (else the run's own, from before this bookkeeping).
+function baseRev(k) {
+  if (sync2.wrev && k in sync2.wrev) return sync2.wrev[k];
+  return rowRev(wrunById(k.slice(5)));
+}
+// A run's row taken in (pulled, or the server's answer): its revision is the base from now on,
+// and what was noted or being sent for the version it replaces is of no further use.
+function tookRunRow(row) {
+  (sync2.wrev = sync2.wrev || {})[row.key] = rowRev(row.data);
+  if (sync2.wjour) delete sync2.wjour[row.key.slice(5)];
+  if (sync2.wop) delete sync2.wop[row.key];
+}
+// Sends the dirty runs among `keys`; returns the keys left for the ordinary upsert (all the runs
+// not yet sent too, if the server hasn't got the function).
+async function pushRuns(keys) {
+  const runs = keys.filter(isWrunKey),
+    rest = keys.filter(k => !isWrunKey(k)),
+    open = view === 'knowledge' && wfOpen && wrunById(wfOpen),
+    was = open ? wsyncState(open) : '';
+  let left = rest;
+  try {
+    for (let i = 0; i < runs.length; i++)
+      if ((await putRun(runs[i])) === 'missing') {
+        left = [...rest, ...runs.slice(i)];
+        break;
+      }
+    for (const id in sync2.wjour || {}) if (!wrunById(id)) delete sync2.wjour[id];
+  } finally {
+    // (the revisions taken, saved with the bookkeeping: after a reload the two agree)
+    if (runs.length && persistLocal()) saveSyncState();
+  }
+  const now = open && wrunById(open.id);
+  if (now && wsyncState(now) !== was) inBackground(renderKnowledge);
+  return left;
+}
+async function putRun(k) {
+  const id = k.slice(5);
+  for (let pass = 0; pass < 4; pass++) {
+    const d = sync2.dirty[k];
+    if (!d) return;
+    const wop = (sync2.wop = sync2.wop || {}),
+      base = baseRev(k);
+    let p = wop[k];
+    // One change, frozen as first sent: sent again as it was until it's answered.
+    if (!p || p.base !== base) {
+      const r = wrunById(id);
+      p = wop[k] = {
+        op: uid() + Math.random().toString(36).slice(2, 10),
+        base,
+        data: r ? clean({ data: { ...JSON.parse(JSON.stringify(r)), rev: base + 1 } }).data : null,
+        n: ((sync2.wjour || {})[id] || []).length, // (the journal's changes it holds)
+      };
+      saveSyncState(); // (before it goes: if the answer is lost, the same op is asked again)
+    }
+    if (tally) {
+      tally.up += sizeOf(p.data);
+      tally.sent++;
+    }
+    const {
+      data: out,
+      error,
+      status,
+    } = await sb.rpc('cockpit_put_wrun', { p_key: k, p_base_rev: p.base, p_data: p.data, p_op: p.op });
+    if (error && !fnMissing(error, status)) throw error;
+    // (no such function, or an answer it can't have given: as before the function, for now)
+    if (error || !out || typeof out !== 'object' || !out.status) {
+      wrunCas = { on: false, at: Date.now() };
+      return 'missing';
+    }
+    wrunCas = { on: true, at: Date.now() };
+    const row = {
+      key: k,
+      data: out.data || null,
+      deleted: !!out.deleted,
+      edited_at: Number(out.edited_at) || 0,
+      seq: Number(out.seq) || 0,
+    };
+    if (out.status === 'accepted' || out.status === 'duplicate') {
+      // (a duplicate: taken before, its answer lost; changed again since by another device, the
+      // run as it is now comes here too)
+      const later = out.status === 'duplicate' && out.cur_rev !== out.rev;
+      acceptedRun(k, p, Number(out.rev), later ? null : row);
+      if (later && !sync2.dirty[k] && row.seq) applyRows([row], false, null, true);
+      continue;
+    }
+    if (out.status !== 'conflict') throw new Error('cockpit_put_wrun: ' + out.status);
+    delete wop[k];
+    // The server has no such run, or exactly the version last taken in here: only this
+    // device's note of the revision was out of date. Sent again from the right one.
+    if ((!row.data && !row.deleted) || (!row.deleted && sync2.synced[k] === recHash(k, row.data))) {
+      (sync2.wrev = sync2.wrev || {})[k] = rowRev(row.data);
+      continue;
+    }
+    const r = wrunById(id),
+      notes = wfConflict(
+        id,
+        r ? JSON.parse(JSON.stringify(r)) : null,
+        row.deleted ? null : row.data,
+        p.base,
+        rowRev(row.data),
+        (sync2.wjour || {})[id] || [],
+      );
+    delete sync2.dirty[k];
+    applyRows([row], false, null, true); // (the server's run, here now)
+    const r2 = wrunById(id);
+    if (r2 && notes.length) {
+      notes.forEach(e => noteRun(r2, e.k || 'note', e.m || ''));
+      persistLocal();
+      markDirty();
+    }
+  }
+}
+// The change `p` was taken as revision `rev` (`row`: the row as stored, when it's the one sent).
+function acceptedRun(k, p, rev, row) {
+  const id = k.slice(5),
+    j = sync2.wjour && sync2.wjour[id];
+  delete sync2.wop[k];
+  (sync2.wrev = sync2.wrev || {})[k] = rev;
+  if (j) {
+    j.splice(0, p.n);
+    if (!j.length) delete sync2.wjour[id];
+  }
+  const h = p.data ? recHash(k, p.data) : null;
+  if (h === null) delete sync2.synced[k];
+  else sync2.synced[k] = h;
+  if (row && row.seq) {
+    (sync2.at = sync2.at || {})[k] = row.seq; // (this device's own write: not read back down)
+    (sync2.et = sync2.et || {})[k] = row.edited_at;
+  } else if (sync2.at) delete sync2.at[k];
+  // This device's copy is that revision now; changed again since it went, it's sent next.
+  const r = wrunById(id);
+  if (r) r.rev = rev;
+  const now = r ? recHash(k, r) : null;
+  if (now === h) delete sync2.dirty[k];
+  else if (sync2.dirty[k]) sync2.dirty[k] = { ...sync2.dirty[k], h: now };
+  saveSyncState();
+}
+// For the health check: whether the server checks run changes (its function refuses an empty key).
+async function wrunHealth(add) {
+  const name = 'Process run checks';
+  let res;
+  try {
+    res = await sb.rpc('cockpit_put_wrun', { p_key: '', p_base_rev: 0, p_data: null, p_op: '' });
+  } catch (e) {
+    return add(name, null, 'Unknown');
+  }
+  const { error, status } = res || {};
+  if (error && fnMissing(error, status)) {
+    wrunCas = { on: false, at: Date.now() };
+    return add(
+      name,
+      false,
+      'Not installed: the newer edit wins',
+      'Run supabase/release-g-runs.sql in the SQL Editor (README > How sync behaves).',
+    );
+  }
+  if (!error || error.code === '22023' || /key must be/.test(error.message || '')) {
+    wrunCas = { on: true, at: Date.now() };
+    return add(name, true, 'On');
+  }
+  add(name, null, 'Unknown');
 }
 // A few times a day, keep a whole-state copy in cockpit_state; its history trigger is what
 // Settings > Previous versions lists.

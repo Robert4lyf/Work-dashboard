@@ -101,6 +101,14 @@ function latestExec(flow, q, since = 0, exact = false) {
 }
 // Failures not yet acknowledged (shown on Today as one chip).
 const execFailures = () => S.execs.filter(x => x.status === 'failed' && !x.ack);
+// (Release G) A failed attempt's failure, by its id: the report that made it ('e' + its row id; a
+// later failure report for the same attempt is a new one). What Acknowledge and Add to the Inbox
+// on its details are bound to.
+function execOcc(x) {
+  if (!x || x.status !== 'failed') return '';
+  const e = [...x.ev].reverse().find(y => y.s === 'failed');
+  return e ? 'e' + e.i : 'u' + x.upd;
+}
 
 /* reports from the server: pulled after each sync, folded in by row id */
 async function pullExecEvents() {
@@ -317,9 +325,9 @@ function openExecDetail(id) {
       f
         ? `<a class="qact go" href="${esc(f.url)}" data-flow="${f.id}"${x.q ? ` data-q="${x.q}"` : ''}>&#9654; Run again<small>Launches the flow once more</small></a>`
         : ''
-    }${x.status === 'failed' ? `<button class="qact" type="button" data-xinbox="${x.id}">Add to the Inbox<small>To look into it later</small></button>` : ''}<button class="qact" type="button" data-xcopy="${x.id}">Copy a summary</button>${
+    }${x.status === 'failed' ? `<button class="qact" type="button" data-xinbox="${x.id}" data-xocc="${execOcc(x)}">Add to the Inbox<small>To look into it later</small></button>` : ''}<button class="qact" type="button" data-xcopy="${x.id}">Copy a summary</button>${
       x.status === 'failed' && !x.ack
-        ? `<button class="qact" type="button" data-xack="${x.id}">Acknowledge<small>Keeps the record, clears the flag</small></button>`
+        ? `<button class="qact" type="button" data-xack="${x.id}" data-xocc="${execOcc(x)}">Acknowledge<small>Keeps the record, clears the flag</small></button>`
         : ''
     }</div><div class="acts"><button class="btn" type="button" data-sheetclose="1">Close</button></div>`,
     { labelledBy: 'sheettitle' },
@@ -333,29 +341,26 @@ function execClick(d, b) {
     if (x) copyText(execSummary(x));
     return;
   }
-  if (d.xack) {
-    const x = S.execs.find(y => y.id === d.xack);
-    if (x) {
-      x.ack = 1;
-      save();
-      renderAll();
-    }
-    return;
-  }
-  if (d.xinbox) {
-    const x = S.execs.find(y => y.id === d.xinbox),
-      f = x && S.flows.find(y => y.id === x.flow);
+  // (each bound to the failure it was drawn for: refused once the attempt has failed again, or
+  // has another result)
+  if (d.xack || d.xinbox) {
+    const x = S.execs.find(y => y.id === (d.xack || d.xinbox));
     if (!x) return;
-    const text = `Automation failed: ${f ? f.name : x.flow}`;
-    S.inbox.unshift({
-      id: uid(),
-      text: text.slice(0, 200),
-      node: fix({ id: uid(), text: text.slice(0, 200), notes: execSummary(x) }),
-    });
+    const occ = execOcc(x);
+    if (!occ || occ !== (d.xocc || '')) return toast('That failure has changed', false, 3000);
+    let added = false;
+    if (d.xinbox) {
+      // (the same failure's item, named by the attempt and the failure: made once, wherever asked)
+      const f = S.flows.find(y => y.id === x.flow),
+        text = `Automation failed: ${f ? f.name : x.flow}`.slice(0, 200),
+        id = keyId('xfail:' + x.id + ':' + occ);
+      added = !S.inbox.some(i => i.id === id) && ![S.quests, S.later].some(l => find(id + 'n', l));
+      if (added) S.inbox.unshift({ id, text, node: fix({ id: id + 'n', text, notes: execSummary(x) }) });
+    }
     x.ack = 1;
     save();
     renderAll();
-    toast('Added to inbox');
+    if (d.xinbox) toast(added ? 'Added to inbox' : 'Already in the Inbox');
     return;
   }
   if (b && b.id === 'xnew') {

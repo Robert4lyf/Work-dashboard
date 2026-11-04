@@ -204,6 +204,15 @@ If you set up the function before summaries were added, paste the updated `supab
 - Follow-ups on waiting items, procedure runs and flow executions are rows of their own (`follow:`, `run:`, `exec:`), appended rather than edited, so two devices adding one each keep both and a task's row stays small. Flow status reports live in a separate append-only table (`cockpit_exec_events`) written only by the report function; each device pulls them and folds them into the execution records in the same order, so the records agree.
 - A task's resources and saved place are part of its row, so they sync with it (and the newer edit of the task wins, as for any other change to it). The Top 3 is a record of its own (`meta:top3`), and its set-aside choices another (`meta:top3held`, so a copy of the app from before them leaves them alone): choosing on two devices at once, the newer choice wins; clearing it deletes the records. The day's reset clears a Top 3 from an earlier day as of midnight, so a choice already made today on another device still wins. No database changes are needed for any of this: the rows are the same table, and the new fields are ignored by older copies of the app and kept as they are.
 - A copy of everything is saved on the server every few hours (the newest 200 are kept). If something goes missing, open **Settings > Previous versions** and restore one.
+- **Process runs are checked by the server** (once `supabase/release-g-runs.sql` is installed, below). Each run carries a revision number. A change to a run is sent with the revision it was made to, and the server takes it only if that is still the run's revision. So two devices can't overwrite each other's changes to a run: the second one is refused, the device takes the server's run, and the run's page shows a **Conflict** with what this device did and what the server has. **Keep the server's** writes what this device did into the run's history without applying it; **Apply mine on top** (offered only when it still fits) does this device's changes again on the server's version, each checked by the usual rules. Settling a conflict never launches an automation. A change sent again after a dropped connection is recognised and applied once. The run's page says where its last change stands: **Saved on this device** (not yet taken by the server), **Synced** or **Conflict**.
+
+### Process run checks (Release G, optional but recommended)
+
+1. In Supabase, open **SQL Editor > New query**, paste the contents of `supabase/release-g-runs.sql` and click **Run**. It's safe to run again and changes no data.
+2. Reload the app on every device. A copy of the app from before this can no longer change process runs once the file is installed (its change is refused, and it takes the server's run).
+3. **Settings > Health check** shows **Process run checks: On**. Without the file the app works as before (the newer edit wins) and the health check says **Not installed**.
+
+To remove it, run the four `drop` lines in the file's ROLLBACK section (without their `-- `). The runs stay as they are. `tests/db/run.sh` tests the file against a throwaway PostgreSQL (it needs PostgreSQL 16 installed; GitHub runs it on every push). Details: `docs/ux/release-g-sync.md`.
 
 ## Features worth knowing
 
@@ -254,7 +263,7 @@ If you set up the function before summaries were added, paste the updated `supab
 
 ## Processes, rules, forecast, insights and the Command Centre
 
-Everything in this section runs in the app itself, from its own records; nothing needs a database change, a server, or any new service. Reload the app on every device after updating.
+Everything in this section runs in the app itself, from its own records; nothing needs a server or any new service. (The one database change, optional, is Release G's process run checks: see How sync behaves.) Reload the app on every device after updating.
 
 ### The words the app uses
 
@@ -303,7 +312,7 @@ One page for the operator: from the **Command Centre** link at the top of Today,
 
 ### Sync notes
 
-Processes (`workflow:`), runs (`wrun:`), rules (`rule:`) and the rule log (`rlog:`) are rows of their own; capacity (`meta:cap`) and pins (`meta:pins`) are single records that exist only once set. A device on a previous version leaves rows it doesn't know alone, and keeps a task's estimate as data it doesn't understand. Run outcomes are deterministic from the records. There is no new SQL.
+Processes (`workflow:`), runs (`wrun:`), rules (`rule:`) and the rule log (`rlog:`) are rows of their own; capacity (`meta:cap`) and pins (`meta:pins`) are single records that exist only once set. A device on a previous version leaves rows it doesn't know alone, and keeps a task's estimate as data it doesn't understand. Run outcomes are deterministic from the records. Release G adds an optional SQL file for runs (above, under How sync behaves).
 
 ## Working on the code
 

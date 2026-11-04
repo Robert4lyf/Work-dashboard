@@ -4414,3 +4414,20 @@ summary,
   margin: 0;
   font-size: inherit;
 }
+
+/* Release G: process-run sync state */
+.wsync.ws-pending {
+  color: var(--wait);
+}
+.wsync.ws-conflict {
+  color: var(--err);
+  font-weight: 600;
+}
+.wconf {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-color: var(--err);
+}
+.wconf p {
+  margin: 0 0 6px;
+}

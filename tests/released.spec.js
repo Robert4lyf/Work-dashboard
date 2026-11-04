@@ -152,7 +152,8 @@ test('failure recovery: the error and the retry warning lead, Try again is the o
   // over the redraw.
   await card.locator('[data-wfact="ack"]').click();
   let r = await page.evaluate(() => wrunById('failed'));
-  expect([r.status, r.ack]).toEqual(['failed', 1]);
+  // (Release G: the acknowledgement names the failure; one from before these ids, by its time)
+  expect([r.status, r.ack]).toEqual(['failed', expect.stringMatching(/^t\d+$/)]);
   await expect(page.locator('.pstep.failed .pnext')).toContainText('stays failed until');
   await expect(page.locator('#wfmore')).toHaveAttribute('open', '');
   await expect(page.locator('#wfmore [data-wfact="ack"]')).toHaveCount(0);
@@ -937,7 +938,7 @@ test('static audit fixes: a re-armed Delete is the same item’s; dark tags and 
     openWorkflowRun('g');
   });
   await page.click('#v-knowledge [data-wfact="ack"]');
-  expect((await app.state()).wruns[0].ack).toBe(1);
+  expect((await app.state()).wruns[0].ack).toMatch(/^t\d+$/); // (the failure, by its time: see failOcc)
   expect(app.errors).toEqual([]);
 });
 

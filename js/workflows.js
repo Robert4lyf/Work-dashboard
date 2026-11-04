@@ -8,7 +8,12 @@
    Stage: { id, type: manual|procedure|flow|verify|wait|decide, title, text, kb, flow, checks:
    [..], who, choices: [{ label, next (stage id or '') }], skip (may be skipped) }.
    Run: { id, wf, ver, name, q, def: [stages], started, at, cur, st: { [stage id]: { o: done|
-   skipped|failed, at, note, exec, run, wait, pick, checks } }, status, fin, err, ack, log }. */
+   skipped|failed, at, note, exec, run, wait, pick, occ } }, status, fin, err, ack, log, rev, occ,
+   fails }.
+   (Release G) rev: the run's revision, one higher on every change the server accepts (absent
+   reads as 0; see pushRuns in sync.js). occ: how many times the run has failed, so each failure
+   has an id of its own (failOcc), and fails: the last few failures, kept after a retry. ack: the
+   failure acknowledged (its occurrence id; 1 from a copy of the app from before). */
 const WF_TYPES = ['manual', 'procedure', 'flow', 'verify', 'wait', 'decide'];
 const WF_TYPE_NAME = {
   manual: 'Plain step',
@@ -133,6 +138,7 @@ function cleanRun(r) {
       if (okRef(o.run)) st[k].run = o.run;
       if (okRef(o.wait)) st[k].wait = o.wait;
       if (Number.isInteger(+o.pick) && +o.pick >= 0) st[k].pick = +o.pick;
+      if (Number.isInteger(+o.occ) && +o.occ > 0) st[k].occ = +o.occ;
     }
   // What the current stage holds while it's under way (its launch, its procedure run, its item).
   const live = {};
@@ -165,17 +171,38 @@ function cleanRun(r) {
     status: WRUN_STATUS.includes(r.status) ? r.status : 'ready',
     fin: Number.isFinite(+r.fin) && +r.fin > 0 ? +r.fin : 0,
     err: txt(r.err, 300),
-    ...(r.ack ? { ack: 1 } : {}),
+    ...(typeof r.ack === 'string' && OCC_RE.test(r.ack) ? { ack: r.ack } : r.ack ? { ack: 1 } : {}),
     ...(r.byRule ? { byRule: 1 } : {}),
+    // (only once there is one, so a run from before reads the same and isn't sent again)
+    ...(Number.isInteger(+r.rev) && +r.rev > 0 && +r.rev < 1e9 ? { rev: +r.rev } : {}),
+    ...(Number.isInteger(+r.occ) && +r.occ > 0 ? { occ: +r.occ } : {}),
+    ...(Array.isArray(r.fails) && r.fails.length ? { fails: cleanFails(r.fails, ids) } : {}),
     log: (Array.isArray(r.log) ? r.log : [])
       .filter(l => l && typeof l === 'object' && Number.isFinite(+l.t) && typeof l.k === 'string')
       .map(l => ({ t: +l.t, k: l.k.slice(0, 20), m: txt(l.m, 200) }))
       .slice(-WF_LOG_MAX),
   };
 }
+// A run's past failures (the newest WF_FAILS): which step, when, what went wrong, the attempt.
+const WF_FAILS = 12,
+  OCC_RE = /^[\w.:-]{1,40}$/;
+function cleanFails(l, ids) {
+  return l
+    .filter(f => f && typeof f === 'object' && Number.isInteger(+f.occ) && +f.occ > 0 && ids.has(f.sid))
+    .map(f => ({
+      occ: +f.occ,
+      sid: f.sid,
+      at: Number.isFinite(+f.at) ? +f.at : 0,
+      err: txt(f.err, 300),
+      ...(okRef(f.exec) ? { exec: f.exec } : {}),
+    }))
+    .slice(-WF_FAILS);
+}
 function normWorkflows() {
   S.workflows = (Array.isArray(S.workflows) ? S.workflows : []).map(cleanWorkflow).filter(Boolean);
   S.wruns = (Array.isArray(S.wruns) ? S.wruns : []).map(cleanRun).filter(Boolean);
+  // (a conflict outlives its run only as long as the run is here: see wfConflict)
+  S.wconflicts = cleanConflicts(S.wconflicts).filter(c => S.wruns.some(r => r.id === c.run));
   pruneRuns2();
   reconcileRuns();
 }
@@ -190,17 +217,20 @@ function reconcileRuns() {
       return;
     if (r.status === 'ready') return;
     if (x.status === 'succeeded') {
-      if (completeStage(r, s.id, { note: x.msg ? 'Automation: ' + x.msg : '', by: 'auto' }) === '')
+      if (
+        completeStage(r, s.id, { note: x.msg ? 'Automation: ' + x.msg : '', by: 'auto', exec: x.id }) === ''
+      )
         emitRun(r);
-    } else {
+    } else if (
       failStage(
         r,
         s.id,
         (x.status === 'cancelled' ? 'Automation cancelled' : 'Automation failed') +
           (x.msg ? ': ' + x.msg : ''),
-      );
+        { exec: x.id },
+      ) === ''
+    )
       emitRun(r);
-    }
   });
 }
 // Finished runs older than WRUNS_DAYS go, and all but the newest WRUNS_KEEP finished ones;
@@ -300,12 +330,14 @@ function makeRun(w, { q = '', id = '', prepared = false, byRule = false } = {}) 
   return r;
 }
 function beginRun(r) {
-  if (r.status !== 'ready') return 'not ready';
-  r.status = 'running';
-  r.started = Date.now();
-  runLog(r, 'started');
-  settleRun(r);
-  return '';
+  return wfTx(r, { a: 'begin' }, () => {
+    if (r.status !== 'ready') return 'not ready';
+    r.status = 'running';
+    r.started = Date.now();
+    runLog(r, 'started');
+    settleRun(r);
+    return '';
+  });
 }
 // The next stage after `s`: a decision's chosen branch, else the one after it in order.
 function nextStageId(r, s, pick) {
@@ -346,7 +378,25 @@ const STAGE_BY = {
   wait: ['reply'],
 };
 // The current stage is done (or skipped): kept with what it held, and the run moves on.
-function completeStage(r, sid, { o = 'done', note = '', pick, by = '' } = {}) {
+// (`exec`: the automation attempt whose result this is; refused once the step has another)
+function completeStage(r, sid, opts = {}) {
+  return wfTx(
+    r,
+    {
+      a: 'done',
+      sid,
+      o: opts.o,
+      note: opts.note,
+      pick: opts.pick,
+      by: opts.by,
+      x: opts.exec,
+      occ: failOcc(r) || undefined,
+      eng: opts.by === 'auto' ? 1 : undefined,
+    },
+    () => doComplete(r, sid, opts),
+  );
+}
+function doComplete(r, sid, { o = 'done', note = '', pick, by = '', exec = '' } = {}) {
   if (WRUN_OVER.includes(r.status)) return 'the run is over';
   if (r.status === 'failed' && o !== 'skipped') return 'retry it first';
   if (r.status === 'paused') return 'the run is paused';
@@ -362,6 +412,7 @@ function completeStage(r, sid, { o = 'done', note = '', pick, by = '' } = {}) {
     if (s.type === 'verify' && !checksDone(r, s)) return 'tick each check first';
     if (s.type === 'procedure' && !guideDone(r)) return 'finish the guide first';
     if (s.type === 'flow' && by === 'auto' && !r.live.exec) return 'no attempt to report on';
+    if (exec && r.live.exec !== exec) return 'that attempt has changed';
     if (s.type === 'flow' && by === 'confirm' && !flowConfirmable(r, s)) return 'wait for its result';
     if (s.type === 'wait' && stageWaitNode(r)) return 'still waiting';
   }
@@ -390,42 +441,72 @@ function completeStage(r, sid, { o = 'done', note = '', pick, by = '' } = {}) {
   }
   return '';
 }
-function failStage(r, sid, err) {
-  if (WRUN_FINAL.includes(r.status) || r.status === 'paused') return 'the run is over or paused';
-  if (r.status === 'ready') return 'the run has not started';
-  const s = runStage(r);
-  if (!s || s.id !== sid) return 'not the current step';
-  r.status = 'failed';
-  delete r.ack; // (a new failure is news, whatever was acknowledged before)
-  r.err = txt(err, 300) || 'Failed';
-  r.st[sid] = { o: 'failed', at: Date.now(), note: r.err, ...(r.live.exec ? { exec: r.live.exec } : {}) };
-  runLog(r, 'failed', r.err);
-  return '';
+// (`exec`: the automation attempt that reported it, as for completeStage)
+function failStage(r, sid, err, { exec = '' } = {}) {
+  return wfTx(r, { a: 'fail', sid, err, x: exec || undefined, eng: exec ? 1 : undefined }, () => {
+    if (WRUN_FINAL.includes(r.status) || r.status === 'paused') return 'the run is over or paused';
+    if (r.status === 'ready') return 'the run has not started';
+    const s = runStage(r);
+    if (!s || s.id !== sid) return 'not the current step';
+    if (exec && r.live.exec !== exec) return 'that attempt has changed';
+    r.status = 'failed';
+    delete r.ack; // (a new failure is news, whatever was acknowledged before)
+    r.err = txt(err, 300) || 'Failed';
+    // (each failure has an id of its own: what Acknowledge and Add to the Inbox are bound to)
+    r.occ = (r.occ || 0) + 1;
+    const at = Date.now();
+    r.st[sid] = {
+      o: 'failed',
+      at,
+      note: r.err,
+      occ: r.occ,
+      ...(r.live.exec ? { exec: r.live.exec } : {}),
+    };
+    r.fails = [
+      ...(r.fails || []),
+      { occ: r.occ, sid, at, err: r.err, ...(r.live.exec ? { exec: r.live.exec } : {}) },
+    ].slice(-WF_FAILS);
+    runLog(r, 'failed', r.err);
+    return '';
+  });
+}
+// The failure a failed run is in, by its id ('' when it isn't failed). A failure from before
+// these ids is named by its time.
+function failOcc(r) {
+  if (!r || r.status !== 'failed') return '';
+  return r.occ ? String(r.occ) : 't' + (((r.st || {})[r.cur] || {}).at || r.at || 0);
 }
 // Try the current stage again: a fresh attempt (a flow stage needs a new launch; the old
 // execution stays in the log). The failure is kept in the log, not repeated on its own.
 function retryStage(r, sid) {
-  if (r.status !== 'failed' && r.status !== 'awaiting_user' && r.status !== 'awaiting_automation')
-    return 'nothing to retry';
-  const s = runStage(r);
-  if (!s || s.id !== sid) return 'not the current step';
-  const tries = (r.live.tries || 0) + 1;
-  delete r.st[sid];
-  delete r.ack;
-  r.live = { tries };
-  r.err = '';
-  r.status = 'running';
-  runLog(r, 'retry', 'attempt ' + (tries + 1));
-  settleRun(r);
-  return '';
+  return wfTx(r, { a: 'retry', sid, occ: failOcc(r) || undefined }, () => {
+    if (r.status !== 'failed' && r.status !== 'awaiting_user' && r.status !== 'awaiting_automation')
+      return 'nothing to retry';
+    const s = runStage(r);
+    if (!s || s.id !== sid) return 'not the current step';
+    const tries = (r.live.tries || 0) + 1;
+    delete r.st[sid]; // (the failure stays in r.fails and the log)
+    delete r.ack;
+    r.live = { tries };
+    r.err = '';
+    r.status = 'running';
+    runLog(r, 'retry', 'attempt ' + (tries + 1));
+    settleRun(r);
+    return '';
+  });
 }
 function pauseRun(r) {
-  if (WRUN_FINAL.includes(r.status) || r.status === 'paused' || r.status === 'ready') return 'cannot pause';
-  r.status = 'paused';
-  runLog(r, 'paused');
-  return '';
+  return wfTx(r, { a: 'pause' }, () => {
+    if (WRUN_FINAL.includes(r.status) || r.status === 'paused' || r.status === 'ready') return 'cannot pause';
+    r.status = 'paused';
+    runLog(r, 'paused');
+    return '';
+  });
 }
 function resumeRun(r) {
+  return wfTx(r, { a: 'resume' }, () => doResume(r));
+}
+function doResume(r) {
   if (r.status !== 'paused') return 'not paused';
   r.status = 'running';
   runLog(r, 'resumed');
@@ -448,14 +529,330 @@ function resumeRun(r) {
   }
   return '';
 }
-function cancelRun(r, why = '') {
-  if (WRUN_OVER.includes(r.status)) return 'the run is over';
-  r.status = 'cancelled';
-  r.fin = Date.now();
-  r.err = txt(why, 300);
-  runLog(r, 'cancelled', why);
+// (`eng`: the day's tidy-up, made the same on every device, rather than your choice)
+function cancelRun(r, why = '', { eng = false } = {}) {
+  return wfTx(r, { a: 'cancel', why, eng: eng ? 1 : undefined }, () => {
+    if (WRUN_OVER.includes(r.status)) return 'the run is over';
+    r.status = 'cancelled';
+    r.fin = Date.now();
+    r.err = txt(why, 300);
+    runLog(r, 'cancelled', why);
+    return '';
+  });
+}
+/* Release G: what this device did to a run, until the server has it. Each change above (and the
+   few below) is noted in the run's journal (sync2.wjour, this device's own bookkeeping) with what
+   it was asked: that is what "Apply mine on top" does again on another device's version of the
+   run after a conflict (see pushRuns in sync.js), each step checked again by the same rules. Moves
+   every device makes alike from the same records (an automation's result, the day's tidy-up) are
+   marked `eng`. A change that changes nothing isn't noted, and a change made inside another
+   (a result applied on Resume) is part of that one. */
+const WJOUR_MAX = 40;
+let wfDepth = 0,
+  wfDry = false; // (trying the journal out on a copy: nothing noted, told to the rules or made)
+function wfTx(r, e, fn) {
+  if (wfDepth) return fn();
+  const before = JSON.stringify(r);
+  wfDepth++;
+  let why;
+  try {
+    why = fn();
+  } finally {
+    wfDepth--;
+  }
+  if (why === '' && !wfDry && JSON.stringify(r) !== before) journalRun(r.id, e);
+  return why;
+}
+function journalRun(id, e) {
+  const j = (sync2.wjour = sync2.wjour || {}),
+    l = (j[id] = j[id] || []),
+    x = {};
+  for (const k in e) if (e[k] !== undefined && e[k] !== '') x[k] = e[k];
+  l.push(x);
+  // (too long to play back whole: the oldest go, and the mark says so)
+  if (l.length > WJOUR_MAX) l.splice(0, l.length - WJOUR_MAX + 1, { a: 'cut' });
+}
+function checkStage(r, sid, i, v) {
+  return wfTx(r, { a: 'check', sid, i, v: !!v }, () => {
+    const s = runStage(r);
+    if (!s || s.id !== sid || s.type !== 'verify' || !runAllows(r, 'check', sid))
+      return 'that step has moved on';
+    if (!(Number.isInteger(i) && i >= 0 && i < (s.checks || []).length)) return 'no such check';
+    r.live.checks = r.live.checks || [];
+    r.live.checks[i] = !!v;
+    return '';
+  });
+}
+function linkGuide(r, sid, prId) {
+  return wfTx(r, { a: 'guide', sid, run: prId }, () => {
+    const s = runStage(r);
+    if (!s || s.id !== sid || s.type !== 'procedure' || !runAllows(r, 'procedure', sid))
+      return 'that step has moved on';
+    if (!okRef(prId)) return 'no such guide run';
+    r.live.run = prId;
+    runLog(r, 'procedure');
+    return '';
+  });
+}
+function waitStage(r, sid) {
+  return wfTx(r, { a: 'wait', sid }, () => {
+    const s = runStage(r);
+    if (!s || s.id !== sid || s.type !== 'wait' || !runAllows(r, 'waititem', sid))
+      return 'that step has moved on';
+    if (r.live.wait) return 'already waiting';
+    stageWaitItem(r, s);
+    settleRun(r);
+    runLog(r, 'waiting', s.who || '');
+    return '';
+  });
+}
+function ackRun(r, occ) {
+  return wfTx(r, { a: 'ack', occ }, () => {
+    if (r.status !== 'failed' || !occ || failOcc(r) !== occ) return 'that failure has changed';
+    r.ack = occ;
+    return '';
+  });
+}
+// (a waiting item taken to Today waits through its step now: see rekeyFollows)
+function rekeyRunWait(r, from, to) {
+  return wfTx(r, { a: 'rekey', from, to }, () => {
+    if (!r.live || r.live.wait !== from || !okRef(to)) return 'not waiting through that';
+    r.live.wait = to;
+    return '';
+  });
+}
+function noteRun(r, k, m) {
+  return wfTx(r, { a: 'note', k, m }, () => {
+    runLog(r, k, m);
+    return '';
+  });
+}
+// One noted change, done again to `r` (another version of the same run): '' when it applied.
+// A launch is only the record of the tap made here: nothing is opened or launched again.
+function replayEntry(r, e) {
+  const str = v => (typeof v === 'string' ? v : ''),
+    sid = str(e.sid);
+  if ((e.a === 'done' || e.a === 'retry') && e.occ && failOcc(r) !== e.occ) return 'that failure has changed';
+  switch (e.a) {
+    case 'begin':
+      return beginRun(r);
+    case 'done':
+      return completeStage(r, sid, {
+        o: e.o === 'skipped' ? 'skipped' : 'done',
+        note: str(e.note),
+        ...(Number.isInteger(e.pick) ? { pick: e.pick } : {}),
+        by: str(e.by),
+        exec: okRef(e.x) ? e.x : '',
+      });
+    case 'fail':
+      return failStage(r, sid, str(e.err), { exec: okRef(e.x) ? e.x : '' });
+    case 'retry':
+      return retryStage(r, sid);
+    case 'pause':
+      return pauseRun(r);
+    case 'resume':
+      return resumeRun(r);
+    case 'cancel':
+      return cancelRun(r, str(e.why), { eng: !!e.eng });
+    case 'check':
+      return checkStage(r, sid, e.i, e.v);
+    case 'launch':
+      return launchStage(r, sid, okRef(e.x) ? e.x : '');
+    case 'guide':
+      return linkGuide(r, sid, str(e.run));
+    case 'wait':
+      return waitStage(r, sid);
+    case 'ack':
+      return r.ack === e.occ ? '' : ackRun(r, str(e.occ));
+    case 'rekey':
+      return rekeyRunWait(r, str(e.from), str(e.to));
+    case 'note':
+      return noteRun(r, str(e.k).slice(0, 20) || 'note', str(e.m));
+    case 'cut':
+      return 'too many changes to replay';
+  }
+  return 'not something that can be applied again';
+}
+
+/* conflicts: a change to a run that the server refused because the run had changed on another
+   device first. This device's version and its journal are kept (S.wconflicts: on this device
+   only, and in its backups) until you choose: keep the server's (what this device did is written
+   into the run's history, not applied) or apply this device's changes on top of the server's,
+   checked again step by step. A refusal that loses nothing is settled on its own (see
+   conflictSettles). */
+const WCONF_MAX = 20;
+function cleanConflicts(l) {
+  return (Array.isArray(l) ? l : [])
+    .filter(c => c && typeof c === 'object' && okRef(c.id) && okRef(c.run))
+    .map(c => ({
+      id: c.id,
+      run: c.run,
+      at: Number.isFinite(+c.at) ? +c.at : 0,
+      base: Number.isInteger(+c.base) ? +c.base : 0,
+      srev: Number.isInteger(+c.srev) ? +c.srev : 0,
+      mine: (c.mine && cleanRun(c.mine)) || null,
+      jour: (Array.isArray(c.jour) ? c.jour : [])
+        .filter(e => e && typeof e === 'object' && typeof e.a === 'string')
+        .slice(-WJOUR_MAX),
+    }))
+    .slice(-WCONF_MAX);
+}
+// Whether a refused change loses nothing by the server's version standing: a run tidied away (on
+// either side), the same automation result or day's tidy-up made there too, an acknowledgement
+// already there, a run only made ready (a repeat's run, made on each device), or nothing noted
+// and no history the server hasn't got. Notes alone are written again on the server's version.
+function conflictSettles(mine, theirs, base, jour) {
+  const t = theirs && cleanRun(theirs);
+  if (!mine || !t) return true;
+  // (an automation's result: the server's run still waits for that attempt, so it takes the
+  // result itself, or already has it; a success the server's run has set aside, by a retry made
+  // there, is news)
+  const held = e =>
+    !e.x ||
+    t.live.exec === e.x ||
+    Object.values(t.st).some(o => o.exec === e.x && (e.a !== 'done' || o.o === 'done')) ||
+    (e.a !== 'done' && (t.fails || []).some(f => f.exec === e.x));
+  if (jour.some(e => e.a !== 'note' && !(e.eng && held(e)) && !(e.a === 'ack' && t.ack === e.occ)))
+    return false;
+  if (jour.length || base === 0) return true;
+  const seen = new Set(t.log.map(l => l.t + '|' + l.k));
+  return mine.log.every(l => seen.has(l.t + '|' + l.k));
+}
+// From sync: the server refused this device's change to run `id` (`mine`: this device's version,
+// null if it was deleted here) and has `theirs` (null: deleted there) at revision `srev`. Kept as a
+// conflict unless it settles; returns the notes to write again on the server's version.
+function wfConflict(id, mine, theirs, base, srev, jour) {
+  if (conflictSettles(mine, theirs, base, jour)) return jour.filter(e => e.a === 'note');
+  S.wconflicts.push({
+    id: uid(),
+    run: id,
+    at: Date.now(),
+    base,
+    srev,
+    mine: JSON.parse(JSON.stringify(mine)),
+    jour: jour.map(e => ({ ...e })),
+  });
+  if (S.wconflicts.length > WCONF_MAX) S.wconflicts = S.wconflicts.slice(-WCONF_MAX);
+  if (!(wfOpen === id && view === 'knowledge'))
+    toast(`“${mine.name}” changed on another device too: open it to choose`, false, 5000);
+  return [];
+}
+// Whether this device's changes still apply on top of the run as it is now ('' when they do):
+// tried out on a copy, by the same rules.
+function conflictWhy(r, c) {
+  if (!r) return 'the run is gone';
+  const copy = JSON.parse(JSON.stringify(r));
+  wfDry = true;
+  try {
+    for (const e of c.jour) {
+      const why = replayEntry(copy, e);
+      if (why) return why;
+    }
+  } finally {
+    wfDry = false;
+  }
   return '';
 }
+// One noted change in words, for the conflict and the run's history.
+function jourWords(e, def) {
+  const st = id => {
+      const s = def.find(x => x.id === id);
+      return s ? `“${s.title}”` : 'a step';
+    },
+    s = def.find(x => x.id === e.sid);
+  switch (e.a) {
+    case 'begin':
+      return 'started it';
+    case 'done':
+      if (e.o === 'skipped') return 'skipped ' + st(e.sid);
+      if (e.by === 'auto') return st(e.sid) + ' done by the automation';
+      if (Number.isInteger(e.pick) && s && s.choices && s.choices[e.pick])
+        return `chose “${s.choices[e.pick].label}” at ${st(e.sid)}`;
+      return 'marked ' + st(e.sid) + ' done';
+    case 'fail':
+      return st(e.sid) + ' failed' + (e.err ? ': ' + e.err : '');
+    case 'retry':
+      return 'tried ' + st(e.sid) + ' again';
+    case 'pause':
+      return 'paused it';
+    case 'resume':
+      return 'resumed it';
+    case 'cancel':
+      return 'cancelled it';
+    case 'check':
+      return `${e.v ? 'ticked' : 'unticked'} “${((s && s.checks) || [])[e.i] || 'a check'}”`;
+    case 'launch':
+      return 'launched ' + st(e.sid);
+    case 'guide':
+      return 'opened the guide for ' + st(e.sid);
+    case 'wait':
+      return 'started waiting at ' + st(e.sid);
+    case 'ack':
+      return 'acknowledged the failure';
+    case 'cut':
+      return '…';
+  }
+  return '';
+}
+const jourSummary = c => {
+  const w = c.jour.map(e => jourWords(e, (c.mine || {}).def || [])).filter(Boolean);
+  return w.length ? w.join(', ') : 'no steps';
+};
+// What the server's version has: its state, and its steps' outcomes where they differ from this
+// device's.
+function theirsWords(r, c) {
+  const s = runStage(r),
+    mine = c.mine || { st: {} },
+    diff = r.def
+      .filter(x => r.st[x.id] && (r.st[x.id] || {}).o !== (mine.st[x.id] || {}).o)
+      .map(x => `“${x.title}” ${r.st[x.id].o}`);
+  return `${runWord(r)}${s ? ` at “${s.title}”` : ''}${diff.length ? ' · ' + diff.join(', ') : ''}`;
+}
+// On the run's page: each conflict, what each side did, and the two ways out.
+function wfConflictBox(r) {
+  return S.wconflicts
+    .filter(c => c.run === r.id)
+    .map(c => {
+      const why = conflictWhy(r, c),
+        btn = (k, label, cls = '') =>
+          `<button class="btn ${cls}" data-wconf="${c.id}" data-wcact="${k}">${label}</button>`;
+      return `<div class="box wconf"><p><b>Conflict:</b> changed on another device too.</p><p class="hint"><b>This device:</b> ${esc(jourSummary(c))}.</p><p class="hint"><b>Server:</b> ${esc(theirsWords(r, c))}.</p><div class="acts">${btn('keep', 'Keep the server’s')}${why ? '' : btn('mine', 'Apply mine on top', 'blue')}</div>${why ? `<p class="hint">Mine can’t be applied: ${esc(why)}.</p>` : ''}</div>`;
+    })
+    .join('');
+}
+function wfConflictClick(d) {
+  const c = S.wconflicts.find(x => x.id === d.wconf),
+    r = c && wrunById(c.run);
+  if (!c) return renderKnowledge();
+  const drop = () => (S.wconflicts = S.wconflicts.filter(x => x !== c));
+  if (d.wcact === 'keep') {
+    if (r) noteRun(r, 'conflict', 'kept the server’s; not applied from this device: ' + jourSummary(c));
+    drop();
+    save();
+    return renderKnowledge();
+  }
+  if (d.wcact !== 'mine') return;
+  // (checked again now: a sync may have moved the run on since the page was drawn)
+  const why = conflictWhy(r, c);
+  if (why) {
+    toast("Can't apply yours: " + why, false, 3000);
+    return renderKnowledge();
+  }
+  const was = r.status;
+  c.jour.forEach(e => replayEntry(r, e));
+  noteRun(r, 'conflict', 'applied this device’s on top: ' + jourSummary(c));
+  drop();
+  reconcileRuns(); // (an attempt recorded again whose result is in: taken now)
+  wfAfter(r, was, '');
+}
+// Where a run's last change stands, when it syncs: saved here and not yet taken by the server,
+// taken (synced), or refused for a newer change made elsewhere ('': not syncing).
+function wsyncState(r) {
+  if (typeof sb === 'undefined' || !sb || !session) return '';
+  if (S.wconflicts.some(c => c.run === r.id)) return 'conflict';
+  return sync2.dirty['wrun:' + r.id] ? 'pending' : 'synced';
+}
+const WSYNC_WORD = { pending: 'Saved on this device', synced: 'Synced', conflict: 'Conflict' };
 /* what the world tells a run: a flow's verified result, a procedure finished, a reply received.
    Deterministic on every device: the same records lead to the same run. */
 function onWorkflowEvent(ev) {
@@ -468,17 +865,25 @@ function onWorkflowEvent(ev) {
         return;
       }
       if (ev.k === 'exec_succeeded') {
-        if (completeStage(r, s.id, { note: ev.msg ? 'Automation: ' + ev.msg : '', by: 'auto' }) === '')
+        if (
+          completeStage(r, s.id, {
+            note: ev.msg ? 'Automation: ' + ev.msg : '',
+            by: 'auto',
+            exec: ev.exec,
+          }) === ''
+        )
           emitRun(r);
-      } else if (!WRUN_FINAL.includes(r.status)) {
+      } else if (
+        !WRUN_FINAL.includes(r.status) &&
         failStage(
           r,
           s.id,
           (ev.k === 'exec_cancelled' ? 'Automation cancelled' : 'Automation failed') +
             (ev.msg ? ': ' + ev.msg : ''),
-        );
+          { exec: ev.exec },
+        ) === ''
+      )
         emitRun(r);
-      }
     });
   }
   if (ev.k === 'proc_finished')
@@ -501,6 +906,7 @@ function onWorkflowEvent(ev) {
 }
 // A run that just ended tells the rules (once per outcome: the key names it).
 function emitRun(r) {
+  if (wfDry) return; // (a change only being tried out, see conflictWhy)
   if (r.status === 'succeeded')
     emitEvent({
       k: 'wrun_succeeded',
@@ -538,7 +944,7 @@ function rolloverWorkflows(d) {
     // An earlier day's run of it never started: it gives way (kept in the history as cancelled).
     S.wruns.forEach(r => {
       if (r.wf === w.id && r.status === 'ready' && /-\d{4}-\d\d-\d\d$/.test(r.id) && r.id < id)
-        cancelRun(r, 'not started that day');
+        cancelRun(r, 'not started that day', { eng: true });
     });
     S.wruns.push(makeRun(w, { id, prepared: true }));
     emitEvent({ k: 'wf_due', key: 'wfdue:' + id, wf: w.id, wrun: id, name: w.name });
@@ -595,13 +1001,24 @@ function wfLaunchFits(wrunId, stageId) {
   );
 }
 function wfLaunched(wrunId, stageId, x) {
-  const r = wrunById(wrunId),
-    s = r && runStage(r);
-  if (!wfLaunchFits(wrunId, stageId)) return;
-  if (x) r.live.exec = x.id;
-  else r.live.launched = Date.now();
-  runLog(r, 'launched', x ? '' : 'untracked');
-  settleRun(r);
+  const r = wrunById(wrunId);
+  if (r && wfLaunchFits(wrunId, stageId)) launchStage(r, stageId, x ? x.id : '');
+}
+// The step's attempt recorded (the tap itself opened the automation: nothing here launches it).
+function launchStage(r, sid, xid) {
+  return wfTx(r, { a: 'launch', sid, x: xid || undefined }, () => {
+    const s = runStage(r);
+    if (!s || s.id !== sid || s.type !== 'flow' || WRUN_FINAL.includes(r.status) || r.status === 'paused')
+      return 'that step has moved on';
+    // (an attempt still under way there: this one can't take its place)
+    const cur = r.live.exec && r.live.exec !== xid && S.execs.find(e => e.id === r.live.exec);
+    if (cur && !EXEC_TERMINAL.includes(cur.status) && !execStale(cur)) return 'another attempt is under way';
+    if (xid) r.live.exec = xid;
+    else r.live.launched = Date.now();
+    runLog(r, 'launched', xid ? '' : 'untracked');
+    settleRun(r);
+    return '';
+  });
 }
 // The node a waiting stage is waiting through: the Inbox item it made, or (taken to Today) the
 // waiting step its details moved to (see rekeyFollows). Null once it isn't waiting any more.
@@ -615,7 +1032,7 @@ function stageWaitNode(r) {
 function stageWaitItem(r, s) {
   const id = keyId('w:' + r.id + ':' + s.id);
   let it = S.inbox.find(x => x.id === id);
-  if (!it) {
+  if (!it && !wfDry) {
     it = {
       id,
       text: (s.title + (r.name ? ' (' + r.name + ')' : '')).slice(0, 200),
@@ -631,11 +1048,14 @@ function wfClick(d, b) {
   if (d.wfstart) return startWorkflow(d.wfstart, d.q || '');
   if (d.wfopen) return openWorkflowRun(d.wfopen);
   if (d.wfback) return closeWorkflowRun();
+  if (d.wconf) return wfConflictClick(d);
   const r = d.wrun && wrunById(d.wrun);
   if (d.wrun && !r) return toast('That run is gone', false, 3000);
   if (!r) return wfEditClick(d, b);
   if (!d.wfact) return;
   if (STAGE_ACTS[d.wfact]) return wfStageClick(r, d);
+  // (bound to the failure they were drawn for: a newer one is news, not acknowledged unseen)
+  if (d.wfact === 'ack' || d.wfact === 'inbox') return wfFailAct(r, d.wfact, d.wocc || '');
   const was = r.status;
   let why = '';
   // Only what the run's state allows (a tap on a page drawn before a sync changed the run).
@@ -663,20 +1083,46 @@ function wfClick(d, b) {
         renderKnowledge();
       },
     );
-  else if (d.wfact === 'ack') {
-    r.ack = 1;
-    save();
-    renderAll();
-    return;
-  } else if (d.wfact === 'inbox') {
-    const text = ('Process failed: ' + r.name).slice(0, 200);
-    S.inbox.unshift({ id: uid(), text, node: fix({ id: uid(), text, notes: runSummary(r) }) });
-    r.ack = 1;
-    save();
-    renderAll();
-    return toast('Added to inbox');
-  } else if (d.wfact === 'copy') return copyText(runSummary(r));
+  else if (d.wfact === 'copy') return copyText(runSummary(r));
   wfAfter(r, was, why);
+}
+// Acknowledge, or Add to the Inbox (which acknowledges too), for the failure `occ`: refused if the
+// run has failed again since (or isn't failed any more). The Inbox item is that failure's, named
+// by the run and the failure, so it is made once however often it's asked for, on any device.
+function wfFailAct(r, act, occ) {
+  if (r.status !== 'failed' || !occ || occ !== failOcc(r)) {
+    toast('That failure has changed', false, 3000);
+    return renderKnowledge();
+  }
+  const added = act === 'inbox' && failInboxItem(r, occ);
+  ackRun(r, occ);
+  save();
+  renderAll();
+  if (act === 'inbox') toast(added ? 'Added to inbox' : 'Already in the Inbox');
+}
+function failInboxItem(r, occ) {
+  const id = keyId('wfail:' + r.id + ':' + occ),
+    nid = id + 'n';
+  if (S.inbox.some(i => i.id === id) || [S.quests, S.later].some(l => find(id, l) || find(nid, l)))
+    return false;
+  const s = runStage(r),
+    f = (r.fails || []).find(x => String(x.occ) === occ),
+    x = f && f.exec && S.execs.find(e => e.id === f.exec),
+    text = ('Process failed: ' + r.name + (s ? ' · ' + s.title : '')).slice(0, 200),
+    url = location.href.split('#')[0] + '#/wrun/' + r.id,
+    notes = [
+      `Step: ${s ? s.title : 'none'}`,
+      `Failed: ${new Date((f && f.at) || r.at).toLocaleString()}${f ? ' (failure ' + f.occ + ' of this run)' : ''}`,
+      `Error: ${(f && f.err) || r.err || 'Failed'}`,
+      ...(x ? [`Attempt: ${x.id} · ${EXEC_WORD[execState(x)]}${x.msg ? ': ' + x.msg : ''}`] : []),
+      `Run: ${url}`,
+      '',
+      runSummary(r),
+    ].join('\n');
+  const node = fix({ id: nid, text, notes });
+  if (okUrl(url)) node.links = [{ id: keyId('wfl:' + id), kind: 'url', url, label: 'The process run' }];
+  S.inbox.unshift({ id, text, node });
+  return true;
 }
 // After an action: what went wrong said, an ending told to the rules, the page redrawn.
 function wfAfter(r, was, why) {
@@ -684,7 +1130,12 @@ function wfAfter(r, was, why) {
   if ((r.status === 'succeeded' || r.status === 'failed') && r.status !== was) emitRun(r);
   save();
   renderKnowledge();
-  if (r.status === 'succeeded') toast('Process completed');
+  if (r.status === 'succeeded')
+    toast(
+      !navigator.onLine && wsyncState(r) === 'pending'
+        ? 'Completed on this device; not synced yet'
+        : 'Process completed',
+    );
 }
 // The current step's own actions (each drawn with the step's id, data-wstage), and the kinds of
 // step each belongs to. The rest act on the run as a whole.
@@ -796,8 +1247,7 @@ function wfStageClick(r0, d) {
     why = retryStage(r, sid);
   } else if (act === 'check') {
     const i = +d.i;
-    r.live.checks = r.live.checks || [];
-    r.live.checks[i] = !r.live.checks[i];
+    checkStage(r, sid, i, !(r.live.checks || [])[i]);
     save();
     return renderKnowledge();
   } else if (act === 'confirmflow') {
@@ -819,9 +1269,8 @@ function wfStageClick(r0, d) {
         fin: 0,
       };
       S.runs.push(nr);
-      r.live.run = nr.id;
-    } else r.live.run = pr.id;
-    runLog(r, 'procedure');
+      linkGuide(r, sid, nr.id);
+    } else linkGuide(r, sid, pr.id);
     save();
     kbRun = r.live.run;
     kbArt = s.kb;
@@ -830,9 +1279,7 @@ function wfStageClick(r0, d) {
     renderKnowledge();
     return window.scrollTo(0, 0);
   } else if (act === 'waititem') {
-    stageWaitItem(r, s);
-    settleRun(r);
-    runLog(r, 'waiting', s.who || '');
+    waitStage(r, sid);
     save();
     return renderKnowledge();
   } else if (act === 'received') {
@@ -885,13 +1332,14 @@ function wfRunView(r) {
     p = runProgressOf(r),
     i = s ? r.def.indexOf(s) : r.def.length,
     q = r.q && (find(r.q) || find(r.q, S.later)),
-    final = WRUN_OVER.includes(r.status);
+    final = WRUN_OVER.includes(r.status),
+    ws = wsyncState(r);
   let h = `<button class="linkbtn" data-wfback="1">‹ ${wfFrom === 'today' ? 'Today' : wfFrom === 'ops' ? 'Command Centre' : wfFrom ? 'Back' : wfView && wfById(wfView) ? esc(wfById(wfView).name) : 'Processes'}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(r.name)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div>
-    <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · step ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}</p>`;
+    <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · step ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}${ws ? ` · <span class="wsync ws-${ws}">${WSYNC_WORD[ws]}</span>` : ''}</p>${wfConflictBox(r)}`;
   const can = runActions(r),
-    b = (act, label, cls = '') =>
-      `<button class="btn ${cls}" data-wrun="${r.id}" data-wfact="${act}">${label}</button>`;
+    b = (act, label, cls = '', extra = '') =>
+      `<button class="btn ${cls}" data-wrun="${r.id}" data-wfact="${act}"${extra ? ' ' + extra : ''}>${label}</button>`;
   if (r.status === 'ready')
     h += `<div class="pstep box"><h3>Ready to start</h3>${r.def.length ? `<p class="ptext">First: ${esc(r.def[0].title)}</p>` : ''}<div class="acts">${b('begin', 'Start', 'green')}${b('cancel', 'Cancel')}</div></div>`;
   else if (r.status === 'paused')
@@ -911,6 +1359,8 @@ function wfRunView(r) {
             cancel: 'Cancel the run',
             copy: 'Copy summary',
           }[a] || a,
+          '',
+          a === 'inbox' || a === 'ack' ? `data-wocc="${failOcc(r)}"` : '',
         ),
       )
       .join('')}</div></div>`;
@@ -977,7 +1427,9 @@ function stageCard(r, s, i) {
         copy: 'Copy details',
       };
     acts = b('retry', 'Try again', 'green');
-    const opts = more.map(a => b(a, label[a])).join('');
+    const opts = more
+      .map(a => b(a, label[a], '', a === 'inbox' || a === 'ack' ? `data-wocc="${failOcc(r)}"` : ''))
+      .join('');
     return `<div class="pstep box failed"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}<p class="hint pnext">${next}</p><div class="acts wacts">${acts}</div><details class="moreopts" id="wfmore"${panels.wfmore ? ' open' : ''}><summary>Other options</summary><div class="acts wacts">${opts}</div><p class="hint">Acknowledging only stops the failure being flagged on Today and in the Command Centre; it doesn't fix it.</p></details></div>`;
   } else if (s.type === 'manual') {
     next = 'Marking it done moves the process to the next step.';
