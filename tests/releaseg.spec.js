@@ -165,3 +165,100 @@ test.describe('Checkpoint 1: a busy day', () => {
     if (left <= 1) await expect(page.locator('#attd')).toHaveCount(0);
   });
 });
+
+test.describe('Checkpoint 3: touch and recovery', () => {
+  test('every control on the main screens is at least 44 × 44 to the finger, and none covers another', async ({
+    app,
+    page,
+  }) => {
+    for (const [w, h] of [
+      [320, 800],
+      [390, 844],
+    ]) {
+      await page.setViewportSize({ width: w, height: h });
+      await day(app, page);
+      const screens = {
+        today: () => go('today'),
+        task: () => {
+          go('today');
+          openPath([S.quests[0].id]);
+        },
+        inbox: () => go('inbox'),
+        knowledge: () => go('knowledge'),
+        review: () => go('review'),
+        account: () => go('account'),
+        ops: () => go('ops'),
+        waiting: () => go('waiting'),
+      };
+      for (const [k, fn] of Object.entries(screens)) {
+        await page.evaluate(`(${fn})()`);
+        const out = await page.evaluate(() => {
+          const small = [],
+            covered = [];
+          document.querySelectorAll('button, a[href], summary, input, select').forEach(e => {
+            const r = e.getBoundingClientRect();
+            // (not in a folded section: there it's out of reach, though it still has a size)
+            const folded = e.closest('details:not([open])');
+            if (folded && !e.closest('summary')) return;
+            if (!r.width || e.closest('[hidden], nav') || getComputedStyle(e).visibility === 'hidden') return;
+            // (the touch area: the box, and its invisible margin of touch if it has one)
+            const a = getComputedStyle(e, '::after');
+            let tw = r.width,
+              th = r.height;
+            if (a.content !== 'none' && a.position === 'absolute') {
+              tw -= (parseFloat(a.left) || 0) + (parseFloat(a.right) || 0);
+              th -= (parseFloat(a.top) || 0) + (parseFloat(a.bottom) || 0);
+            }
+            const label = `${e.tagName}.${[...e.classList].join('.')} "${(e.textContent || e.getAttribute('aria-label') || '').trim().slice(0, 20)}"`;
+            if (tw < 43.5 || th < 43.5) small.push(`${Math.round(tw)}x${Math.round(th)} ${label}`);
+            // (on screen, clear of the fixed tab bar and a task's action bar)
+            if (r.top < 0 || r.bottom > innerHeight - 140) return;
+            const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            if (hit && hit !== e && !e.contains(hit) && !hit.contains(e) && !hit.closest('.qfoot, header'))
+              covered.push(label);
+          });
+          return { small, covered };
+        });
+        expect(out.small, `${k} at ${w}px`).toEqual([]);
+        expect(out.covered, `${k} at ${w}px`).toEqual([]);
+      }
+    }
+  });
+
+  test('easily-made moves can be undone: to the Inbox, to another day, Top 3, a schedule', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    const snap = () =>
+      page.evaluate(() =>
+        JSON.stringify([
+          S.quests.map(q => [q.id, q.scheduled]),
+          S.later.map(q => q.id),
+          S.inbox.length,
+          S.top3,
+        ]),
+      );
+    const undo = async () => {
+      await expect(page.locator('#toast #undo')).toBeVisible();
+      await page.click('#toast #undo');
+    };
+    const id = await page.evaluate(() => S.quests.find(q => canAct(q) && !inTop3(q.id)).id);
+    for (const act of [
+      id => moveToInbox(id),
+      id => schedule('q', id, shift(today(), 1)),
+      () => toggleTop3(top3Ids()[0]),
+      id => setSchedule(id, today(), '15:00'),
+    ]) {
+      const before = await snap();
+      await page.evaluate(act, id);
+      expect(await snap()).not.toBe(before);
+      await undo();
+      expect(await snap()).toBe(before);
+    }
+    // A sync arriving meanwhile ends the chance to undo (it wouldn't put back the other device's change).
+    await page.evaluate(id => moveToInbox(id), id);
+    await page.evaluate(() => dropUndo());
+    await expect(page.locator('#toast #undo')).toHaveCount(0);
+  });
+});

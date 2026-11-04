@@ -121,6 +121,12 @@ function setSchedule(id, date, time) {
     return toast('Pause or finish the focus session on it first', false, 3500);
   const sc = cleanSched({ date, time });
   if (!sc) return;
+  // (Release G: with Undo)
+  withUndo(`Scheduled ${dayLabel(date)}${sc.time ? ', ' + sc.time : ''}`, () =>
+    applySchedule(n, r, onToday, later, sc, date),
+  );
+}
+function applySchedule(n, r, onToday, later, sc, date) {
   n.scheduled = sc;
   if (onToday && date > today()) {
     r.arr.splice(r.arr.indexOf(n), 1);
@@ -137,15 +143,15 @@ function setSchedule(id, date, time) {
   S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
   save();
   renderAll();
-  toast(`Scheduled ${dayLabel(date)}${sc.time ? ', ' + sc.time : ''}`);
 }
 function clearSchedule(id) {
   const r = find(id) || find(id, S.later);
   if (!r || !r.n.scheduled) return;
-  delete r.n.scheduled;
-  save();
-  renderAll();
-  toast('Unscheduled');
+  withUndo('Unscheduled', () => {
+    delete r.n.scheduled;
+    save();
+    renderAll();
+  });
 }
 function schedClick(d) {
   if (d.schedset) return openScheduleSheet(d.schedset);

@@ -475,6 +475,10 @@ function renderUpcoming() {
 // Move a top-level task ('q') or inbox item ('i') to Upcoming.
 function schedule(kind, id, date) {
   if (!date || date <= today()) return;
+  // (Release G: with Undo)
+  withUndo('Moved to ' + dayLabel(date), () => scheduleNow(kind, id, date));
+}
+function scheduleNow(kind, id, date) {
   let n;
   if (kind === 'q') {
     const r = find(id);
@@ -496,7 +500,6 @@ function schedule(kind, id, date) {
   S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
   save();
   renderAll();
-  toast('Moved to ' + dayLabel(date));
 }
 function renderNode({ n, parents }) {
   const d = isDone(n),
