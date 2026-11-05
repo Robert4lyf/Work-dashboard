@@ -265,7 +265,13 @@ function openPath(p) {
   let row = null;
   if (!p.length && listAt) {
     row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(listAt.id)}"]`);
-    if (row) window.scrollBy(0, row.getBoundingClientRect().top - listAt.top);
+    // (kept on the screen, should it be shorter now: the phone turned meanwhile, say)
+    if (row)
+      window.scrollBy(
+        0,
+        row.getBoundingClientRect().top -
+          Math.max(0, Math.min(listAt.top, innerHeight - row.offsetHeight - 72)),
+      );
     listAt = null;
   }
   if (left && view === 'today') {
@@ -1153,6 +1159,12 @@ document.addEventListener('keydown', e => {
       f[e.shiftKey ? f.length - 1 : 0].focus();
     }
     return;
+  }
+  // (Release H: the keyboard's search key on Find or Search puts the keyboard away, to see what
+  // was found)
+  if (e.key === 'Enter' && (el.id === 'tfind' || el.id === 'sq')) {
+    e.preventDefault();
+    return el.blur();
   }
   // Enter in the process editor's step row adds the step (not the form's Save).
   if (e.key === 'Enter' && el.id === 'wfstepin') {

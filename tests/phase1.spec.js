@@ -157,7 +157,7 @@ test('the header follows one rule: saved place today, else Top 3, else list orde
   await busy(app, page);
   const head = page.locator('#hnow');
   // A place saved an hour ago comes first, with Continue.
-  await expect(head).toContainText('Pick up where you left off · Q4 budget report');
+  await expect(head).toContainText('Saved place · Q4 budget report');
   await expect(page.locator('#hact [data-resume="q4"]')).toHaveText('Continue');
   // An older saved place doesn't take over: Top 3's first task with a step to do does.
   await page.evaluate(() => {

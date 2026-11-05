@@ -142,7 +142,7 @@ function askNext(id) {
       text: `Every step of "${r.n.text}" is ticked. It stays open until you finish it.`,
       label: 'Next step',
       ok: 'Add step',
-      cancel: 'Later',
+      cancel: 'Not now',
       extra: [
         ['unsure', 'Not sure yet'],
         ['finish', 'Finish task', 'blue'],
@@ -529,11 +529,16 @@ function pUpdate(o, n) {
   const h = n.getAttribute('data-h');
   if (h !== null) return o.getAttribute('data-h') === h ? o : pResolve(n);
   if (FORM.test(o.tagName)) {
-    // (the field being typed in stays exactly as it is: its words, its place in them, and its own
-    // marks, such as data-typed, which says it's to be saved when left; any other field changed
-    // is new)
-    if (o === document.activeElement) return o;
-    return pAttrsSame(o, n) && o.innerHTML === n.innerHTML ? o : pResolve(n);
+    // (in a sync's redraw the field being typed in stays exactly as it is: its words, its place in
+    // them, its composing and its own marks, such as data-typed, which says it's to be saved when
+    // left. Otherwise a field is kept only if it holds what the new markup gives it: one emptied
+    // by drawing it again, the step box after a step is added say, is new, as before)
+    if (background && o === document.activeElement) return o;
+    const same =
+      pAttrsSame(o, n) &&
+      o.innerHTML === n.innerHTML &&
+      (/^(checkbox|radio)$/.test(o.type) ? o.checked === n.checked : o.value === n.value);
+    return same ? o : pResolve(n);
   }
   pAttrs(o, n);
   pChildren(o, n);
@@ -623,7 +628,28 @@ function putHTML(el, html) {
   el.innerHTML = html;
   if (page) el.dataset.page = page;
 }
+// (Release H) An Android keyboard composing a word in a view drawn from scratch (Search, the
+// Inbox...): a sync's redraw of that view waits until the word is done, then happens, since
+// replacing the field under the keyboard duplicates or loses letters. Today is patched in place.
+let composing = null,
+  composeLater = false;
+document.addEventListener('compositionstart', e => (composing = e.target), true);
+document.addEventListener(
+  'compositionend',
+  () => {
+    composing = null;
+    if (composeLater) {
+      composeLater = false;
+      setTimeout(() => inBackground(renderAll), 0);
+    }
+  },
+  true,
+);
 function setHTML(el, html) {
+  if (background && composing && !PATCHED[el.id] && el.contains(composing)) {
+    composeLater = true;
+    return;
+  }
   if (!background) {
     // A redraw after a tap or key press: the keyboard stays on the same control, or (if it went)
     // in this view, rather than falling back to the top of the page.

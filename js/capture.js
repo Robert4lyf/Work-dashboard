@@ -40,7 +40,7 @@ async function testCapture() {
         );
       throw new Error(r.status);
     }
-    toast('Sent. It will appear in your inbox');
+    toast('Sent. It will appear in your Inbox');
     sync();
   } catch (e) {
     toast("The test didn't go through", false, 3000);

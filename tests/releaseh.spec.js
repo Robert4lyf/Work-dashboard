@@ -373,3 +373,104 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
     await expect(page.locator('#waitmore > summary')).toBeFocused();
   });
 });
+
+test.describe('Checkpoint 5: review fixes', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('the step box is empty after a step is added, typed in and sent with Enter twice', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    const id = await page.evaluate(() => S.quests.find(q => q.children.length > 1).id);
+    await page.evaluate(id => openPath([id]), id);
+    const n0 = await page.evaluate(id => find(id).n.children.length, id);
+    await page.click('#sin');
+    await page.keyboard.type('Gather figures');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#sin')).toHaveValue('');
+    await expect(page.locator('#sin')).toBeFocused();
+    await page.keyboard.type('Draft it');
+    await page.keyboard.press('Enter');
+    const kids = await page.evaluate(id => find(id).n.children.map(c => c.text), id);
+    expect(kids.length).toBe(n0 + 2);
+    expect(kids).toContain('Gather figures');
+    expect(kids).toContain('Draft it');
+  });
+
+  test('with a focus session paused, the header offers no other task to continue; the session is named with its task', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.evaluate(() => {
+      const q = S.quests.find(q => q.text === 'Fletcher Way'),
+        c = q.children.find(c => !c.done);
+      S.timer = { q: c.id, mins: 25, left: 24 * 60 * 1000, started: Date.now() };
+      save();
+      go('focus');
+    });
+    await expect(page.locator('#hact [data-resume]')).toHaveCount(0);
+    await expect(page.locator('#clock small')).toContainText('Fletcher Way · ');
+  });
+
+  test("Search: a sync's redraw waits while the keyboard is composing a word, then happens", async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.evaluate(() => go('search'));
+    await page.click('#sq');
+    await page.keyboard.type('Hel');
+    const same = await page.evaluate(() => {
+      const i = document.getElementById('sq');
+      i._mine = 1;
+      i.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      inBackground(renderAll);
+      const kept = document.getElementById('sq')._mine === 1;
+      i.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      return kept;
+    });
+    expect(same).toBe(true);
+    await expect(page.locator('#sq')).toHaveValue('Hel');
+  });
+
+  test('the jump line keeps to one line with Larger text at 360px; the Follow up sheet fits at 320px', async ({
+    app,
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await day(app, page);
+    await page.evaluate(() => {
+      document.documentElement.dataset.font = 'large';
+      renderAll();
+    });
+    const tops = await page.$$eval('#v-today .tjump [data-jump]', bs =>
+      bs.map(b => Math.round(b.getBoundingClientRect().top)),
+    );
+    expect(new Set(tops).size).toBe(1);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.locator('#v-today .wrow [data-chase]').first().click();
+    const over = await page.$eval('#sheet', s =>
+      [...s.querySelectorAll('.fld')].some(
+        f => f.getBoundingClientRect().right > s.getBoundingClientRect().right + 0.5,
+      ),
+    );
+    expect(over).toBe(false);
+  });
+
+  test('back to the list after the phone turned: the row opened is on the screen', async ({ app, page }) => {
+    await day(app, page);
+    const id = await page.$eval('#v-today .list .row:nth-child(6)', r => r.dataset.qid);
+    await page.evaluate(id => {
+      const r = document.querySelector(`#v-today .row[data-qid="${id}"]`);
+      scrollBy(0, r.getBoundingClientRect().top - 600);
+    }, id);
+    await page.click(`#v-today .row[data-qid="${id}"] .open`);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.evaluate(() => history.back());
+    await expect(page.locator(`#v-today .row[data-qid="${id}"]`)).toBeVisible();
+    const b = await page.$eval(`#v-today .row[data-qid="${id}"]`, r => r.getBoundingClientRect().bottom);
+    expect(b).toBeLessThanOrEqual(390);
+  });
+});

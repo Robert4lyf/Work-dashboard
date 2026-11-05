@@ -181,7 +181,7 @@ test('Journey H: resume after an interruption: Today shows where work stopped, t
     save();
     renderAll();
   });
-  await expect(page.locator('#hnow')).toContainText('Pick up where you left off');
+  await expect(page.locator('#hnow')).toContainText('Saved place');
   await page.click('#hnow .go');
   await expect(page.locator('#v-today h1')).toHaveText('Board pack');
   await expect(page.locator('.placebox')).toContainText('Totals checked to row 40');

@@ -15,7 +15,7 @@ test.beforeEach(async ({ page, app }) => {
   await app.addSub('Draft');
 });
 
-test('ticking the last step asks; Later keeps the task open, on Today and the next day', async ({
+test('ticking the last step asks; Not now keeps the task open, on Today and the next day', async ({
   app,
   page,
 }) => {
@@ -24,7 +24,7 @@ test('ticking the last step asks; Later keeps the task open, on Today and the ne
   let s = await app.state();
   expect(s.quests[0].done).toBe(false);
   expect(s.log.map(x => x.text)).toEqual(['Draft']); // (the step, not the task)
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
   await expect(sheet(page)).toHaveCount(0);
   // The task's page asks too; Today's row says so, and the header points at it.
   await expect(page.locator('.nextask')).toBeVisible();
@@ -75,14 +75,14 @@ test("the task page's buttons; un-ticking or adding a step reopens a finished ta
   page,
 }) => {
   await page.click('[aria-label="Mark done: Draft"]');
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
   await page.click('.nextask [data-unsure]');
   expect((await app.state()).quests[0].children.map(c => c.text)).toEqual([
     'Work out the next step',
     'Draft',
   ]);
   await page.click('[aria-label="Mark done: Work out the next step"]');
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
   await page.click('.nextask [data-finish]');
   let s = await app.state();
   expect(s.quests[0].done).toBe(true);
@@ -102,7 +102,7 @@ test("the task page's buttons; un-ticking or adding a step reopens a finished ta
   await page.click('[aria-label="Mark done: Draft"]');
   await expect(page.locator('#sheettitle')).toHaveText("What's next?");
   expect((await app.state()).quests[0].done).toBe(false);
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
 
   // Finished, then a step added: open again.
   await page.click('.nextask [data-finish]');
@@ -194,7 +194,7 @@ test('a task left asking stays open over reloads, after an earlier finish (via I
     S.quests[0].children[0].done = true;
     settle(bf);
   });
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
   await page.reload();
   expect(await page.evaluate(() => [isDone(S.quests[0]), needsNext(S.quests[0])])).toEqual([false, true]);
   await setDay(page, 2026, 9, 24);
@@ -225,7 +225,7 @@ test('a task left asking stays open over reloads, after an earlier finish (via I
 
 test('turning on a repeat for a task with every step ticked finishes it properly', async ({ app, page }) => {
   await page.click('[aria-label="Mark done: Draft"]');
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
   await page.click('#mored > summary');
   await page.click('#rptd summary');
   await page.click('[data-rpreset="daily"]');
@@ -244,7 +244,7 @@ test('single-task mode asks what\'s next for a task with every step ticked, not 
   await page.click('[data-crumb="-1"]');
   await page.click('header [data-zen]');
   await page.click('#v-zen [data-toggle]');
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
   await expect(page.locator('#v-zen .zt')).toHaveText("Every step is ticked. What's next?");
   await expect(page.locator('#v-zen .ztrail')).toHaveText('Contract');
   await page.click('#v-zen [data-asknext]');

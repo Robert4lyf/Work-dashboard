@@ -1823,7 +1823,8 @@ nav .badge[hidden] {
 }
 .prow2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* (minmax(0, …): a date field narrower than its own default width, not past the sheet's edge) */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .prow2 .fld {
@@ -3733,12 +3734,24 @@ nav button[aria-current='page'] {
   gap: 8px;
   margin: 0 0 12px;
 }
+.tjump {
+  flex-wrap: nowrap;
+}
 .tjump .chip {
   flex: 1 1 auto;
+  min-width: 0;
   justify-content: center;
   gap: 4px;
   padding: 0 8px;
   white-space: nowrap;
+  overflow: hidden;
+}
+/* (Larger text: the arrow goes first, so the three keep to one line) */
+:root[data-font='large'] .tjump .jarrow {
+  display: none;
+}
+:root[data-font='large'] .tjump .chip {
+  padding: 0 4px;
 }
 .tjump .jarrow {
   font-weight: 900;
@@ -4506,9 +4519,22 @@ summary,
 .wconf p {
   margin: 0 0 6px;
 }
-.wsync.ws-refused {
+.wsync.ws-refused,
+.wsync.ws-failed {
   color: var(--err);
   font-weight: 600;
+}
+/* (Release H: not protected, or only partly: said with weight and a sign, not only in grey) */
+.wsync.ws-unchecked,
+.wsync.ws-partial,
+.wunprot {
+  color: var(--ink);
+  font-weight: 600;
+}
+.wsync.ws-unchecked::before,
+.wsync.ws-partial::before,
+.wunprot::before {
+  content: '⚠ ';
 }
 /* Release H: a sheet with words typed into it asks before back (or a tap beside it) closes it */
 #sheet .sheetwarn {
@@ -4517,6 +4543,7 @@ summary,
   border-radius: var(--radius-sm);
   background: var(--err-soft);
   color: var(--err);
+  border: 3px solid var(--err);
 }
 #sheet .sheetwarn p {
   margin: 0 0 6px;
