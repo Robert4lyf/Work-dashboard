@@ -67,7 +67,9 @@ function renderHeader() {
     } else if (nx && nx.why === 'place') {
       // Where work stopped: picking it up opens the saved place, in single-task mode.
       h = `<button class="go" data-open="${nx.q.id}"><small>Pick up where you left off · ${esc(nx.q.text)}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
-      if (full) acts = `<button class="btn sm green" data-resume="${nx.q.id}">Resume</button>`;
+      // (Release H: on a task's page it gives way to the page's own action, quieter)
+      if (full)
+        acts = `<button class="btn sm${view === 'today' && path.length ? '' : ' green'}" data-resume="${nx.q.id}">Continue</button>`;
     } else if (nx) {
       const label = nx.why === 'top3' ? `Top 3 priority ${nx.rank}` : 'Next task',
         where = nx.n !== nx.q ? ' · ' + esc(nx.q.text) : '';

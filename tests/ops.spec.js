@@ -264,7 +264,7 @@ test('routines are lists of buttons; the day summary copies; the status line is 
   const items = await page.locator('#sheet .qact').allTextContents();
   expect(items[0]).toContain('Needs attention: ');
   expect(items[1]).toBe('Pick your Top 3');
-  expect(items[2]).toContain('Process the Inbox');
+  expect(items[2]).toContain('Sort the Inbox');
   expect(items[3]).toMatch(/^Today: \d+h \d+m planned of /);
   expect(items[4]).toBe('Start on: Tomorrow'); // (a place saved just now comes first: see recommend)
   await page.click('#sheet [data-top3pick]');

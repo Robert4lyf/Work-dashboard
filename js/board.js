@@ -7,7 +7,7 @@ function moveToInbox(id) {
   const r = find(id);
   if (!r) return;
   // (Release G: with Undo, as a move is easily made by mistake)
-  withUndo('Moved to inbox', () => moveToInboxNow(r));
+  withUndo('Moved to the Inbox', () => moveToInboxNow(r));
 }
 function moveToInboxNow(r) {
   const bf = snapshot();

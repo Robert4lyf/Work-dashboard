@@ -113,7 +113,7 @@ test('2: failure ids are unique across devices: each failure gets its own Inbox 
   expect((await a.run('r1')).err).toBe('Missing file');
   await more(a);
   await a.page.click('[data-wfact="inbox"]');
-  await expect.poll(async () => (await a.toasts()).filter(t => t === 'Added to inbox').length).toBe(2); // (A's own failure's, then the server's)
+  await expect.poll(async () => (await a.toasts()).filter(t => t === 'Added to the Inbox').length).toBe(2); // (A's own failure's, then the server's)
   const notes = (await a.state()).inbox.map(i => i.node.notes);
   expect(notes).toHaveLength(2);
   expect(notes.filter(n => n.includes('Error: Missing file'))).toHaveLength(1);

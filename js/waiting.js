@@ -89,7 +89,7 @@ const FOLLOW_LABEL = {
   start: 'Asked',
   chase: 'Followed up',
   expect: 'Reply promised',
-  resolve: 'Resolved',
+  resolve: 'Reply received',
   reopen: 'Reopened',
 };
 // The history as a short list (the latest first), or nothing.
@@ -208,7 +208,7 @@ function openFollowUp(id, dateOnly) {
   if (!r.n || !r.n.wait) return;
   const w = r.n.wait;
   popSheet(
-    `<form id="fuform" data-id="${id}"><h2 id="sheettitle">${dateOnly ? 'Next chase date' : 'Record a follow-up'}</h2><p class="hint qahint">${esc(r.n.text)}${w.who ? ' · ' + esc(w.who) : ''}</p>${
+    `<form id="fuform" data-id="${id}"><h2 id="sheettitle">${dateOnly ? 'Next chase date' : 'Follow up'}</h2><p class="hint qahint">${esc(r.n.text)}${w.who ? ' · ' + esc(w.who) : ''}</p>${
       dateOnly
         ? ''
         : `<label class="f" for="funote">What happened</label><textarea class="fld" id="funote" rows="2" maxlength="${FOLLOW_MAX}" placeholder="Emailed Sam, awaiting approval"></textarea>`
@@ -273,12 +273,12 @@ function openWaitActions(id) {
     upcoming = !inbox && !find(id) && !!find(id, S.later),
     a = [
       {
-        label: 'Record a follow-up',
+        label: 'Follow up',
         attrs: `data-chase="${id}"`,
         cls: 'go',
         hint: w.last ? 'Last ' + dayLabel(w.last) : '',
       },
-      { label: 'Response received', attrs: `data-waitclear="${id}"`, hint: 'Back on your list' },
+      { label: 'Reply received', attrs: `data-waitclear="${id}"`, hint: 'Back on your list' },
       {
         label: 'Change the next chase date',
         attrs: `data-chasedate="${id}"`,
@@ -287,7 +287,7 @@ function openWaitActions(id) {
       { label: 'Copy a follow-up message', attrs: `data-waitcopy="${id}"` },
     ];
   if (inbox) a.push({ label: 'Open in the Inbox', attrs: 'data-goto="inbox"' });
-  else if (upcoming) a.push({ label: 'Open Upcoming', attrs: 'data-goupd="1"' });
+  else if (upcoming) a.push({ label: 'Open Upcoming', attrs: `data-goupd="${id}"` });
   else {
     a.push({ label: 'Open', attrs: `data-open="${id}"` });
     // (its task, which may be shown only under Waiting: its own actions are on its page)
@@ -397,7 +397,7 @@ function waitingRows(all) {
       ]
         .filter(Boolean)
         .join(' · ');
-    h += `<div class="row${waitMark === n.id ? ' marked' : ''}" data-wid="${n.id}">${(n.children && n.children.length) || start || inbox ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open"${inbox ? ' data-v="inbox"' : start ? ' data-goupd="1"' : ` data-open="${n.id}"`}><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Reply received</button><button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
+    h += `<div class="row${waitMark === n.id ? ' marked' : ''}" data-wid="${n.id}">${(n.children && n.children.length) || start || inbox ? '' : `<button class="check" data-toggle="${n.id}" aria-label="Done: ${esc(n.text)}">${tick}</button>`}<button class="open"${inbox ? ' data-v="inbox"' : start ? ` data-goupd="${n.id}"` : ` data-open="${n.id}"`}><span>${esc(n.text)}</span><small>${meta} ${chaseTag(w)}</small></button><button class="btn sm" data-waitclear="${n.id}">Reply received</button><button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
   });
   return h + '</div>';
 }

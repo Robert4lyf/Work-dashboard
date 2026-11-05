@@ -181,7 +181,7 @@ function openNewSheet() {
 }
 function createClick(d, b) {
   if (d.hintoff) return hintOff(d.hintoff);
-  if (d.gosec) return openSettings(SET_SEC[d.gosec] || null, d.gosec);
+  if (d.gosec) return settingsFrom(SET_SEC[d.gosec] || null, d.gosec); // (back returns here: events.js)
   if (d.setgo) return openSettings(d.setgo);
   if (d.setback) return openSettings(null);
   if (d.procf !== undefined) {

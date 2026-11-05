@@ -336,9 +336,67 @@ document.addEventListener('submit', e => {
   const i = $('#sheetin');
   closeSheet(i ? i.value.trim() : true);
 });
+/* Release H: a sheet with words typed into it (a rule, a follow-up's note, a step, a web link) and
+   not saved isn't closed by the back gesture or a tap beside it without asking: back asks, in the
+   sheet itself, and a second back (or Discard) closes it; a tap beside it asks the same and leaves
+   it up. Its own Cancel still closes it. Nothing typed: it closes as before. */
+const sheetField = el =>
+  el.matches('textarea, input') &&
+  !el.matches('[type=search], [type=checkbox], [type=radio], [type=date], [type=time], [type=file]');
+document.addEventListener(
+  'input',
+  e => {
+    const s = e.target.closest && e.target.closest('#sheet');
+    if (s && sheetField(e.target)) s.dataset.typed = '1';
+  },
+  true,
+);
+function sheetTyped() {
+  const s = $('#sheet');
+  return (
+    !!s &&
+    s.dataset.typed === '1' &&
+    [...s.querySelectorAll('input, textarea')].some(i => sheetField(i) && i.value.trim())
+  );
+}
+// Back (or Escape) on a sheet.
+function sheetBack() {
+  if (!sheetTyped() || $('#sheetwarn')) return closeSheet();
+  askDiscard();
+}
+function askDiscard() {
+  const box = $('#sheet .sheetbox');
+  if (!box) return closeSheet();
+  if (!$('#sheetwarn'))
+    box.insertAdjacentHTML(
+      'beforeend',
+      '<div class="sheetwarn" id="sheetwarn" role="alert"><p>Discard what you typed?</p><div class="acts"><button class="btn pink" type="button" data-sheetdiscard="1">Discard</button><button class="btn" type="button" data-sheetkeep="1">Keep editing</button></div></div>',
+    );
+  const w = $('#sheetwarn');
+  w.scrollIntoView({ block: 'nearest' });
+  w.querySelector('[data-sheetkeep]').focus({ preventScroll: true });
+}
 document.addEventListener(
   'click',
   e => {
+    const t = e.target.closest ? e.target : null;
+    if (t && t.closest('[data-sheetdiscard]')) {
+      e.stopImmediatePropagation();
+      return closeSheet();
+    }
+    if (t && t.closest('[data-sheetkeep]')) {
+      e.stopImmediatePropagation();
+      $('#sheetwarn').remove();
+      const f = [...$('#sheet').querySelectorAll('input, textarea')].find(
+        i => sheetField(i) && i.value.trim(),
+      );
+      if (f) f.focus();
+      return;
+    }
+    if (t && t.closest('.sheetback') && sheetTyped()) {
+      e.stopImmediatePropagation();
+      return askDiscard();
+    }
     if (e.target.closest && e.target.closest('[data-sheetclose]')) {
       e.stopImmediatePropagation();
       closeSheet();

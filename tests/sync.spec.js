@@ -1232,7 +1232,7 @@ test('triage on one device while the other device moves the item: the walk goes 
   await b.page.click('#v-inbox [data-promote] >> nth=0');
   await settle(a, b);
   await expect(a.page.locator('#v-inbox .tcard .ttitle')).toHaveText('Two');
-  await expect(a.page.locator('#v-inbox .tprog')).toHaveText('1 of 3 processed');
+  await expect(a.page.locator('#v-inbox .tprog')).toHaveText('1 of 3 sorted');
   await a.page.click('[data-tdo="today"]');
   await settle(a, b);
   expect(texts(await b.state())).toEqual(['Three', 'Two']);

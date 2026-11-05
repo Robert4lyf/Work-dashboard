@@ -69,7 +69,7 @@ test('the actions act, with feedback and Undo; the sheet closes; scheduling uses
   await page.click('[aria-label="Actions: Report"]');
   await page.click('#sheet [data-sched]:has-text("Do next week")');
   await expect(page.locator('#sheet')).toHaveCount(0);
-  await expect(page.locator('#toast')).toContainText('Moved to Mon 28 Sep');
+  await expect(page.locator('#toast')).toContainText('On Upcoming until Mon 28 Sep');
   let s = await app.state();
   expect(s.later[0]).toMatchObject({ text: 'Report', start: '2026-09-28' });
   await page.click('[aria-label="Actions: Call Sam"]');

@@ -51,7 +51,7 @@ function questActions(id, fromList) {
   if (!d) {
     if (S.timer && topOf(S.timer.q) === q) act('Resume focus', 'data-pause="1"', 'go');
     else if (q.resume && placeFits(q, n) && canAct(q))
-      act('Resume work', `data-resume="${q.id}"`, 'go', placeLine(q.resume));
+      act('Continue work', `data-resume="${q.id}"`, 'go', placeLine(q.resume));
     else {
       const t = focusLeaf(n);
       if (t) act(t === n ? 'Focus on this' : 'Focus: ' + t.text, `data-zen="1" data-q="${t.id}"`, 'go');
@@ -104,7 +104,7 @@ function primaryAction(n, parents = []) {
           ? { label: 'Reschedule', attrs: `data-schedset="${n.id}"`, cls: 'blue' }
           : null;
   if (q.resume && placeFits(q, n) && canAct(q))
-    return { label: 'Resume work', attrs: `data-resume="${q.id}"`, cls: 'green' };
+    return { label: 'Continue work', attrs: `data-resume="${q.id}"`, cls: 'green' };
   if (top && needsNext(n)) return { label: 'Finish task', attrs: `data-finish="${n.id}"`, cls: 'green' };
   // (only waiting: what's waited on first, a follow-up if one is due, else the reply)
   if (top && onlyWaiting(n)) {

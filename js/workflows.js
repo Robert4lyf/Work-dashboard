@@ -1166,17 +1166,23 @@ function startWorkflow(wfId, q = '') {
   save();
   openWorkflowRun(r.id);
 }
-// Back from a run: to the page it was opened from, else the workflow list.
+// Back from a run: to the page it was opened from, else the workflow list. (Release H: where it
+// was scrolled to, with the keyboard on the control that opened the run.)
+let wfFromY = 0;
 function closeWorkflowRun() {
-  const from = wfFrom;
+  const from = wfFrom,
+    id = wfOpen;
   wfOpen = wfFrom = null;
   if (from && from !== 'knowledge') go(from);
   else renderKnowledge();
-  window.scrollTo(0, 0);
+  window.scrollTo(0, wfFromY);
+  wfFromY = 0;
+  if (id) refocus(`[data-wfopen="${CSS.escape(id)}"]`);
 }
 function openWorkflowRun(id) {
   if (!wrunById(id)) return toast('That run is gone', false, 3000);
   leaveEditor(() => {
+    if (wfOpen !== id) wfFromY = window.scrollY;
     wfFrom = view === 'knowledge' ? null : view;
     if (wfOpen !== id) panels.wfmore = false; // (another run's Other options start folded)
     wfOpen = id;
@@ -1298,7 +1304,7 @@ function wfFailAct(r, act, occ) {
   ackRun(r, occ);
   save();
   renderAll();
-  if (act === 'inbox') toast(added ? 'Added to inbox' : 'Already in the Inbox');
+  if (act === 'inbox') toast(added ? 'Added to the Inbox' : 'Already in the Inbox');
 }
 function failInboxItem(r, occ) {
   const id = keyId('wfail:' + r.id + ':' + occ),

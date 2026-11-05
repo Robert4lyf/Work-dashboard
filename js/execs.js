@@ -365,7 +365,7 @@ function execClick(d, b) {
     x.ack = 1;
     save();
     renderAll();
-    if (d.xinbox) toast(added ? 'Added to inbox' : 'Already in the Inbox');
+    if (d.xinbox) toast(added ? 'Added to the Inbox' : 'Already in the Inbox');
     return;
   }
   if (b && b.id === 'xnew') {

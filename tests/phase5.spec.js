@@ -27,7 +27,11 @@ test('audit: back closes an article shown over a process overview first; a typed
   await page.click('#sres [data-sart="a1"]');
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Policy');
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Report'); // (one back: the overview under it)
+  // (Release H: one back goes to Search, where the article was opened from, its words kept; the
+  // overview is still under Knowledge)
+  await expect(page.locator('#sq')).toHaveValue('policy');
+  await page.click('nav [data-v=knowledge]');
+  await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Report');
   // Save with a step typed but not added: it's added, not lost.
   await page.click('[data-wfedit="w1"]');
   await page.fill('#wfstepin', 'Typed last');

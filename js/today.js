@@ -507,7 +507,7 @@ function renderCarried() {
   // One line, folded: open it to decide on each (the weekly review asks too).
   const qs = carried();
   return qs.length
-    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'task')} carried over <small>for a while: keep, move or drop</small></summary>${carriedRows(qs)}</details>`
+    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'task')} carried over <small>for a while: keep, move or delete</small></summary>${carriedRows(qs)}</details>`
     : '';
 }
 // A carried-over task with its decisions (also used by the weekly review).
@@ -516,7 +516,7 @@ function carriedRows(qs) {
   return qs
     .map(
       q =>
-        `<div class="crow"><p>${esc(q.text)} <small>${ageOf(q)} days</small></p><div class="chips">${b(`data-keep="${q.id}"`, 'Keep')}${b(`data-sched="${q.id}" data-kind="q" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${b(`data-sched="${q.id}" data-kind="q" data-when="${nextMonday()}"`, 'Next week')}${b(`data-toinbox="${q.id}"`, 'Inbox')}${b(`data-drop="${q.id}"`, 'Drop')}</div></div>`,
+        `<div class="crow"><p>${esc(q.text)} <small>${ageOf(q)} days</small></p><div class="chips">${b(`data-keep="${q.id}"`, 'Keep')}${b(`data-sched="${q.id}" data-kind="q" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${b(`data-sched="${q.id}" data-kind="q" data-when="${nextMonday()}"`, 'Next week')}${b(`data-toinbox="${q.id}"`, 'Inbox')}${b(`data-drop="${q.id}" aria-label="Delete: ${esc(q.text)}"`, 'Delete')}</div></div>`,
     )
     .join('');
 }
@@ -533,7 +533,7 @@ function renderUpcoming() {
   let h = `<details id="upd"${panels.upd ? ' open' : ''}><summary>Upcoming (${S.later.length})</summary>`;
   S.later.forEach(n => {
     const c = count(n);
-    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}${n.scheduled ? ` <button class="linkbtn" data-schedset="${n.id}">Scheduled ${esc(schedWhen(n))}</button>` : ''}</div>
+    h += `<div class="uprow" data-upid="${n.id}"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}${n.scheduled ? ` <button class="linkbtn" data-schedset="${n.id}">Scheduled ${esc(schedWhen(n))}</button>` : ''}</div>
       <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
       <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
   });
@@ -543,7 +543,7 @@ function renderUpcoming() {
 function schedule(kind, id, date) {
   if (!date || date <= today()) return;
   // (Release G: with Undo)
-  withUndo('Moved to ' + dayLabel(date), () => scheduleNow(kind, id, date));
+  withUndo('On Upcoming until ' + dayLabel(date), () => scheduleNow(kind, id, date));
 }
 function scheduleNow(kind, id, date) {
   let n;
@@ -574,7 +574,8 @@ function renderNode({ n, parents }) {
     top = !parents.length,
     q = parents[0] || n; // (the quest: a step's page shares its resources and saved place)
   // (opened from another view: the way back names it)
-  const from = typeof atReturn === 'function' && atReturn() ? RETURN_NAME[returnTo.view] : 'Today';
+  const from =
+    typeof atReturn === 'function' && atReturn() ? returnTo.name || RETURN_NAME[returnTo.view] : 'Today';
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; ${from}</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
   // The facts: what's set on this task, each a tap to change. First what you're here for: how
@@ -653,7 +654,7 @@ function renderNode({ n, parents }) {
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${md === i + 1 ? ' selected' : ''}>${ord(i + 1)}${i + 1 > 28 ? ' (or last day)' : ''}</option>`).join('')}</select>
       </details>`;
   }
-  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this task</button></div>`;
+  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to Inbox</button><button class="dellink" data-del="${n.id}">Delete this task</button></div>`;
   h += '</details>';
   // Always to hand: the one thing to do next (see primaryAction), a tick for a step or a task
   // without steps, and the rest of its actions.

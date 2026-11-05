@@ -91,8 +91,8 @@ test('record a follow-up: history, next chase date, promised reply; the copied m
   await app.go('waiting');
   await page.click('#v-waiting [data-wact="s1"]');
   await expect(page.locator('#sheet .qact')).toHaveText([
-    'Record a follow-up',
-    /Response received/,
+    'Follow up',
+    /Reply received/,
     /Change the next chase date/,
     'Copy a follow-up message',
     'Open',
@@ -143,7 +143,7 @@ test('record a follow-up: history, next chase date, promised reply; the copied m
   expect(s.follows.map(f => f.k)).toEqual(['chase', 'expect', 'resolve']);
   await page.evaluate(() => (document.querySelector('#waitd').open = true));
   await expect(page.locator('#waitd [data-waitsave]')).toHaveText('Reopen: set waiting again');
-  await expect(page.locator('#waitd .flist li').first()).toContainText('Resolved');
+  await expect(page.locator('#waitd .flist li').first()).toContainText('Reply received');
   await page.fill('#wwho', 'Sarah');
   await page.click('#waitd [data-waitsave]');
   s = await app.state();
@@ -187,7 +187,7 @@ test('the chase notification follows the next chase date; the review puts overdu
   await expect(step.locator('.crow').nth(1)).toContainText('Quote');
   await expect(step.locator('.crow').nth(1)).toContainText('Reply overdue');
   await step.locator('.crow').nth(0).locator('[data-chase]').click();
-  await expect(page.locator('#sheettitle')).toHaveText('Record a follow-up');
+  await expect(page.locator('#sheettitle')).toHaveText('Follow up');
   await page.keyboard.press('Escape');
 });
 

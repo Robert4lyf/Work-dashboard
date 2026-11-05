@@ -86,7 +86,9 @@ function searchResults() {
   group('Today', qs);
   group(
     'Upcoming',
-    S.later.filter(n => has(n.text) || has(n.notes)).map(n => row('data-goupd="1"', n.text, day(n.start))),
+    S.later
+      .filter(n => has(n.text) || has(n.notes))
+      .map(n => row(`data-goupd="${n.id}"`, n.text, day(n.start))),
   );
   group(
     'Inbox',

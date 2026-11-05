@@ -23,10 +23,25 @@ const test = base.test.extend({
         .waitForFunction(() => typeof sb === 'undefined' || !sb || authSeen, null, { timeout: 5000 })
         .catch(() => {});
     };
+    // A reload here stands for leaving the app and opening it again, so it starts on Today, as a
+    // fresh open does: the place a tab keeps for its own reload (Release H, sessionStorage) is
+    // dropped once the page has kept it. `page.reload({ keepPlace: true })` is a real reload.
     const reload = page.reload.bind(page);
-    page.reload = async (...a) => {
+    page.reload = async ({ keepPlace, ...o } = {}) => {
       await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null)).catch(() => {});
-      const r = await reload(...a);
+      if (!keepPlace)
+        await page
+          .evaluate(() => {
+            const drop = () => {
+              try {
+                sessionStorage.removeItem('cockpit.place');
+              } catch (e) {}
+            };
+            addEventListener('pagehide', drop);
+            document.addEventListener('visibilitychange', drop);
+          })
+          .catch(() => {});
+      const r = await reload(o);
       await started();
       return r;
     };

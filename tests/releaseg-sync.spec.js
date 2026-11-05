@@ -470,7 +470,7 @@ test('Acknowledge and Add to the Inbox drawn for one failure refuse a newer one;
   // Add to the Inbox: failure 2's details, a link to the run, a stable id.
   await more(a);
   await a.page.click('[data-wfact="inbox"]');
-  await said(a, 'Added to inbox');
+  await said(a, 'Added to the Inbox');
   let s = await a.state();
   const item = s.inbox[0];
   expect(item.text).toBe('Process failed: Weekly report · Prepare');

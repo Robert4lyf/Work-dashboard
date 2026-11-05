@@ -105,7 +105,7 @@ function progressLine(n) {
 // The one short action on a top 3 row.
 function top3Action(n) {
   if (isDone(n)) return '';
-  if (n.resume) return `<button class="btn sm green" data-resume="${n.id}">Resume</button>`;
+  if (n.resume) return `<button class="btn sm green" data-resume="${n.id}">Continue</button>`;
   if (needsNext(n)) return `<button class="btn sm" data-asknext="${n.id}">What's next?</button>`;
   const t = focusLeaf(n);
   return t ? `<button class="btn sm blue" data-zen="1" data-q="${t.id}">Focus</button>` : '';
@@ -162,14 +162,14 @@ function top3PickerHtml(hint) {
   rest.forEach(q => {
     h += `<div class="t3prow"><button class="qact" type="button" data-stay="1" data-t3tog="${q.id}" aria-pressed="false"${full ? ' disabled' : ''}><span class="t3n" aria-hidden="true"></span>${esc(q.text)}</button></div>`;
   });
-  // Chosen but set aside: not holding a place. Each can be taken out of Top 3 altogether.
+  // Chosen but set aside: not holding a place. Each can be removed from Top 3 altogether.
   kept.forEach(q => {
     const why = canAct(q)
-      ? 'can be worked on: take one out to bring it back'
+      ? 'can be worked on: remove one of the three to bring it back'
       : q.scheduled
         ? 'scheduled'
         : 'waiting';
-    h += `<div class="t3prow t3kept"><span class="t3kname">${esc(q.text)} <small>Set aside · ${why}</small></span><button class="linkbtn" type="button" data-stay="1" data-t3drop="${q.id}" aria-label="Take out of Top 3: ${esc(q.text)}">Take out</button></div>`;
+    h += `<div class="t3prow t3kept"><span class="t3kname">${esc(q.text)} <small>Set aside · ${why}</small></span><button class="linkbtn" type="button" data-stay="1" data-t3drop="${q.id}" aria-label="Remove from Top 3: ${esc(q.text)}">Remove from Top 3</button></div>`;
   });
   if (held.length)
     h += `<p class="hint t3held">Not available: ${held.map(q => esc(q.text) + ' (' + (q.scheduled ? 'scheduled' : 'waiting') + ')').join(', ')}.</p>`;

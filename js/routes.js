@@ -3,7 +3,7 @@
    another app. Opening a link only navigates: nothing is changed, ticked, started or sent.
      #/today            Today (the list, with the top 3)
      #/inbox            the Inbox
-     #/inbox/triage     Process inbox
+     #/inbox/triage     Sort the Inbox
      #/q/<id>           a task or a step (on Today; one on Upcoming or in the Inbox is shown there)
      #/kb/<id>          a Knowledge article (a procedure shows its steps)
      #/kb/<id>/run      a procedure, started or resumed
@@ -218,7 +218,7 @@ let shortcutKind = 'today',
 const SHORTCUTS = [
   ['today', 'Start work: Today', ''],
   ['continue', 'Continue: where you left off', ''],
-  ['triage', 'Process inbox', ''],
+  ['triage', 'Sort the Inbox', ''],
   ['inbox', 'Inbox', ''],
   ['waiting', 'Waiting Centre', ''],
   ['q', 'A task', 'quest'],

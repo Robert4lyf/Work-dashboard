@@ -139,7 +139,7 @@ function stepActions(s, q) {
 function procSection(a) {
   const open = openRunFor(a.id, ''),
     runs = S.runs.filter(r => r.art === a.id && r.fin).sort((x, y) => y.fin - x.fin);
-  let h = `<div class="sechead pshead"><h2>Guide <small>${a.steps.length} steps</small></h2><button class="btn sm blue" data-runstart="${a.id}">${open ? 'Resume' : 'Start'}</button></div>`;
+  let h = `<div class="sechead pshead"><h2>Guide <small>${a.steps.length} steps</small></h2><button class="btn sm blue" data-runstart="${a.id}">${open ? 'Continue' : 'Start'}</button></div>`;
   h += `<ol class="plist">${a.steps
     .map(
       s =>
@@ -354,5 +354,5 @@ function procLinkLine(artId, qid) {
   if (!a) return '';
   const r = openRunFor(artId, qid),
     last = !r && S.runs.filter(x => x.art === artId && x.q === qid && x.fin).sort((x, y) => y.fin - x.fin)[0];
-  return `<span class="procline"><small>${r ? esc(runLine(r)) : last ? esc(runLine(last)) : 'Not started'}</small><button class="btn sm blue" data-runstart="${artId}" data-q="${qid}">${r ? 'Resume' : 'Start'}</button></span>`;
+  return `<span class="procline"><small>${r ? esc(runLine(r)) : last ? esc(runLine(last)) : 'Not started'}</small><button class="btn sm blue" data-runstart="${artId}" data-q="${qid}">${r ? 'Continue' : 'Start'}</button></span>`;
 }
