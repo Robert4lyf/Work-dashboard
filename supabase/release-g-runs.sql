@@ -135,6 +135,8 @@ grant execute on function public.cockpit_put_wrun(text, integer, jsonb, text) to
 -- takes the stored run instead (as it does for an older edit, see cockpit_items_stamp). Deleting
 -- a run that is over (succeeded or cancelled) is still allowed from anywhere, as the app's tidying
 -- of old runs, and the tombstone keeps the next revision, so the run can't come back at an old one.
+-- (Since Release H it also checks the run keeps its own id and stays within 256 KB, as the function
+-- does; the same as in release-h.sql.)
 create or replace function public.cockpit_items_wrun_guard() returns trigger
 language plpgsql set search_path = public, pg_temp as $$
 declare
@@ -147,7 +149,15 @@ begin
   if jsonb_typeof(new.data->'rev') = 'number' and (new.data->>'rev') ~ '^\d{1,9}$' then
     n := (new.data->>'rev')::integer;
   end if;
-  if n = o + 1 and n < 999999999 then return new; end if;
+  -- (Release H: and, as cockpit_put_wrun checks, the same row, the run's own id, at most 256 KB)
+  if new.key is distinct from old.key then return null; end if;
+  if n = o + 1 and n < 999999999 then
+    if jsonb_typeof(new.data->'id') is distinct from 'string' or new.data->>'id' <> substr(new.key, 6)
+       or octet_length(new.data::text) > 262144 then
+      return null;
+    end if;
+    return new;
+  end if;
   if new.deleted and not old.deleted and old.data->>'status' in ('succeeded', 'cancelled') and o < 999999998 then
     new.data := jsonb_build_object('id', old.data->'id', 'rev', o + 1);
     return new;
@@ -159,11 +169,12 @@ drop trigger if exists cockpit_items_wrun_guard on public.cockpit_items;
 create trigger cockpit_items_wrun_guard before update on public.cockpit_items
   for each row when (old.key like 'wrun:%') execute function public.cockpit_items_wrun_guard();
 
--- Automation reports (the same function as in supabase-setup.sql, kept the same in both): a
--- report that names no execution goes to the OLDEST launch of its flow still waiting to hear
--- (with no result reported yet), not the newest, so a late report from an attempt that a retry
--- set aside never completes or fails the newer attempt. Its arguments, checks, limits and rights
--- are as before.
+-- Automation reports (the same function as in supabase-setup.sql and release-h.sql, kept the same
+-- in all three, so running these files again in any order never brings back an older pairing): a
+-- report that names no execution is paired with a launch only when exactly one launch of its flow
+-- is waiting to hear; a named execution is taken only if it is that flow's. Its arguments, checks,
+-- limits and rights are as before. (Release G paired with the oldest launch waiting, which could
+-- be one that never ran, or another run's; Release H changed that, see release-h.sql.)
 create or replace function public.cockpit_exec_report(
   token text, flow text, status text, message text default '', execution text default '', run_ref text default ''
 ) returns jsonb
@@ -175,6 +186,8 @@ declare
   m text := left(trim(regexp_replace(regexp_replace(coalesce(message, ''), '[[:cntrl:]]+', ' ', 'g'), '\s+', ' ', 'g')), 300);
   x text := trim(coalesce(execution, ''));
   r text := left(trim(coalesce(run_ref, '')), 60);
+  named boolean;
+  waiting integer;
   fname text;
   ev bigint;
 begin
@@ -195,12 +208,22 @@ begin
   end if;
   delete from cockpit_exec_events e where e.user_id = u and e.reported_at < now() - interval '90 days';
   delete from cockpit_notices n where n.user_id = u and n.key like 'exec:%' and n.sent_at < now() - interval '30 days';
-  -- Which execution this is about: the caller's say, else the run it reported before (an
-  -- earlier report with no execution of its own stands for one, named 'u' + its row id, as the
-  -- app names it), else the OLDEST launch of this flow still waiting to hear: requested or
-  -- running, within a day, with no result reported for it yet. (Oldest, not newest: a report
-  -- coming late from an attempt a retry has set aside goes to that attempt, never to the newer
-  -- one that took its place. Release G.)
+  -- Which execution this is about (Release H):
+  --  1. the one the caller names, but only if this user has an execution of that id for this
+  --     flow (the app passes it to a flow set up to take it, see README). One it hasn't (a typo,
+  --     another flow's, a launch not synced yet) is neither taken nor replaced by a guess.
+  --  2. else the run it reported before (an earlier report with no execution of its own stands
+  --     for one, named 'u' + its row id, as the app names it);
+  --  3. else, with no id given, the launch of this flow still waiting to hear (requested or
+  --     running, within a day, no result reported for it yet), but only when exactly ONE is
+  --     waiting. With none, or two or more (a launch that never ran, another run's, one a retry
+  --     set aside), the report is left unpaired: the app makes it an execution of its own, and a
+  --     step waiting on an automation waits for you to confirm it. A guess is never made.
+  named := x <> '';
+  if named and not exists (select 1 from cockpit_items i where i.user_id = u and i.key = 'exec:' || x
+      and not i.deleted and i.data->>'id' = x and i.data->>'flow' = f) then
+    x := '';
+  end if;
   if x = '' and r <> '' then
     select coalesce(nullif(e.execution, ''), 'u' || e.id) into x from cockpit_exec_events e
       where e.user_id = u and e.flow = f and e.run_ref = r
@@ -208,16 +231,15 @@ begin
       order by e.id limit 1;
     x := coalesce(x, '');
   end if;
-  if x = '' then
-    select i.data->>'id' into x from cockpit_items i
+  if x = '' and not named then
+    select count(*), min(i.data->>'id') into waiting, x from cockpit_items i
       where i.user_id = u and i.kind = 'exec' and not i.deleted
         and i.data->>'flow' = f and i.data->>'status' in ('requested', 'running')
         and (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end)
             > (extract(epoch from now() - interval '24 hours') * 1000)::bigint
         and not exists (select 1 from cockpit_exec_events e where e.user_id = u
-          and e.execution = i.data->>'id' and e.status in ('succeeded', 'failed', 'cancelled'))
-      order by (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end), i.key
-      limit 1;
+          and e.execution = i.data->>'id' and e.status in ('succeeded', 'failed', 'cancelled'));
+    if waiting <> 1 then x := ''; end if;
     x := coalesce(x, '');
     if x !~ '^[A-Za-z0-9_-]{1,40}$' then x := ''; end if;
   end if;
@@ -240,7 +262,8 @@ grant execute on function public.cockpit_exec_report(text, text, text, text, tex
 notify pgrst, 'reload schema';
 
 -- ROLLBACK: to remove this again, run the four lines between the markers without their "-- ".
--- (cockpit_exec_report stays as it is: supabase-setup.sql has the same version.)
+-- Run release-h.sql's ROLLBACK first, if you ran it. (cockpit_exec_report stays as it is:
+-- supabase-setup.sql has the same version.)
 -- The runs stay as they are (their `rev` is kept and simply ignored), and the app goes back to
 -- the newer edit winning.
 -- BEGIN ROLLBACK

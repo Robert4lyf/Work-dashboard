@@ -17,9 +17,13 @@ try {
   sb = null;
 }
 function setSync(s) {
+  // (a run's page says where its last change stands: redrawn when that changes, Release H)
+  const open = view === 'knowledge' && typeof wsyncState === 'function' && wfOpen && wrunById(wfOpen),
+    was = open ? wsyncState(open) : '';
   syncStatus = s;
   renderSyncBadge();
   if (view === 'account') inBackground(renderAccount); // keeps what's being typed in Settings
+  if (open && wrunById(open.id) && wsyncState(open) !== was) inBackground(renderKnowledge);
 }
 function badgeText() {
   if (!sb) return 'Sync off';
@@ -134,6 +138,8 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     sync2.serverAt = Math.max(sync2.serverAt || 0, Number(r.edited_at) || 0); // (newest change anywhere)
     // A kind from a newer version: nothing here to change (and not a reason to reload).
     if (!knownKey(r.key)) continue;
+    // A run deleted there and changed here, kept here until you choose (Release H, see putRun).
+    if (wrunHeld(r.key)) continue;
     // A repeat's copy for a day (id <template>-<date>) cleared by another device's reset:
     // remembered, so this device's look-back doesn't make it again.
     if (r.deleted && /^(quest|wrun):.+-\d{4}-\d\d-\d\d$/.test(r.key))
@@ -238,7 +244,7 @@ async function pushDirty() {
         .slice(i, i + 500)
         .map(k => ({ k, d: sync2.dirty[k] }))
         .filter(x => {
-          if (!x.d) return false;
+          if (!x.d || wrunHeld(x.k)) return false; // (a run held for your choice: not sent)
           if (x.d.h === null || recs.has(x.k)) return true;
           delete sync2.dirty[x.k]; // (added and removed again before it was ever sent)
           return false;
@@ -266,8 +272,8 @@ async function pushDirty() {
     // A row the server kept its own newer version of (see cockpit_items_stamp) isn't among
     // them: this device takes that version instead, now, rather than counting its own as sent.
     const took = Array.isArray(wrote) ? new Set(wrote.map(r => r.key)) : null,
-      lost = [],
       lostRun = {}; // (a run's change that didn't go in: what it was, and when made)
+    let lost = [];
     (wrote || []).forEach(r => ((sync2.at = sync2.at || {})[r.key] = Number(r.seq)));
     // (one stored cleaned is read back, so this device has it as stored)
     sent.forEach((r, j) => r !== rows[j] && delete sync2.at[r.key]);
@@ -291,6 +297,20 @@ async function pushDirty() {
       if (isWrunKey(k)) tookRunRow({ key: k, data: d.h === null ? null : recs.get(k) });
     });
     saveSyncState();
+    // (Release H) A run's change turned away by the guard while this device took the function to
+    // be missing: asked again now. Installed since, the change isn't a conflict: it goes through
+    // the function, in the sync that follows.
+    const lostRuns = Object.keys(lostRun);
+    if (lostRuns.length && wrunCas.on === false && (await wrunProbe()).fn) {
+      lostRuns.forEach(k => {
+        const b = batch.find(x => x.k === k);
+        if (!sync2.dirty[k] && b) sync2.dirty[k] = b.d;
+        delete lostRun[k];
+      });
+      lost = lost.filter(k => !lostRuns.includes(k));
+      saveSyncState();
+      again = true;
+    }
     for (let j = 0; j < lost.length; j += 100) {
       const { data, error: e2 } = await sb
         .from('cockpit_items')
@@ -299,17 +319,22 @@ async function pushDirty() {
       if (e2) throw e2;
       // A run's change refused although no newer edit was there (a server with the run guard but
       // without the function: see supabase/release-g-runs.sql): kept as a conflict, not dropped.
+      let undone = false;
       data.forEach(row => {
         const l = lostRun[row.key];
-        if (l && Number(row.edited_at) <= l.at)
-          wfConflict(
-            row.key.slice(5),
-            l.mine,
-            row.deleted ? null : row.data,
-            baseRev(row.key),
-            rowRev(row.data),
-            (sync2.wjour || {})[row.key.slice(5)] || [],
-          );
+        if (!l || Number(row.edited_at) > l.at) return;
+        const jour = (sync2.wjour || {})[row.key.slice(5)] || [];
+        wfConflict(
+          row.key.slice(5),
+          l.mine,
+          row.deleted ? null : row.data,
+          baseRev(row.key),
+          rowRev(row.data),
+          jour,
+        );
+        if (undoAside(jour, row.deleted ? null : row.data)) undone = true;
+        // (deleted there, kept here for your choice: the next change goes on top of the deletion)
+        if (wrunHeld(row.key)) (sync2.wrev = sync2.wrev || {})[row.key] = rowRev(row.data);
       });
       applyRows(
         data.sort((a, b) => a.seq - b.seq),
@@ -317,6 +342,7 @@ async function pushDirty() {
         null,
         true,
       );
+      if (undone) markDirty();
     }
   }
 }
@@ -338,8 +364,36 @@ function clean(row) {
    here, and this device's version kept as a conflict to decide on (see wfConflict). Without the
    function on the server, runs sync like everything else (the newer edit wins) and the health
    check says so; it's asked again every half hour. Nothing here ever launches anything. */
-let wrunCas = { on: null, at: 0 }; // the server has the function: true, false (when last asked), or null (not known yet)
+// the server has the function: true, false (when last asked), or null (not known yet); and
+// (Release H, from cockpit_sync_checks) the guard: true, false, or undefined (not known)
+let wrunCas = { on: null, at: 0 };
 const isWrunKey = k => k.startsWith('wrun:');
+// (Release H) A run deleted on the server while changed here, kept here (and not sent) until you
+// choose on its page: see wfConflict.
+const wrunHeld = k => isWrunKey(k) && S.wconflicts.some(c => c.gone && c.run === k.slice(5));
+// (Release H) After "Keep the server's" on a run deleted there: what the server has of it now,
+// read again, should it be back since (a restore or an undo elsewhere), so this device doesn't
+// stay without a run the server has.
+async function wrunRecheck(id) {
+  const k = 'wrun:' + id;
+  if (!sb || !session || !navigator.onLine) return;
+  const { data, error } = await sb.from('cockpit_items').select(FULL).in('key', [k]);
+  if (error || !Array.isArray(data) || !data.some(r => !r.deleted)) return;
+  applyRows(data, false, null, true);
+  save();
+  inBackground(renderAll);
+}
+// "Keep the server's" for such a run: deleted here too, with what was noted for it.
+function wrunForget(id) {
+  const k = 'wrun:' + id;
+  S.wruns = S.wruns.filter(r => r.id !== id);
+  delete sync2.dirty[k];
+  delete sync2.synced[k];
+  if (sync2.wjour) delete sync2.wjour[id];
+  if (sync2.wop) delete sync2.wop[k];
+  if (sync2.wjh) delete sync2.wjh[id];
+  saveSyncState();
+}
 const wrunCasOff = () => wrunCas.on === false && Date.now() - wrunCas.at < 30 * 60e3;
 // (PostgREST: no such function. A 404 is that too, from older versions.)
 const fnMissing = (error, status) => status === 404 || ['PGRST202', '42883'].includes(error && error.code);
@@ -392,7 +446,7 @@ async function pushRuns(keys) {
   let left = rest;
   try {
     for (let i = 0; i < runs.length; i++) {
-      if (wrunParked(runs[i])) continue;
+      if (wrunParked(runs[i]) || wrunHeld(runs[i])) continue;
       const got = await putRun(runs[i]);
       if (got === 'missing') {
         left = [...rest, ...runs.slice(i)];
@@ -477,6 +531,12 @@ async function putRun(k) {
       continue;
     }
     if (out.status !== 'conflict') throw new Error('cockpit_put_wrun: ' + out.status);
+    // (Release H) What the server has is what was sent, revision aside: this change, taken before
+    // with its answer lost, and asked about again after its op id was forgotten (30 days).
+    if (p.data && row.data && !row.deleted && sameRun(k, row.data, p.data)) {
+      acceptedRun(k, p, rowRev(row.data), row);
+      continue;
+    }
     delete wop[k];
     // The server has no such run, or exactly the version last taken in here: only this
     // device's note of the revision was out of date. Sent again from the right one.
@@ -485,16 +545,27 @@ async function putRun(k) {
       continue;
     }
     const r = wrunById(id),
+      jour = (sync2.wjour || {})[id] || [],
       notes = wfConflict(
         id,
         r ? JSON.parse(JSON.stringify(r)) : null,
         row.deleted ? null : row.data,
         p.base,
         rowRev(row.data),
-        (sync2.wjour || {})[id] || [],
+        jour,
       );
+    // (the attempts the refused change set aside, back where the server's run still holds them)
+    const undone = undoAside(jour, row.deleted ? null : row.data);
+    // Deleted there and under way here (Release H): kept here, unsent, until you choose. A change
+    // then made is made on top of the deletion.
+    if (row.deleted && wrunHeld(k)) {
+      (sync2.wrev = sync2.wrev || {})[k] = rowRev(row.data);
+      saveSyncState();
+      return;
+    }
     delete sync2.dirty[k];
     applyRows([row], false, null, true); // (the server's run, here now)
+    if (undone) markDirty();
     const r2 = wrunById(id);
     if (r2 && notes.length) {
       notes.forEach(e => noteRun(r2, e.k || 'note', e.m || ''));
@@ -564,30 +635,64 @@ async function wrunTakeServer(k) {
   }
   inBackground(renderKnowledge);
 }
-// For the health check: whether the server checks run changes (its function refuses an empty key).
-async function wrunHealth(add) {
-  const name = 'Process run checks';
-  let res;
+// Two versions of a run the same but for their revision.
+const sameRun = (k, a, b) => recHash(k, { ...a, rev: 0 }) === recHash(k, { ...b, rev: 0 });
+// What the server has of the run checks: { fn, guard } (each true, false, or null: not known;
+// `h`: asked through Release H's cockpit_sync_checks). Without that function (release-h.sql not
+// run), the Release G way: cockpit_put_wrun refuses an empty key, and the guard can't be seen.
+// What it finds is what the app goes by from then on (wrunCas).
+async function wrunProbe() {
+  const out = { fn: null, guard: null, h: false };
   try {
-    res = await sb.rpc('cockpit_put_wrun', { p_key: '', p_base_rev: 0, p_data: null, p_op: '' });
+    const { data, error, status } = await sb.rpc('cockpit_sync_checks');
+    if (!error && data && typeof data === 'object' && 'put_wrun' in data) {
+      out.fn = data.put_wrun === true;
+      out.guard = data.guard === true;
+      out.h = true;
+    } else if (error && !fnMissing(error, status))
+      return out; // (offline, say: not known)
+    else {
+      const res = await sb.rpc('cockpit_put_wrun', { p_key: '', p_base_rev: 0, p_data: null, p_op: '' }),
+        e2 = res && res.error;
+      if (e2 && fnMissing(e2, res.status)) out.fn = false;
+      else if (!e2 || e2.code === '22023' || /key must be/.test(e2.message || '')) out.fn = true;
+    }
   } catch (e) {
-    return add(name, null, 'Unknown');
+    return out;
   }
-  const { error, status } = res || {};
-  if (error && fnMissing(error, status)) {
-    wrunCas = { on: false, at: Date.now() };
+  if (out.fn !== null) wrunCas = { on: out.fn, at: Date.now(), ...(out.h ? { guard: out.guard } : {}) };
+  return out;
+}
+// For the health check: whether the server checks run changes, all of it or in part. (Asked
+// afresh each time: a migration just run counts at once.)
+async function wrunHealth(add) {
+  const name = 'Process run checks',
+    fix =
+      'Run supabase/release-g-runs.sql, then supabase/release-h.sql, in the SQL Editor (docs/ux/release-h-sync.md > Deploying).',
+    p = await wrunProbe();
+  if (p.fn === null) return add(name, null, 'Unknown');
+  if (p.h && p.fn && !p.guard)
     return add(
       name,
       false,
-      'Not installed: the newer edit wins',
-      'Run supabase/release-g-runs.sql in the SQL Editor (README > How sync behaves).',
+      'Partly installed: the function is there but not the guard, so an older copy of the app can still overwrite a run',
+      fix,
     );
-  }
-  if (!error || error.code === '22023' || /key must be/.test(error.message || '')) {
-    wrunCas = { on: true, at: Date.now() };
-    return add(name, true, 'On');
-  }
-  add(name, null, 'Unknown');
+  if (p.h && !p.fn && p.guard)
+    return add(
+      name,
+      false,
+      'Partly installed: the guard is there but not the function, so every change to a run is refused (each kept on its device as a conflict)',
+      fix,
+    );
+  if (!p.fn) return add(name, false, 'Not installed: the newer edit wins', fix);
+  add(
+    name,
+    true,
+    p.h
+      ? 'On: run changes are checked by the server'
+      : 'On (run supabase/release-h.sql to check the guard too)',
+  );
 }
 // A few times a day, keep a whole-state copy in cockpit_state; its history trigger is what
 // Settings > Previous versions lists.
@@ -671,6 +776,8 @@ async function sync() {
       sync2.kbimg = 1; // (a first sync reads every row)
       saveSyncState();
     } else await pullChanges();
+    // (whether the server checks run changes, asked once a session, for what a run's page says)
+    if (wrunCas.on === null && S.wruns.length) await wrunProbe();
     // The day's reset, now that the server's copy is in (applyRows ran it if anything came).
     if (S.day !== today()) {
       rollover();

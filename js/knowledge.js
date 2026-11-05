@@ -65,6 +65,9 @@ function normKnowledge() {
       url: f.url,
       // (a time that can't be right, say from a device with its clock wrong, isn't shown)
       last: Number.isFinite(+f.last) && f.last > 0 && f.last < Date.now() + 864e5 ? +f.last : 0,
+      // (Release H: the launch passes the attempt's id to the flow; off unless chosen, so a flow
+      // from before reads the same)
+      ...(f.passId === true ? { passId: true } : {}),
     }));
 }
 const kbCat = id => S.kbcats.find(c => c.id === id);
@@ -150,12 +153,12 @@ function kbFlows() {
   h += `<details id="kbflows"${panels.kbflows || !flows.length ? ' open' : ''}${flows.length ? '' : ' data-held="1"'}><summary>${flows.length ? 'Manage automations' : 'Add a desktop automation'}</summary>`;
   flows.forEach(
     f =>
-      (h += `<div class="tagrow"><input class="fld" data-flowname="${f.id}" value="${esc(f.name)}" maxlength="60" aria-label="Flow name"><button class="x" data-delflow="${f.id}" aria-label="Delete flow ${esc(f.name)}">×</button></div><p class="hint flowline">${flowStatusLine(f)}${S.execs.some(x => x.flow === f.id) ? ` <button class="linkbtn" data-xhist="${f.id}">History</button>` : ''}</p>`),
+      (h += `<div class="tagrow"><input class="fld" data-flowname="${f.id}" value="${esc(f.name)}" maxlength="60" aria-label="Flow name"><button class="x" data-delflow="${f.id}" aria-label="Delete flow ${esc(f.name)}">×</button></div><label class="optbox flowpass"><input type="checkbox" data-flowpass="${f.id}"${f.passId ? ' checked' : ''}>Pass the attempt’s id to the flow (its input <code>ExecId</code>)</label><p class="hint flowline">${flowStatusLine(f)}${S.execs.some(x => x.flow === f.id) ? ` <button class="linkbtn" data-xhist="${f.id}">History</button>` : ''}</p>`),
   );
   h += `<form id="flowform"><label class="f" for="flowname">Button name</label><input class="fld" id="flowname" maxlength="60" autocomplete="off" required>
     <label class="f" for="flowurl">Run URL</label><input class="fld" id="flowurl" placeholder="ms-powerautomate:/console/flow/run?..." autocomplete="off" required>
     <div class="acts"><button class="btn">Add automation</button></div></form>
-    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. Each one gets a button here and on Today. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run.</p></details>`;
+    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. Each one gets a button here and on Today. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run. With result tracking on, “Pass the attempt’s id” adds the attempt's id to the Run URL as the flow's input <code>ExecId</code>, for its report (the flow needs an input variable named ExecId; see the README).</p></details>`;
   return h;
 }
 // The notes (one scratchpad, synced), pinned at the top of Knowledge.
@@ -458,6 +461,15 @@ function kbDelete(id) {
     renderKnowledge();
   });
 }
+// (Release H) Whether a flow's launch passes the attempt's id on (see flowRunUrl).
+function setFlowPass(id, on) {
+  const f = S.flows.find(x => x.id === id);
+  if (!f) return;
+  if (on) f.passId = true;
+  else delete f.passId;
+  save();
+  renderKnowledge();
+}
 function addFlow() {
   const name = $('#flowname').value.trim(),
     url = $('#flowurl').value.trim();
@@ -499,6 +511,18 @@ async function kbAddImages(files) {
   kbRenderEditImgs();
   imageToast(r);
 }
+// A flow's Run URL for one launch: as saved, or, for a flow set to take it and a tracked attempt
+// `x`, with the attempt's id as the input variable ExecId (Power Automate Desktop's documented
+// &inputArguments={"<name>": <value>} on a run URL).
+function flowRunUrl(f, x) {
+  if (!f.passId || !x) return f.url;
+  return (
+    f.url +
+    (f.url.includes('?') ? '&' : '?') +
+    'inputArguments=' +
+    encodeURIComponent(JSON.stringify({ ExecId: x.id }))
+  );
+}
 // A tap on a flow's button: remembered, so it can say when it was last used. (Whether the flow
 // then ran is up to Power Automate: the page can't tell.)
 document.addEventListener(
@@ -518,8 +542,19 @@ document.addEventListener(
     // Tracked (Settings > Flows and automations): the tap is an execution, requested, until the
     // flow reports back. Nothing else runs it: only this tap.
     const x = startExec(f.id, a.dataset.q || '');
+    // (Release H) Set to pass it on, the link the browser follows next (this handler runs first)
+    // carries this attempt's id as the flow's input ExecId, for its report to name.
+    a.setAttribute('href', flowRunUrl(f, x));
+    // (and back to the plain link once followed: a kept chip mustn't offer this attempt's id to
+    // a later "open in new tab" or copy)
+    setTimeout(() => a.setAttribute('href', f.url), 0);
     if (a.dataset.wrun) wfLaunched(a.dataset.wrun, a.dataset.wstage || '', x);
     save();
+    // (the attempt sent at once: the server takes a report naming it only once it has it)
+    if (f.passId && x && typeof sync === 'function') {
+      clearTimeout(pushT);
+      setTimeout(sync, 0);
+    }
     setTimeout(renderView, 0); // (after the link has been followed; the chips are on Today)
   },
   true,

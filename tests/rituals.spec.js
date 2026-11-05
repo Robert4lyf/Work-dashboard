@@ -23,7 +23,13 @@ test('tasks carried over for 3+ days ask for a decision each morning', async ({ 
   await card.locator('[data-keep]').first().click(); // Keep: off the card until tomorrow
   await card.locator('.crow', { hasText: 'Old email' }).locator('[data-sched]').first().click();
   await card.locator('[data-toinbox]').first().click(); // Old call
-  await card.locator('[data-drop]').first().click(); // Old idea
+  // Old idea: Delete takes two taps (Release H), as deleting a task does elsewhere.
+  await expect(card.locator('[data-drop]').first()).toHaveText('Delete');
+  await card.locator('[data-drop]').first().click();
+  await expect(card.locator('[data-drop]').first()).toHaveText('Delete?');
+  expect((await app.state()).quests.some(q => q.text === 'Old idea')).toBe(true);
+  await card.locator('[data-drop]').first().click();
+  await expect(page.locator('#toast')).toContainText('Deleted Old idea');
   await expect(card).toHaveCount(0);
   let s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Old report', 'Fresh']);
@@ -85,7 +91,9 @@ test('waiting is on a step: set from the task, shown on Today and the Waiting ta
   await page.fill('#wdue', '2026-10-05');
   await page.evaluate(() => inBackground(renderToday));
   await expect(page.locator('#wdue')).toHaveValue('2026-10-05');
-  await page.press('#wdue', 'Tab');
+  // (left for another field: since Release H the redraw leaves the field exactly as it was, the
+  // keyboard on the part of the date it was on, so Tab would move to its next part)
+  await page.focus('#wexp');
   expect((await app.state()).quests[0].children[0].wait.due).toBe('2026-10-05');
   await page.fill('#wdue', '2026-09-23');
   await page.press('#wdue', 'Tab');

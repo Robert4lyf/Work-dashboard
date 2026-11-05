@@ -23,10 +23,25 @@ const test = base.test.extend({
         .waitForFunction(() => typeof sb === 'undefined' || !sb || authSeen, null, { timeout: 5000 })
         .catch(() => {});
     };
+    // A reload here stands for leaving the app and opening it again, so it starts on Today, as a
+    // fresh open does: the place a tab keeps for its own reload (Release H, sessionStorage) is
+    // dropped once the page has kept it. `page.reload({ keepPlace: true })` is a real reload.
     const reload = page.reload.bind(page);
-    page.reload = async (...a) => {
+    page.reload = async ({ keepPlace, ...o } = {}) => {
       await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null)).catch(() => {});
-      const r = await reload(...a);
+      if (!keepPlace)
+        await page
+          .evaluate(() => {
+            const drop = () => {
+              try {
+                sessionStorage.removeItem('cockpit.place');
+              } catch (e) {}
+            };
+            addEventListener('pagehide', drop);
+            document.addEventListener('visibilitychange', drop);
+          })
+          .catch(() => {});
+      const r = await reload(o);
       await started();
       return r;
     };
@@ -98,6 +113,12 @@ const test = base.test.extend({
       openQuest: async text => {
         const inList = page.locator(`#v-today .row .open >> text="${text}"`);
         if (await inList.count()) return inList.first().click();
+        // (Release H: the rest of Scheduled and Waiting may be folded: opened, as a user would)
+        await page.evaluate(() =>
+          ['schedmore', 'waitmore'].forEach(
+            id => document.getElementById(id) && (document.getElementById(id).open = true),
+          ),
+        );
         await page.click(`#v-today .secrow:has-text("${text}") .open`);
         const r = await page.evaluate(() => (path.length ? find(path[path.length - 1]) : null));
         if (r && r.parents.length) await page.click('[data-crumb="0"]'); // (a step: up to its task)

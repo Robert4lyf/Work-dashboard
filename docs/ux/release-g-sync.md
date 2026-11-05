@@ -1,5 +1,9 @@
 # Release G, checkpoint 2: process runs synced with a revision check
 
+> **Release H** changed parts of this: reports naming no execution are paired only when exactly
+> one launch is waiting (not the oldest), a flow can pass its launch's id, a run deleted elsewhere
+> while changed here is a conflict, and more. See `docs/ux/release-h-sync.md`.
+
 Up to Release F, a process run (`S.wruns`, one row `wrun:<id>` in `public.cockpit_items`) synced
 like every other record: newer edit wins. Release F made a stale tap harmless once the newer run
 had reached the device. Two devices that each changed the same run before syncing still resolved

@@ -156,9 +156,9 @@ test('the header follows one rule: saved place today, else Top 3, else list orde
 }) => {
   await busy(app, page);
   const head = page.locator('#hnow');
-  // A place saved an hour ago comes first, with Resume.
-  await expect(head).toContainText('Pick up where you left off · Q4 budget report');
-  await expect(page.locator('#hact [data-resume="q4"]')).toHaveText('Resume');
+  // A place saved an hour ago comes first, with Continue.
+  await expect(head).toContainText('Saved place · Q4 budget report');
+  await expect(page.locator('#hact [data-resume="q4"]')).toHaveText('Continue');
   // An older saved place doesn't take over: Top 3's first task with a step to do does.
   await page.evaluate(() => {
     S.quests[4].resume.at = Date.now() - 3 * 864e5;
@@ -210,9 +210,11 @@ test("Today's order: attention, Top 3, what it's waiting on, the work; the rest 
   page,
 }) => {
   await busy(app, page);
+  // (Release H: the line that jumps to each section first)
   const blocks = await page.$$eval('#v-today > *', els =>
     els.map(e => e.className.split(' ')[0] || e.tagName.toLowerCase()),
   );
+  expect(blocks.shift()).toBe('tjump');
   // (Release F: Waiting above the list on a phone, so a long day doesn't bury it)
   // (Release G: the list's filter between its title and the list)
   expect(blocks.slice(0, 6)).toEqual(['attn', 'top3', 'todaysec', 'sechead', 'tfilter', 'list']);

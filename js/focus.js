@@ -27,7 +27,10 @@ const topOf = id => {
 };
 const timerLabel = t => {
   const q = t.q && find(t.q);
-  return [t.tag, q && q.n.text].filter(Boolean).join(': ');
+  // (a step named with its task: many tasks have a step called Draft)
+  return [t.tag, q && (q.parents.length ? q.parents[0].text + ' · ' + q.n.text : q.n.text)]
+    .filter(Boolean)
+    .join(': ');
 };
 // What the next session is for: the task picked here, else the header's recommendation.
 function focusTarget() {

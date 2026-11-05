@@ -84,7 +84,7 @@ function go(v) {
 /* Release G: where a task's page was opened from, so back (and its ‹ crumb) returns there:
    another view (Waiting, Forecast, Search, the Command Centre) with its scroll position, or
    Today's list where it was scrolled to. */
-let returnTo = null, // { view, sub, y, depth }: the view a task's page was opened from
+let returnTo = null, // { depth, name, ...placeHere() }: the view a task's page was opened from
   listY = 0, // (where Today's list was scrolled to when a task was opened from it)
   listAt = null; // ({ id, top }: the task opened, and where its row was on the screen)
 const RETURN_NAME = {
@@ -93,7 +93,135 @@ const RETURN_NAME = {
   search: 'Search',
   ops: 'Command Centre',
   inbox: 'Inbox',
+  knowledge: 'Knowledge', // (Release H: a process run's or a guide's "For:" link; named in returnTo)
 };
+/* Release H: the same for a link to another view that isn't a task's page (an article, a process,
+   the Inbox or an Upcoming task from Search; Upcoming from the Waiting Centre or the forecast;
+   Settings from a process run): back returns to where it was followed from, while the page it
+   landed on is still showing (known by placeSig). A tab is a fresh start, as for returnTo. */
+let viewFrom = null;
+// What Knowledge is showing (an article, a guide being followed, a process run and where its ‹
+// goes), so it can be put back as it was.
+const kbPlace = () => ({
+  kbArt,
+  kbRun,
+  wfOpen,
+  wfView,
+  wfFrom,
+  wfFromY,
+  kbView,
+  kbCatOpen,
+  kbReturn,
+  kbRunBack,
+  kbRunBackWf,
+});
+// Which page is showing, as far as going back is concerned.
+function placeSig() {
+  const on = v => view === v;
+  return JSON.stringify([
+    view,
+    on('today') ? path : '',
+    on('knowledge') ? [kbArt, kbRun, wfOpen, wfView, !!kbEdit, !!wfEdit] : '',
+    on('account') ? setSub : '',
+    on('inbox') ? !!triage : '',
+    on('review') ? reviewSub : '',
+  ]);
+}
+// Where the page is now, for back to put back: the view, its sub-page, the scroll, Today's path,
+// what Knowledge and Settings show, and the control the keyboard was on.
+function placeHere(opener = document.activeElement) {
+  return {
+    view,
+    sub: reviewSub,
+    y: window.scrollY,
+    path: [...path],
+    kb: kbPlace(),
+    set: view === 'account' ? setSub : null,
+    opener: opener && opener.closest && !opener.closest('#sheet') ? focusSel(opener) : '',
+    was: placeSig(),
+  };
+}
+// After following a link from `f` (placeHere, taken before it): back now returns there.
+function landed(f) {
+  if (!f || f.view === view) return;
+  f.sig = placeSig();
+  if (f.sig !== f.was) viewFrom = f;
+}
+// Back to a place kept by placeHere (returnTo or viewFrom), with only what's still there.
+function goPlace(r) {
+  if (r.kb) {
+    const k = r.kb;
+    kbArt = k.kbArt && S.kb.some(a => a.id === k.kbArt) ? k.kbArt : null;
+    kbRun = k.kbRun && S.runs.some(x => x.id === k.kbRun) ? k.kbRun : null;
+    wfOpen = k.wfOpen && wrunById(k.wfOpen) ? k.wfOpen : null;
+    wfView = k.wfView && wfById(k.wfView) ? k.wfView : null;
+    wfFrom = wfOpen ? k.wfFrom : null;
+    wfFromY = k.wfFromY || 0;
+    kbView = k.kbView;
+    kbCatOpen = k.kbCatOpen;
+    kbReturn = k.kbReturn;
+    kbRunBack = k.kbRunBack;
+    kbRunBackWf = k.kbRunBackWf;
+    kbImgShown = null;
+  }
+  // (Today's path as it was under that view where it matters: Today itself, or a guide opened from
+  // a task, whose ‹ goes back to it)
+  path = r.view === 'today' || (r.kb && r.kb.kbReturn) ? r.path || [] : [];
+  if (r.view === 'review') reviewSub = r.sub;
+  go(r.view);
+  if (r.view === 'account' && r.set) openSettings(r.set);
+  window.scrollTo(0, r.y);
+  refocus(r.opener);
+}
+function backFrom() {
+  const f = viewFrom;
+  viewFrom = null;
+  keepDrafts();
+  goPlace(f);
+}
+// The keyboard back on the control that was opened (Release H), without moving the page: the one
+// on the screen, if it's shown twice (a task in Top 3 and on the list, say).
+function refocus(sel, scope = $('#v-' + view)) {
+  if (!sel || !scope) return;
+  let all;
+  try {
+    all = [...scope.querySelectorAll(sel)].filter(e => e.getClientRects().length);
+  } catch (e) {
+    return;
+  }
+  const f =
+    all.find(e => {
+      const r = e.getBoundingClientRect();
+      return r.bottom > 0 && r.top < window.innerHeight;
+    }) || all[0];
+  if (f) f.focus({ preventScroll: true });
+}
+// An Upcoming task (from the forecast, Search or the Waiting Centre): Today's list, with Upcoming
+// open at it (as the q route shows one: routes.js). Back returns to where it was opened from.
+function showUpcoming(id) {
+  const from = placeHere(),
+    l = id && find(id, S.later),
+    top = l && (l.parents[0] || l.n);
+  path = [];
+  go('today');
+  const u = $('#upd');
+  if (u) u.open = panels.upd = true;
+  const row = top && $(`#upd [data-upid="${CSS.escape(top.id)}"]`);
+  if (row) {
+    row.classList.add('marked'); // (until the next redraw)
+    row.scrollIntoView({ block: 'center' });
+    const b = row.querySelector('[data-now]');
+    if (b) b.focus({ preventScroll: true });
+    if (!undoSnap) toast('On Upcoming: ' + top.text, false, 3000);
+  } else if (u) u.scrollIntoView({ block: 'start' });
+  landed(from);
+}
+// Settings (a group, a section of it) from a link elsewhere: back returns there.
+function settingsFrom(group, sec) {
+  const from = view !== 'account' && placeHere();
+  openSettings(group, sec);
+  landed(from);
+}
 // Words typed into a box and left (going to another view or task) come back with it: kept per
 // box, view and task, so one task's half-typed step never turns up on another's page.
 const drafts = {};
@@ -119,18 +247,37 @@ function openPath(p) {
     listAt = row ? { id: p[0], top: row.getBoundingClientRect().top } : null;
   }
   keepDrafts();
+  // (up a level: the keyboard goes back to the step, or the task, that was open)
+  const left = p.length < path.length && p.every((id, i) => path[i] === id) ? path[p.length] : '';
   path = p;
   reorder = false;
-  if (returnTo && p.length < returnTo.depth) returnTo = null;
+  // (up from a step to a level still under the page it was opened from: back still returns there)
+  if (returnTo && p.length < returnTo.depth) {
+    if (p.length) returnTo.depth = p.length;
+    else returnTo = null;
+  }
   renderToday();
+  renderHeader(); // (its action is quieter on a task's page: see header.js)
   restoreDrafts();
   window.scrollTo(0, p.length ? 0 : listY);
   // (back on the list: the task's row where it was on the screen, whatever the rows above it
   // measure now that they're drawn afresh)
+  let row = null;
   if (!p.length && listAt) {
-    const row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(listAt.id)}"]`);
-    if (row) window.scrollBy(0, row.getBoundingClientRect().top - listAt.top);
+    row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(listAt.id)}"]`);
+    // (kept on the screen, should it be shorter now: the phone turned meanwhile, say)
+    if (row)
+      window.scrollBy(
+        0,
+        row.getBoundingClientRect().top -
+          Math.max(0, Math.min(listAt.top, innerHeight - row.offsetHeight - 72)),
+      );
     listAt = null;
+  }
+  if (left && view === 'today') {
+    const f = row && row.querySelector(`[data-open="${CSS.escape(left)}"]`);
+    if (f) f.focus({ preventScroll: true });
+    else refocus(`[data-open="${CSS.escape(left)}"]`, $('#v-today'));
   }
 }
 // Back from a task's page opened from another view: to that view, where it was.
@@ -138,17 +285,14 @@ function returnBack() {
   const r = returnTo;
   returnTo = null;
   keepDrafts(); // (the task page's words, kept under its own path before it's left)
-  path = [];
-  if (r.view === 'review') reviewSub = r.sub;
-  go(r.view);
-  window.scrollTo(0, r.y);
+  goPlace(r);
 }
 const atReturn = () => returnTo && view === 'today' && path.length === returnTo.depth;
 document.querySelectorAll('nav button[data-v]').forEach(
   b =>
     (b.onclick = () => {
       if (!window.appReady) return; // (not started yet)
-      returnTo = null; // (a tab is a fresh start: back no longer leads to where a task came from)
+      returnTo = viewFrom = null; // (a tab is a fresh start: back no longer leads to where a task came from)
       if (b.dataset.v === 'today' && view === 'today' && path.length) {
         openPath([]);
       }
@@ -237,6 +381,7 @@ document.addEventListener('change', e => {
     return renderReview();
   }
   if (el.dataset && el.dataset.wfact === 'check') return wfClick(el.dataset, el);
+  if (el.dataset && el.dataset.flowpass) return setFlowPass(el.dataset.flowpass, el.checked);
   // Committed. (Not a time: those change a part at a time and are still being typed.)
   // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
   // Nor an article being written: it's saved with its Save button.
@@ -440,7 +585,10 @@ document.addEventListener('click', e => {
   waitClick(d);
   kbRunClick(d, b);
   execClick(d, b);
+  // (a process's overview from Search, say: back returns there. Release H)
+  const wfFromHere = d.wfview && view !== 'knowledge' && placeHere(b);
   wfClick(d, b);
+  landed(wfFromHere);
   ruleClick(d, b);
   forecastClick(d, b);
   insightClick(d);
@@ -450,29 +598,51 @@ document.addEventListener('click', e => {
     const r = find(d.open);
     if (r) {
       const p = [...r.parents.map(p => p.id), r.n.id];
-      // (from another view: remembered, to come back to)
+      // (from another view: remembered, to come back to; from a guide or a process run too, back
+      // to it. Not a guide's "Back to the task" when it was opened from that task: that's going
+      // back, not on.)
+      const goingBack =
+        view === 'knowledge' && kbReturn && p.length === path.length && p.every((id, i) => path[i] === id);
       const from =
-        view !== 'today' && RETURN_NAME[view]
-          ? { view, sub: reviewSub, y: window.scrollY, depth: p.length }
+        view !== 'today' && RETURN_NAME[view] && !goingBack
+          ? {
+              ...placeHere(b),
+              depth: p.length,
+              name: view !== 'knowledge' ? '' : wfOpen ? 'Process' : kbRun ? 'Guide' : '',
+            }
           : null;
+      // (a step opened on a task's page that was itself opened from another view: the way back
+      // stays, for when the task's page is reached again)
+      const deeper =
+        view === 'today' &&
+        returnTo &&
+        path.length >= returnTo.depth &&
+        p.length > path.length &&
+        path.every((id, i) => p[i] === id);
+      const keep = deeper ? returnTo : null;
       openPath(p);
       if (view !== 'today') go('today');
       // (opened from Today itself: back is to Today's list, whatever came before)
-      returnTo = from;
+      returnTo = from || keep;
       if (from) {
         renderToday();
         restoreDrafts();
       }
-    }
+    } else if (find(d.open, S.later)) showUpcoming(d.open); // (Release H: the forecast's Upcoming)
   }
   if (d.v && b.closest('header, #v-waiting, #waitsec')) {
+    const from = !b.closest('header') && placeHere(b);
     if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open task)
     if (b.classList.contains('halarm')) alarmsOpen = true; // (the alarms, unfolded)
     go(d.v);
     if (b.classList.contains('halarm') && $('#alarmd')) $('#alarmd').scrollIntoView({ block: 'nearest' });
+    landed(from);
   }
   if (b.id === 'searchBtn') openSearch();
-  if (d.sart)
+  if (d.sart) {
+    // (Release H: from Search, say, back returns there; from a task's page or a guide, the
+    // article's own ‹ already goes back to them)
+    const from = !['today', 'knowledge'].includes(view) && placeHere(b);
     leaveEditor(() => {
       kbRunBack = kbRun; // (opened from a run being followed: the article's ‹ goes back to it)
       kbRun = null;
@@ -481,18 +651,18 @@ document.addEventListener('click', e => {
       kbReturn = view === 'today' && path.length > 0; // (opened from a quest: back goes to it)
       go('knowledge');
       renderKnowledge();
+      landed(from);
     });
-  if (d.goupd) {
-    // An Upcoming item (from the Waiting tab): Today's list, with Upcoming open.
-    path = [];
-    go('today');
-    renderToday();
-    const u = $('#upd');
-    if (u) u.open = panels.upd = true;
   }
+  // An Upcoming item (from the Waiting Centre or Search): Today's list, with Upcoming open at it.
+  if (d.goupd) showUpcoming(d.goupd);
   if (d.goto) {
+    // (Release H: from Search or the Command Centre, back returns there; not a ‹ Today link,
+    // which is itself the way back)
+    const from = d.goto !== 'today' && placeHere(b);
     if (d.goto === 'inbox') triage = null; // (the capture box, not a walk under way)
     go(d.goto);
+    landed(from);
     if (d.openadd) {
       panels.waddd = true;
       renderWaiting();
@@ -686,7 +856,7 @@ document.addEventListener('click', e => {
     setLook(d.look, d.val);
     renderAccount();
   }
-  if (d.edittags) openSettings('tags');
+  if (d.edittags) settingsFrom('tags');
   if (d.deltag) {
     if (!arm(b, 'Delete?')) return;
     withUndo('Tag deleted', () => {
@@ -772,9 +942,11 @@ document.addEventListener('click', e => {
     renderAll();
   }
   if (d.drop) {
+    // (Release H: the task and its steps go, so two taps, as "Delete this task" asks)
     const q = S.quests.find(x => x.id === d.drop);
+    if (!q || !arm(b, 'Delete?')) return;
     if (q)
-      withUndo('Dropped ' + q.text, () => {
+      withUndo('Deleted ' + q.text, () => {
         S.quests = S.quests.filter(x => x !== q);
         save();
         renderAll();
@@ -879,7 +1051,7 @@ document.addEventListener('click', e => {
     pending = null;
     renderAccount();
   }
-  if (b.id === 'syncBtn') openSettings('sync');
+  if (b.id === 'syncBtn') settingsFrom('sync');
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
     // Unsent edits go first. Then alarms and alerts stop coming here, and nothing of this
@@ -915,7 +1087,11 @@ document.addEventListener('click', e => {
       })
       .catch(e => e && toast("Couldn't sign out: " + (e.message || e), false, 4000)); // (0: chose to stay)
   }
-  if (b.id === 'syncNow') sync();
+  if (b.id === 'syncNow') {
+    // (a server check taken to be missing is asked about again: a migration just run counts now)
+    if (wrunCas.on === false) wrunCas = { on: null, at: 0 };
+    sync();
+  }
   if (b.id === 'pushkeys') setupPushKeys();
   if (b.id === 'pushnewkeys' && arm(b, 'Replace keys?')) replacePushKeys();
   if (b.id === 'pushon') enablePush();
@@ -953,7 +1129,8 @@ document.addEventListener('click', e => {
 document.addEventListener(
   'toggle',
   e => {
-    if (e.target.id && !e.target.dataset.held) panels[e.target.id] = e.target.open;
+    if (e.target.id && !e.target.dataset.held && !(e.target.id === 'donesec' && findOpened))
+      panels[e.target.id] = e.target.open;
   },
   true,
 );
@@ -983,13 +1160,19 @@ document.addEventListener('keydown', e => {
     }
     return;
   }
+  // (Release H: the keyboard's search key on Find or Search puts the keyboard away, to see what
+  // was found)
+  if (e.key === 'Enter' && (el.id === 'tfind' || el.id === 'sq')) {
+    e.preventDefault();
+    return el.blur();
+  }
   // Enter in the process editor's step row adds the step (not the form's Save).
   if (e.key === 'Enter' && el.id === 'wfstepin') {
     e.preventDefault();
     return addTypedStep();
   }
   if (el.closest && el.closest('input,textarea,select,[contenteditable]')) {
-    if (e.key === 'Escape') el.closest('#sheet') ? closeSheet() : el.blur();
+    if (e.key === 'Escape') el.closest('#sheet') ? sheetBack() : el.blur();
     return;
   }
   if ($('#sheet') && e.key !== 'Escape') return; // a sheet is up: its buttons only
@@ -1025,13 +1208,70 @@ document.addEventListener('keydown', e => {
   else if (k === 'o') go('ops');
   else if (k === 'z') setZen(!zen);
   else if (k === 'Escape') {
-    if ($('#sheet')) closeSheet();
+    if ($('#sheet')) sheetBack();
     else if (imgShown || kbImgShown) closeImgs();
     else if (zen) setZen(false);
     else if (view === 'today' && path.length) openPath(path.slice(0, -1));
   }
 });
 
+/* Release H: where you were (the view, a task's page, a process run or an article open), kept
+   for this tab, so a reload, or Android discarding the page in the background, opens there
+   again. Only for this tab (sessionStorage): opening the app afresh starts on Today. A deep link
+   (or a share, or a shortcut) wins; anything gone meanwhile falls back to Today. */
+const PLACE_KEY = 'cockpit.place';
+const PLACE_VIEWS = ['today', 'inbox', 'waiting', 'notes', 'knowledge', 'search', 'review', 'ops', 'focus'];
+function keepPlace() {
+  try {
+    sessionStorage.setItem(
+      PLACE_KEY,
+      JSON.stringify({
+        view,
+        path,
+        sub: reviewSub,
+        q: view === 'search' ? searchQ : '',
+        kb: view === 'knowledge' ? { wfOpen, wfFrom, wfView, kbArt, kbRun, kbView } : null,
+      }),
+    );
+  } catch (e) {}
+}
+function takePlace() {
+  let p = null;
+  try {
+    p = JSON.parse(sessionStorage.getItem(PLACE_KEY) || 'null');
+    sessionStorage.removeItem(PLACE_KEY);
+  } catch (e) {}
+  // (opened at a deep link, a share or an app-icon shortcut: that's where to go)
+  if (launchRoute || location.hash.startsWith('#/') || location.search.length > 1) return;
+  if (!p || typeof p !== 'object' || !PLACE_VIEWS.includes(p.view)) return;
+  const ids = Array.isArray(p.path) ? p.path.filter(x => typeof x === 'string' && okRef(x)) : [];
+  // (the task's page only if it's all still there; else Today's list)
+  const r = ids.length && find(ids[ids.length - 1]);
+  path = r && [...r.parents.map(x => x.id), r.n.id].join('/') === ids.join('/') ? ids : [];
+  if (p.view === 'review' && ['week', 'forecast', 'insights', 'log'].includes(p.sub)) reviewSub = p.sub;
+  const k = p.kb;
+  if (p.view === 'knowledge' && k && typeof k === 'object') {
+    if (typeof k.wfOpen === 'string' && k.wfOpen) {
+      // (a run gone meanwhile: Today, rather than a page that isn't there)
+      if (!wrunById(k.wfOpen)) {
+        path = [];
+        return (view = 'today');
+      }
+      wfOpen = k.wfOpen;
+      wfFrom = PLACE_VIEWS.includes(k.wfFrom) ? k.wfFrom : null;
+    }
+    if (typeof k.wfView === 'string' && wfById(k.wfView)) wfView = k.wfView;
+    if (typeof k.kbArt === 'string' && S.kb.some(a => a.id === k.kbArt)) kbArt = k.kbArt;
+    const run = typeof k.kbRun === 'string' && !wfOpen && S.runs.find(x => x.id === k.kbRun);
+    if (run && S.kb.some(a => a.id === run.art)) {
+      kbRun = run.id;
+      kbArt = run.art;
+    }
+    if (k.kbView === 'proc' || k.kbView === 'ref') kbView = k.kbView;
+  }
+  if (p.view === 'search' && typeof p.q === 'string') searchQ = p.q.slice(0, 200);
+  view = p.view;
+}
 // Leaving (closing, switching app): notes typed in the last moment are saved now, not after
 // the typing pause.
 const saveNotesNow = () => notesDirty && $('#notesin') && saveNotes($('#notesin').value);
@@ -1039,12 +1279,14 @@ window.addEventListener('pagehide', () => {
   if (!window.appReady) return;
   saveNotesNow();
   keepKbDraft();
+  keepPlace();
 });
 document.addEventListener('visibilitychange', () => {
   if (!window.appReady) return; // (not started yet: nothing to save or redraw)
   if (document.hidden) {
     saveNotesNow();
     keepKbDraft();
+    keepPlace();
     // (leaving the app doesn't take the keyboard off a field: a date picked just before is saved)
     const a = document.activeElement,
       wd = a && a.type === 'date' && a.closest('#waitd[data-waitid]');
@@ -1122,6 +1364,7 @@ function start(pics, kv) {
   heldAtStart = deferStart ? holdDue() : '';
   setTimeout(() => releaseHeld(heldAtStart), 20000); // (never held for long, whatever happens)
   // An article left half-written when the app was closed (or Android closed it) comes back.
+  takePlace(); // (Release H: where this tab was, after a reload)
   if (restoreKbDraft()) view = 'knowledge';
   go(view);
   receiveShare();
@@ -1149,7 +1392,7 @@ function appBack() {
   if (!$('#v-alarm').hidden) return true; // (an alarm is ringing: its buttons only)
   if (imgShown || kbImgShown) return (closeImgs(), true);
   if (zen && !focusLocked()) return (setZen(false), true);
-  if ($('#sheet')) return (closeSheet(), true);
+  if ($('#sheet')) return (sheetBack(), true); // (asking first if words were typed into it: tree.js)
   if (view === 'knowledge' && kbEdit) {
     // (an article written from an Inbox item in triage: back goes to that item, untouched)
     leaveEditor(kbEdit.fromInbox && triage ? () => triageReturn(false) : renderKnowledge);
@@ -1163,6 +1406,8 @@ function appBack() {
     });
     return true;
   }
+  // (a page a link led to from another view, still showing: back there. Release H)
+  if (viewFrom && viewFrom.sig === placeSig()) return (backFrom(), true);
   if (view === 'knowledge' && kbRun) {
     kbRunClick({ runback: '1' }, {});
     return true;

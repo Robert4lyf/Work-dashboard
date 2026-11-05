@@ -66,14 +66,16 @@ test('1: a late report from an attempt a retry set aside never completes the new
   expect(s.execs.find(x => x.id === x2).aside).toBeUndefined();
   await a.sync();
   expect(srv.rows.get('exec:' + x1).data.aside).toBe(1);
-  // The first attempt's late report, with no execution id (a launch by link can't name one):
-  // paired with the oldest launch waiting, x1, not x2. The step still waits for x2.
+  // The first attempt's late report, with no execution id: two launches are waiting (x1, set
+  // aside, and x2), so it is paired with neither (Release H; Release G took the oldest). The step
+  // still waits for x2, and says a result came that it didn't take.
   const r1 = await report(a, { token, flow: 'f1', status: 'succeeded', message: 'attempt 1 finished' });
-  expect(r1.data.execution).toBe(x1);
+  expect(r1.data.execution).toBe('');
   await settle(a);
   expect(await a.run('r1')).toMatchObject({ cur: 's1', status: 'awaiting_automation', live: { exec: x2 } });
-  // x2's own report then completes the step, as x2.
-  const r2 = await report(a, { token, flow: 'f1', status: 'succeeded', message: 'attempt 2' });
+  await expect(a.page.locator('#v-knowledge .wstray')).toContainText('names no attempt');
+  // x2's own report, naming it, then completes the step, as x2.
+  const r2 = await report(a, { token, flow: 'f1', status: 'succeeded', message: 'attempt 2', execution: x2 });
   expect(r2.data.execution).toBe(x2);
   await settle(a);
   expect(await a.run('r1')).toMatchObject({
@@ -111,7 +113,7 @@ test('2: failure ids are unique across devices: each failure gets its own Inbox 
   expect((await a.run('r1')).err).toBe('Missing file');
   await more(a);
   await a.page.click('[data-wfact="inbox"]');
-  await expect.poll(async () => (await a.toasts()).filter(t => t === 'Added to inbox').length).toBe(2); // (A's own failure's, then the server's)
+  await expect.poll(async () => (await a.toasts()).filter(t => t === 'Added to the Inbox').length).toBe(2); // (A's own failure's, then the server's)
   const notes = (await a.state()).inbox.map(i => i.node.notes);
   expect(notes).toHaveLength(2);
   expect(notes.filter(n => n.includes('Error: Missing file'))).toHaveLength(1);

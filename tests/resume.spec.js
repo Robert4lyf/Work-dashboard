@@ -91,7 +91,7 @@ test('a place can be saved without a timer, from a task’s actions or a step’
   // Shown on the step it points at, not on another step's page.
   await page.click('#v-today .open >> text="April totals"');
   await expect(page.locator('#placecard')).toBeVisible();
-  await expect(page.locator('.qfoot [data-resume]')).toHaveText('Resume work');
+  await expect(page.locator('.qfoot [data-resume]')).toHaveText('Continue work');
   await page.click('[data-crumb="0"]');
   await page.click('#v-today .open >> text="March totals"');
   await expect(page.locator('#placecard')).toHaveCount(0);
@@ -106,7 +106,7 @@ test('Resume work opens single-task mode on the saved step with the note; the pl
   await page.reload();
   // From the top 3 row and the task's page alike.
   await page.evaluate(() => setTop3(['q1']));
-  await expect(page.locator('.t3row [data-resume]')).toHaveText('Resume');
+  await expect(page.locator('.t3row [data-resume]')).toHaveText('Continue');
   await page.click('.t3row [data-resume]');
   await expect(page.locator('#v-zen')).toBeVisible();
   await expect(page.locator('#v-zen .zt')).toHaveText('April totals');

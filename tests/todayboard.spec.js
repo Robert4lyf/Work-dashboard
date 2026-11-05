@@ -75,7 +75,7 @@ test('on the board: a tile opens its task, back returns to the board; one withou
   await page.click('.qtopen:has-text("Filbert Close")');
   await page.click('[aria-label="Mark done: h"]');
   await expect(page.locator('#sheettitle')).toHaveText("What's next?");
-  await page.click('#sheet button:has-text("Later")');
+  await page.click('#sheet button:has-text("Not now")');
   await page.click('[data-crumb="-1"]');
   expect(await lanes(page)).toContainEqual(['ask', ['Filbert Close', 'Megan queries']]);
 });

@@ -373,10 +373,7 @@ function forecastClick(d, b) {
         text: 'It goes to Upcoming and comes back to Today that day.',
         ok: 'Move',
       },
-      () => {
-        schedule('q', d.fmove, date);
-        toast('Moved to ' + dayLabel(date));
-      },
+      () => schedule('q', d.fmove, date), // (its toast says where it went, with Undo)
     );
   }
   if (d.estpick) {

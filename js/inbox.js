@@ -26,9 +26,9 @@ function promoteInbox(id) {
     settle(bf);
   });
 }
-// Clear an inbox item (its Clear button), with Undo.
+// Delete an inbox item (its Delete button), with Undo.
 function clearInbox(id) {
-  withUndo('Cleared', () => {
+  withUndo('Deleted', () => {
     S.inbox = S.inbox.filter(x => x.id !== id);
     addXP(5);
     save();
@@ -37,8 +37,8 @@ function clearInbox(id) {
 }
 function renderInbox() {
   if (triage) return setHTML($('#v-inbox'), renderTriage());
-  let h = `<div class="sechead"><h2>Inbox</h2>${S.inbox.length ? '<button class="linkbtn" data-triagestart="1">Process inbox</button>' : ''}</div>`;
-  h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn green">Add</button></form>`;
+  let h = `<div class="sechead"><h2>Inbox</h2>${S.inbox.length ? '<button class="linkbtn" data-triagestart="1">Sort the Inbox</button>' : ''}</div>`;
+  h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New Inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn green">Add</button></form>`;
   if (!S.inbox.length)
     h +=
       '<div class="empty">Nothing captured. Type a thought above (or say it with the mic); sort it into Today later.</div>';
@@ -62,7 +62,7 @@ function renderInbox() {
       // Then waiting.
       h += `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">`;
     }
-    h += `<div class="iacts"><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Clear</button></div></div>`;
+    h += `<div class="iacts"><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Delete</button></div></div>`;
   });
   if (S.inbox.length) h += '</div>';
   setHTML($('#v-inbox'), h);
@@ -110,7 +110,7 @@ function receiveShare() {
   renderAll();
   triage = null; // (a walk under way would hide what just arrived)
   if (!focusLocked()) go('inbox'); // (mid-session, single-task mode stays: the toast says)
-  toast('Added to inbox');
+  toast('Added to the Inbox');
 }
 
 /* voice capture: browsers with speech recognition only */

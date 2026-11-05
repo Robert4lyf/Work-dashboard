@@ -7,6 +7,9 @@ async function day(app, page, at = new Date(2026, 10, 4, 10, 0)) {
   await page.clock.install({ time: at });
   await app.open();
   await app.setState(eDay);
+  // (Release H folds the rest of Scheduled and Waiting on a phone; these tests are about their
+  // rows, so the folds are as a user who has opened them left them: open)
+  await page.evaluate(() => ['sched', 'wait'].forEach(k => localStorage.setItem(`dashboard-${k}-open`, '1')));
   await page.reload();
 }
 const sched = page => page.locator('#v-today .schedrow');

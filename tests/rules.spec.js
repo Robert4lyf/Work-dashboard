@@ -273,6 +273,9 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await page.click('#sheetok');
   await expect(page.locator('#toast')).toContainText('Choose the process');
   await expect(page.locator('#sheet')).toHaveCount(1);
+  // (a name typed: back asks first, a second back closes it. Release H)
+  await page.evaluate(() => history.back());
+  await expect(page.locator('#sheetwarn')).toBeVisible();
   await page.evaluate(() => history.back());
   await expect(page.locator('#sheet')).toHaveCount(0);
   expect(app.errors).toEqual([]);

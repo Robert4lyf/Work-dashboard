@@ -69,7 +69,9 @@ function row(n, i, len, sib) {
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
-  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
+  return withHash(
+    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`,
+  );
 }
 // A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
 // and any waiting marked. Every one ticked but the task not finished: a last block asks what's next.
@@ -110,7 +112,10 @@ let todayFilter = (() => {
   })(),
   todayFind = '',
   todayFindOpen = false,
-  rowRank = new Map(); // (Top 3 rank by task id, for the list's marks; set as Today is drawn)
+  rowRank = new Map(), // (Top 3 rank by task id, for the list's marks; set as Today is drawn)
+  // (Done today opened by Find for a finished task it found: not the user's choice, so neither
+  // remembered nor kept open once the words no longer find one)
+  findOpened = false;
 const isDueNow = q =>
   !isDone(q) &&
   ((q.due && q.due <= today()) || q.children.some(c => !isDone(c) && c.due && c.due <= today()));
@@ -180,14 +185,28 @@ function applyFind() {
     el.hidden = !show;
     if (show && !el.closest('#donesec')) left++;
   });
+  // (a finished task found: "Done today" opens to show it while the words are there, and closes
+  // again after; not remembered as opened)
+  const done = v.querySelector('#donesec');
+  let hit = false;
+  if (done) {
+    hit = words.length > 0 && [...done.querySelectorAll('.row[data-qid]')].some(r => !r.hidden);
+    if (hit && !done.open) {
+      findOpened = true;
+      done.open = true;
+    } else if (!hit && findOpened) {
+      findOpened = false;
+      done.open = panels.donesec === true;
+    }
+  }
   const none = v.querySelector('.tnomatch');
-  if (none) none.hidden = !words.length || left > 0;
+  if (none) none.hidden = !words.length || left > 0 || hit;
 }
 function listHead(title, ns, views) {
   const sw = views
     ? `<span class="viewsw" role="group" aria-label="Show as">${['list', 'board'].map(v => `<button class="chip" data-tview="${v}" aria-pressed="${todayView === v}">${v === 'list' ? 'List' : 'Board'}</button>`).join('')}</span>`
     : '';
-  return `<div class="sechead"><h2>${title}</h2>${sw}${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
+  return `<div class="sechead"><h2 id="taskshead" tabindex="-1">${title}</h2>${sw}${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
 }
 /* Today as a board: a lane per stage, a tile per task. The choice is this device's own. */
 const TVIEW = 'dashboard-today-view';
@@ -317,7 +336,11 @@ function drawToday() {
   $('#v-today')
     .querySelectorAll('details[id]')
     // (the waiting panel is held open on a waiting quest: that isn't a choice to remember)
-    .forEach(d => (d.id !== 'waitd' || !d.dataset.held ? (panels[d.id] = d.open) : 0));
+    .forEach(d =>
+      (d.id !== 'waitd' || !d.dataset.held) && !(d.id === 'donesec' && findOpened)
+        ? (panels[d.id] = d.open)
+        : 0,
+    );
   // Down the path as far as it still leads (a level moved or removed elsewhere cuts it there).
   const ok = [];
   let arr = S.quests;
@@ -387,17 +410,41 @@ function drawToday() {
   // list, so a long day doesn't bury it), Today's tasks, then the rest folded. On a wide screen, two
   // columns: what you work through on the left under the header (Top 3, the list); what needs
   // you, what's at a time and what you're waiting on down the right.
-  const att = renderAttention(),
-    top3 = renderTop3() + renderCarried(),
-    sched = renderScheduledToday(),
-    wait = renderWaitingToday(),
-    rest = more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '';
+  // (Release H: each a part of its own, kept as it is on the page while it reads the same)
+  const hash = x => (x ? withHash(x) : ''),
+    att = hash(renderAttention()),
+    top3 = renderTop3() + hash(renderCarried()),
+    sched = hash(renderScheduledToday()),
+    wait = hash(renderWaitingToday()),
+    rest = hash(more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '');
   const h = colsMQ.matches
     ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
-    : att + top3 + sched + wait + tasks + rest;
+    : todayJump(work, sched, wait) + att + top3 + sched + wait + tasks + rest;
   setHTML($('#v-today'), h);
   applyFind();
 }
+// (Release H) On one column: a line at the top of Today saying what's on it further down, each a
+// tap to its section, so Today's tasks are one tap from the first screen however busy the day.
+// The sections themselves are unchanged. (Two columns show everything at once: not there.)
+function todayJump(work, sched, wait) {
+  const left = work.filter(q => !isDone(q)).length,
+    parts = [
+      sched && ['schedhead', 'Scheduled', S.quests.filter(isScheduled).length],
+      wait && ['waithead', 'Waiting', todayWaiting().length],
+      work.length && ['taskshead', 'Tasks', left],
+    ].filter(Boolean);
+  if (parts.length < 2) return '';
+  return `<div class="tjump chips" role="navigation" aria-label="On Today">${parts.map(([id, label, k]) => `<button class="chip" data-jump="${id}" aria-label="Go to ${label}: ${k}">${label} <small>${k}</small><span class="jarrow" aria-hidden="true">↓</span></button>`).join('')}</div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-jump]'),
+    h = b && document.getElementById(b.dataset.jump);
+  if (!h) return;
+  // (to the section's bar, the keyboard and a screen reader with it; no animation)
+  h.closest('.sechead').scrollIntoView({ block: 'start' });
+  if (!h.hasAttribute('tabindex')) h.tabIndex = -1;
+  h.focus({ preventScroll: true });
+});
 // Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
 // (`bare`: the buttons alone, for a page whose section already says what they are)
 function quickActions(bare = false) {
@@ -438,26 +485,7 @@ function renderAttention() {
       : ''
   }${cc}</div>`;
 }
-const ATTN = 'dashboard-attn-open';
-function attnOpen() {
-  if (panels.attd !== undefined) return panels.attd;
-  try {
-    return (panels.attd = localStorage.getItem(ATTN) === '1');
-  } catch (e) {
-    return false;
-  }
-}
-document.addEventListener(
-  'toggle',
-  e => {
-    if (e.target.id !== 'attd') return;
-    panels.attd = e.target.open;
-    try {
-      localStorage.setItem(ATTN, e.target.open ? '1' : '0');
-    } catch (x) {}
-  },
-  true,
-);
+const attnOpen = () => foldOpen('attd');
 // (a summary just written in a one-line box: three lines once left, so none of it is cut off)
 document.addEventListener('focusout', e => {
   if (e.target.id === 'fsum' && e.target.value.trim()) e.target.rows = 3;
@@ -484,7 +512,7 @@ function renderCarried() {
   // One line, folded: open it to decide on each (the weekly review asks too).
   const qs = carried();
   return qs.length
-    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'task')} carried over <small>for a while: keep, move or drop</small></summary>${carriedRows(qs)}</details>`
+    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'task')} carried over <small>for a while: keep, move or delete</small></summary>${carriedRows(qs)}</details>`
     : '';
 }
 // A carried-over task with its decisions (also used by the weekly review).
@@ -493,7 +521,7 @@ function carriedRows(qs) {
   return qs
     .map(
       q =>
-        `<div class="crow"><p>${esc(q.text)} <small>${ageOf(q)} days</small></p><div class="chips">${b(`data-keep="${q.id}"`, 'Keep')}${b(`data-sched="${q.id}" data-kind="q" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${b(`data-sched="${q.id}" data-kind="q" data-when="${nextMonday()}"`, 'Next week')}${b(`data-toinbox="${q.id}"`, 'Inbox')}${b(`data-drop="${q.id}"`, 'Drop')}</div></div>`,
+        `<div class="crow"><p>${esc(q.text)} <small>${ageOf(q)} days</small></p><div class="chips">${b(`data-keep="${q.id}"`, 'Keep')}${b(`data-sched="${q.id}" data-kind="q" data-when="${shift(today(), 1)}"`, 'Tomorrow')}${b(`data-sched="${q.id}" data-kind="q" data-when="${nextMonday()}"`, 'Next week')}${b(`data-toinbox="${q.id}"`, 'Inbox')}${b(`data-drop="${q.id}" aria-label="Delete: ${esc(q.text)}"`, 'Delete')}</div></div>`,
     )
     .join('');
 }
@@ -510,7 +538,7 @@ function renderUpcoming() {
   let h = `<details id="upd"${panels.upd ? ' open' : ''}><summary>Upcoming (${S.later.length})</summary>`;
   S.later.forEach(n => {
     const c = count(n);
-    h += `<div class="uprow"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}${n.scheduled ? ` <button class="linkbtn" data-schedset="${n.id}">Scheduled ${esc(schedWhen(n))}</button>` : ''}</div>
+    h += `<div class="uprow" data-upid="${n.id}"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}${n.scheduled ? ` <button class="linkbtn" data-schedset="${n.id}">Scheduled ${esc(schedWhen(n))}</button>` : ''}</div>
       <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
       <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
   });
@@ -520,7 +548,7 @@ function renderUpcoming() {
 function schedule(kind, id, date) {
   if (!date || date <= today()) return;
   // (Release G: with Undo)
-  withUndo('Moved to ' + dayLabel(date), () => scheduleNow(kind, id, date));
+  withUndo('On Upcoming until ' + dayLabel(date), () => scheduleNow(kind, id, date));
 }
 function scheduleNow(kind, id, date) {
   let n;
@@ -551,7 +579,8 @@ function renderNode({ n, parents }) {
     top = !parents.length,
     q = parents[0] || n; // (the quest: a step's page shares its resources and saved place)
   // (opened from another view: the way back names it)
-  const from = typeof atReturn === 'function' && atReturn() ? RETURN_NAME[returnTo.view] : 'Today';
+  const from =
+    typeof atReturn === 'function' && atReturn() ? returnTo.name || RETURN_NAME[returnTo.view] : 'Today';
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; ${from}</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
   // The facts: what's set on this task, each a tap to change. First what you're here for: how
@@ -630,7 +659,7 @@ function renderNode({ n, parents }) {
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${md === i + 1 ? ' selected' : ''}>${ord(i + 1)}${i + 1 > 28 ? ' (or last day)' : ''}</option>`).join('')}</select>
       </details>`;
   }
-  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to inbox</button><button class="dellink" data-del="${n.id}">Delete this task</button></div>`;
+  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to Inbox</button><button class="dellink" data-del="${n.id}">Delete this task</button></div>`;
   h += '</details>';
   // Always to hand: the one thing to do next (see primaryAction), a tick for a step or a task
   // without steps, and the rest of its actions.

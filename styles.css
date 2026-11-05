@@ -1823,7 +1823,8 @@ nav .badge[hidden] {
 }
 .prow2 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* (minmax(0, …): a date field narrower than its own default width, not past the sheet's edge) */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .prow2 .fld {
@@ -3688,6 +3689,87 @@ nav button[aria-current='page'] {
   border-width: 3px;
   border-top-width: 0;
 }
+/* Release H: the rest of Today's Scheduled and Waiting, a tap away inside their own panel */
+.secmore {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.secmore > summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-height: 44px;
+  padding: 6px 12px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+.secmore > summary::-webkit-details-marker {
+  display: none;
+}
+.secmore > summary::before {
+  content: '▸';
+}
+.secmore[open] > summary::before {
+  content: '▾';
+}
+.secmore > summary small {
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.secmore > summary small.wchase {
+  color: var(--ink);
+  font-weight: 800;
+}
+.secmore > .slist {
+  border-top: 1px solid var(--line);
+}
+/* (the line at the top of Today: a tap to each section further down) */
+.tjump {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.tjump {
+  flex-wrap: nowrap;
+}
+.tjump .chip {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+/* (Larger text: the arrow goes first, so the three keep to one line) */
+:root[data-font='large'] .tjump .jarrow {
+  display: none;
+}
+:root[data-font='large'] .tjump .chip {
+  padding: 0 4px;
+}
+.tjump .jarrow {
+  font-weight: 900;
+}
+@media (max-width: 359px) {
+  .tjump {
+    gap: 6px;
+  }
+  .tjump .chip {
+    padding: 0 4px;
+  }
+  .tjump .jarrow {
+    display: none;
+  }
+}
+#v-today .sechead:has(> h2) {
+  scroll-margin-top: 8px;
+}
 /* Release G: touch targets. The small controls used every day reach at least 44 x 44 CSS px to
    the finger, without growing on screen: an invisible margin of touch around each (it stops
    short of its neighbours, which keep their own). Fields, chips and folded sections are 44px
@@ -4437,7 +4519,38 @@ summary,
 .wconf p {
   margin: 0 0 6px;
 }
-.wsync.ws-refused {
+.wsync.ws-refused,
+.wsync.ws-failed {
   color: var(--err);
   font-weight: 600;
+}
+/* (Release H: not protected, or only partly: said with weight and a sign, not only in grey) */
+.wsync.ws-unchecked,
+.wsync.ws-partial,
+.wunprot {
+  color: var(--ink);
+  font-weight: 600;
+}
+.wsync.ws-unchecked::before,
+.wsync.ws-partial::before,
+.wunprot::before {
+  content: '⚠ ';
+}
+/* Release H: a sheet with words typed into it asks before back (or a tap beside it) closes it */
+#sheet .sheetwarn {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--err-soft);
+  color: var(--err);
+  border: 3px solid var(--err);
+}
+#sheet .sheetwarn p {
+  margin: 0 0 6px;
+  font-weight: 600;
+}
+.uprow.marked {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: var(--radius-sm);
 }

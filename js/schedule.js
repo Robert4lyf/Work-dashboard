@@ -165,17 +165,60 @@ function schedClick(d) {
 function renderScheduledToday() {
   const ns = S.quests.filter(isScheduled).sort(schedOrder);
   if (!ns.length) return '';
-  const rows = ns
-    .map(n => {
-      const st = schedStatus(n),
-        done = !n.children.length
-          ? `<button class="btn sm" data-toggle="${n.id}" aria-label="Mark done: ${esc(n.text)}">Done</button>`
-          : '';
-      return `<div class="secrow schedrow sch-${st.k}" data-qid="${n.id}"><span class="stime">${n.scheduled.date === today() ? esc(n.scheduled.time || 'Any time') : `<small>${esc(niceDate(n.scheduled.date))}</small>${esc(n.scheduled.time || '')}`}</span><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${esc(st.label)}${n.due ? ' · ' + dueTag(n) : ''}</small></button>${done}${moreBtn(n)}</div>`;
-    })
-    .join('');
-  return `<section class="todaysec schedsec" aria-labelledby="schedhead"><div class="sechead"><h2 id="schedhead">Scheduled <small>${ns.length}</small></h2></div><div class="slist box">${rows}</div></section>`;
+  const rowOf = n => {
+    const st = schedStatus(n),
+      done = !n.children.length
+        ? `<button class="btn sm" data-toggle="${n.id}" aria-label="Mark done: ${esc(n.text)}">Done</button>`
+        : '';
+    return `<div class="secrow schedrow sch-${st.k}" data-qid="${n.id}"><span class="stime">${n.scheduled.date === today() ? esc(n.scheduled.time || 'Any time') : `<small>${esc(niceDate(n.scheduled.date))}</small>${esc(n.scheduled.time || '')}`}</span><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span><small>${esc(st.label)}${n.due ? ' · ' + dueTag(n) : ''}</small></button>${done}${moreBtn(n)}</div>`;
+  };
+  // (Release H: what's next, and any whose time has gone by without being marked done, shown; the
+  // rest of the day a tap away, their times in the summary, open or folded remembered)
+  const { shown, rest } = schedPreview(ns),
+    more = rest.length
+      ? `<details id="schedmore" class="secmore"${foldOpen('schedmore') ? ' open' : ''}><summary>${rest.length} more <small>${rest.map(n => esc(schedWhen(n))).join(', ')}</small></summary><div class="slist">${rest.map(rowOf).join('')}</div></details>`
+      : '';
+  return `<section class="todaysec schedsec" aria-labelledby="schedhead"><div class="sechead"><h2 id="schedhead">Scheduled <small>${ns.length}</small></h2></div><div class="slist box">${shown.map(rowOf).join('')}${more}</div></section>`;
 }
+// Which of Today's scheduled tasks show without opening the section: the ones whose time (or day)
+// has passed and are waiting to be marked done, then the next one coming up.
+function schedPreview(ns) {
+  // (two columns: room for the whole day beside the list)
+  if (colsMQ.matches) return { shown: ns, rest: [] };
+  const st = new Map(ns.map(n => [n, schedStatus(n).k])),
+    due = ns.filter(n => ['past', 'passed'].includes(st.get(n))),
+    next = ns.find(n => !due.includes(n)),
+    shown = ns.filter(n => due.includes(n) || n === next),
+    rest = ns.filter(n => !shown.includes(n));
+  // (one more is shown rather than folded: its summary would take nearly the room it does)
+  return rest.length < 2 ? { shown: ns, rest: [] } : { shown, rest };
+}
+// (Release H) A section's folded remainder, open or not, as last left on this device.
+const FOLDS = {
+  attd: 'dashboard-attn-open',
+  schedmore: 'dashboard-sched-open',
+  waitmore: 'dashboard-wait-open',
+};
+function foldOpen(id) {
+  if (panels[id] !== undefined) return panels[id];
+  try {
+    return (panels[id] = localStorage.getItem(FOLDS[id]) === '1');
+  } catch (e) {
+    return false;
+  }
+}
+document.addEventListener(
+  'toggle',
+  e => {
+    const k = FOLDS[e.target.id];
+    if (!k) return;
+    panels[e.target.id] = e.target.open;
+    try {
+      localStorage.setItem(k, e.target.open ? '1' : '0');
+    } catch (x) {}
+  },
+  true,
+);
 
 /* Today: the Waiting section (what Today's tasks are waiting on) */
 // Today's waiting steps, most urgent first, each with its task. A task with nothing else left to
@@ -198,24 +241,32 @@ function renderWaitingToday() {
   const ws = todayWaiting();
   if (!ws.length) return '';
   const all = waitingNodes().length,
-    rows = ws
-      .map(({ n, q }) => {
-        const w = n.wait,
-          chase = waitBucket(w) === 'chase',
-          only = q && taskState(q) === 'waiting',
-          meta = [
-            w.who ? 'on ' + esc(w.who) : '',
-            q && q !== n ? `${esc(q.text)}` : '',
-            w.expect && w.expect >= today() ? 'reply by ' + esc(dayLabel(w.expect)) : '',
-          ]
-            .filter(Boolean)
-            .join(' · ');
-        // One action: a follow-up when one is due, else the reply; the rest under ⋯.
-        const act = chase
-          ? `<button class="btn sm blue" data-chase="${n.id}">Follow up</button>`
-          : `<button class="btn sm" data-waitclear="${n.id}">Reply received</button>`;
-        return `<div class="secrow wrow" data-wid="${n.id}"><button class="open" data-open="${(q || n).id}"><span>${esc(n.text)}</span><small>${meta}${meta ? ' ' : ''}${chaseTag(w) || (w.due ? '' : '<span class="tag">No chase date</span>')}</small></button>${act}<button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
-      })
-      .join('');
-  return `<section class="todaysec waitsec2" aria-labelledby="waithead"><div class="sechead"><h2 id="waithead">Waiting <small>${ws.length}</small></h2><button class="linkbtn" data-goto="waiting">View all${all > ws.length ? ' ' + all : ''}</button></div><div class="slist box">${rows}</div></section>`;
+    rowOf = ({ n, q }) => {
+      const w = n.wait,
+        chase = waitBucket(w) === 'chase',
+        only = q && taskState(q) === 'waiting',
+        meta = [
+          w.who ? 'on ' + esc(w.who) : '',
+          q && q !== n ? `${esc(q.text)}` : '',
+          w.expect && w.expect >= today() ? 'reply by ' + esc(dayLabel(w.expect)) : '',
+        ]
+          .filter(Boolean)
+          .join(' · ');
+      // One action: a follow-up when one is due, else the reply; the rest under ⋯.
+      const act = chase
+        ? `<button class="btn sm blue" data-chase="${n.id}">Follow up</button>`
+        : `<button class="btn sm" data-waitclear="${n.id}">Reply received</button>`;
+      return `<div class="secrow wrow" data-wid="${n.id}"><button class="open" data-open="${(q || n).id}"><span>${esc(n.text)}</span><small>${meta}${meta ? ' ' : ''}${chaseTag(w) || (w.due ? '' : '<span class="tag">No chase date</span>')}</small></button>${act}<button class="qmore" data-wact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button></div>`;
+    };
+  // (Release H: the most urgent shown; the rest a tap away, the summary saying how many of
+  // them are due a chase, so none goes unnoticed. Chases due are in Needs attention as well.)
+  const cut = colsMQ.matches || ws.length - WAIT_SHOWN < 2 ? ws.length : WAIT_SHOWN,
+    shown = ws.slice(0, cut),
+    rest = ws.slice(cut),
+    chase = rest.filter(x => waitBucket(x.n.wait) === 'chase').length,
+    more = rest.length
+      ? `<details id="waitmore" class="secmore"${foldOpen('waitmore') ? ' open' : ''}><summary>${rest.length} more${chase ? ` <small class="wchase">${chase} to chase</small>` : ''}</summary><div class="slist">${rest.map(rowOf).join('')}</div></details>`
+      : '';
+  return `<section class="todaysec waitsec2" aria-labelledby="waithead"><div class="sechead"><h2 id="waithead">Waiting <small>${ws.length}</small></h2><button class="linkbtn" data-goto="waiting">View all${all > ws.length ? ' ' + all : ''}</button></div><div class="slist box">${shown.map(rowOf).join('')}${more}</div></section>`;
 }
+const WAIT_SHOWN = 1;

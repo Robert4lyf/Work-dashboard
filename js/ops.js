@@ -155,8 +155,8 @@ function attentionItems() {
     add(
       3,
       plural(S.inbox.length, 'Inbox item'),
-      'Waiting to be processed',
-      'Process the Inbox',
+      'Waiting to be sorted',
+      'Sort the Inbox',
       'data-goto="inbox"',
     );
   if (typeof reviewDue === 'function' && reviewDue())
@@ -406,7 +406,7 @@ function routineSheet(kind) {
       [`Needs attention: ${att.length ? plural(att.length, 'item') : 'nothing'}`, 'data-goto="ops"', ''],
       [ids.length ? 'Top 3 chosen' : 'Pick your Top 3', 'data-top3pick="1"', ''],
       [
-        `Process the Inbox${S.inbox.length ? ` (${S.inbox.length})` : ''}`,
+        `Sort the Inbox${S.inbox.length ? ` (${S.inbox.length})` : ''}`,
         'data-goto="inbox"',
         S.inbox.length ? '' : 'empty',
       ],

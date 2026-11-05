@@ -1,5 +1,5 @@
-/* guided inbox triage ("Process inbox"): the Inbox's items one at a time, each with its details
-   and one decision: Today, Later, Waiting, Reference (an article in Knowledge), Delete or Skip.
+/* guided inbox triage ("Sort the Inbox"): the Inbox's items one at a time, each with its details
+   and one decision: Today, Do later, Waiting, Reference (an article in Knowledge), Delete or Skip.
    Optional: the Inbox itself stays as it is, and leaving the tab leaves triage (except to write
    the article). Nothing is counted or copied: the progress is worked out from what's left. */
 let triage = null; // { seen: ids shown, skipped: ids passed over, decided: ids kept (waiting), cur, pane, ref }
@@ -30,9 +30,9 @@ function renderTriage() {
     seen = [...triage.seen],
     processed = seen.filter(id => !S.inbox.some(x => x.id === id) || triage.decided.has(id)).length,
     skipped = seen.filter(id => triage.skipped.has(id) && S.inbox.some(x => x.id === id)).length;
-  let h = `<div class="sechead"><h2>Process inbox</h2><button class="linkbtn" data-triageexit="1">Exit</button></div><p class="hint tprog" aria-live="polite">${processed} of ${seen.length} processed${skipped ? `, ${skipped} skipped` : ''}</p>`;
+  let h = `<div class="sechead"><h2>Sort the Inbox</h2><button class="linkbtn" data-triageexit="1">Exit</button></div><p class="hint tprog" aria-live="polite">${processed} of ${seen.length} sorted${skipped ? `, ${skipped} skipped` : ''}</p>`;
   if (!it) {
-    h += `<div class="empty">${skipped ? 'Nothing left but the skipped ones.' : S.inbox.length ? "All processed. What's left is waiting on others." : 'Inbox empty.'}</div><div class="acts tdone">${
+    h += `<div class="empty">${skipped ? 'Nothing left but the skipped ones.' : S.inbox.length ? "All sorted. What's left is waiting on others." : 'Inbox empty.'}</div><div class="acts tdone">${
       skipped ? '<button class="btn blue" data-triageagain="1">Go through the skipped ones</button>' : ''
     }<button class="btn" data-triageexit="1">Back to the Inbox</button></div>`;
     return h;
@@ -56,7 +56,7 @@ function renderTriage() {
   // (each decision names the item it was drawn for: a redraw meanwhile mustn't retarget a tap)
   const b = (k, l, c = '') =>
     `<button class="btn ${c}" data-tdo="${k}" data-id="${it.id}" aria-pressed="${triage.pane === k}">${l}</button>`;
-  h += `<div class="tacts" role="group" aria-label="Decide">${b('today', 'Today', 'blue')}${b('later', 'Later')}${b('waiting', 'Waiting')}${b('ref', 'Reference')}${b('delete', 'Delete')}${b('skip', 'Skip')}</div>`;
+  h += `<div class="tacts" role="group" aria-label="Decide">${b('today', 'Today', 'blue')}${b('later', 'Do later')}${b('waiting', 'Waiting')}${b('ref', 'Reference')}${b('delete', 'Delete')}${b('skip', 'Skip')}</div>`;
   return h;
 }
 function triageWaiting(id) {

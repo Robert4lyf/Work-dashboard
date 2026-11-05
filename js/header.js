@@ -66,14 +66,18 @@ function renderHeader() {
       h = `<button class="go" data-open="${ask.id}"><small>Every step ticked in ${esc(ask.text)}</small><b>${full ? "What's next?" : esc(ask.text) + ": what's next?"}</b></button>`;
     } else if (nx && nx.why === 'place') {
       // Where work stopped: picking it up opens the saved place, in single-task mode.
-      h = `<button class="go" data-open="${nx.q.id}"><small>Pick up where you left off · ${esc(nx.q.text)}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
-      if (full) acts = `<button class="btn sm green" data-resume="${nx.q.id}">Resume</button>`;
+      h = `<button class="go" data-open="${nx.q.id}"><small>Saved place · ${esc(nx.q.text)}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
+      // (Release H: on a task's page it gives way to the page's own action, quieter; with a focus
+      // session on, paused on the Focus page say, it isn't offered: that session comes first)
+      if (full && !S.timer)
+        acts = `<button class="btn sm${view === 'today' && path.length ? '' : ' green'}" data-resume="${nx.q.id}">Continue</button>`;
     } else if (nx) {
       const label = nx.why === 'top3' ? `Top 3 priority ${nx.rank}` : 'Next task',
         where = nx.n !== nx.q ? ' · ' + esc(nx.q.text) : '';
       // (compact: no tick, so a quick tap on another page can't finish a step by mistake)
       h = `${full ? `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button>` : ''}<button class="go" data-open="${nx.n.id}"><small>${label}${where}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
-      if (full) acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
+      if (full && !S.timer)
+        acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
     } else {
       // (unfinished, but none of it to act on now: say what it's waiting for, not that it's done)
       const sc = S.quests.filter(isScheduled).length,

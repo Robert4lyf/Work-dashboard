@@ -5,7 +5,7 @@ const SEARCH_MAX = 20; // per group
 function renderSearch() {
   setHTML(
     $('#v-search'),
-    `<h2>Search</h2><input class="fld" type="search" id="sq" placeholder="Tasks, inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
+    `<h2>Search</h2><input class="fld" type="search" id="sq" placeholder="Tasks, Inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
   );
 }
 function openSearch() {
@@ -86,7 +86,9 @@ function searchResults() {
   group('Today', qs);
   group(
     'Upcoming',
-    S.later.filter(n => has(n.text) || has(n.notes)).map(n => row('data-goupd="1"', n.text, day(n.start))),
+    S.later
+      .filter(n => has(n.text) || has(n.notes))
+      .map(n => row(`data-goupd="${n.id}"`, n.text, day(n.start))),
   );
   group(
     'Inbox',

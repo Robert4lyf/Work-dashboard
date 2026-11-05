@@ -193,7 +193,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   await page.click('#v-today .open >> text="Budget approval"');
   await page.evaluate(() => (document.querySelector('#waitd').open = true));
   await expect(page.locator('#waitd .flist li')).toHaveText([
-    /Resolved/,
+    /Reply received/,
     /Followed up: Emailed Sarah/,
     /Asked: Budget approval/,
   ]);

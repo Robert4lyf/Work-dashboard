@@ -51,6 +51,9 @@ test('steps are added, edited, reordered and removed in the editor; the article 
   await page.fill('#psurl', 'javascript:alert(1)');
   await page.click('#sheet #sheetok');
   await expect(page.locator('#toast')).toContainText('Enter a web address');
+  // (words typed and not saved: Escape asks first, a second one closes it. Release H)
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#sheetwarn')).toBeVisible();
   await page.keyboard.press('Escape');
   // Reorder: Check totals up; edit the first; remove the flow step and put it back.
   await page.click('[data-pup] >> nth=-1');
@@ -133,14 +136,14 @@ test('a run goes step by step; a flow step runs only when tapped and is never ti
   expect((await app.state()).runs[0].done).toEqual(['p1']);
   await page.click('#v-knowledge .runlist [data-runjump][data-step="p3"]');
   await expect(card.locator('h3')).toHaveText('Check totals');
-  // Leave and come back: Resume picks the same run up where it was.
+  // Leave and come back: Continue picks the same run up where it was.
   await app.go('today');
   await page.evaluate(() => {
     kbArt = 'a1';
     kbRun = null;
     go('knowledge');
   });
-  await expect(page.locator('[data-runstart="a1"]')).toHaveText('Resume');
+  await expect(page.locator('[data-runstart="a1"]')).toHaveText('Continue');
   await expect(page.locator('#v-knowledge .hint', { hasText: 'Unfinished' })).toContainText('1 of 3 steps');
   await page.click('[data-runstart="a1"]');
   await expect(card.locator('h3')).toHaveText('Check totals');
@@ -199,7 +202,7 @@ test('a task’s linked procedure: start from the task, progress on the task, ba
   await page.click('#v-knowledge .kbtrail [data-open="q1"]');
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await expect(row.locator('.procline')).toContainText('1 of 2 steps');
-  await expect(row.locator('[data-runstart]')).toHaveText('Resume');
+  await expect(row.locator('[data-runstart]')).toHaveText('Continue');
   // A run on its own (no task) is separate from the task's. (Knowledge still shows the run
   // left open; the article is a step back.)
   await page.evaluate(() => {

@@ -35,7 +35,7 @@ test('Process inbox walks the items: Today, Later, Waiting, Delete and Skip, wit
   page,
 }) => {
   await page.click('[data-triagestart]');
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('0 of 4 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('0 of 4 sorted');
   // The first item, with its notes (links clickable) and steps.
   await expect(card(page).locator('.ttitle')).toHaveText('Supplier onboarding');
   await expect(card(page).locator('.tnotes a')).toHaveAttribute('href', 'https://example.com/x');
@@ -47,7 +47,7 @@ test('Process inbox walks the items: Today, Later, Waiting, Delete and Skip, wit
   expect(s.quests[0]).toMatchObject({ text: 'Supplier onboarding' });
   expect(s.quests[0].children.map(c => c.text)).toEqual(['Get W-9', 'Bank details']);
   expect(s.quests[0].notes).toContain('Dana');
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('1 of 4 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('1 of 4 sorted');
   await expect(card(page).locator('.ttitle')).toHaveText('Renew parking permit');
   // Later: tomorrow, through the usual scheduling.
   await page.click('[data-tdo="later"]');
@@ -55,7 +55,7 @@ test('Process inbox walks the items: Today, Later, Waiting, Delete and Skip, wit
   await page.click('#v-inbox .tpane [data-sched]:has-text("Tomorrow")');
   s = await app.state();
   expect(s.later[0]).toMatchObject({ text: 'Renew parking permit', start: '2026-09-24' });
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('2 of 4 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('2 of 4 sorted');
   await expect(card(page).locator('.ttitle')).toHaveText('Ask Jo about the budget');
   // Waiting: who and when to chase; the item stays in the Inbox, waiting, and counts as done.
   await page.click('[data-tdo="waiting"]');
@@ -65,22 +65,22 @@ test('Process inbox walks the items: Today, Later, Waiting, Delete and Skip, wit
   await page.click('#twform .btn.blue');
   s = await app.state();
   expect(s.inbox.find(i => i.id === 'i3').wait).toMatchObject({ who: 'Jo', due: '2026-09-30' });
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('3 of 4 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('3 of 4 sorted');
   await expect(card(page).locator('.ttitle')).toHaveText('Old idea');
   // Skip, then nothing is left but the skipped one; go through it again and delete it.
   await page.click('[data-tdo="skip"]');
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('3 of 4 processed, 1 skipped');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('3 of 4 sorted, 1 skipped');
   await expect(page.locator('#v-inbox .empty')).toContainText('skipped');
   await page.click('[data-triageagain]');
   await expect(card(page).locator('.ttitle')).toHaveText('Old idea');
   await page.click('[data-tdo="delete"]');
-  await expect(page.locator('#toast')).toContainText('Cleared');
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('4 of 4 processed');
-  await expect(page.locator('#v-inbox .empty')).toContainText('All processed');
+  await expect(page.locator('#toast')).toContainText('Deleted');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('4 of 4 sorted');
+  await expect(page.locator('#v-inbox .empty')).toContainText('All sorted');
   // Undo brings the item back into the walk.
   await page.click('#undo');
   await expect(card(page).locator('.ttitle')).toHaveText('Old idea');
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('3 of 4 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('3 of 4 sorted');
   await page.click('[data-triageexit]');
   await expect(page.locator('#iform')).toBeVisible();
   expect((await app.state()).inbox.map(i => i.text)).toEqual(['Ask Jo about the budget', 'Old idea']);
@@ -115,7 +115,7 @@ test('Reference: the item becomes an article with its details; the item goes onl
   expect(s.kb.map(a => a.title)).toEqual(['Supplier onboarding']);
   expect(s.kb[0].cat).toBe('c1');
   expect(s.inbox.map(i => i.id)).toEqual(['i2', 'i3', 'i4']);
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('1 of 4 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('1 of 4 sorted');
   await expect(card(page).locator('.ttitle')).toHaveText('Renew parking permit');
   await expect(page.locator('#toast')).toContainText('Saved to Knowledge');
   await page.click('#undo');
@@ -183,7 +183,7 @@ test('edge cases: empty Inbox, an item removed elsewhere, double taps, long text
     inBackground(renderAll);
   });
   await expect(card(page).locator('.ttitle')).toHaveText('x'.repeat(200));
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('1 of 3 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('1 of 3 sorted');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   // A double tap on Today moves it once.
   await page.click('[data-tdo="today"]', { clickCount: 2 });
@@ -198,7 +198,7 @@ test('edge cases: empty Inbox, an item removed elsewhere, double taps, long text
     save();
     inBackground(renderAll);
   });
-  await expect(page.locator('#v-inbox .tprog')).toHaveText('2 of 4 processed');
+  await expect(page.locator('#v-inbox .tprog')).toHaveText('2 of 4 sorted');
   await page.click('[data-tdo="skip"]');
   await expect(card(page).locator('.ttitle')).toHaveText('Late arrival');
   // Typing in the waiting form survives a sync redraw.
