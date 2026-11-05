@@ -49,10 +49,15 @@ columns (from 1240px) show everything, with no jump line.
 
 | 390 × 844, Scenario A | Release G | Release H |
 | --- | ---: | ---: |
-| Today's tasks start (px from the top) | 1,701 | 1,445 |
-| Page height | 3,823 | 3,343 |
+| Today's tasks start (px from the top) | 1,701 | 1,446 |
+| Page height | 3,823 | 3,568 |
 | Taps from the first screen to Today's tasks | scroll ~2 screens | 1 (Tasks ↓) |
-| At 320 × 800: Today's tasks start | 2,187 | 1,833 |
+| At 320 × 800: Today's tasks start | 2,187 | 1,884 |
+
+(Correction: checkpoint 1's commit message says 3,343px for the page. That was measured with the
+dropped Top 3 change still in place; 3,568px is the figure for what was kept. Screenshots:
+`release-h/before-*.png` and `release-h/after-*.png`, the same data at 11:00; measurements in
+`release-h/*-measure.json`.)
 
 Task discovery, looked at again:
 
@@ -70,6 +75,76 @@ failed process or automation. Opening an item acknowledges nothing.
 ## Checkpoint 2: Today drawn again in place
 
 <!-- perf:start -->
+Before, every redraw of Today (a tick, a sync, coming back to it) replaced the whole view: on a
+heavy day 13,700 elements read in, laid out and drawn again, whatever had changed.
+
+Now Today's new markup is laid over what's on the page (`patchHTML` in `js/tree.js`; no
+framework, the markup is still the one source of what's shown):
+
+- Each task row, and Needs attention, Carried over, Scheduled, Waiting and the folded rest,
+  carries a fingerprint of its markup with its length (`data-h`). A part that reads the same as
+  one on the page is cut from the new markup before it's read in, and the one on the page is
+  kept, untouched. A changed one is replaced whole. Children are matched by task id (or id),
+  else by kind in order; never by position alone.
+- What's kept keeps the keyboard, a half-typed word (and an Android keyboard's composing on it),
+  its selection, open panels, a two-tap confirmation and scroll. A field being typed in is left
+  exactly as it is. A kept element that has to move (a row moved up in Reorder) gets the keyboard
+  back.
+- Another page (another task, or the list from a task) is still drawn from scratch, so nothing of
+  one task's page can be carried onto another's. Every other view is drawn as before.
+- Tests: a sync that changes nothing leaves every row alone; a renamed task redraws its row
+  only; typing survives a sync's redraw with its selection; twelve mixed changes in a row give
+  exactly the page a from-scratch draw gives; Reorder keeps the keyboard. Most fail with the
+  patch switched off.
+
+Tried and not kept: `content-visibility: hidden` on Today while another tab is open, to keep its
+layout. No gain measurable through the noise.
+
+### Measured
+
+`tests/perf/bench.js`, Chromium at 390 × 844 with the CPU slowed ×4 (the phone figure). Main
+(Release G) and this branch were run alternately, two rounds each, on a quiet machine; each
+round is the median of 5. Both rounds are shown (round 1 / round 2). Busy is 100 tasks; heavy is
+300 tasks plus 1,000 finished, 300 articles, 400 runs and 500 executions. Until the next frame is
+drawn, ms.
+
+| Heavy | Release G | Release H | Change |
+| --- | ---: | ---: | ---: |
+| Today redraw (`renderAll`) | 778 / 782 | 107 / 135 | −84% |
+| Background sync redraw, nothing changed | 758 / 734 | 116 / 105 | −85% |
+| Background sync redraw, one task changed | 778 / 775 | 225 / 258 | −69% |
+| Tick a step on Today | 855 / 886 | 323 / 312 | −63% |
+| Tab to Today | 730 / 749 | 351 / 442 | −46% |
+| App start (store read to first draw) | 1,139 / 982 | 782 / 843 | −22% |
+| Cold load to ready | 1,370 / 1,141 | 957 / 986 | −16% |
+| Today drawn from scratch | 665 / 708 | 575 / 538 | −19% |
+| Tick a step on a task's page | 152 / 169 | 156 / 161 | none |
+| Tab to Waiting | 510 / 546 | 440 / 464 | −14% |
+| Tab to Command Centre | 347 / 285 | 266 / 295 | none (noise) |
+| Search keystroke | 66 / 72 | 71 / 90 | **+5 to +18ms (worse)** |
+| `save()` | 132 / 118 | 130 / 140 | none to +12ms |
+| Taking in 500 synced rows | 1,012 / 1,004 | 861 / 957 | −5 to −15% |
+
+| Busy | Release G | Release H |
+| --- | ---: | ---: |
+| Today redraw | 198 / 193 | 39 / 47 |
+| Background sync redraw | 210 / 270 | 41 / 40 |
+| Tick a step on Today | 236 / 233 | 104 / 107 |
+| Tab to Today | 196 / 211 | 125 / 159 |
+
+What this shows, plainly:
+
+- The slowest everyday actions on a heavy day are 63–85% quicker: a tick, a sync's redraw, a
+  redraw. The 30% target is met for them.
+- Drawing Today from scratch (another task's page and back, a first draw) is only ~20% quicker:
+  that's still a full read-in and layout of the view.
+- Regressions: a search keystroke is 5–18ms slower at heavy, and `save()` up to 12ms slower in
+  one round. Neither path was changed by the redraw work; checkpoints 3 and 4 add to sync
+  bookkeeping and Search's way back. Within the run-to-run spread seen before (±20%), but
+  reported as measured.
+- Still over budget at heavy (100ms at ×4): a tick (~320ms, of which `save()` ~130ms), a tab to
+  Today (~350–440ms), Waiting (~450ms) and taking in 500 synced rows (~0.9s). These are
+  benchmark figures on an emulated slow CPU, not timings on your phone.
 <!-- perf:end -->
 
 ## Checkpoint 3: trustworthy sync
