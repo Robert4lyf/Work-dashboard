@@ -69,7 +69,9 @@ function row(n, i, len, sib) {
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
-  return `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`;
+  return withHash(
+    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`,
+  );
 }
 // A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
 // and any waiting marked. Every one ticked but the task not finished: a last block asks what's next.
@@ -403,11 +405,13 @@ function drawToday() {
   // list, so a long day doesn't bury it), Today's tasks, then the rest folded. On a wide screen, two
   // columns: what you work through on the left under the header (Top 3, the list); what needs
   // you, what's at a time and what you're waiting on down the right.
-  const att = renderAttention(),
-    top3 = renderTop3() + renderCarried(),
-    sched = renderScheduledToday(),
-    wait = renderWaitingToday(),
-    rest = more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '';
+  // (Release H: each a part of its own, kept as it is on the page while it reads the same)
+  const hash = x => (x ? withHash(x) : ''),
+    att = hash(renderAttention()),
+    top3 = renderTop3() + hash(renderCarried()),
+    sched = hash(renderScheduledToday()),
+    wait = hash(renderWaitingToday()),
+    rest = hash(more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '');
   const h = colsMQ.matches
     ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
     : todayJump(work, sched, wait) + att + top3 + sched + wait + tasks + rest;

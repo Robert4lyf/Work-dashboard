@@ -143,3 +143,171 @@ test.describe('Checkpoint 1: Today on a phone', () => {
     expect(y).toBeLessThan(1500);
   });
 });
+
+test.describe('Checkpoint 2: Today drawn again in place', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  // (each row element tagged, to tell a row left alone from one drawn again)
+  const tag = page =>
+    page.evaluate(() =>
+      document.querySelectorAll('#v-today .row[data-qid]').forEach(r => (r._seen = r.dataset.qid)),
+    );
+  const redrawn = page =>
+    page.$$eval('#v-today .row[data-qid]', rs =>
+      rs.filter(r => r._seen !== r.dataset.qid).map(r => r.dataset.qid),
+    );
+
+  test('a sync that changes nothing leaves every row alone; one that renames a task redraws only its row', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await tag(page);
+    await page.evaluate(() => inBackground(renderAll));
+    expect(await redrawn(page)).toEqual([]);
+    const id = await page.evaluate(() => {
+      const q = S.quests.find(x => x.text === 'Team rota');
+      q.text = 'Team rota (v2)';
+      inBackground(renderAll);
+      return q.id;
+    });
+    expect(await redrawn(page)).toEqual([id]);
+    await expect(page.locator(`#v-today .row[data-qid="${id}"] .open > span`)).toHaveText('Team rota (v2)');
+    expect(app.errors).toEqual([]);
+  });
+
+  test('ticking a task redraws its row and what depends on it, not the rest; the order is the order underneath', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await tag(page);
+    const id = await page.evaluate(() => S.quests.find(q => q.text === 'Renew parking permit').id);
+    await page.click(`#v-today .row[data-qid="${id}"] [data-toggle]`);
+    await expect(page.locator(`#donesec .row[data-qid="${id}"]`)).toHaveCount(1);
+    expect(await redrawn(page)).toEqual([id]);
+    // The rows in the DOM are in the order of S.quests, whatever was moved.
+    await page.evaluate(() => {
+      const [a, b] = [
+        S.quests.findIndex(q => q.text === 'Team rota'),
+        S.quests.findIndex(q => q.text === 'Expenses'),
+      ];
+      [S.quests[a], S.quests[b]] = [S.quests[b], S.quests[a]];
+      renderAll();
+    });
+    const dom = await page.$$eval('#v-today .list.box > .row', rs => rs.map(r => r.dataset.qid));
+    const want = await page.evaluate(() => {
+      const shown = new Set(
+        [...document.querySelectorAll('#v-today .list.box > .row')].map(r => r.dataset.qid),
+      );
+      return S.quests.filter(q => shown.has(q.id)).map(q => q.id);
+    });
+    // (waiting ones go below the rest, as before: compare within each part)
+    const rank = await page.evaluate(ids => ids.map(id => listRank(find(id).n)), dom);
+    expect(rank).toEqual([...rank].sort((x, y) => x - y));
+    for (const k of new Set(rank))
+      expect(dom.filter((_, i) => rank[i] === k)).toEqual(want.filter(id => rank[dom.indexOf(id)] === k));
+    expect(app.errors).toEqual([]);
+  });
+
+  test("a word being typed on a task's page is left exactly as it is by a sync's redraw: the same box, its words, its place", async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    const id = await page.evaluate(() => S.quests.find(q => q.children.length > 1).id);
+    await page.evaluate(id => openPath([id]), id);
+    await page.click('#sin');
+    await page.keyboard.type('Ring the supplier');
+    await page.evaluate(() => {
+      const i = document.getElementById('sin');
+      i._mine = 1;
+      i.setSelectionRange(5, 8);
+    });
+    // Another device ticks a step of this task: the page changes around the box.
+    await page.evaluate(() => {
+      const r = find(path[0]).n;
+      r.children.find(c => !c.done).done = true;
+      inBackground(renderAll);
+    });
+    expect(
+      await page.$eval('#sin', i => [
+        i._mine,
+        i.value,
+        i.selectionStart,
+        i.selectionEnd,
+        document.activeElement === i,
+      ]),
+    ).toEqual([1, 'Ring the supplier', 5, 8, true]);
+    expect(app.errors).toEqual([]);
+  });
+
+  test('open sections stay open through redraws; a different page is drawn from scratch', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.click('#attd > summary');
+    await page.click('#waitmore > summary');
+    await page.evaluate(() => {
+      renderAll();
+      inBackground(renderAll);
+    });
+    await expect(page.locator('#attd')).toHaveAttribute('open', '');
+    await expect(page.locator('#waitmore')).toHaveAttribute('open', '');
+    const [a, b] = await page.evaluate(() =>
+      S.quests
+        .filter(q => q.children.length)
+        .slice(0, 2)
+        .map(q => q.id),
+    );
+    await page.evaluate(id => openPath([id]), a);
+    await page.evaluate(() => (document.querySelector('#v-today h1')._mine = 1));
+    await page.evaluate(id => openPath([id]), b);
+    expect(await page.$eval('#v-today h1', h => h._mine)).toBeUndefined();
+    expect(app.errors).toEqual([]);
+  });
+  test('after many changes in a row, drawn in place or in the background, the page is what drawing it from scratch gives', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    const html = () => page.$eval('#v-today', e => e.innerHTML.replace(/ data-(h|keep|page)="[^"]*"/g, ''));
+    for (let i = 0; i < 12; i++) {
+      await page.evaluate(i => {
+        const qs = S.quests.filter(q => !q.done),
+          q = qs[(i * 7) % qs.length];
+        if (i % 4 === 0) q.text += ' x';
+        else if (i % 4 === 1 && q.children.some(c => !c.done)) q.children.find(c => !c.done).done = true;
+        else if (i % 4 === 2) S.quests.push(S.quests.splice(S.quests.indexOf(q), 1)[0]);
+        else if (!q.children.length) q.done = true;
+        norm(S);
+        save();
+        i % 2 ? inBackground(renderAll) : renderAll();
+      }, i);
+      const patched = await html();
+      await page.evaluate(() => {
+        document.getElementById('v-today').removeAttribute('data-page');
+        renderAll();
+      });
+      expect(patched, 'after change ' + i).toBe(await html());
+    }
+    await expect(page.locator('#v-today [data-keep]')).toHaveCount(0);
+    expect(app.errors).toEqual([]);
+  });
+
+  test('Reorder: a row moved up keeps the keyboard on its Up, though the row is kept and moved', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.click('#reorder');
+    const id = await page.$eval('#v-today .list .row:nth-child(3)', r => r.dataset.qid);
+    await page.locator('#v-today .list .row:nth-child(3)').evaluate(r => (r._mine = 1));
+    await page.click(`[data-up="${id}"]`);
+    expect(await page.$eval('#v-today .list .row:nth-child(2)', r => [r.dataset.qid, r._mine])).toEqual([
+      id,
+      1,
+    ]);
+    await expect(page.locator(`[data-up="${id}"]`)).toBeFocused();
+  });
+});

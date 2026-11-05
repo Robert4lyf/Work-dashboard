@@ -424,9 +424,140 @@ function focusSel(a) {
   if (a.id) return '#' + CSS.escape(a.id);
   // (not data-typed, nor an armed button's own marks: the redrawn control won't have them yet)
   const ds = [...a.attributes].filter(
-    x => x.name.startsWith('data-') && !['data-typed', 'data-orig', 'data-armat'].includes(x.name),
+    x => x.name.startsWith('data-') && !['data-typed', 'data-orig', 'data-armat', 'data-h'].includes(x.name),
   );
   return ds.length ? a.tagName + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
+}
+/* Release H: Today drawn again in place. The new markup is laid over what's there: what reads
+   the same is left alone (not taken out and put back, so not laid out again, and the keyboard, a
+   half-typed word, an open panel and an Android keyboard's composing on it stay as they are); what
+   changed is replaced. Children are matched by their task's id (or their id), else by kind in
+   order. A row carries a fingerprint of its markup (data-h): the same fingerprint, the row is
+   kept whole; a different one, it's replaced whole. No framework: the markup stays the one source
+   of what's shown, and a view is still drawn from scratch whenever it isn't Today. */
+// (by view, what page of it is drawn: a different page is drawn from scratch, so nothing of one
+// task's page, a field half typed in say, is carried over onto another's)
+const PATCHED = { 'v-today': () => 'p:' + path.join('/') };
+function withHash(html) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < html.length; i++) h = Math.imul(h ^ html.charCodeAt(i), 16777619);
+  return html.replace(/^<([a-z0-9]+)/i, `<$1 data-h="${(h >>> 0).toString(36)}.${html.length.toString(36)}"`);
+}
+const pKey = n =>
+  n.nodeType === 1 ? n.getAttribute('data-qid') || n.getAttribute('data-wid') || n.id || null : null;
+const pSame = (o, n) =>
+  o.nodeType === n.nodeType &&
+  (o.nodeType !== 1 ||
+    (o.tagName === n.tagName && pKey(o) === pKey(n) && (pKey(o) || o.className === n.className)));
+const FORM = /^(INPUT|TEXTAREA|SELECT)$/;
+function pAttrs(o, n, skip) {
+  for (const { name, value } of n.attributes)
+    if (name !== skip && o.getAttribute(name) !== value) o.setAttribute(name, value);
+  for (const { name } of [...o.attributes])
+    if (name !== skip && !n.hasAttribute(name)) o.removeAttribute(name);
+}
+const pAttrsSame = (o, n) =>
+  o.attributes.length === n.attributes.length &&
+  [...n.attributes].every(a => o.getAttribute(a.name) === a.value);
+// The node to stand where `o` was: `o` itself, brought up to date, or `n` in its place.
+function pUpdate(o, n) {
+  if (o.nodeType !== 1) {
+    if (o.nodeValue !== n.nodeValue) o.nodeValue = n.nodeValue;
+    return o;
+  }
+  const h = n.getAttribute('data-h');
+  if (h !== null) return o.getAttribute('data-h') === h ? o : pResolve(n);
+  if (FORM.test(o.tagName)) {
+    // (the field being typed in stays exactly as it is: its words, its place in them, and its own
+    // marks, such as data-typed, which says it's to be saved when left; any other field changed
+    // is new)
+    if (o === document.activeElement) return o;
+    return pAttrsSame(o, n) && o.innerHTML === n.innerHTML ? o : pResolve(n);
+  }
+  pAttrs(o, n);
+  pChildren(o, n);
+  return o;
+}
+function pChildren(from, to) {
+  const olds = [...from.childNodes],
+    byKey = new Map(),
+    used = new Set(),
+    out = [];
+  olds.forEach(o => {
+    const k = pKey(o);
+    if (k && !byKey.has(k)) byKey.set(k, o);
+  });
+  let pos = 0;
+  for (const n of [...to.childNodes]) {
+    const kept = n.nodeType === 1 && pKeep.get(n.getAttribute('data-keep'));
+    if (kept) {
+      used.add(kept);
+      out.push(kept);
+      continue;
+    }
+    const k = pKey(n);
+    let o = null;
+    if (k) {
+      o = byKey.get(k);
+      if (o && (used.has(o) || !pSame(o, n))) o = null;
+    } else {
+      // (the next of the same kind not yet used, looking a few ahead past any taken out)
+      for (let i = pos, seen = 0; i < olds.length && seen < 4; i++) {
+        const c = olds[i];
+        if (used.has(c) || pKey(c)) continue;
+        seen++;
+        if (pSame(c, n)) {
+          o = c;
+          pos = i + 1;
+          break;
+        }
+      }
+    }
+    const put = o ? pUpdate(o, n) : pResolve(n);
+    if (put === o) used.add(o);
+    out.push(put);
+  }
+  olds.forEach(o => used.has(o) || o.remove());
+  let ref = from.firstChild;
+  for (const n of out) {
+    if (n === ref) ref = ref.nextSibling;
+    else from.insertBefore(n, ref);
+  }
+}
+// (a fingerprint also gives its markup's length, so a part that reads the same as one already
+// on the page is cut from the new markup before it's read in, and the one there is kept: on a big
+// day most of Today is neither read in again nor compared)
+let pKeep = new Map();
+function patchHTML(el, html) {
+  pKeep = new Map();
+  el.querySelectorAll('[data-h]').forEach(e => pKeep.set(e.getAttribute('data-h'), e));
+  const re = /<([a-z0-9]+) data-h="([0-9a-z]+\.([0-9a-z]+))"/g;
+  let cut = '',
+    pos = 0,
+    m;
+  while ((m = re.exec(html))) {
+    if (!pKeep.has(m[2])) continue; // (changed: looked into, for parts inside it that haven't)
+    const end = m.index + parseInt(m[3], 36) + (m[0].length - m[1].length - 1);
+    if (html[end - 1] !== '>') continue;
+    cut += html.slice(pos, m.index) + `<${m[1]} data-keep="${m[2]}"></${m[1]}>`;
+    pos = re.lastIndex = end;
+  }
+  const t = document.createElement('template');
+  t.innerHTML = pos ? cut + html.slice(pos) : html;
+  pChildren(el, t.content);
+  pKeep = new Map();
+}
+// (a new part put in: the parts kept from the page put back in it where they were cut)
+function pResolve(n) {
+  if (n.nodeType === 1)
+    n.querySelectorAll('[data-keep]').forEach(k => k.replaceWith(pKeep.get(k.dataset.keep)));
+  return n;
+}
+function putHTML(el, html) {
+  const page = PATCHED[el.id] && PATCHED[el.id]();
+  if (page && el.dataset.page === page) return patchHTML(el, html);
+  el.innerHTML = html;
+  if (page) el.dataset.page = page;
 }
 function setHTML(el, html) {
   if (!background) {
@@ -435,7 +566,13 @@ function setHTML(el, html) {
     const a = document.activeElement,
       inside = a && el.contains(a),
       sel = inside ? focusSel(a) : '';
-    el.innerHTML = html;
+    putHTML(el, html);
+    // (kept by the patch: it keeps the keyboard; if it was moved, as a row moved up is, moving
+    // it took the keyboard off it, so it's given back)
+    if (inside && a.isConnected && el.contains(a)) {
+      if (document.activeElement !== a) a.focus({ preventScroll: true });
+      return;
+    }
     if (inside) {
       let f = (sel && el.querySelector(sel)) || el;
       // (the control may now be folded away, say a task just ticked into "Done today": the
@@ -496,17 +633,27 @@ function setHTML(el, html) {
       at: +b.dataset.armat || 0,
     }))
     .filter(x => x.sel);
-  el.innerHTML = html;
+  putHTML(el, html);
+  // (the field being typed in, kept by the patch, is left exactly as it is: putting its words and
+  // place back would break an Android keyboard's composing)
+  const kept = a && a !== document.body && a.isConnected && el.contains(a);
+  if (kept && document.activeElement !== a) {
+    a.focus({ preventScroll: true });
+    if (sel)
+      try {
+        a.setSelectionRange(sel[0], sel[1]);
+      } catch (e) {}
+  }
   armed.forEach(x => {
     const b = el.querySelector(x.sel);
     if (b && b.textContent === x.orig && rowOf(b) === x.row) armAgain(b, x.label, x.orig, x.at);
   });
   for (const id in typed) {
     const i = el.querySelector('#' + CSS.escape(id));
-    if (i) i.value = typed[id];
+    if (i && i.value !== typed[id]) i.value = typed[id];
     if (i && wasTyped.has(id)) i.dataset.typed = '1';
   }
-  const f = fsel && el.querySelector(fsel);
+  const f = !kept && fsel && el.querySelector(fsel);
   if (f && typedSel !== null && f.defaultValue === typedWas) {
     f.value = typedSel;
     f.dataset.typed = '1';

@@ -286,6 +286,26 @@ async function measure(page, cdp, url) {
   // Today
   put('renderAll', await timeOp(page, `() => renderAll()`, { before: TODAY }));
   put('bg_sync_redraw', await timeOp(page, `() => inBackground(renderAll)`, { before: TODAY }));
+  // (Release H) A sync bringing in one task's change (its name), then the redraw; and Today drawn
+  // from scratch (as when coming back to it from a task's page, or before Release H every time).
+  put(
+    'bg_sync_change',
+    await timeOp(
+      page,
+      `(i) => { const q = S.quests.find(q => !q.done && q.children.length); q.text = q.text.replace(/ #\\d+$/, '') + ' #' + i; inBackground(renderAll); }`,
+      { before: TODAY },
+    ),
+  );
+  put(
+    'renderAll_full',
+    await timeOp(
+      page,
+      `() => { document.getElementById('v-today').removeAttribute('data-page'); renderAll(); }`,
+      {
+        before: TODAY,
+      },
+    ),
+  );
   const step = await page.evaluate(`(${PICK_STEP})()`);
   if (step) {
     put(
@@ -595,6 +615,8 @@ const OPS = [
   ['tick_today', 'Tick a step (from Today)', 'work'],
   ['tick_task_page', "Tick a step (task's page)", 'work'],
   ['bg_sync_redraw', 'Background redraw inBackground(renderAll)', 'work'],
+  ['bg_sync_change', 'Background redraw after a synced change to one task', 'work'],
+  ['renderAll_full', 'Today drawn from scratch', 'work'],
   ['tab_today', 'Tab: Today (from Inbox)', 'work'],
   ['tab_inbox', 'Tab: Inbox', 'work'],
   ['tab_knowledge', 'Tab: Knowledge (Reference)', 'work'],
@@ -622,6 +644,8 @@ const BUDGETS = {
   tick_today: [50, 100],
   tick_task_page: [50, 100],
   bg_sync_redraw: [50, 100],
+  bg_sync_change: [50, 100],
+  renderAll_full: [100, 300],
   tab: [150, 150],
   search_key: [50, 100],
   search_open: [150, 150],
