@@ -216,3 +216,90 @@ fit at 320px; it's labelled "Mark done: name" for a screen reader), Delete vs Re
 Undo was audited under rapid actions, navigation, an incoming sync, deletion and the day's
 rollover: any later change (a save, a sync that changes anything, rollover) drops the Undo, so
 it can't overwrite newer work. No defect found.
+
+## Checkpoint 5: adversarial QA
+
+Eight reviews, by four independent reviewers working from the code and the running app, each
+trying to show the release is wrong: (1) first-time use, (2) daily efficiency, (3) mobile
+navigation and touch, (4) visual clarity, (5) sync and data integrity, (6) security and database
+permissions, (7) performance and accessibility, (8) unexpected sequences. Every confirmed defect
+was fixed with a regression test that fails without the fix (checked by running the tests on the
+code before each fix).
+
+Found in this release's own changes, and fixed:
+
+- **High: the step box kept its words** after a step was added, so the next step was saved as
+  "Gather figuresDraft" (the in-place redraw kept the field). A field is now kept only while it
+  holds what the redraw gives it, or while it's being typed in during a sync.
+- **High: Carried over's Keep buttons turned into "undefined"** once that section changed: the
+  redraw's own placeholder attribute had the same name as the button's. Renamed.
+- Find's opening of Done today was remembered as yours and could stay open.
+- A fold's summary lost the keyboard when a sync redrew its section.
+- The jump line wrapped onto two lines with Larger text or long counts.
+- "Keep the server's" on a run deleted elsewhere, then restored there, left this device without
+  a run the server had (only a later full re-read would have repaired it).
+- The health check took a replica-only guard trigger (which never fires) for an installed one.
+- A process run's failure lines ("Not synced", "not installed") were the same grey as "Synced".
+
+Found in older code, fixed while here:
+
+- A field merely tapped into kept stale words through a sync, and the next key press wrote them
+  over the other device's edit.
+- A sync's redraw of Search or the Inbox replaced the field under a composing keyboard
+  (duplicated letters, in Chromium's emulation).
+- With a focus session paused, the header offered to continue another task, then refused.
+- Back after the phone turned could put the opened row below the screen.
+- The Follow up sheet's two date fields overflowed at 320px.
+- The keyboard's search key did nothing in Find and Search (it now puts the keyboard away).
+- Wording left over: "inbox" in two places; "Later" on "What's next?" (Later means Upcoming
+  elsewhere: now "Not now"); "Pick up where you left off" now says "Saved place", which is what
+  it is (a stopped focus session doesn't move it).
+
+Checked and held: rapid ticks, ticks during a sync, renames, moves and deletions elsewhere, list
+and board, Reorder, Find typing through syncs (real IME composition via CDP), the two-column
+breakpoint both ways, names containing markup and the fingerprint attribute itself, 5,000
+character names, memory over 100 in-place redraws (flat), the discard prompt under a sync,
+contrast of every new element in light, dark and automatic (lowest 4.64:1), no automatic launch
+or retry anywhere, cross-user isolation and the new SQL's permissions, migration order and
+rollback.
+
+### Scenarios (390 × 844, Scenario A data)
+
+| Journey | Taps | Note |
+| --- | --- | --- |
+| A: start the next meaningful action | 2 | Continue (or a Top 3 Focus), Start |
+| A: reach Today's tasks | 1 | Tasks ↓ (was ~2 screens of scrolling) |
+| B: start, pause, capture, sort it, back to the original | 11 | The right task is offered; 8 using the Inbox row's own Today button |
+| C: follow up a waiting item | 2 | Follow up, Save |
+| D: next meeting, reschedule, mark done | 6 | Never offered as Focus or the next action |
+| E: a failed automation in a process | 1 to the failed step | Recovery by Try again or a confirmation by hand; nothing relaunches by itself |
+| F: two devices, the same run | — | Conflict shown with both versions; tested on the fake server and real PostgreSQL |
+| G: 300 tasks | — | See the measured table above |
+| H: first use, add a task | 4 + typing | Through the Inbox, as designed |
+
+### Test results
+
+- `npx playwright test` (full suite, served on 4173): **476 passed, 0 failed**, no retries
+  (Release G ended at 438). One test (`releaseg-sync` "the answer lost…") failed once in a loaded run: a race in
+  the test, not the app; fixed in the test.
+- `bash tests/db/run.sh` (real PostgreSQL 16): 151 checks passed.
+- `npm run format:check`: clean.
+
+## Remaining weaknesses
+
+- **Not tested on a real Android phone.** Everything above is Chromium with phone emulation;
+  `release-h-android-checklist.md` lists what to try on yours.
+- **`supabase/release-h.sql` isn't installed on your project yet.** Until it is, a report naming
+  no attempt is paired as in Release G (the oldest waiting launch), and the health check can't
+  see the guard. Steps in `release-h-sync.md`.
+- **The PAD side of the attempt id** (`ExecId`) is documented from Microsoft's docs, not tried on
+  a real Power Automate Desktop.
+- **Heavy days are still over budget** for a tick (~320ms at ×4, ~130 of it saving), switching to
+  Today (~350–440ms), Waiting (~450ms) and taking in a big sync (~0.9s). A first draw of Today, or
+  coming back to it from a task's page, is still a full draw.
+- **Other record types stay newer-edit-wins.** For tasks and notes that's by design; waiting
+  items, guide runs, rule effects and Inbox items made for a run change that's refused stay as
+  they were made (documented in `release-h-sync.md`).
+- Reload keeps your place but not a half-typed draft.
+- Minor, seen and left: the jump counts don't follow the Due/Started filter (they count the
+  sections); a Today with duplicate task ids (not reachable through sync) would show one row.
