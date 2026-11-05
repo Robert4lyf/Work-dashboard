@@ -112,7 +112,10 @@ let todayFilter = (() => {
   })(),
   todayFind = '',
   todayFindOpen = false,
-  rowRank = new Map(); // (Top 3 rank by task id, for the list's marks; set as Today is drawn)
+  rowRank = new Map(), // (Top 3 rank by task id, for the list's marks; set as Today is drawn)
+  // (Done today opened by Find for a finished task it found: not the user's choice, so neither
+  // remembered nor kept open once the words no longer find one)
+  findOpened = false;
 const isDueNow = q =>
   !isDone(q) &&
   ((q.due && q.due <= today()) || q.children.some(c => !isDone(c) && c.due && c.due <= today()));
@@ -189,11 +192,11 @@ function applyFind() {
   if (done) {
     hit = words.length > 0 && [...done.querySelectorAll('.row[data-qid]')].some(r => !r.hidden);
     if (hit && !done.open) {
-      done.dataset.findopen = '1';
+      findOpened = true;
       done.open = true;
-    } else if (!hit && done.dataset.findopen) {
-      delete done.dataset.findopen;
-      done.open = false;
+    } else if (!hit && findOpened) {
+      findOpened = false;
+      done.open = panels.donesec === true;
     }
   }
   const none = v.querySelector('.tnomatch');
@@ -334,7 +337,9 @@ function drawToday() {
     .querySelectorAll('details[id]')
     // (the waiting panel is held open on a waiting quest: that isn't a choice to remember)
     .forEach(d =>
-      (d.id !== 'waitd' || !d.dataset.held) && !d.dataset.findopen ? (panels[d.id] = d.open) : 0,
+      (d.id !== 'waitd' || !d.dataset.held) && !(d.id === 'donesec' && findOpened)
+        ? (panels[d.id] = d.open)
+        : 0,
     );
   // Down the path as far as it still leads (a level moved or removed elsewhere cuts it there).
   const ok = [];
@@ -429,7 +434,7 @@ function todayJump(work, sched, wait) {
       work.length && ['taskshead', 'Tasks', left],
     ].filter(Boolean);
   if (parts.length < 2) return '';
-  return `<div class="tjump chips" role="navigation" aria-label="On Today">${parts.map(([id, label, k]) => `<button class="chip" data-jump="${id}">${label} <small>${k}</small><span class="jarrow" aria-hidden="true">↓</span></button>`).join('')}</div>`;
+  return `<div class="tjump chips" role="navigation" aria-label="On Today">${parts.map(([id, label, k]) => `<button class="chip" data-jump="${id}" aria-label="Go to ${label}: ${k}">${label} <small>${k}</small><span class="jarrow" aria-hidden="true">↓</span></button>`).join('')}</div>`;
 }
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-jump]'),

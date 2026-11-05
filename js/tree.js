@@ -484,7 +484,10 @@ function focusSel(a) {
   const ds = [...a.attributes].filter(
     x => x.name.startsWith('data-') && !['data-typed', 'data-orig', 'data-armat', 'data-h'].includes(x.name),
   );
-  return ds.length ? a.tagName + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('') : '';
+  if (ds.length) return a.tagName + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
+  // (a folded section's summary: by its section's id)
+  const d = a.parentElement;
+  return a.tagName === 'SUMMARY' && d && d.id ? `#${CSS.escape(d.id)} > summary` : '';
 }
 /* Release H: Today drawn again in place. The new markup is laid over what's there: what reads
    the same is left alone (not taken out and put back, so not laid out again, and the keyboard, a
@@ -547,7 +550,7 @@ function pChildren(from, to) {
   });
   let pos = 0;
   for (const n of [...to.childNodes]) {
-    const kept = n.nodeType === 1 && pKeep.get(n.getAttribute('data-keep'));
+    const kept = n.nodeType === 1 && pKeep.get(n.getAttribute('data-pkeep'));
     if (kept) {
       used.add(kept);
       out.push(kept);
@@ -597,7 +600,7 @@ function patchHTML(el, html) {
     if (!pKeep.has(m[2])) continue; // (changed: looked into, for parts inside it that haven't)
     const end = m.index + parseInt(m[3], 36) + (m[0].length - m[1].length - 1);
     if (html[end - 1] !== '>') continue;
-    cut += html.slice(pos, m.index) + `<${m[1]} data-keep="${m[2]}"></${m[1]}>`;
+    cut += html.slice(pos, m.index) + `<${m[1]} data-pkeep="${m[2]}"></${m[1]}>`;
     pos = re.lastIndex = end;
   }
   const t = document.createElement('template');
@@ -608,7 +611,10 @@ function patchHTML(el, html) {
 // (a new part put in: the parts kept from the page put back in it where they were cut)
 function pResolve(n) {
   if (n.nodeType === 1)
-    n.querySelectorAll('[data-keep]').forEach(k => k.replaceWith(pKeep.get(k.dataset.keep)));
+    // (data-pkeep: the patch's own name; data-keep is a button's, Carried over's Keep)
+    n.querySelectorAll('[data-pkeep]').forEach(
+      k => pKeep.has(k.dataset.pkeep) && k.replaceWith(pKeep.get(k.dataset.pkeep)),
+    );
   return n;
 }
 function putHTML(el, html) {

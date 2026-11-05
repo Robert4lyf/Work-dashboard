@@ -1123,7 +1123,8 @@ document.addEventListener('click', e => {
 document.addEventListener(
   'toggle',
   e => {
-    if (e.target.id && !e.target.dataset.held) panels[e.target.id] = e.target.open;
+    if (e.target.id && !e.target.dataset.held && !(e.target.id === 'donesec' && findOpened))
+      panels[e.target.id] = e.target.open;
   },
   true,
 );

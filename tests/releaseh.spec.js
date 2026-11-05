@@ -310,4 +310,66 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
     ]);
     await expect(page.locator(`[data-up="${id}"]`)).toBeFocused();
   });
+  test("Carried over: keeping one leaves the others' Keep buttons as they are (the patch's own marks are its own)", async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.evaluate(() => {
+      S.quests
+        .filter(q => !q.done && !q.scheduled)
+        .slice(0, 3)
+        .forEach(q => (q.since = shift(today(), -5)));
+      save();
+    });
+    await page.reload();
+    await page.click('#carrd > summary');
+    await expect(page.locator('#carrd button[data-keep]')).toHaveCount(3);
+    await page.locator('#carrd button[data-keep]').first().click();
+    await expect(page.locator('#carrd button[data-keep]')).toHaveCount(2);
+    await expect(page.locator('#carrd')).not.toContainText('undefined');
+    const html = () => page.$eval('#v-today', e => e.innerHTML.replace(/ data-(h|page)="[^"]*"/g, ''));
+    const patched = await html();
+    await page.evaluate(() => {
+      document.getElementById('v-today').removeAttribute('data-page');
+      renderAll();
+    });
+    expect(patched).toBe(await html());
+  });
+
+  test('Find opening Done today, then a sync redraw: it closes when the words are cleared, and stays unremembered', async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.evaluate(() => {
+      S.quests.find(q => q.text === 'Book room for team away day').done = true;
+      save();
+      renderAll();
+    });
+    await page.click('[data-tfindopen]');
+    await page.keyboard.type('book room');
+    await expect(page.locator('#donesec')).toHaveAttribute('open', '');
+    await page.evaluate(() => inBackground(renderAll));
+    await expect(page.locator('#donesec')).toHaveAttribute('open', '');
+    await page.fill('#tfind', '');
+    await expect(page.locator('#donesec')).not.toHaveAttribute('open', '');
+    await page.evaluate(() => renderAll());
+    await expect(page.locator('#donesec')).not.toHaveAttribute('open', '');
+    expect(await page.evaluate(() => panels.donesec)).not.toBe(true);
+  });
+
+  test("a fold's summary keeps the keyboard through a sync's redraw of its section", async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.focus('#waitmore > summary');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#waitmore')).toHaveAttribute('open', '');
+    await page.evaluate(() => inBackground(renderAll));
+    await expect(page.locator('#waitmore > summary')).toBeFocused();
+    await page.evaluate(() => renderAll());
+    await expect(page.locator('#waitmore > summary')).toBeFocused();
+  });
 });
