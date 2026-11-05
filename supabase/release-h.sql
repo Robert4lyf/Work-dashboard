@@ -153,7 +153,8 @@ begin
     'put_wrun', to_regprocedure('public.cockpit_put_wrun(text,integer,jsonb,text)') is not null,
     'guard', exists (select 1 from pg_trigger t
       where t.tgrelid = to_regclass('public.cockpit_items') and t.tgname = 'cockpit_items_wrun_guard'
-        and t.tgenabled <> 'D'),
+        -- (on as triggers normally fire: 'O' or 'A'; 'R', replica only, never fires for the app)
+        and t.tgenabled in ('O', 'A')),
     'guard_fn', to_regprocedure('public.cockpit_items_wrun_guard()') is not null);
 end $$;
 revoke all on function public.cockpit_sync_checks() from public, anon;

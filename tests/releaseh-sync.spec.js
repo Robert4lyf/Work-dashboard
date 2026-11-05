@@ -454,3 +454,129 @@ test('LOW: an answer lost, then asked again after its op id was forgotten, is ac
   expect(srvRun(srv).log.filter(l => l.k === 'done')).toHaveLength(1);
   noErrors(a);
 });
+
+// Checkpoint 5's sync review: confirmed findings, each failing without its fix.
+const MM = (id, title) => ({ id, type: 'manual', title });
+async function setupGone(browser) {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(
+    stages => {
+      S.track = true;
+      S.workflows = [{ id: 'w1', name: 'Weekly report', ver: 1, days: [], monthDay: 0, stages }];
+      S.wruns = [makeRun(S.workflows[0], { id: 'r1' })];
+      norm(S);
+      save();
+    },
+    [MM('s1', 'Prepare'), MM('s2', 'Send'), MM('s3', 'File')],
+  );
+  await a.sync();
+  const b = await device(browser, srv);
+  await settle(a, b);
+  return { srv, a, b };
+}
+const openRun = (d, id = 'r1') => d.page.evaluate(id => openWorkflowRun(id), id);
+async function restoreFrom(d, json) {
+  await d.page.evaluate(j => {
+    pending = JSON.parse(j);
+    go('account');
+    renderAccount();
+  }, json);
+  await d.page.click('#doRestore');
+}
+
+test('review 5: a run deleted there, then restored there: Keep the server’s here takes it back, rather than staying without it', async ({
+  browser,
+}) => {
+  const { srv, a, b } = await setupGone(browser);
+  // A starts the run and syncs, B takes it.
+  await openRun(a);
+  await a.page.click('[data-wfact="done"][data-wstage="s1"]');
+  await settle(a, b);
+  const backup = await a.page.evaluate(() => JSON.stringify(S));
+  // B offline: does s2.
+  await b.offline(true);
+  await openRun(b);
+  await b.page.click('[data-wfact="done"][data-wstage="s2"]');
+  // A deletes the run.
+  await a.page.evaluate(() => {
+    S.wruns = S.wruns.filter(r => r.id !== 'r1');
+    save();
+  });
+  await a.sync();
+  expect(srv.rows.get('wrun:r1').deleted).toBe(true);
+  await b.offline(false);
+  await b.sync();
+  expect((await b.state()).wconflicts.length).toBe(1);
+  // A restores a backup holding the run (from before the deletion).
+  await restoreFrom(a, backup);
+  await settle(a);
+  expect(srv.rows.get('wrun:r1').deleted).toBe(false);
+  await settle(b);
+  // the account's other writes meanwhile (a busy day on another device: 300 rows)
+  for (let i = 0; i < 300; i++)
+    srv.rows.set('zz:' + i, {
+      key: 'zz:' + i,
+      kind: 'zz',
+      data: {},
+      deleted: false,
+      edited_at: Date.now(),
+      seq: ++srv.seq,
+    });
+  await settle(b);
+  await openRun(b);
+  await b.page.click('[data-wcact="keep"]');
+  await settle(a, b);
+  const bRun = await b.run('r1'),
+    aRun = await a.run('r1');
+  await b.page.reload();
+  await settle(b);
+  expect(!!(await b.run('r1'))).toBe(!srv.rows.get('wrun:r1').deleted);
+});
+
+test('review 5: a task page field with the keyboard, not typed in, shows an edit synced from elsewhere; the next key press keeps it', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.quests.push({
+      id: 'q1',
+      text: 'Quarterly report',
+      children: [{ id: 'c1', text: 'Step', children: [], done: false }],
+      done: false,
+      notes: 'old notes',
+    });
+    norm(S);
+    save();
+    renderAll();
+  });
+  await a.sync();
+  const b = await device(browser, srv);
+  await settle(a, b);
+  // A opens the task's page and puts the keyboard in its Notes (not typing yet).
+  await a.page.evaluate(() => openPath(['q1']));
+  await a.page.evaluate(() => {
+    const t = $('#fnotes');
+    let d = t.closest('details');
+    while (d) {
+      d.open = true;
+      d = d.parentElement.closest('details');
+    }
+  });
+  await a.page.click('#fnotes');
+  await expect(a.page.locator('#fnotes')).toHaveValue('old notes');
+  // B edits the notes; A hears of it (a background redraw).
+  await b.page.evaluate(() => {
+    find('q1').n.notes = 'new notes from the desktop';
+    save();
+  });
+  await b.sync();
+  await a.sync();
+  await a.page.waitForTimeout(200);
+  // A types one letter at the end.
+  await a.page.keyboard.press('End');
+  await a.page.keyboard.type('!');
+  await settle(a, b);
+  expect((await b.state()).quests.find(q => q.id === 'q1').notes).toContain('new notes from the desktop');
+});

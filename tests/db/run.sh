@@ -141,6 +141,10 @@ q "alter table public.cockpit_items disable trigger cockpit_items_wrun_guard" >/
 same "a disabled guard counts as missing" "$(probe)" '{"guard": false, "release": "h", "guard_fn": true, "put_wrun": true}'
 apply "$H"
 same "and is put back too" "$(probe)" "$ALL"
+q "alter table public.cockpit_items enable replica trigger cockpit_items_wrun_guard" >/dev/null
+same "a guard firing only for replication counts as missing" "$(probe)" '{"guard": false, "release": "h", "guard_fn": true, "put_wrun": true}'
+apply "$H"
+same "and is put back as well" "$(probe)" "$ALL"
 # (an install from before Release H: its functions' search_path without pg_temp)
 q "alter function public.cockpit_capture(text, text) set search_path = public" >/dev/null
 apply "$H"

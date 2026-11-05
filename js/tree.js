@@ -533,7 +533,18 @@ function pUpdate(o, n) {
     // them, its composing and its own marks, such as data-typed, which says it's to be saved when
     // left. Otherwise a field is kept only if it holds what the new markup gives it: one emptied
     // by drawing it again, the step box after a step is added say, is new, as before)
-    if (background && o === document.activeElement) return o;
+    if (background && o === document.activeElement) {
+      // (only once typed into: a field merely tapped into shows an edit synced from elsewhere, so
+      // the next key press doesn't write the old words over it; the place in it is kept)
+      if (!o.dataset.typed && !composing && !/^(checkbox|radio)$/.test(o.type) && o.value !== n.value) {
+        const at = [o.selectionStart, o.selectionEnd];
+        o.value = n.value;
+        try {
+          o.setSelectionRange(Math.min(at[0], o.value.length), Math.min(at[1], o.value.length));
+        } catch (e) {}
+      }
+      return o;
+    }
     const same =
       pAttrsSame(o, n) &&
       o.innerHTML === n.innerHTML &&

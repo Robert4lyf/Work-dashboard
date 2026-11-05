@@ -545,6 +545,9 @@ document.addEventListener(
     // (Release H) Set to pass it on, the link the browser follows next (this handler runs first)
     // carries this attempt's id as the flow's input ExecId, for its report to name.
     a.setAttribute('href', flowRunUrl(f, x));
+    // (and back to the plain link once followed: a kept chip mustn't offer this attempt's id to
+    // a later "open in new tab" or copy)
+    setTimeout(() => a.setAttribute('href', f.url), 0);
     if (a.dataset.wrun) wfLaunched(a.dataset.wrun, a.dataset.wstage || '', x);
     save();
     // (the attempt sent at once: the server takes a report naming it only once it has it)

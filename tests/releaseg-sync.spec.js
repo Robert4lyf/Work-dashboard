@@ -332,7 +332,13 @@ test('the answer lost after the server took the change: sent again with the same
   srv.dropAnswers = 1;
   await a.page.click('[data-wfact="done"][data-wstage="s1"]');
   await a.page.evaluate(() => clearTimeout(pushT)); // (the test syncs)
-  await a.sync();
+  // (and no sync of the device's own before the test's next: the failed one saves, which would
+  // otherwise send it again 1.2s later, and under a loaded machine before the checks below)
+  await a.page.evaluate(async () => {
+    await sync();
+    while (syncing || again) await new Promise(r => setTimeout(r, 20));
+    clearTimeout(pushT);
+  });
   // The server has it; this device doesn't know yet (the sync failed).
   expect(srvRun(srv)).toMatchObject({ rev: 2, cur: 's2' });
   await expect(a.page.locator('#syncBtn')).toHaveText('Sync error');

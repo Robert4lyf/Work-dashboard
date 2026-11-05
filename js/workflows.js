@@ -971,6 +971,7 @@ function wfConflictClick(d) {
       wrunForget(c.run);
       if (wfOpen === c.run) wfOpen = null;
       save();
+      if (typeof wrunRecheck === 'function') wrunRecheck(c.run);
       toast('Deleted, as on the other device', false, 3000);
       return renderKnowledge();
     }

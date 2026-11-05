@@ -371,6 +371,18 @@ const isWrunKey = k => k.startsWith('wrun:');
 // (Release H) A run deleted on the server while changed here, kept here (and not sent) until you
 // choose on its page: see wfConflict.
 const wrunHeld = k => isWrunKey(k) && S.wconflicts.some(c => c.gone && c.run === k.slice(5));
+// (Release H) After "Keep the server's" on a run deleted there: what the server has of it now,
+// read again, should it be back since (a restore or an undo elsewhere), so this device doesn't
+// stay without a run the server has.
+async function wrunRecheck(id) {
+  const k = 'wrun:' + id;
+  if (!sb || !session || !navigator.onLine) return;
+  const { data, error } = await sb.from('cockpit_items').select(FULL).in('key', [k]);
+  if (error || !Array.isArray(data) || !data.some(r => !r.deleted)) return;
+  applyRows(data, false, null, true);
+  save();
+  inBackground(renderAll);
+}
 // "Keep the server's" for such a run: deleted here too, with what was noted for it.
 function wrunForget(id) {
   const k = 'wrun:' + id;
