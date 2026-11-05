@@ -237,6 +237,7 @@ document.addEventListener('change', e => {
     return renderReview();
   }
   if (el.dataset && el.dataset.wfact === 'check') return wfClick(el.dataset, el);
+  if (el.dataset && el.dataset.flowpass) return setFlowPass(el.dataset.flowpass, el.checked);
   // Committed. (Not a time: those change a part at a time and are still being typed.)
   // Nor the waiting panel's fields before it's set: they're only saved with "Set waiting".
   // Nor an article being written: it's saved with its Save button.
@@ -915,7 +916,11 @@ document.addEventListener('click', e => {
       })
       .catch(e => e && toast("Couldn't sign out: " + (e.message || e), false, 4000)); // (0: chose to stay)
   }
-  if (b.id === 'syncNow') sync();
+  if (b.id === 'syncNow') {
+    // (a server check taken to be missing is asked about again: a migration just run counts now)
+    if (wrunCas.on === false) wrunCas = { on: null, at: 0 };
+    sync();
+  }
   if (b.id === 'pushkeys') setupPushKeys();
   if (b.id === 'pushnewkeys' && arm(b, 'Replace keys?')) replacePushKeys();
   if (b.id === 'pushon') enablePush();

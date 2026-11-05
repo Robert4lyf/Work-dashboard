@@ -150,6 +150,16 @@ update cockpit_items set data = '{"id":"q1","text":"Q2"}', edited_at = 2 where k
 select t.eq((select data->>'text' from cockpit_items where key = 'quest:q1'), 'Q2', 'other rows are as before');
 update cockpit_items set data = '{"id":"r1","rev":"999"}', edited_at = 99999999999999 where key = 'wrun:r1';
 select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6', 'a revision that isn''t a number is read as 0: refused, without an error');
+-- (Release H) The next revision written directly must still be the run it says it is, and within
+-- the function's size limit.
+update cockpit_items set data = t.run('other', 7, '{"cur":"s7"}'), edited_at = 99999999999999 where key = 'wrun:r1';
+select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6', 'a direct write of the next revision with another run''s id is refused');
+update cockpit_items set data = '{"id": 1, "rev": 7}', edited_at = 99999999999999 where key = 'wrun:r1';
+select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6', 'or with an id that isn''t text');
+update cockpit_items set data = t.run('r1', 7, jsonb_build_object('log', repeat('x', 270000))), edited_at = 99999999999999 where key = 'wrun:r1';
+select t.eq((select data->>'cur' from cockpit_items where key = 'wrun:r1'), 's6', 'or over 256 KB');
+update cockpit_items set key = 'wrun:r1b', data = t.run('r1b', 7), edited_at = 99999999999999 where key = 'wrun:r1';
+select t.ok(exists (select 1 from cockpit_items where key = 'wrun:r1' and data->>'cur' = 's6') and not exists (select 1 from cockpit_items where key = 'wrun:r1b'), 'and a run can''t be moved to another key');
 
 -- At most 600 changes an hour per user (a duplicate is still answered).
 reset role;
@@ -162,18 +172,60 @@ select t.eq((public.cockpit_put_wrun('wrun:r1', 0, t.run('r1', 1, '{"cur":"b"}')
 reset role;
 delete from cockpit_wrun_ops where op like 'op-flood-%';
 
--- Automation reports with no execution id go to the oldest launch still waiting, so a late
--- report from an attempt a retry set aside never lands on the newer attempt.
+-- Automation reports (Release H): with no execution id, a report goes to the launch of its flow
+-- waiting to hear only when exactly one is waiting; none or several, it is left unpaired. A named
+-- execution is taken only if it is this user's and that flow's.
 insert into cockpit_exec_tokens (token, user_id) values ('xtok-a', :'A');
 insert into cockpit_items (user_id, key, kind, data, edited_at) values
   (:'A', 'exec:x1', 'exec', jsonb_build_object('id', 'x1', 'flow', 'f9', 'status', 'requested', 'aside', 1,
      'at', (extract(epoch from now() - interval '10 minutes') * 1000)::bigint), 1),
   (:'A', 'exec:x2', 'exec', jsonb_build_object('id', 'x2', 'flow', 'f9', 'status', 'requested',
+     'at', (extract(epoch from now() - interval '1 minute') * 1000)::bigint), 1),
+  (:'A', 'exec:y1', 'exec', jsonb_build_object('id', 'y1', 'flow', 'f8', 'status', 'requested',
+     'at', (extract(epoch from now() - interval '1 minute') * 1000)::bigint), 1),
+  (:'B', 'exec:z1', 'exec', jsonb_build_object('id', 'z1', 'flow', 'f9', 'status', 'requested',
      'at', (extract(epoch from now() - interval '1 minute') * 1000)::bigint), 1);
 set role anon;
-select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'running'))->>'execution', 'x1', 'a report goes to the oldest launch waiting (the one set aside)');
-select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'succeeded', 'late'))->>'execution', 'x1', 'still waiting after a running report: its result goes there too');
-select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'succeeded'))->>'execution', 'x2', 'once it has its result, the next report goes to the newer launch');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'succeeded', 'which?'))->>'execution', '', 'two launches waiting: a report naming none is left unpaired (no guess)');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'running', '', 'x2'))->>'execution', 'x2', 'one naming its execution goes there');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f8', 'succeeded', '', 'x2'))->>'execution', '', 'one naming another flow''s execution isn''t taken');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f8', 'succeeded', '', 'nope1'))->>'execution', '', 'nor one naming an execution there isn''t, even with one f8 launch waiting (no guess)');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'succeeded', '', 'z1'))->>'execution', '', 'nor another user''s execution');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'failed', '', 'x1'))->>'execution', 'x1', 'x1 reports its own result, by its id');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'succeeded', 'only one'))->>'execution', 'x2', 'then only x2 waits: a report naming none goes to it');
 select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'failed'))->>'execution', '', 'with none waiting, a report is its own');
-select t.eq((public.cockpit_exec_report('xtok-a', 'f9', 'failed', '', 'x2'))->>'execution', 'x2', 'one naming its execution goes there');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f8', 'succeeded'))->>'execution', 'y1', 'f8''s one launch waiting takes f8''s report');
+reset role;
+-- The audit's case: a launch that never ran (PAD asked to confirm, or the phone can't open the
+-- link) and, later, another run's launch that did. The report of the one that ran is unpaired.
+insert into cockpit_items (user_id, key, kind, data, edited_at) values
+  (:'A', 'exec:n1', 'exec', jsonb_build_object('id', 'n1', 'flow', 'f7', 'status', 'requested',
+     'at', (extract(epoch from now() - interval '70 minutes') * 1000)::bigint), 1),
+  (:'A', 'exec:n2', 'exec', jsonb_build_object('id', 'n2', 'flow', 'f7', 'status', 'requested',
+     'at', (extract(epoch from now() - interval '60 minutes') * 1000)::bigint), 1),
+  (:'A', 'exec:o1', 'exec', jsonb_build_object('id', 'o1', 'flow', 'f6', 'status', 'requested',
+     'at', (extract(epoch from now() - interval '25 hours') * 1000)::bigint), 1),
+  (:'A', 'exec:o2', 'exec', jsonb_build_object('id', 'o2', 'flow', 'f6', 'status', 'running',
+     'at', (extract(epoch from now() - interval '5 minutes') * 1000)::bigint), 1),
+  (:'A', 'exec:o3', 'exec', jsonb_build_object('id', 'o3', 'flow', 'f6', 'status', 'requested',
+     'at', (extract(epoch from now() - interval '5 minutes') * 1000)::bigint), 1);
+update cockpit_items set deleted = true where user_id = :'A' and key = 'exec:o3';
+set role anon;
+select t.eq((public.cockpit_exec_report('xtok-a', 'f7', 'succeeded', 'run for R2'))->>'execution', '', 'a launch that never ran and another run''s: unpaired, not the oldest');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f6', 'succeeded'))->>'execution', 'o2', 'a launch over a day old, or deleted, isn''t counted as waiting');
+-- run_ref keeps a script's reports together, even unpaired ones.
+select public.cockpit_exec_report('xtok-a', 'f7', 'running', '', '', 'rr-1') as rr \gset
+select t.eq(:'rr'::jsonb->>'execution', '', 'a run_ref''s first report, with two waiting, is unpaired');
+select t.eq((public.cockpit_exec_report('xtok-a', 'f7', 'succeeded', '', '', 'rr-1'))->>'execution', 'u' || (:'rr'::jsonb->>'event'), 'its next report joins it');
+reset role;
+
+-- The probe the app's health check asks (release-h.sql).
+set role authenticated;
+select t.as_user(:'A');
+select t.eq(public.cockpit_sync_checks()::text, '{"guard": true, "release": "h", "guard_fn": true, "put_wrun": true}', 'the probe: everything installed');
+select t.as_user('');
+select t.raises($$ select public.cockpit_sync_checks() $$, 'sign in first', 'the probe needs a user');
+reset role;
+set role anon;
+select t.raises($$ select public.cockpit_sync_checks() $$, 'permission denied', 'and the anon role can''t call it');
 reset role;

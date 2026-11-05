@@ -50,21 +50,21 @@ test('two devices complete the same step offline: the second is refused and show
   expect(srvRun(srv).rev).toBe(1);
   for (const d of [a, b]) {
     await open(d);
-    await expect(wsync(d)).toHaveText('Synced');
+    await expect(wsync(d)).toHaveText('Synced, checked by the server');
     await d.offline(true);
     await d.page.click('[data-wfact="done"][data-wstage="s1"]');
     // (saved here, not yet taken by the server)
-    await expect(wsync(d)).toHaveText('Saved on this device');
+    await expect(wsync(d)).toHaveText('Saved on this device, not yet synced');
   }
   await a.offline(false);
   await a.sync();
-  await expect(wsync(a)).toHaveText('Synced');
+  await expect(wsync(a)).toHaveText('Synced, checked by the server');
   expect(srvRun(srv)).toMatchObject({ rev: 2, cur: 's2' });
   await b.offline(false);
   await b.sync();
   // B's change was made to revision 1: refused; B has the server's run now, and its own kept.
   expect(srvRun(srv).rev).toBe(2);
-  await expect(wsync(b)).toHaveText('Conflict');
+  await expect(wsync(b)).toHaveText('Conflict: needs your choice');
   await expect(conflictBox(b)).toContainText('This device: marked “Prepare” done.');
   await expect(conflictBox(b)).toContainText('Server: Your turn at “Send”.');
   // (the step has moved on there: doing it again on top isn't offered)
@@ -91,7 +91,7 @@ test('two devices complete the same step offline: the second is refused and show
     expect(r.log.map(l => l.k)).toEqual(['started', 'done', 'conflict']);
     expect(r.log[2].m).toBe('kept the server’s; not applied from this device: marked “Prepare” done');
   }
-  await expect(wsync(b)).toHaveText('Synced');
+  await expect(wsync(b)).toHaveText('Synced, checked by the server');
   // Nothing left to send back and forth.
   const before = srv.writes;
   await settle(a, b);
@@ -148,12 +148,12 @@ test('offline on one device: several changes go as one, accepted on reconnecting
   await a.page.click('[data-wfact="done"][data-wstage="s1"]');
   await a.page.click('[data-wfact="done"][data-wstage="s2"]');
   await said(a, 'Completed on this device; not synced yet');
-  await expect(wsync(a)).toHaveText('Saved on this device');
+  await expect(wsync(a)).toHaveText('Saved on this device, not yet synced');
   expect(srvRun(srv).status).toBe('awaiting_user');
   const puts = srv.puts.length;
   await a.offline(false);
   await a.sync();
-  await expect(wsync(a)).toHaveText('Synced');
+  await expect(wsync(a)).toHaveText('Synced, checked by the server');
   // One change: revision 1 to 2, holding both steps.
   expect(srvRun(srv)).toMatchObject({ rev: 2, status: 'succeeded' });
   expect(srv.puts.slice(puts).filter(p => p.p_key === 'wrun:r1')).toHaveLength(1);
@@ -336,14 +336,14 @@ test('the answer lost after the server took the change: sent again with the same
   // The server has it; this device doesn't know yet (the sync failed).
   expect(srvRun(srv)).toMatchObject({ rev: 2, cur: 's2' });
   await expect(a.page.locator('#syncBtn')).toHaveText('Sync error');
-  await expect(wsync(a)).toHaveText('Saved on this device');
+  await expect(wsync(a)).toHaveText('Not synced: the last sync failed');
   const writes = srv.writes,
     op = srv.puts[srv.puts.length - 1].p_op;
   await a.sync();
   const again = srv.puts[srv.puts.length - 1];
   expect(again.p_op).toBe(op); // (the same change, asked about again)
   expect(srv.writes).toBe(writes); // (not written twice)
-  await expect(wsync(a)).toHaveText('Synced');
+  await expect(wsync(a)).toHaveText('Synced, checked by the server');
   expect(await a.run('r1')).toMatchObject({ rev: 2, cur: 's2' });
   expect(srvRun(srv).rev).toBe(2);
   expect(srvRun(srv).log.filter(l => l.k === 'done')).toHaveLength(1);

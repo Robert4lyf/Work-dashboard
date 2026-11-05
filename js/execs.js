@@ -161,10 +161,14 @@ function foldExecEvent(ev) {
   if (!Number.isFinite(id) || !status || !flow) return false;
   if (S.execs.some(x => x.ev.some(e => e.i === id))) return false;
   // Its execution: the one named, else the one an earlier report with the same run_ref went
-  // to, else one of its own (named by the row, so every device names it the same).
-  let x = okRef(ev.execution) ? S.execs.find(y => y.id === ev.execution) : null;
-  if (!x && !okRef(ev.execution) && ref) x = S.execs.find(y => y.flow === flow && y.ref === ref) || null;
-  const xid = okRef(ev.execution) ? ev.execution : x ? x.id : 'u' + id;
+  // to, else one of its own (named by the row, so every device names it the same). A named one
+  // that is another flow's isn't it (Release H): the report is then one of its own, and moves
+  // nothing waiting on that other flow.
+  const named = okRef(ev.execution) ? S.execs.find(y => y.id === ev.execution) : null,
+    given = okRef(ev.execution) && !(named && named.flow !== flow);
+  let x = given ? named : null;
+  if (!x && !given && ref) x = S.execs.find(y => y.flow === flow && y.ref === ref) || null;
+  const xid = given ? ev.execution : x ? x.id : 'u' + id;
   if (!x) {
     x = { id: xid, flow, q: '', at: t, status, msg, upd: t, ref: '', ev: [], unreq: 1 };
     S.execs.push(x);
@@ -246,7 +250,7 @@ function renderExecSettings() {
   h += S.flows.length
     ? `<p class="hint" style="margin:8px 0 2px">Flow ids (the <code>flow</code> value):</p>${S.flows.map(f => `<div class="caprow"><span>${esc(f.name)}</span><code>${esc(f.id)}</code></div>`).join('')}`
     : '<p class="hint">Add a desktop automation under Knowledge > Processes first.</p>';
-  h += `<p class="hint">POST JSON <code>{"token":"…","flow":"<id>","status":"running|succeeded|failed|cancelled","message":"…"}</code> to the report URL with the apikey header. The report is matched to the oldest launch of that flow still waiting to hear. Power Automate Desktop and PowerShell examples are in the README.</p>
+  h += `<p class="hint">POST JSON <code>{"token":"…","flow":"<id>","status":"running|succeeded|failed|cancelled","message":"…","execution":"…"}</code> to the report URL with the apikey header. <code>execution</code> is the attempt's id: a flow set to “Pass the attempt’s id” (Knowledge > Processes > Manage automations) gets it as its input variable <code>ExecId</code>. Without it, a report is matched only when exactly one launch of that flow is waiting; otherwise it’s kept on its own, and a step waiting on the automation waits for you to confirm it. Power Automate Desktop and PowerShell examples are in the README.</p>
     <div class="acts"><button class="btn" id="xnew">${execToken ? 'New token' : 'Create token'}</button><button class="btn" id="xrevoke">Revoke</button></div></details>`;
   return h;
 }

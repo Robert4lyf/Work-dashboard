@@ -1,7 +1,8 @@
 // A stand-in for Supabase shared by several "devices" (browser contexts), as in sync.spec.js, with
 // Release G's server side too: cockpit_put_wrun (supabase/release-g-runs.sql) with the same rules,
 // checked revision, op ids applied once, the same answers, and the guard on ordinary upserts of
-// 'wrun:' rows. `srv.wrunFn = false` is a project without the migration (PostgREST's "no such
+// 'wrun:' rows, and release-h.sql's report pairing and probe (cockpit_sync_checks; `srv.checksFn
+// = false`: release-h.sql not run). `srv.wrunFn = false` is a project without the migration (PostgREST's "no such
 // function", and no guard; `srv.guard = true` with it: the guard without the function, as a stale
 // schema cache or a partial rollback leaves it). `srv.dropAnswers = n`: the next n accepted
 // changes are applied but their answers lost, as on a connection that drops. `srv.beforeAnswer`:
@@ -126,27 +127,30 @@ function execReport(srv, a) {
     return { error: 'status must be running, succeeded, failed or cancelled' };
   srv.events = srv.events || [];
   let x = a.execution || '';
+  // (as supabase-setup.sql since Release H: a named execution only if it is that flow's; else the
+  // run_ref's; else, naming none, the launch waiting to hear only when exactly ONE is, set aside or
+  // not; with none or several, unpaired)
+  const named = !!x,
+    row = named && srv.rows.get('exec:' + x);
+  if (named && (!row || row.deleted || !row.data || row.data.id !== x || row.data.flow !== a.flow)) x = '';
   if (!x && a.run_ref) {
     const first = srv.events.find(e => e.flow === a.flow && e.run_ref === a.run_ref);
     if (first) x = first.execution || 'u' + first.id;
   }
-  if (!x) {
-    // (as supabase-setup.sql since Release G: the OLDEST launch still waiting, with no result
-    // reported for it yet; set aside or not)
+  if (!x && !named) {
     const done = new Set(
       srv.events.filter(e => ['succeeded', 'failed', 'cancelled'].includes(e.status)).map(e => e.execution),
     );
-    const open = [...srv.rows.values()]
-      .filter(
-        r =>
-          r.key.startsWith('exec:') &&
-          !r.deleted &&
-          r.data.flow === a.flow &&
-          ['requested', 'running'].includes(r.data.status) &&
-          !done.has(r.data.id),
-      )
-      .sort((p, q) => p.data.at - q.data.at)[0];
-    x = open ? open.data.id : '';
+    const open = [...srv.rows.values()].filter(
+      r =>
+        r.key.startsWith('exec:') &&
+        !r.deleted &&
+        r.data.flow === a.flow &&
+        ['requested', 'running'].includes(r.data.status) &&
+        r.data.at > Date.now() - 864e5 &&
+        !done.has(r.data.id),
+    );
+    x = open.length === 1 ? open[0].data.id : '';
   }
   const ev = {
     id: ++srv.seq,
@@ -305,6 +309,13 @@ async function device(browser, srv, seed, opts = {}) {
     if (name === 'cockpit_new_exec_token') return (srv.xtoken = 'xtok' + ++srv.seq);
     if (name === 'cockpit_exec_report') return execReport(srv, args);
     if (name === 'cockpit_put_wrun') return putWrun(srv, args, page);
+    // (release-h.sql's probe; `srv.checksFn = false`: a project without release-h.sql)
+    if (name === 'cockpit_sync_checks') {
+      srv.probes = (srv.probes || 0) + 1;
+      if (srv.checksFn === false) return { missing: true };
+      const guard = srv.guard !== undefined ? srv.guard : srv.wrunFn;
+      return { release: 'h', put_wrun: !!srv.wrunFn, guard: !!guard, guard_fn: !!guard };
+    }
     return null;
   });
   await page.exposeFunction('srvExecRows', gt => (srv.events || []).filter(e => e.id > gt));

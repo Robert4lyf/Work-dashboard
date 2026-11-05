@@ -493,6 +493,7 @@ function asideExec(xid) {
   if (!x || EXEC_TERMINAL.includes(x.status) || x.aside) return;
   x.aside = 1;
   x.ack = 1;
+  if (wfDepth) wfAside.push(x.id); // (noted with the change: undone if the server refuses it)
 }
 // The failure a failed run is in, by its id ('' when it isn't failed). A failure from before
 // these ids is named by its time.
@@ -575,11 +576,13 @@ function cancelRun(r, why = '', { eng = false } = {}) {
    (a result applied on Resume) is part of that one. */
 const WJOUR_MAX = 40;
 let wfDepth = 0,
-  wfDry = false; // (trying the journal out on a copy: nothing noted, told to the rules or made)
+  wfDry = false, // (trying the journal out on a copy: nothing noted, told to the rules or made)
+  wfAside = []; // (the attempts the change under way set aside, noted with it as `ax`)
 function wfTx(r, e, fn) {
   if (wfDepth) return fn();
   const before = JSON.stringify(r);
   wfDepth++;
+  wfAside = [];
   let why;
   try {
     why = fn();
@@ -587,7 +590,7 @@ function wfTx(r, e, fn) {
     wfDepth--;
   }
   if (why === '' && !wfDry && JSON.stringify(r) !== before) {
-    journalRun(r.id, e);
+    journalRun(r.id, wfAside.length ? { ...e, ax: wfAside.slice() } : e);
     (sync2.wjh = sync2.wjh || {})[r.id] = recHash('wrun:' + r.id, r); // (explained: see wrunSeen)
   }
   return why;
@@ -750,6 +753,7 @@ function cleanConflicts(l) {
       at: Number.isFinite(+c.at) ? +c.at : 0,
       base: Number.isInteger(+c.base) ? +c.base : 0,
       srev: Number.isInteger(+c.srev) ? +c.srev : 0,
+      ...(c.gone ? { gone: 1 } : {}), // (Release H: deleted on the server, still here)
       mine: (c.mine && cleanRun(c.mine)) || null,
       jour: (Array.isArray(c.jour) ? c.jour : [])
         .filter(e => e && typeof e === 'object' && typeof e.a === 'string')
@@ -763,14 +767,21 @@ function cleanConflicts(l) {
 // and no history the server hasn't got. Notes alone are written again on the server's version.
 function conflictSettles(mine, theirs, base, jour) {
   const t = theirs && cleanRun(theirs);
-  if (!mine || !t) return true;
+  if (!mine) return true; // (deleted here: the server's run comes back, nothing of this device's lost)
+  // Deleted on the server (Release H): settled only for a run that is over here too and that this
+  // device didn't change but for notes or what every device does alike (a finished run tidied
+  // away). One still under way here, or finished by this device, is a choice to make: the other
+  // device may have deleted it, or restored a backup without it, while this one worked on it.
+  if (!t) return WRUN_OVER.includes(mine.status) && jour.every(e => e.a === 'note' || e.eng);
   // (an automation's result: the server's run still waits for that attempt, so it takes the
   // result itself, or already has it; a success the server's run has set aside, by a retry made
-  // there, is news)
+  // there, is news, and so is a failure where the server's step has that attempt done, a result
+  // confirmed by hand there: Release H)
+  const same = (e, o) => (e.a === 'done' ? o.o === 'done' : e.a === 'fail' ? o.o === 'failed' : true);
   const held = e =>
     !e.x ||
     t.live.exec === e.x ||
-    Object.values(t.st).some(o => o.exec === e.x && (e.a !== 'done' || o.o === 'done')) ||
+    Object.values(t.st).some(o => o.exec === e.x && same(e, o)) ||
     (e.a !== 'done' && (t.fails || []).some(f => f.exec === e.x));
   if (jour.some(e => e.a !== 'note' && !(e.eng && held(e)) && !(e.a === 'ack' && t.ack === e.occ)))
     return false;
@@ -798,6 +809,8 @@ function wfConflict(id, mine, theirs, base, srev, jour) {
     at: Date.now(),
     base,
     srev,
+    // (deleted on the server: this device keeps the run, unsent, until you choose; see putRun)
+    ...(theirs ? {} : { gone: 1 }),
     mine: JSON.parse(JSON.stringify(mine)),
     jour: jour.map(e => ({ ...e })),
   });
@@ -808,15 +821,61 @@ function wfConflict(id, mine, theirs, base, srev, jour) {
     if (r) noteRun(r, 'conflict', 'not applied from this device (too many conflicts): ' + jourSummary(old));
   }
   if (!(wfOpen === id && view === 'knowledge'))
-    toast(`“${mine.name}” changed on another device too: open it to choose`, false, 5000);
+    toast(
+      theirs
+        ? `“${mine.name}” changed on another device too: open it to choose`
+        : `“${mine.name}” was deleted on another device after it changed here: open it to choose`,
+      false,
+      5000,
+    );
   return [];
+}
+// (Release H) The attempts a refused change set aside (its journal's `ax`), back as they were
+// where the server's run still holds them: it waits for that attempt, or took its result. So the
+// server's run and the attempt's own record agree again. ('Apply mine on top' sets them aside
+// again, if it applies.) Returns whether any changed.
+function undoAside(jour, theirs) {
+  const t = theirs && cleanRun(theirs);
+  if (!t) return false;
+  const holds = x =>
+    t.live.exec === x.id ||
+    (EXEC_TERMINAL.includes(x.status) && Object.values(t.st).some(o => o.exec === x.id && o.o !== 'skipped'));
+  let changed = false;
+  jour.forEach(e =>
+    (Array.isArray(e.ax) ? e.ax : []).forEach(id => {
+      const x = S.execs.find(y => y.id === id);
+      if (!x || !x.aside || !holds(x)) return;
+      delete x.aside;
+      if (!EXEC_TERMINAL.includes(x.status)) delete x.ack; // (set with the aside; a failure's own stays)
+      changed = true;
+    }),
+  );
+  return changed;
+}
+// (Release H) The server's run differs from the base of this device's refused change only by the
+// day's tidy-up: never started, cancelled as "not started that day", one revision on. This
+// device's work then goes on top (its whole version, as it was refused).
+function tidiedOnly(r, c) {
+  const last = r.log[r.log.length - 1] || {};
+  return (
+    !!c.mine &&
+    !c.gone &&
+    r.status === 'cancelled' &&
+    (r.rev || 0) === c.base + 1 &&
+    !Object.keys(r.st).length &&
+    !r.log.some(l => l.k === 'started') &&
+    last.k === 'cancelled' &&
+    r.err === 'not started that day'
+  );
 }
 // Whether this device's changes still apply on top of the run as it is now ('' when they do):
 // tried out on a copy, by the same rules.
 function conflictWhy(r, c) {
   if (!r) return 'the run is gone';
-  // (replaced as a whole here, a backup restored say: the whole of this device's version, or not)
-  if (c.jour.some(e => e.a === 'replace')) return c.mine ? '' : 'nothing to apply';
+  // (replaced as a whole here, a backup restored say: the whole of this device's version, or not;
+  // the same for a run deleted on the server and kept here, and one only tidied away there)
+  if (c.gone || c.jour.some(e => e.a === 'replace') || tidiedOnly(r, c))
+    return c.mine ? '' : 'nothing to apply';
   const copy = JSON.parse(JSON.stringify(r));
   wfDry = true;
   try {
@@ -879,6 +938,8 @@ const jourSummary = c => {
 // What the server's version has: its state, and its steps' outcomes where they differ from this
 // device's.
 function theirsWords(r, c) {
+  if (c.gone) return 'Deleted on another device';
+  if (tidiedOnly(r, c)) return 'Cancelled by the day’s tidy-up (never started there)';
   const s = runStage(r),
     mine = c.mine || { st: {} },
     diff = r.def
@@ -904,6 +965,15 @@ function wfConflictClick(d) {
   if (!c) return renderKnowledge();
   const drop = () => (S.wconflicts = S.wconflicts.filter(x => x !== c));
   if (d.wcact === 'keep') {
+    // (deleted there: deleted here too, as the server has it)
+    if (c.gone) {
+      drop();
+      wrunForget(c.run);
+      if (wfOpen === c.run) wfOpen = null;
+      save();
+      toast('Deleted, as on the other device', false, 3000);
+      return renderKnowledge();
+    }
     if (r) noteRun(r, 'conflict', 'kept the server’s; not applied from this device: ' + jourSummary(c));
     drop();
     save();
@@ -917,27 +987,47 @@ function wfConflictClick(d) {
     return renderKnowledge();
   }
   const was = r.status;
-  if (c.jour.some(e => e.a === 'replace')) replaceRun(r, c.mine);
-  else c.jour.forEach(e => replayEntry(r, e));
-  noteRun(r, 'conflict', 'applied this device’s on top: ' + jourSummary(c));
+  // (deleted there: this device's version, as it is here, goes back on top of the deletion)
+  if (c.gone)
+    noteRun(r, 'conflict', 'kept this device’s after it was deleted on another device: ' + jourSummary(c));
+  else {
+    if (c.jour.some(e => e.a === 'replace') || tidiedOnly(r, c)) replaceRun(r, c.mine);
+    else c.jour.forEach(e => replayEntry(r, e));
+    noteRun(r, 'conflict', 'applied this device’s on top: ' + jourSummary(c));
+  }
   drop();
   reconcileRuns(); // (an attempt recorded again whose result is in: taken now)
   wfAfter(r, was, '');
 }
 // Where a run's last change stands, when it syncs: saved here and not yet taken by the server,
 // taken (synced), or refused for a newer change made elsewhere ('': not syncing).
+// (Release H) Synced, it also says whether the server checks the run's changes ('checked'), doesn't
+// ('unchecked': the newer edit wins), has its check only in part ('partial'), or isn't known yet.
 function wsyncState(r) {
   if (typeof sb === 'undefined' || !sb || !session) return '';
   if (S.wconflicts.some(c => c.run === r.id)) return 'conflict';
   if (wrunParked('wrun:' + r.id)) return 'refused';
-  return sync2.dirty['wrun:' + r.id] ? 'pending' : 'synced';
+  if (sync2.dirty['wrun:' + r.id]) return syncStatus === 'error' ? 'failed' : 'pending';
+  if (wrunCas.on === true) return wrunCas.guard === false ? 'partial' : 'checked';
+  if (wrunCas.on === false) return wrunCas.guard ? 'partial' : 'unchecked';
+  return 'synced';
 }
 const WSYNC_WORD = {
-  pending: 'Saved on this device',
+  pending: 'Saved on this device, not yet synced',
+  checked: 'Synced, checked by the server',
+  unchecked: 'Synced, but the server’s check isn’t installed: the newer edit wins',
+  partial: 'Synced, but the server’s check is only partly installed (Settings > Health check)',
   synced: 'Synced',
-  conflict: 'Conflict',
+  conflict: 'Conflict: needs your choice',
   refused: 'Not synced',
+  failed: 'Not synced: the last sync failed',
 };
+// (Release H) Said by an automation's Launch and a Try again while the server doesn't check run
+// changes (synced or not yet): nothing is blocked (offline work goes on), but you should know.
+const wunprot = r =>
+  wsyncState(r) && wrunCas.on === false && !wrunCas.guard
+    ? '<p class="hint wunprot">Not protected: if another device changes this run before it syncs, the newer edit overwrites this run’s progress.</p>'
+    : '';
 // A run the server refused as it is (see park in sync.js): why, and the way out.
 function wsyncRefused(r) {
   const b = wrunParked('wrun:' + r.id);
@@ -1034,14 +1124,30 @@ function rolloverWorkflows(d) {
     const id = w.id + '-' + d;
     if (S.wruns.some(r => r.id === id) || (sync2.gone && sync2.gone['wrun:' + id])) return;
     // An earlier day's run of it never started: it gives way (kept in the history as cancelled).
+    // Not one this device has a change of its own to, still to reach the server, or a conflict
+    // about (Release H): that work may yet start it.
     S.wruns.forEach(r => {
-      if (r.wf === w.id && r.status === 'ready' && /-\d{4}-\d\d-\d\d$/.test(r.id) && r.id < id)
+      if (
+        r.wf === w.id &&
+        r.status === 'ready' &&
+        /-\d{4}-\d\d-\d\d$/.test(r.id) &&
+        r.id < id &&
+        !wrunUnsent(r.id)
+      )
         cancelRun(r, 'not started that day', { eng: true });
     });
     S.wruns.push(makeRun(w, { id, prepared: true }));
     emitEvent({ k: 'wf_due', key: 'wfdue:' + id, wf: w.id, wrun: id, name: w.name });
   });
 }
+// Whether this device has a change of its own to a run not yet taken by the server: noted in its
+// journal, being sent, or refused and waiting on a choice.
+const wrunUnsent = id =>
+  !!(
+    ((sync2.wjour || {})[id] || []).length ||
+    (sync2.wop || {})['wrun:' + id] ||
+    S.wconflicts.some(c => c.run === id)
+  );
 /* actions from the page */
 function startWorkflow(wfId, q = '') {
   const w = wfById(wfId);
@@ -1524,7 +1630,7 @@ function stageCard(r, s, i) {
     const opts = more
       .map(a => b(a, label[a], '', a === 'inbox' || a === 'ack' ? `data-wocc="${failOcc(r)}"` : ''))
       .join('');
-    return `<div class="pstep box failed"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}<p class="hint pnext">${next}</p><div class="acts wacts">${acts}</div><details class="moreopts" id="wfmore"${panels.wfmore ? ' open' : ''}><summary>Other options</summary><div class="acts wacts">${opts}</div><p class="hint">Acknowledging only stops the failure being flagged on Today and in the Command Centre; it doesn't fix it.</p></details></div>`;
+    return `<div class="pstep box failed"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}<p class="hint pnext">${next}</p>${wunprot(r)}<div class="acts wacts">${acts}</div><details class="moreopts" id="wfmore"${panels.wfmore ? ' open' : ''}><summary>Other options</summary><div class="acts wacts">${opts}</div><p class="hint">Acknowledging only stops the failure being flagged on Today and in the Command Centre; it doesn't fix it.</p></details></div>`;
   } else if (s.type === 'manual') {
     next = 'Marking it done moves the process to the next step.';
     acts = `${b('done', 'Mark done', 'green')}${skip}${b('fail', 'Report a problem')}`;
@@ -1569,10 +1675,10 @@ function stageCard(r, s, i) {
         '<p class="hint"><span class="tag gone">Automation removed</span> Confirm the result by hand, or skip.</p>';
       acts = `${b('confirmflow', 'It succeeded', 'green', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}${skip}`;
     } else if (x && !EXEC_TERMINAL.includes(x.status) && !execStale(x)) {
-      body += `<p class="hint xline">${execLine(x)}</p><p class="hint">This step completes on its own when the automation reports its result.</p>`;
+      body += `<p class="hint xline">${execLine(x)}</p><p class="hint">This step completes on its own when the automation reports its result.</p>${strayLine(f, x)}`;
       acts = `${b('confirmflow', 'It succeeded (checked by hand)', '', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}`;
     } else {
-      if (x) body += `<p class="hint xline">${execLine(x)}</p>`;
+      if (x) body += `<p class="hint xline">${execLine(x)}</p>${strayLine(f, x)}`;
       body += S.track
         ? '<p class="hint">Launch the automation; this step completes when its result is reported.</p>'
         : '<p class="hint">Result tracking is off (<button class="linkbtn" data-gosec="execsec">Settings: Automations</button>): launch the automation, then confirm its result yourself.</p>';
@@ -1581,6 +1687,7 @@ function stageCard(r, s, i) {
           ? `${b('confirmflow', 'It succeeded (checked by hand)', '', 'data-ok="yes"')}${b('confirmflow', 'It failed', '', 'data-ok="no"')}`
           : ''
       }${skip}`;
+      body += wunprot(r);
     }
   } else if (s.type === 'wait') {
     const wn = stageWaitNode(r);
@@ -1595,6 +1702,17 @@ function stageCard(r, s, i) {
     acts = `${wn ? b('received', 'Mark reply received', 'green') : r.live.wait ? b('received', 'Mark reply received', 'green') : b('waititem', 'Start waiting' + (s.who ? ' on ' + esc(s.who) : ''), 'blue')}${skip}`;
   }
   return `<div class="pstep box"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}${next ? `<p class="hint pnext">${next}</p>` : ''}<div class="acts wacts">${acts}</div></div>`;
+}
+// (Release H) A result reported for this flow since the attempt `x` was launched that named no
+// attempt and couldn't be paired (two launches waiting, say): never taken as this one's. Said, so
+// you can check and confirm the step yourself.
+function strayLine(f, x) {
+  const y = S.execs
+    .filter(e => e.unreq && e.flow === f.id && e.at >= x.at && EXEC_TERMINAL.includes(e.status))
+    .sort((a, b) => b.at - a.at)[0];
+  return y
+    ? `<p class="hint wstray">A result came for this automation that names no attempt (${execLine(y)}), so it wasn’t taken as this one’s. Check what happened, then confirm the step yourself.</p>`
+    : '';
 }
 /* definitions: the list under Knowledge, and the editor (a stage list) */
 const WF_TEMPLATES = [

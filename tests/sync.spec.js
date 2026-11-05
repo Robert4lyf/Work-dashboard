@@ -100,8 +100,8 @@ function fakeSupabase() {
 }
 
 // What cockpit_exec_report does (see supabase-setup.sql): checks the token, pairs the report
-// with an execution (the caller's, the run_ref's, or the newest open launch of the flow), and
-// keeps it as a row other devices hear about.
+// with an execution (the caller's if it is that flow's, the run_ref's, or the flow's launch
+// waiting to hear when exactly one is: Release H), and keeps it as a row other devices hear about.
 function execReport(srv, a, from) {
   if (!a || a.token !== srv.xtoken) return { error: 'unknown execution token' };
   if (!/^[\w-]{1,40}$/.test(a.flow || '')) return { error: "flow must be the flow's id" };
@@ -109,21 +109,26 @@ function execReport(srv, a, from) {
     return { error: 'status must be running, succeeded, failed or cancelled' };
   srv.events = srv.events || [];
   let x = a.execution || '';
+  const named = !!x,
+    row = named && srv.rows.get('exec:' + x);
+  if (named && (!row || row.deleted || !row.data || row.data.flow !== a.flow)) x = '';
   if (!x && a.run_ref) {
     const first = srv.events.find(e => e.flow === a.flow && e.run_ref === a.run_ref);
     if (first) x = first.execution || 'u' + first.id;
   }
-  if (!x) {
-    const open = [...srv.rows.values()]
-      .filter(
-        r =>
-          r.key.startsWith('exec:') &&
-          !r.deleted &&
-          r.data.flow === a.flow &&
-          ['requested', 'running'].includes(r.data.status),
-      )
-      .sort((p, q) => q.data.at - p.data.at)[0];
-    x = open ? open.data.id : '';
+  if (!x && !named) {
+    const done = new Set(
+      srv.events.filter(e => ['succeeded', 'failed', 'cancelled'].includes(e.status)).map(e => e.execution),
+    );
+    const open = [...srv.rows.values()].filter(
+      r =>
+        r.key.startsWith('exec:') &&
+        !r.deleted &&
+        r.data.flow === a.flow &&
+        ['requested', 'running'].includes(r.data.status) &&
+        !done.has(r.data.id),
+    );
+    x = open.length === 1 ? open[0].data.id : '';
   }
   const ev = {
     id: ++srv.seq,

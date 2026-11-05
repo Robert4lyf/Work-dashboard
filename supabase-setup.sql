@@ -1,5 +1,7 @@
 -- Dashboard: run this in Supabase > SQL Editor > New query.
 -- Safe to run again: it only adds what's missing.
+-- Then run supabase/release-g-runs.sql and supabase/release-h.sql, in that order (process runs
+-- checked by the server; see docs/ux/release-h-sync.md).
 create table if not exists public.cockpit_state (
   user_id    uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   data       jsonb  not null,
@@ -35,7 +37,7 @@ drop policy if exists "delete own history" on public.cockpit_history;
 create policy "delete own history" on public.cockpit_history for delete using (auth.uid() = user_id);
 
 create or replace function public.cockpit_keep_history() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 begin
   if old.data is distinct from new.data then
     insert into cockpit_history (user_id, data, edited_at) values (old.user_id, old.data, old.edited_at);
@@ -108,7 +110,7 @@ alter table public.cockpit_capture_tokens enable row level security;
 -- No policies: the table is only reachable through the two functions below.
 
 create or replace function public.cockpit_new_capture_token() returns text
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 declare t text := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
 begin
   if auth.uid() is null then raise exception 'sign in first'; end if;
@@ -120,7 +122,7 @@ revoke execute on function public.cockpit_new_capture_token() from public, anon;
 grant execute on function public.cockpit_new_capture_token() to authenticated;
 
 create or replace function public.cockpit_capture(token text, text text) returns boolean
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   u uuid;
   body text := trim(coalesce(text, ''));
@@ -194,7 +196,7 @@ create policy "own notices" on public.cockpit_notices for all using (auth.uid() 
 create or replace function public.cockpit_alert(
   token text, title text, body text default '', "to" text default 'inbox', who text default '', due text default ''
 ) returns boolean
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   u uuid;
   t text := left(regexp_replace(trim(coalesce(title, '')), '\s+', ' ', 'g'), 200);
@@ -253,7 +255,7 @@ grant execute on function public.cockpit_alert(text, text, text, text, text, tex
 -- For the app's health check: is the every-minute job that sends notifications set up, and what
 -- did its last call to the send-notices function get back? (Only states and status codes.)
 create or replace function public.cockpit_notify_status() returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   out jsonb := jsonb_build_object('cron', false, 'net', false);
   r record;
@@ -301,7 +303,7 @@ alter table public.cockpit_exec_tokens enable row level security;
 -- No policies: only reachable through the functions below.
 
 create or replace function public.cockpit_new_exec_token() returns text
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 declare t text := 'x' || replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
 begin
   if auth.uid() is null then raise exception 'sign in first'; end if;
@@ -313,7 +315,7 @@ revoke execute on function public.cockpit_new_exec_token() from public, anon;
 grant execute on function public.cockpit_new_exec_token() to authenticated;
 
 create or replace function public.cockpit_revoke_exec_token() returns boolean
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, pg_temp as $$
 begin
   if auth.uid() is null then raise exception 'sign in first'; end if;
   delete from cockpit_exec_tokens where user_id = auth.uid();
@@ -323,8 +325,9 @@ revoke execute on function public.cockpit_revoke_exec_token() from public, anon;
 grant execute on function public.cockpit_revoke_exec_token() to authenticated;
 
 -- One row per report. `execution` is the app's execution id when it's known: given by the
--- caller, matched by run_ref to an earlier report, or paired here with the oldest unconfirmed
--- launch of that flow. Otherwise the app makes an execution of its own for the report.
+-- caller (if it is that flow's), matched by run_ref to an earlier report, or paired here with the
+-- launch of that flow waiting to hear when exactly one is. Otherwise the app makes an execution of
+-- its own for the report.
 create sequence if not exists public.cockpit_exec_events_seq;
 create table if not exists public.cockpit_exec_events (
   id          bigint primary key default nextval('public.cockpit_exec_events_seq'),
@@ -357,7 +360,8 @@ end $$;
 --   status     running | succeeded | failed | cancelled
 --   message    a short, plain description (an error's text, a count): at most 300 characters,
 --              kept as text, never report contents or personal information
---   execution  the app's execution id, if the script knows it (optional)
+--   execution  the app's execution id, if the script knows it (optional; a flow set to take it gets
+--              it as its input variable ExecId, see README)
 --   run_ref    the script's own id for this run, so its reports stay together (optional)
 -- Returns {"execution": <id or "">, "event": <row id>}. At most 120 reports an hour.
 create or replace function public.cockpit_exec_report(
@@ -371,6 +375,8 @@ declare
   m text := left(trim(regexp_replace(regexp_replace(coalesce(message, ''), '[[:cntrl:]]+', ' ', 'g'), '\s+', ' ', 'g')), 300);
   x text := trim(coalesce(execution, ''));
   r text := left(trim(coalesce(run_ref, '')), 60);
+  named boolean;
+  waiting integer;
   fname text;
   ev bigint;
 begin
@@ -391,12 +397,22 @@ begin
   end if;
   delete from cockpit_exec_events e where e.user_id = u and e.reported_at < now() - interval '90 days';
   delete from cockpit_notices n where n.user_id = u and n.key like 'exec:%' and n.sent_at < now() - interval '30 days';
-  -- Which execution this is about: the caller's say, else the run it reported before (an
-  -- earlier report with no execution of its own stands for one, named 'u' + its row id, as the
-  -- app names it), else the OLDEST launch of this flow still waiting to hear: requested or
-  -- running, within a day, with no result reported for it yet. (Oldest, not newest: a report
-  -- coming late from an attempt a retry has set aside goes to that attempt, never to the newer
-  -- one that took its place. Release G.)
+  -- Which execution this is about (Release H):
+  --  1. the one the caller names, but only if this user has an execution of that id for this
+  --     flow (the app passes it to a flow set up to take it, see README). One it hasn't (a typo,
+  --     another flow's, a launch not synced yet) is neither taken nor replaced by a guess.
+  --  2. else the run it reported before (an earlier report with no execution of its own stands
+  --     for one, named 'u' + its row id, as the app names it);
+  --  3. else, with no id given, the launch of this flow still waiting to hear (requested or
+  --     running, within a day, no result reported for it yet), but only when exactly ONE is
+  --     waiting. With none, or two or more (a launch that never ran, another run's, one a retry
+  --     set aside), the report is left unpaired: the app makes it an execution of its own, and a
+  --     step waiting on an automation waits for you to confirm it. A guess is never made.
+  named := x <> '';
+  if named and not exists (select 1 from cockpit_items i where i.user_id = u and i.key = 'exec:' || x
+      and not i.deleted and i.data->>'id' = x and i.data->>'flow' = f) then
+    x := '';
+  end if;
   if x = '' and r <> '' then
     select coalesce(nullif(e.execution, ''), 'u' || e.id) into x from cockpit_exec_events e
       where e.user_id = u and e.flow = f and e.run_ref = r
@@ -404,16 +420,15 @@ begin
       order by e.id limit 1;
     x := coalesce(x, '');
   end if;
-  if x = '' then
-    select i.data->>'id' into x from cockpit_items i
+  if x = '' and not named then
+    select count(*), min(i.data->>'id') into waiting, x from cockpit_items i
       where i.user_id = u and i.kind = 'exec' and not i.deleted
         and i.data->>'flow' = f and i.data->>'status' in ('requested', 'running')
         and (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end)
             > (extract(epoch from now() - interval '24 hours') * 1000)::bigint
         and not exists (select 1 from cockpit_exec_events e where e.user_id = u
-          and e.execution = i.data->>'id' and e.status in ('succeeded', 'failed', 'cancelled'))
-      order by (case when (i.data->>'at') ~ '^\d{1,16}$' then (i.data->>'at')::bigint else 0 end), i.key
-      limit 1;
+          and e.execution = i.data->>'id' and e.status in ('succeeded', 'failed', 'cancelled'));
+    if waiting <> 1 then x := ''; end if;
     x := coalesce(x, '');
     if x !~ '^[A-Za-z0-9_-]{1,40}$' then x := ''; end if;
   end if;
