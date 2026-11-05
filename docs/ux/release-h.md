@@ -71,3 +71,73 @@ failed process or automation. Opening an item acknowledges nothing.
 
 <!-- perf:start -->
 <!-- perf:end -->
+
+## Checkpoint 3: trustworthy sync
+
+Details, guarantees, residual risks and the deployment procedure: `release-h-sync.md`. In short:
+
+- **A report naming no attempt can't complete the wrong run.** It was paired with the oldest
+  waiting launch of its automation, even one for another run or one that never ran (Power
+  Automate Desktop asks before running; a phone can't run the link at all). Proven on real
+  PostgreSQL. Now it's paired only when exactly one launch of that automation is waiting;
+  otherwise the step waits for you to confirm it by hand.
+- **An explicit attempt id, optional per automation.** Microsoft documents `inputArguments` on
+  the Run URL, so "Pass the attempt's id to the flow" adds `ExecId` to the link at the tap. The
+  server only takes an id that is yours and that automation's. The PAD side is documented, not
+  tested on a real PAD install.
+- **Protection is said where it matters.** A process run's page says *Synced, checked by the
+  server*; *Saved on this device, not yet synced*; *Conflict: needs your choice*; *Synced, but
+  the server's check isn't installed: the newer edit wins* (or only partly installed); *Not
+  synced: the last sync failed*. Launch and Try again carry a one-line warning while
+  unprotected. Nothing is blocked, offline work included. Health check tells a partial install
+  apart from a missing one.
+- **Conflicts that lost work silently:** the day's tidy-up cancelling a run begun offline
+  elsewhere; a run deleted elsewhere (or by a restore) while it had unsent work here; a failure
+  report settling over a success confirmed by hand; attempts set aside by a refused change
+  staying set aside. Each is fixed with a test.
+- **The database guard** also checks a run's key and id and its size; every SECURITY DEFINER
+  function searches `public, pg_temp`. Two direct writes of the same revision are serialised by
+  the row lock (tested on real PostgreSQL), so the direct path is compare-and-swap too.
+- **Production:** `supabase/release-h.sql` needs running once in the SQL editor (after
+  `release-g-runs.sql`, already installed). Until then the app works as in Release G, and the
+  health check says what's missing. Nothing was run against a real Supabase project.
+
+## Checkpoint 4: navigation, wording, safer sheets
+
+Twelve navigation defects were confirmed by probing the app (Android back is `history.back()`);
+ten are fixed, each with a test in `tests/releaseh4.spec.js`:
+
+- Back returns to where you came from after: a Forecast entry for an Upcoming task (it did
+  nothing before); an Upcoming item opened from Waiting or Search (back used to leave the app); a
+  process run's "For: task" link and its "Settings: Automations" link; any Search result, not
+  only tasks (the query is kept); the crumb up from a step.
+- Closing a process run puts the page back where it was, the keyboard on what opened it; back to
+  a list puts the keyboard on the row that was opened.
+- **A sheet with typed words** asks "Discard what you typed?" on back, Escape or a tap outside
+  it, instead of dropping them. Sheets with nothing typed close as before.
+- **A reload, or Android discarding the page**, keeps your place (the view, task, run, guide or
+  article) for that tab. Opening the app afresh still starts on Today; a deep link wins.
+- **Delete on a carried-over task** needs two taps, like Delete everywhere else (Undo stays).
+
+Wording, one term per meaning:
+
+| Was | Now | Why |
+| --- | --- | --- |
+| Resume (a guide, the saved place) | Continue | Resume is kept for un-pausing: the timer, a paused process |
+| Clear (an Inbox item), Drop | Delete | They delete |
+| Process the Inbox, n processed | Sort the Inbox, n sorted | "Process" is a kind of thing in this app |
+| Take out (Top 3) | Remove from Top 3 | As in a task's actions |
+| Response received, Resolved | Reply received | As everywhere else |
+| Record a follow-up | Follow up | As its button |
+| Later (triage) | Do later | As everywhere else |
+| Moved to Tue | On Upcoming until Tue | Not to be read as Scheduled |
+| inbox | Inbox | It's the Inbox |
+
+On a task's page the header's Continue (for the saved place, often another task) is no longer
+styled as the page's main action. Left as they are: Done on a Scheduled row (Mark done doesn't
+fit at 320px; it's labelled "Mark done: name" for a screen reader), Delete vs Remove picture
+(they do different things).
+
+Undo was audited under rapid actions, navigation, an incoming sync, deletion and the day's
+rollover: any later change (a save, a sync that changes anything, rollover) drops the Undo, so
+it can't overwrite newer work. No defect found.
