@@ -555,7 +555,7 @@ test('review 5: a task page field with the keyboard, not typed in, shows an edit
   const b = await device(browser, srv);
   await settle(a, b);
   // A opens the task's page and puts the keyboard in its Notes (not typing yet).
-  await a.page.evaluate(() => openPath(['q1']));
+  await a.page.locator('#v-projects [data-open="q1"]').click();
   await a.page.evaluate(() => {
     const t = $('#fnotes');
     let d = t.closest('details');

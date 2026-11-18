@@ -121,7 +121,7 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
     await page.click(`#v-search [data-wfview="${wf.id}"]`);
     await page.click('nav [data-v=inbox]');
     await back(page);
-    expect((await where(page)).view).toBe('today');
+    expect((await where(page)).view).toBe('projects');
   });
 
   test('a process run: its task and Settings come back to the run; back from the run keeps the scroll', async ({

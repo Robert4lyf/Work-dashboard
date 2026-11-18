@@ -89,7 +89,7 @@ test('a picture whose data is missing on this device is fetched again, not delet
   expect(r).toEqual({ pics: 0, synced: false, tomb: false, catchUp: true });
 });
 
-test('Android back: steps back through the app, and only leaves it from Today’s list', async ({
+test('Android back: steps back through the app and returns to Projects from Today’s list', async ({
   app,
   page,
 }) => {
@@ -105,6 +105,8 @@ test('Android back: steps back through the app, and only leaves it from Today’
   await expect(page.locator('#v-today .crumbs, #v-today [data-crumb]').first()).toBeVisible();
   await page.goBack();
   await expect(page.locator('#v-today .open >> text="Task"')).toBeVisible();
+  await page.goBack();
+  await expect(page.locator('#v-projects .project-open >> text="Task"')).toBeVisible();
   // A picture shown full size closes first.
   await page.evaluate(() => {
     S.noteImgs = [{ id: 'm', src: 'data:image/png;base64,iVBORw0KGgo=', at: 1 }];

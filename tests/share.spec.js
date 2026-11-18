@@ -32,7 +32,7 @@ test('app-icon shortcuts: Capture opens the inbox ready to type; there is no Foc
   expect(new URL(page.url()).search).toBe('');
   // An old installed app may still offer the removed Focus shortcut: the URL is just tidied.
   await page.goto('/index.html?focus=1');
-  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('#v-projects')).toBeVisible();
   expect(new URL(page.url()).search).toBe('');
   // (and the removed Talk one: the capture box instead)
   await page.goto('/index.html?talk=1');

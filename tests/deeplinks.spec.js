@@ -146,11 +146,11 @@ test('missing, invalid or hostile targets fail plainly, change nothing, and neve
     ['#/kb/nope', "article isn't here", 'knowledge'],
     ['#/waiting/s1', "waiting item isn't here", 'waiting'], // (s1 isn't waiting)
     ['#/kb/a2/run', 'no steps to follow', 'knowledge'],
-    ['#/nope', "isn't one the Dashboard knows", 'today'],
-    ['#/q/<img onerror=x>', "isn't one the Dashboard knows", 'today'],
-    ['#/q/%ZZ', "isn't one the Dashboard knows", 'today'],
-    ['#/today/extra', "isn't one the Dashboard knows", 'today'],
-    ['#/q/' + 'a'.repeat(41), "isn't one the Dashboard knows", 'today'],
+    ['#/nope', "isn't one the Dashboard knows", 'projects'],
+    ['#/q/<img onerror=x>', "isn't one the Dashboard knows", 'projects'],
+    ['#/q/%ZZ', "isn't one the Dashboard knows", 'projects'],
+    ['#/today/extra', "isn't one the Dashboard knows", 'projects'],
+    ['#/q/' + 'a'.repeat(41), "isn't one the Dashboard knows", 'projects'],
   ]) {
     await cold(page, h);
     // (the message may wait on the first word from the sync library, when the service worker

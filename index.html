@@ -49,7 +49,8 @@
         <div class="hfoot"><div class="hstats" id="hstats"></div></div>
       </header>
 
-      <section id="v-today"></section>
+      <section id="v-projects" aria-label="Projects"></section>
+      <section id="v-today" hidden></section>
       <section id="v-inbox" hidden></section>
       <section id="v-waiting" hidden></section>
       <section id="v-review" hidden></section>
@@ -64,7 +65,8 @@
 
     <nav aria-label="Sections">
       <div class="tabs" id="tabs">
-        <button data-v="today" aria-current="page">Today</button>
+        <button data-v="projects" aria-current="page">Projects</button>
+        <button data-v="today">Today</button>
         <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
         <button data-v="knowledge">Knowledge<span class="badge" id="waitBadge" hidden></span></button>
         <button data-v="review">

@@ -237,13 +237,13 @@ test('the page shows the period, charts and sentences; exports carry the numbers
   await expect(page.locator('#toast')).toContainText('Copied');
   const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-iexport="csv"]')]);
   expect(dl.suggestedFilename()).toMatch(/^dashboard-insights-\d{4}-\d\d-\d\d\.csv$/);
-  // The Review tabs: back from Insights goes to Today; History is still its own page.
+  // The Review tabs: back from Insights goes to Projects; History is still its own page.
   await page.click('[data-rsub="log"]');
   await expect(page.locator('#v-log')).toBeVisible();
   await page.click('[data-rsub="insights"]');
   await expect(page.locator('#v-log')).toBeHidden();
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('#v-projects')).toBeVisible();
   expect(app.errors).toEqual([]);
 });
 

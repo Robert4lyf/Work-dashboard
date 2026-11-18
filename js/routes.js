@@ -1,6 +1,7 @@
 /* deep links: a URL with a hash route opens a place in the app from a shortcut, a bookmark, an
    Android automation (Automate, Tasker, HTTP Shortcuts, an NFC card through one of them) or
    another app. Opening a link only navigates: nothing is changed, ticked, started or sent.
+     #/projects         Projects
      #/today            Today (the list, with the top 3)
      #/inbox            the Inbox
      #/inbox/triage     Sort the Inbox
@@ -22,6 +23,7 @@
    ticks, launches or sends anything; #/inbox/triage begins the walk and #/kb/<id>/run starts or
    resumes a run (a record of its own), which is what those places do on arrival. */
 const ROUTES = [
+  'projects',
   'today',
   'inbox',
   'triage',
@@ -58,7 +60,8 @@ function parseRoute(hash) {
   if (sub) return null;
   if (!ROUTES.includes(kind) || kind === 'triage' || kind === 'run') return null;
   if (['q', 'kb', 'wrun'].includes(kind) && !id) return null;
-  if (['today', 'inbox', 'focus', 'continue', 'review', 'workflows', 'ops'].includes(kind) && id) return null;
+  if (['projects', 'today', 'inbox', 'focus', 'continue', 'review', 'workflows', 'ops'].includes(kind) && id)
+    return null;
   return { kind, id };
 }
 // The URL's route, taken and cleared. Returns whether there was one.
@@ -104,9 +107,10 @@ function followRoute(r, first) {
     if (view) go(view);
   };
   switch (r.kind) {
+    case 'projects':
     case 'today':
       path = [];
-      go('today');
+      go(r.kind);
       return;
     case 'inbox':
       triage = null;
@@ -217,6 +221,7 @@ let shortcutKind = 'today',
   shortcutId = '';
 const SHORTCUTS = [
   ['today', 'Start work: Today', ''],
+  ['projects', 'Projects', ''],
   ['continue', 'Continue: where you left off', ''],
   ['triage', 'Sort the Inbox', ''],
   ['inbox', 'Inbox', ''],

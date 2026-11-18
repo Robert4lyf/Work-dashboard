@@ -54,12 +54,17 @@ function renderHeader() {
   const full = headerFull(),
     hd = document.querySelector('header');
   if (hd) hd.classList.toggle('compact', !full);
+  if (hd) hd.classList.toggle('project-header', view === 'projects');
+  const projectTitle = view === 'projects' ? '<h1>Projects</h1>' : '';
   if (S.timer && view !== 'focus') {
     const t = S.timer,
       paused = t.left != null;
-    h = `<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t))}</small></button>`;
+    h =
+      projectTitle +
+      `<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t))}</small></button>`;
     acts = `<button class="btn sm ${paused ? 'green' : 'blue'}" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`;
-  } else {
+  } else if (projectTitle) h = projectTitle;
+  else {
     const nx = recommend(),
       ask = !nx && S.quests.find(q => needsNext(q) && !q.wait && !q.scheduled); // (every step ticked: what's next?)
     if (ask) {
