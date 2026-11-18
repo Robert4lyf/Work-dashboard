@@ -260,7 +260,7 @@ async function device(browser, srv, seed, opts = {}) {
     await page.waitForFunction(() => window.appReady === true);
     return r;
   };
-  await page.goto('/');
+  await page.goto('/#/today');
   await expect(page.locator('#syncBtn')).toHaveText('Synced');
   const d = {
     page,
