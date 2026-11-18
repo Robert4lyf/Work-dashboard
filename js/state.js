@@ -1,6 +1,16 @@
 const KEY = 'work-cockpit-v1';
 const SUMMARY_MAX = 600;
 const PROJECT_UPDATE_MAX = 1000;
+const PROJECT_SECTION_NAME_MAX = 60;
+const PROJECT_SECTION_COLOURS = {
+  blue: 'Blue',
+  teal: 'Teal',
+  green: 'Green',
+  amber: 'Amber',
+  red: 'Red',
+  purple: 'Purple',
+};
+const UNCATEGORISED = 'uncategorised';
 const RESUME_MAX = 400; // a saved place's note
 const LINKS_MAX = 20; // resources linked to a task
 const TOP3_MAX = 3;
@@ -228,6 +238,8 @@ function norm(s) {
       later: [],
       projects: [],
       projectUpdates: [],
+      projectSections: [],
+      projectPlacements: [],
       todayPicks: [],
       pdaily: {},
       interrupts: [],
@@ -268,6 +280,21 @@ function norm(s) {
     if (text) updates.set(u.id, { id: u.id, q: u.q, t: u.t, text });
   }
   S.projectUpdates = [...updates.values()];
+  const sections = new Map();
+  for (const section of Array.isArray(S.projectSections) ? S.projectSections : []) {
+    if (!okId(section) || section.id === UNCATEGORISED || typeof section.name !== 'string') continue;
+    const name = cleanText(section.name.slice(0, PROJECT_SECTION_NAME_MAX)).trim();
+    if (!name) continue;
+    const colour = Object.hasOwn(PROJECT_SECTION_COLOURS, section.colour) ? section.colour : 'blue';
+    sections.set(section.id, { id: section.id, name, colour });
+  }
+  S.projectSections = [...sections.values()];
+  const placements = new Map();
+  for (const entry of Array.isArray(S.projectPlacements) ? S.projectPlacements : []) {
+    if (okId(entry) && okRef(entry.section) && entry.section !== UNCATEGORISED)
+      placements.set(entry.id, { id: entry.id, section: entry.section });
+  }
+  S.projectPlacements = [...placements.values()];
   const picks = new Map();
   for (const pick of Array.isArray(S.todayPicks) ? S.todayPicks : []) {
     if (pick && okRef(pick.id) && cleanDay(pick.day) && Number.isFinite(pick.at))

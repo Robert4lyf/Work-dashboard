@@ -4587,6 +4587,97 @@ header.project-header :is(.hsearch, .syncbtn, .now .go, .now .go small) {
 header.project-header .syncbtn[data-state='off']::before {
   background: var(--muted);
 }
+.project-board-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+.project-board-section {
+  --section-accent: var(--edge);
+  margin-bottom: 22px;
+}
+.project-board-section[data-colour='blue'] {
+  --section-accent: #528cdf;
+}
+.project-board-section[data-colour='teal'] {
+  --section-accent: #159789;
+}
+.project-board-section[data-colour='green'] {
+  --section-accent: #62994c;
+}
+.project-board-section[data-colour='amber'] {
+  --section-accent: #d89a30;
+}
+.project-board-section[data-colour='red'] {
+  --section-accent: #d15a62;
+}
+.project-board-section[data-colour='purple'] {
+  --section-accent: #9273d1;
+}
+.project-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 10px;
+  border: 1px solid var(--edge);
+  border-inline-start: 4px solid var(--section-accent);
+  background: var(--panel);
+}
+.project-board-section[data-colour] :is(.project-section-head, .project-card) {
+  background: color-mix(in srgb, var(--section-accent) 8%, var(--panel));
+}
+.project-board-section[data-colour] .project-card {
+  border-inline-start-color: var(--section-accent);
+  box-shadow: inset 3px 0 var(--section-accent);
+}
+.project-section-head h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-h);
+}
+.project-section-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 44px;
+  gap: 10px;
+  padding: 4px 0;
+  text-align: start;
+  background: none;
+  border: 0;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.project-section-toggle::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(-45deg);
+}
+.project-section-toggle[aria-expanded='true']::before {
+  transform: rotate(45deg);
+}
+.project-section-toggle small {
+  color: var(--muted);
+  font-weight: 500;
+}
+.project-section-edit {
+  min-height: 44px;
+}
+.project-section-body {
+  padding-top: 10px;
+}
+.project-section-empty {
+  margin: 0;
+  padding: 12px 10px;
+  border: 1px dashed var(--edge);
+  color: var(--muted);
+}
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 285px), 1fr));
@@ -4820,8 +4911,9 @@ header.project-header .syncbtn[data-state='off']::before {
 .project-group .project-grid {
   margin-top: 8px;
 }
-.project-group h2 {
+.project-group h3 {
   margin: 0;
+  font-size: var(--fs-sm);
 }
 @media (min-width: 640px) and (max-width: 999px) {
   .wrap:has(> #v-projects:not([hidden])) {
