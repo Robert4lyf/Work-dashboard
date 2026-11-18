@@ -189,6 +189,10 @@ test('project cards keep the same dimensions across rows when showing or editing
   await page.setViewportSize({ width: 1280, height: 900 });
   await start(app, page);
   const cards = page.locator('#v-projects .project-card:visible');
+  const sidewaysOverflow = () =>
+    cards.locator('.project-preview').evaluateAll(previews =>
+      previews.map(preview => preview.scrollWidth - preview.clientWidth),
+    );
   const layout = () =>
     cards.evaluateAll(items =>
       items.map(card => {
@@ -199,6 +203,7 @@ test('project cards keep the same dimensions across rows when showing or editing
     );
 
   const initial = await layout();
+  expect(await sidewaysOverflow()).toEqual(initial.map(() => 0));
   expect(new Set(initial.map(card => card.top)).size).toBeGreaterThan(1);
   for (const key of ['width', 'height', 'footerOffset']) {
     expect(new Set(initial.map(card => Math.round(card[key]))).size).toBe(1);
@@ -210,6 +215,7 @@ test('project cards keep the same dimensions across rows when showing or editing
   );
 
   await page.setViewportSize({ width: 320, height: 800 });
+  expect(await sidewaysOverflow()).toEqual(initial.map(() => 0));
   expect(new Set((await layout()).map(card => card.height)).size).toBe(1);
   await expect(page.getByRole('textbox', { name: 'New step' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
@@ -244,6 +250,9 @@ test('each card has its own collapsible history with dated updates that survive 
     'Draft sent for review',
   ]);
   expect((await report.boundingBox()).height).toBe(height);
+  const preview = report.locator('.project-preview');
+  await preview.evaluate(el => (el.scrollTop = el.scrollHeight));
+  expect(await preview.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
   await expect(report.locator('.project-step')).toHaveCount(3);
   await page.getByRole('button', { name: 'History for Supplier replies' }).click();
   await expect(page.getByRole('article', { name: 'Supplier replies' }).locator('time')).toHaveCount(0);
