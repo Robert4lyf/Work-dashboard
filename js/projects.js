@@ -5,6 +5,15 @@ let projectStepFor = '',
 const PROJECT_STEP_LIMIT = 3;
 const openProjectHistory = new Set();
 const projectUpdateDate = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+const projectGripIcon =
+  '<svg viewBox="0 0 16 20" aria-hidden="true" fill="currentColor"><circle cx="5" cy="4" r="1.5"/><circle cx="11" cy="4" r="1.5"/><circle cx="5" cy="10" r="1.5"/><circle cx="11" cy="10" r="1.5"/><circle cx="5" cy="16" r="1.5"/><circle cx="11" cy="16" r="1.5"/></svg>';
+const PROJECT_FOLDS_KEY = 'dashboard-project-section-folds';
+const foldedProjectSections = new Set();
+try {
+  const saved = JSON.parse(localStorage.getItem(PROJECT_FOLDS_KEY));
+  if (Array.isArray(saved)) saved.filter(okRef).forEach(id => foldedProjectSections.add(id));
+} catch (e) {}
+const openProjectCompleted = new Set();
 
 function projectCheck(n, label) {
   const done = isDone(n);
@@ -67,7 +76,7 @@ function projectCard(q, updates, canReorder, selected) {
         ${!kids.length && mayTick ? projectCheck(q, done ? 'Mark not done' : 'Mark done') : ''}
         <h2 id="project-title-${q.id}"><button class="project-open" ${detail}><span>${esc(q.text)}</span>${chevron}</button></h2>
         ${todayPickButton(q, q, selected, upcoming)}
-        ${canReorder ? `<button class="project-grip" type="button" data-project-reorder="${q.id}" aria-haspopup="dialog" aria-label="Reorder ${esc(q.text)}" title="Drag to reorder or open move options"><svg viewBox="0 0 16 20" aria-hidden="true" fill="currentColor"><circle cx="5" cy="4" r="1.5"/><circle cx="11" cy="4" r="1.5"/><circle cx="5" cy="10" r="1.5"/><circle cx="11" cy="10" r="1.5"/><circle cx="5" cy="16" r="1.5"/><circle cx="11" cy="16" r="1.5"/></svg></button>` : ''}
+        ${canReorder ? `<button class="project-grip" type="button" data-project-reorder="${q.id}" aria-haspopup="dialog" aria-label="Reorder ${esc(q.text)}" title="Drag to move or open move options">${projectGripIcon}</button>` : ''}
       </div>
       ${meta.length ? `<div class="project-meta">${meta.map(item => `<span>${item}</span>`).join('')}</div>` : ''}
       ${steps ? `<ul class="project-steps">${steps}</ul>` : ''}
@@ -89,13 +98,30 @@ function projectCard(q, updates, canReorder, selected) {
   </article>`;
 }
 
+function projectSectionGroups() {
+  const groups = [...S.projectSections, { id: UNCATEGORISED, name: 'Uncategorised' }].map(section => ({
+    ...section,
+    active: [],
+    upcoming: [],
+    done: [],
+  }));
+  const byId = new Map(groups.map(section => [section.id, section]));
+  const placements = new Map(S.projectPlacements.map(entry => [entry.id, entry.section]));
+  const groupFor = q => byId.get(placements.get(q.id)) || byId.get(UNCATEGORISED);
+  for (const q of S.quests) groupFor(q)[isDone(q) ? 'done' : 'active'].push(q);
+  for (const q of S.later) groupFor(q).upcoming.push(q);
+  return groups;
+}
+
 function renderProjects() {
-  const el = $('#v-projects'),
-    donePanel = $('#projects-done');
-  if (donePanel) projectsDoneOpen = donePanel.open;
-  const active = S.quests.filter(q => !isDone(q)),
-    done = S.quests.filter(isDone),
-    known = [...S.quests, ...S.later];
+  const el = $('#v-projects');
+  for (const panel of el.querySelectorAll('[data-project-completed]')) {
+    const id = panel.dataset.projectCompleted;
+    if (id === UNCATEGORISED) projectsDoneOpen = panel.open;
+    else if (panel.open) openProjectCompleted.add(id);
+    else openProjectCompleted.delete(id);
+  }
+  const known = [...S.quests, ...S.later];
   if (!known.some(q => q.id === projectStepFor)) projectStepFor = '';
   const updatesByProject = new Map();
   for (const entry of S.projectUpdates) {
@@ -105,42 +131,128 @@ function renderProjects() {
   }
   for (const list of updatesByProject.values()) list.sort((a, b) => b.t - a.t || byName(b.id, a.id));
   const selected = todayPickSet();
-  const grid = (qs, canReorder = false) =>
-    `<div class="project-grid"${canReorder ? ' id="active-project-grid"' : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder, selected)).join('')}</div>`;
+  const canMoveSections = S.projectSections.length > 0;
+  const grid = (qs, canReorder, id = '') =>
+    `<div class="project-grid"${id ? ` id="${id}"` : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder, selected)).join('')}</div>`;
+  const sections = projectSectionGroups().map(section => {
+    const { id, name, colour, active, upcoming, done } = section;
+    const uncategorised = id === UNCATEGORISED;
+    const expanded = !foldedProjectSections.has(id);
+    const count = active.length + upcoming.length + done.length;
+    const completedId = uncategorised ? 'projects-done' : 'projects-done-' + id;
+    const completedOpen = uncategorised ? projectsDoneOpen : openProjectCompleted.has(id);
+    const upcomingId = 'projects-upcoming-' + id;
+    return `<section class="project-board-section" id="project-section-${id}" data-project-section="${id}"${colour ? ` data-colour="${colour}"` : ''} aria-labelledby="project-section-name-${id}">
+      <div class="project-section-head">
+        ${!uncategorised && S.projectSections.length > 1 ? `<button type="button" class="project-grip" data-project-section-reorder="${id}" aria-haspopup="dialog" aria-label="Reorder section ${esc(name)}" title="Drag to reorder or open move options">${projectGripIcon}</button>` : ''}
+        <h2 id="project-section-name-${id}"><button type="button" class="project-section-toggle" data-project-section-toggle="${id}" aria-expanded="${expanded}" aria-controls="project-section-body-${id}"><span>${esc(name)}</span><small aria-hidden="true">${count}</small></button></h2>
+        ${uncategorised ? '' : `<button type="button" class="linkbtn project-section-edit" data-project-section-edit="${id}" aria-label="Edit section ${esc(name)}">Edit</button>`}
+      </div>
+      <div class="project-section-body" id="project-section-body-${id}"${expanded ? '' : ' hidden'}>
+        ${active.length ? grid(active, canMoveSections || active.length > 1, uncategorised ? 'active-project-grid' : '') : ''}
+        ${upcoming.length ? `<section class="project-group" aria-labelledby="${upcomingId}"><h3 id="${upcomingId}">Upcoming</h3>${grid(upcoming, canMoveSections)}</section>` : ''}
+        ${done.length ? `<details class="project-group" id="${completedId}" data-project-completed="${id}"${completedOpen ? ' open' : ''}><summary>Completed today <small>${done.length}</small></summary>${grid(done, canMoveSections)}</details>` : ''}
+        ${count ? '' : `<p class="project-section-empty">${uncategorised && !known.length ? 'No projects yet. <button class="linkbtn" data-goto="inbox">Capture a project in the Inbox</button>.' : 'Drag projects here.'}</p>`}
+      </div>
+    </section>`;
+  });
   setHTML(
     el,
-    `
-    ${active.length ? grid(active, active.length > 1) : `<div class="slot">${done.length ? 'Every current project is done.' : 'No current projects.'} <button class="linkbtn" data-goto="inbox">Capture a project in the Inbox</button></div>`}
-    ${S.later.length ? `<section class="project-group" aria-labelledby="projects-upcoming"><h2 id="projects-upcoming">Upcoming</h2>${grid(S.later)}</section>` : ''}
-    ${done.length ? `<details class="project-group" id="projects-done"${projectsDoneOpen ? ' open' : ''}><summary>Completed today <small>${done.length}</small></summary>${grid(done)}</details>` : ''}
-  `,
+    `<div class="project-board-actions"><button type="button" class="btn sm" data-project-section-add="1" aria-haspopup="dialog">Add section</button></div>${sections.join('')}`,
   );
 }
 
 function projectClick(d) {
+  if (d.projectSectionAdd || d.projectSectionEdit) {
+    editProjectSection(S.projectSections.find(section => section.id === d.projectSectionEdit));
+    return;
+  }
+  if (d.projectSectionDelete) {
+    const section = S.projectSections.find(item => item.id === d.projectSectionDelete);
+    if (section) {
+      closeSheet();
+      sheet(
+        {
+          title: 'Delete ' + section.name + '?',
+          text: 'Projects in this section will move to Uncategorised.',
+          ok: 'Delete section',
+          danger: true,
+        },
+        yes => {
+          if (!yes) return;
+          withUndo('Section deleted', () => {
+            S.projectSections = S.projectSections.filter(item => item.id !== section.id);
+            save();
+            renderProjects();
+          });
+        },
+      );
+    }
+    return;
+  }
+  if (d.projectSectionToggle) {
+    if (!foldedProjectSections.delete(d.projectSectionToggle))
+      foldedProjectSections.add(d.projectSectionToggle);
+    try {
+      localStorage.setItem(PROJECT_FOLDS_KEY, JSON.stringify([...foldedProjectSections]));
+    } catch (e) {}
+    renderProjects();
+    return;
+  }
+  if (d.projectSectionReorder) {
+    const at = S.projectSections.findIndex(item => item.id === d.projectSectionReorder);
+    if (at < 0) return;
+    const actions = [-1, 1]
+      .filter(offset => S.projectSections[at + offset])
+      .map(offset => ({
+        label: offset < 0 ? 'Move section earlier' : 'Move section later',
+        attrs: `data-project-section-move="${d.projectSectionReorder}" data-direction="${offset}"`,
+      }));
+    actionSheet(S.projectSections[at].name, actions, 'You can also drag the handle to reorder.');
+    return;
+  }
+  if (d.projectSectionMove) {
+    const at = S.projectSections.findIndex(item => item.id === d.projectSectionMove);
+    closeSheet();
+    if (at >= 0) moveProjectSection(d.projectSectionMove, S.projectSections[at + Number(d.direction)]?.id);
+    return;
+  }
   if (d.projectReorder) {
-    const active = S.quests.filter(q => !isDone(q));
-    const at = active.findIndex(q => q.id === d.projectReorder);
-    if (at < 0 || active.length < 2) return;
+    const location = locateProjectCard(d.projectReorder);
+    if (!location) return;
+    const { group, cards, at } = location;
     const actions = [];
-    if (at > 0)
+    if (at > 0 && !cards[at].start)
       actions.push({
         label: 'Move earlier',
         attrs: `data-project-move="${d.projectReorder}" data-direction="-1"`,
       });
-    if (at + 1 < active.length)
+    if (at + 1 < cards.length && !cards[at].start)
       actions.push({
         label: 'Move later',
         attrs: `data-project-move="${d.projectReorder}" data-direction="1"`,
       });
-    actionSheet(active[at].text, actions, 'You can also drag the handle to reorder.');
+    for (const section of projectSectionGroups()) {
+      if (section.id === group.id) continue;
+      actions.push({
+        label: 'Move to ' + section.name,
+        attrs: `data-project-place="${d.projectReorder}" data-section="${section.id}"`,
+      });
+    }
+    if (actions.length)
+      actionSheet(cards[at].text, actions, 'You can also drag the handle to move this project.');
     return;
   }
   if (d.projectMove) {
-    const active = S.quests.filter(q => !isDone(q));
-    const at = active.findIndex(q => q.id === d.projectMove);
+    const location = locateProjectCard(d.projectMove);
     closeSheet();
-    if (at >= 0) moveProject(d.projectMove, active[at + Number(d.direction)]?.id);
+    const target = location?.cards[location.at + Number(d.direction)];
+    if (target) moveProject(d.projectMove, location.group.id, target.id);
+    return;
+  }
+  if (d.projectPlace) {
+    closeSheet();
+    moveProject(d.projectPlace, d.section);
     return;
   }
   if (d.projectHistory) {
@@ -162,30 +274,109 @@ function projectClick(d) {
   if (projectStepFor) document.getElementById('project-step-' + projectStepFor).focus();
 }
 
-function moveProject(id, targetId) {
-  const from = S.quests.findIndex(q => q.id === id && !isDone(q));
-  const to = S.quests.findIndex(q => q.id === targetId && !isDone(q));
+function editProjectSection(section) {
+  const colours = Object.entries(PROJECT_SECTION_COLOURS)
+    .map(([id, name]) => `<option value="${id}"${section?.colour === id ? ' selected' : ''}>${name}</option>`)
+    .join('');
+  popSheet(
+    `<form id="project-section-form" data-section="${section?.id || ''}">
+    <h2 id="sheettitle">${section ? 'Edit section' : 'Add section'}</h2>
+    <label class="f" for="project-section-name">Section name</label>
+    <input class="fld" id="project-section-name" required maxlength="${PROJECT_SECTION_NAME_MAX}" value="${esc(section?.name || '')}">
+    <label class="f" for="project-section-colour">Accent colour</label>
+    <select class="fld" id="project-section-colour">${colours}</select>
+    <div class="acts">
+      <button class="btn green">${section ? 'Save section' : 'Add section'}</button>
+      <button type="button" class="btn" data-sheetclose="1">Cancel</button>
+      ${section ? `<button type="button" class="linkbtn" data-stay="1" data-project-section-delete="${section.id}">Delete section</button>` : ''}
+    </div>
+  </form>`,
+    { labelledBy: 'sheettitle' },
+  );
+}
+
+function saveProjectSection(form) {
+  const input = $('#project-section-name');
+  const name = cleanText(input.value).trim();
+  const colour = $('#project-section-colour').value;
+  if (!name) {
+    input.value = '';
+    input.reportValidity();
+    return;
+  }
+  if (!Object.hasOwn(PROJECT_SECTION_COLOURS, colour)) return;
+  const id = form.dataset.section;
+  const existing = S.projectSections.find(section => section.id === id);
+  if (id && !existing) return closeSheet();
+  if (existing) Object.assign(existing, { name, colour });
+  else S.projectSections.push({ id: uid(), name, colour });
+  closeSheet();
+  save();
+  renderProjects();
+}
+
+function moveProjectSection(id, targetId) {
+  const from = S.projectSections.findIndex(section => section.id === id);
+  const to = S.projectSections.findIndex(section => section.id === targetId);
   if (from < 0 || to < 0 || from === to) return;
-  const [project] = S.quests.splice(from, 1);
-  S.quests.splice(to, 0, project);
+  const [section] = S.projectSections.splice(from, 1);
+  S.projectSections.splice(to, 0, section);
+  save();
+  renderProjects();
+  toast(`Section moved to position ${to + 1}`);
+}
+
+function locateProjectCard(id, groups = projectSectionGroups()) {
+  for (const group of groups) {
+    for (const cards of [group.active, group.upcoming, group.done]) {
+      const at = cards.findIndex(q => q.id === id);
+      if (at !== -1) return { group, cards, at };
+    }
+  }
+  return null;
+}
+
+function moveProject(id, sectionId, targetId) {
+  const groups = projectSectionGroups();
+  const destination = groups.find(group => group.id === sectionId);
+  const source = locateProjectCard(id, groups);
+  if (!destination || !source) return;
+  const project = source.cards[source.at];
+  const changedSection = source.group.id !== sectionId;
+  const from = S.quests.indexOf(project);
+  const peers = isDone(project) ? destination.done : destination.active;
+  const target = peers.find(q => q.id === targetId);
+  const anchor = target || (changedSection ? peers.at(-1) : null);
+  const to = anchor ? S.quests.indexOf(anchor) : -1;
+  if (from >= 0 && to >= 0 && from !== to) {
+    S.quests.splice(from, 1);
+    S.quests.splice(to + (changedSection && !target && from > to ? 1 : 0), 0, project);
+  } else if (!changedSection) return;
+  if (changedSection) {
+    S.projectPlacements = S.projectPlacements.filter(entry => entry.id !== id);
+    if (sectionId !== UNCATEGORISED) S.projectPlacements.push({ id, section: sectionId });
+  }
   save();
   renderAll();
-  toast(`Moved to position ${S.quests.slice(0, to + 1).filter(q => !isDone(q)).length}`);
+  toast(changedSection ? 'Moved to ' + destination.name : 'Project reordered');
 }
 
 const projectView = $('#v-projects');
 let projectDrag = null;
 projectView.addEventListener('pointerdown', e => {
-  const handle = e.target.closest('[data-project-reorder]');
+  const handle = e.target.closest('[data-project-reorder], [data-project-section-reorder]');
   if (!handle || !e.isPrimary || e.button !== 0 || projectDrag) return;
+  const sectionDrag = !!handle.dataset.projectSectionReorder;
   projectDrag = {
-    id: handle.dataset.projectReorder,
+    id: handle.dataset.projectSectionReorder || handle.dataset.projectReorder,
+    sectionDrag,
+    sourceSection: handle.closest('[data-project-section]').dataset.projectSection,
     pointer: e.pointerId,
     x: e.clientX,
     y: e.clientY,
     moving: false,
     frame: 0,
-    source: handle.closest('.project-card'),
+    source: handle.closest(sectionDrag ? '[data-project-section]' : '.project-card'),
     target: null,
   };
 });
@@ -205,10 +396,23 @@ document.addEventListener('pointermove', e => {
 
 function markProjectDrop() {
   const drag = projectDrag;
-  const target = document.elementFromPoint(drag.x, drag.y)?.closest('#active-project-grid > .project-card');
-  drag.target?.classList.remove('project-drop-target');
-  drag.target = target && target.dataset.qid !== drag.id ? target : null;
-  drag.target?.classList.add('project-drop-target');
+  const hit = document.elementFromPoint(drag.x, drag.y);
+  const section = hit?.closest('#v-projects [data-project-section]');
+  const sectionId = section?.dataset.projectSection;
+  const card = hit?.closest('.project-card');
+  let target = null;
+  if (section && drag.sectionDrag && sectionId !== UNCATEGORISED && sectionId !== drag.id)
+    target = { element: section.firstElementChild, sectionId };
+  if (
+    section &&
+    !drag.sectionDrag &&
+    card?.dataset.qid !== drag.id &&
+    (card || sectionId !== drag.sourceSection)
+  )
+    target = { element: card || section.firstElementChild, sectionId, cardId: card?.dataset.qid };
+  if (drag.target?.element !== target?.element) drag.target?.element.classList.remove('project-drop-target');
+  drag.target = target;
+  target?.element.classList.add('project-drop-target');
 }
 
 function scrollProjectDrag() {
@@ -228,19 +432,21 @@ function cancelProjectDrag() {
   projectDrag = null;
   cancelAnimationFrame(drag.frame);
   drag.source.classList.remove('project-dragging');
-  drag.target?.classList.remove('project-drop-target');
+  drag.target?.element.classList.remove('project-drop-target');
   if (projectView.hasPointerCapture(drag.pointer)) projectView.releasePointerCapture(drag.pointer);
 }
 
 document.addEventListener('pointerup', e => {
   if (projectDrag?.pointer !== e.pointerId) return;
-  const { id, moving } = projectDrag;
+  const { id, moving, sectionDrag } = projectDrag;
   projectDrag.x = e.clientX;
   projectDrag.y = e.clientY;
   if (moving) markProjectDrop();
-  const targetId = projectDrag.target?.dataset.qid;
+  const target = projectDrag.target;
   cancelProjectDrag();
-  if (targetId) moveProject(id, targetId);
+  if (!target) return;
+  if (sectionDrag) moveProjectSection(id, target.sectionId);
+  else moveProject(id, target.sectionId, target.cardId);
 });
 document.addEventListener('pointercancel', e => {
   if (projectDrag?.pointer === e.pointerId) cancelProjectDrag();

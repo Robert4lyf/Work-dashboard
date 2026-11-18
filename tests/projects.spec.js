@@ -1,5 +1,81 @@
 const { test, expect } = require('./fixtures');
 
+async function addSection(page, name, colour) {
+  await page.getByRole('button', { name: 'Add section' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Add section' });
+  await dialog.getByLabel('Section name').fill(name);
+  await dialog.getByLabel('Accent colour').selectOption(colour);
+  await dialog.getByRole('button', { name: 'Add section' }).click();
+}
+
+async function dragTo(page, handle, target) {
+  await handle.scrollIntoViewIfNeeded();
+  const from = await handle.boundingBox();
+  const to = await target.boundingBox();
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+  await expect(target).toHaveClass(/project-drop-target/);
+  await page.mouse.up();
+}
+
+test('sections accept project drops, can be reordered, and keep their accents and collapsed state', async ({
+  app,
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await start(app, page);
+  await addSection(page, 'Urgent', 'red');
+  await addSection(page, 'Tuesdays', 'teal');
+  const urgent = page.getByRole('region', { name: 'Urgent', exact: true });
+  const tuesdays = page.getByRole('region', { name: 'Tuesdays', exact: true });
+  const uncategorised = page.getByRole('region', { name: 'Uncategorised', exact: true });
+  const order = () => page.locator('.project-section-toggle span').allTextContents();
+  expect(await order()).toEqual(['Urgent', 'Tuesdays', 'Uncategorised']);
+  await dragTo(
+    page,
+    tuesdays.getByRole('button', { name: 'Reorder section Tuesdays' }),
+    urgent.locator('.project-section-head'),
+  );
+  expect(await order()).toEqual(['Tuesdays', 'Urgent', 'Uncategorised']);
+  await urgent.getByRole('button', { name: 'Urgent', exact: true }).click();
+  await dragTo(
+    page,
+    uncategorised.getByRole('button', { name: 'Reorder Weekly reporting' }),
+    urgent.locator('.project-section-head'),
+  );
+  await expect(urgent.getByRole('button', { name: 'Urgent', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await page.reload();
+  expect(await order()).toEqual(['Tuesdays', 'Urgent', 'Uncategorised']);
+  await expect(urgent.getByRole('button', { name: 'Urgent', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  await urgent.getByRole('button', { name: 'Urgent', exact: true }).click();
+  const report = urgent.getByRole('article', { name: 'Weekly reporting' });
+  await expect(report).toBeVisible();
+  await expect(report).toHaveCSS('border-left-color', 'rgb(209, 90, 98)');
+  await urgent.getByRole('button', { name: 'Edit section Urgent' }).click();
+  await page.getByLabel('Accent colour').selectOption('purple');
+  await page.getByRole('button', { name: 'Save section' }).click();
+  await expect(report).toHaveCSS('border-left-color', 'rgb(146, 115, 209)');
+  await report.getByRole('button', { name: 'Reorder Weekly reporting' }).press('Enter');
+  await page.getByRole('button', { name: 'Move to Tuesdays' }).press('Enter');
+  await expect(tuesdays.getByRole('article', { name: 'Weekly reporting' })).toBeVisible();
+  await tuesdays.getByRole('button', { name: 'Edit section Tuesdays' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete section' }).click();
+  await page
+    .getByRole('dialog', { name: 'Delete Tuesdays?' })
+    .getByRole('button', { name: 'Delete section' })
+    .click();
+  await expect(tuesdays).toHaveCount(0);
+  await expect(uncategorised.getByRole('article', { name: 'Weekly reporting' })).toBeVisible();
+  expect(await order()).toEqual(['Urgent', 'Uncategorised']);
+});
+
 async function start(app, page) {
   await page.clock.install({ time: new Date(2026, 10, 18, 11, 0) });
   await app.open({ home: 'projects' });

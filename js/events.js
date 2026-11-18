@@ -318,6 +318,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (!window.appReady) return;
   const f = e.target;
+  if (f.id === 'project-section-form') return saveProjectSection(f);
   if (f.dataset.projectUpdate) return addProjectUpdate(f);
   if (f.id === 'sform' || f.dataset.projectStep) {
     const input = f.querySelector('input'),
@@ -1023,6 +1024,8 @@ document.addEventListener('click', e => {
         flows: S.flows,
         follows: S.follows,
         projectUpdates: S.projectUpdates,
+        projectSections: S.projectSections,
+        projectPlacements: S.projectPlacements,
         todayPicks: S.todayPicks,
         runs: S.runs,
         execs: S.execs,
@@ -1054,6 +1057,8 @@ document.addEventListener('click', e => {
       'flows',
       'follows',
       'projectUpdates',
+      'projectSections',
+      'projectPlacements',
       'todayPicks',
       'runs',
       'execs',

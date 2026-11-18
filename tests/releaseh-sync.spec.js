@@ -6,6 +6,41 @@ const { test, expect } = require('@playwright/test');
 const { server, device, settle, report } = require('./fakesb');
 const { unfold } = require('./fixtures');
 
+test('a project assigned offline to a section deleted elsewhere falls back to Uncategorised', async ({
+  browser,
+}) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.quests.push(fix({ id: 'report', text: 'Weekly report' }));
+    S.projectSections.push({ id: 'urgent', name: 'Urgent', colour: 'red' });
+    save();
+    renderAll();
+  });
+  await a.sync();
+  const b = await device(browser, srv);
+  await settle(a, b);
+  await b.offline(true);
+  await a.page.getByRole('button', { name: 'Edit section Urgent' }).click();
+  await a.page.getByRole('dialog').getByRole('button', { name: 'Delete section' }).click();
+  await a.page
+    .getByRole('dialog', { name: 'Delete Urgent?' })
+    .getByRole('button', { name: 'Delete section' })
+    .click();
+  await a.sync();
+  await b.page.getByRole('button', { name: 'Reorder Weekly report' }).click();
+  await b.page.getByRole('button', { name: 'Move to Urgent' }).click();
+  await b.offline(false);
+  await settle(a, b);
+  for (const d of [a, b]) {
+    await expect(d.page.getByRole('region', { name: 'Urgent', exact: true })).toHaveCount(0);
+    await expect(
+      d.page.getByRole('region', { name: 'Uncategorised' }).getByRole('article', { name: 'Weekly report' }),
+    ).toBeVisible();
+    expect(d.errors).toEqual([]);
+  }
+});
+
 test('independent tasks sent to Today from two devices sync into the same plan', async ({ browser }) => {
   const srv = server();
   const a = await device(browser, srv);

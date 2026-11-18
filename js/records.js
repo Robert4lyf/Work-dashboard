@@ -10,6 +10,8 @@ const LISTS = {
   template: ['templates', x => x.id],
   project: ['projects', x => x.id],
   pupdate: ['projectUpdates', x => x.id],
+  psection: ['projectSections', x => x.id],
+  pplacement: ['projectPlacements', x => x.id],
   todaypick: ['todayPicks', x => x.day + '|' + x.id],
   tag: ['tags', x => x.name],
   log: ['log', x => x.id + '|' + x.d],
@@ -46,6 +48,9 @@ function toRecords(s) {
   if (s.cap) m.set('meta:cap', { days: s.cap });
   // Quick-launch pins (Release C): their own record, only once there are any.
   if (s.pins && s.pins.length) m.set('meta:pins', { pins: s.pins });
+  // Section order changes independently of section names, colours and project assignments.
+  if (s.projectSections?.length)
+    m.set('meta:projectsections', { ids: s.projectSections.map(section => section.id) });
   // An article's pictures are records of their own, so editing its text doesn't send them again.
   // (The article keeps an empty list in their place: that's how a device from before this reads
   // it, so the two don't keep rewriting it back and forth.)
@@ -97,6 +102,7 @@ function fromRecords(m, day) {
   const by = {};
   m.forEach((v, k) => (by[k.slice(0, k.indexOf(':'))] = by[k.slice(0, k.indexOf(':'))] || []).push(v));
   const order = m.get('meta:order') || {};
+  const sectionOrder = m.get('meta:projectsections')?.ids;
   const ordered = (list = [], ids = [], key = x => x.id, newFirst = false) => {
     const pos = new Map(ids.map((id, i) => [id, i])),
       known = list.filter(x => pos.has(key(x))).sort((a, b) => pos.get(key(a)) - pos.get(key(b))),
@@ -110,6 +116,11 @@ function fromRecords(m, day) {
     templates: ordered(by.template, order.templates),
     projects: ordered(by.project, order.projects),
     projectUpdates: by.pupdate || [],
+    projectSections: ordered(
+      (by.psection || []).filter(section => okRef(section?.id)).sort((a, b) => byName(a.id, b.id)),
+      Array.isArray(sectionOrder) ? sectionOrder : [],
+    ),
+    projectPlacements: by.pplacement || [],
     todayPicks: by.todaypick || [],
     tags: ordered(by.tag, order.tags, x => x.name),
     log: (by.log || []).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)),
@@ -214,6 +225,7 @@ const META_KEYS = [
   'track',
   'cap',
   'pins',
+  'projectsections',
 ];
 const knownKey = k =>
   k.slice(0, k.indexOf(':')) in LISTS ||
