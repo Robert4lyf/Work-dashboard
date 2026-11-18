@@ -99,3 +99,75 @@ test('detail uses the existing task page and returns to Projects after reload an
   await page.evaluate(() => history.back());
   await expect(page.getByRole('button', { name: 'Month end', exact: true })).toBeFocused();
 });
+
+test('project cards keep the same dimensions across rows when showing or editing steps', async ({
+  app,
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await start(app, page);
+  const cards = page.locator('#v-projects .project-card:visible');
+  const layout = () =>
+    cards.evaluateAll(items =>
+      items.map(card => {
+        const { width, height, top } = card.getBoundingClientRect();
+        const actions = card.querySelector('.project-actions').getBoundingClientRect();
+        return { width, height, top, footerOffset: actions.bottom - top };
+      }),
+    );
+
+  const initial = await layout();
+  expect(new Set(initial.map(card => card.top)).size).toBeGreaterThan(1);
+  for (const key of ['width', 'height', 'footerOffset']) {
+    expect(new Set(initial.map(card => Math.round(card[key]))).size).toBe(1);
+  }
+  await page.getByRole('button', { name: 'Add step to Weekly reporting' }).click();
+  await expect(page.getByRole('textbox', { name: 'New step' })).toBeFocused();
+  expect((await layout()).map(({ height, top }) => [height, top])).toEqual(
+    initial.map(({ height, top }) => [height, top]),
+  );
+
+  await page.setViewportSize({ width: 320, height: 800 });
+  expect(new Set((await layout()).map(card => card.height)).size).toBe(1);
+  await expect(page.getByRole('textbox', { name: 'New step' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});
+
+test('each card has its own collapsible history with dated updates that survive reload', async ({
+  app,
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await start(app, page);
+  const report = page.getByRole('article', { name: 'Weekly reporting' });
+  const toggle = report.getByRole('button', { name: 'History for Weekly reporting' });
+  const update = report.getByRole('textbox', { name: 'New project update' });
+  const height = (await report.boundingBox()).height;
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(update).toBeHidden();
+  await toggle.click();
+  await expect(update).toBeVisible();
+  await update.fill('Draft sent for review');
+  await toggle.click();
+  await toggle.click();
+  await expect(update).toHaveValue('Draft sent for review');
+  await report.getByRole('button', { name: 'Add update' }).click();
+  await expect(update).toHaveValue('');
+  await expect(report.locator('time')).toHaveCount(1);
+  await page.clock.fastForward(1000);
+  await update.fill('Feedback received\nRevising the figures');
+  await report.getByRole('button', { name: 'Add update' }).click();
+  await expect(report.locator('.project-updates p')).toHaveText([
+    'Feedback received Revising the figures',
+    'Draft sent for review',
+  ]);
+  expect((await report.boundingBox()).height).toBe(height);
+  await expect(report.locator('.project-step')).toHaveCount(3);
+  await page.getByRole('button', { name: 'History for Supplier replies' }).click();
+  await expect(page.getByRole('article', { name: 'Supplier replies' }).locator('time')).toHaveCount(0);
+
+  await page.reload();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(report.locator('time')).toHaveCount(2);
+});

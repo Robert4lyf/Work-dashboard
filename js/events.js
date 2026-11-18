@@ -308,6 +308,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (!window.appReady) return;
   const f = e.target;
+  if (f.dataset.projectUpdate) return addProjectUpdate(f);
   if (f.id === 'sform' || f.dataset.projectStep) {
     const input = f.querySelector('input'),
       id = f.dataset.parent || f.dataset.projectStep,
@@ -1001,6 +1002,7 @@ document.addEventListener('click', e => {
         kbcats: S.kbcats,
         flows: S.flows,
         follows: S.follows,
+        projectUpdates: S.projectUpdates,
         runs: S.runs,
         execs: S.execs,
         workflows: S.workflows,
@@ -1030,6 +1032,7 @@ document.addEventListener('click', e => {
       'kbcats',
       'flows',
       'follows',
+      'projectUpdates',
       'runs',
       'execs',
       'workflows',

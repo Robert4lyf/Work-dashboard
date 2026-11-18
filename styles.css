@@ -4591,14 +4591,23 @@ header.project-header .syncbtn[data-state='off']::before {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 285px), 1fr));
   gap: 12px;
-  align-items: start;
 }
 .project-card {
+  display: flex;
+  flex-direction: column;
+  block-size: calc(140px + 10 * var(--fs));
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--edge);
   border-radius: var(--radius);
   background: var(--panel);
+}
+.project-preview {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  margin-inline: -5px;
+  padding: 5px;
 }
 .project-card-heading {
   display: flex;
@@ -4692,14 +4701,51 @@ header.project-header .syncbtn[data-state='off']::before {
 }
 .project-actions {
   display: flex;
-  gap: 4px 16px;
+  flex: none;
+  gap: 4px 12px;
   flex-wrap: wrap;
 }
 .project-actions button {
   min-height: 44px;
 }
+.project-actions [data-project-history] {
+  margin-inline-start: auto;
+}
 .project-add {
+  flex: none;
   margin: 0 0 4px;
+}
+.project-history {
+  margin-top: 8px;
+  padding: 8px 0 4px;
+  border-top: 1px solid var(--edge);
+}
+.project-update {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+.project-update .fld {
+  min-height: 48px;
+  resize: vertical;
+}
+.project-updates {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.project-updates li {
+  border-top: 1px solid var(--edge);
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+}
+.project-updates time {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.project-updates p {
+  margin: 2px 0 0;
+  white-space: pre-wrap;
 }
 .project-group {
   margin-top: 20px;

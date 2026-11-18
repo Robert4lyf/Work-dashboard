@@ -3,13 +3,34 @@
 let projectStepFor = '',
   projectsDoneOpen = false;
 const PROJECT_STEP_LIMIT = 3;
+const openProjectHistory = new Set();
+const projectUpdateDate = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 
 function projectCheck(n, label) {
   const done = isDone(n);
   return `<button class="check${done ? ' project-checked' : ''}" type="button" data-toggle="${n.id}" aria-pressed="${done}" aria-label="${label}: ${esc(n.text)}">${tick}</button>`;
 }
 
-function projectCard(q) {
+function projectHistory(q, updates, open) {
+  return `<section class="project-history" id="project-history-${q.id}" aria-label="Project history"${open ? '' : ' hidden'}>
+    ${withHash(`<form class="project-update" data-project-update="${q.id}">
+      <textarea class="fld" id="project-update-${q.id}" maxlength="${PROJECT_UPDATE_MAX}" rows="2" placeholder="Write an update" aria-label="New project update" required></textarea>
+      <button class="btn sm">Add update</button>
+    </form>`)}
+    ${
+      open && updates?.length
+        ? `<ol class="project-updates">${updates
+            .map(
+              u =>
+                `<li id="project-entry-${u.id}"><time datetime="${new Date(u.t).toISOString()}">${projectUpdateDate.format(u.t)}</time><p>${esc(u.text)}</p></li>`,
+            )
+            .join('')}</ol>`
+        : ''
+    }
+  </section>`;
+}
+
+function projectCard(q, updates) {
   const done = isDone(q),
     upcoming = !!q.start,
     scheduled = isScheduled(q),
@@ -38,16 +59,21 @@ function projectCard(q) {
     })
     .join('');
   const remaining = kids.length - preview.length;
+  const historyOpen = openProjectHistory.has(q.id);
   return `<article class="project-card" data-qid="${q.id}" aria-labelledby="project-title-${q.id}">
-    <div class="project-card-heading">
-      ${!kids.length && mayTick ? projectCheck(q, done ? 'Mark not done' : 'Mark done') : ''}
-      <h2 id="project-title-${q.id}"><button class="project-open" ${detail}><span>${esc(q.text)}</span>${chevron}</button></h2>
+    <div class="project-preview">
+      <div class="project-card-heading">
+        ${!kids.length && mayTick ? projectCheck(q, done ? 'Mark not done' : 'Mark done') : ''}
+        <h2 id="project-title-${q.id}"><button class="project-open" ${detail}><span>${esc(q.text)}</span>${chevron}</button></h2>
+      </div>
+      ${meta.length ? `<div class="project-meta">${meta.map(item => `<span>${item}</span>`).join('')}</div>` : ''}
+      ${steps ? `<ul class="project-steps">${steps}</ul>` : ''}
+      ${projectHistory(q, updates, historyOpen)}
     </div>
-    ${meta.length ? `<div class="project-meta">${meta.map(item => `<span>${item}</span>`).join('')}</div>` : ''}
-    ${steps ? `<ul class="project-steps">${steps}</ul>` : ''}
     <div class="project-actions">
       <button class="linkbtn" data-project-add="${q.id}" aria-expanded="${projectStepFor === q.id}" aria-label="Add step to ${esc(q.text)}">+ Add step</button>
       ${!upcoming && remaining ? `<button class="linkbtn" ${detail} aria-label="Show all steps for ${esc(q.text)}">${remaining} more ${remaining === 1 ? 'step' : 'steps'}</button>` : ''}
+      <button class="linkbtn" data-project-history="${q.id}" aria-controls="project-history-${q.id}" aria-expanded="${historyOpen}" aria-label="History for ${esc(q.text)}">History</button>
     </div>
     ${
       projectStepFor === q.id
@@ -68,7 +94,15 @@ function renderProjects() {
     done = S.quests.filter(isDone),
     known = [...S.quests, ...S.later];
   if (!known.some(q => q.id === projectStepFor)) projectStepFor = '';
-  const grid = qs => `<div class="project-grid">${qs.map(projectCard).join('')}</div>`;
+  const updatesByProject = new Map();
+  for (const entry of S.projectUpdates) {
+    if (!openProjectHistory.has(entry.q)) continue;
+    if (!updatesByProject.has(entry.q)) updatesByProject.set(entry.q, []);
+    updatesByProject.get(entry.q).push(entry);
+  }
+  for (const list of updatesByProject.values()) list.sort((a, b) => b.t - a.t || byName(b.id, a.id));
+  const grid = qs =>
+    `<div class="project-grid">${qs.map(q => projectCard(q, updatesByProject.get(q.id))).join('')}</div>`;
   setHTML(
     el,
     `
@@ -80,10 +114,36 @@ function renderProjects() {
 }
 
 function projectClick(d) {
+  if (d.projectHistory) {
+    const id = d.projectHistory;
+    if (!openProjectHistory.delete(id)) openProjectHistory.add(id);
+    renderProjects();
+    const history = document.getElementById('project-history-' + id);
+    if (history) {
+      const preview = history.parentElement;
+      preview.scrollTop = history.hidden
+        ? 0
+        : preview.scrollTop + history.getBoundingClientRect().top - preview.getBoundingClientRect().top;
+    }
+    return;
+  }
   if (!d.projectAdd) return;
   projectStepFor = projectStepFor === d.projectAdd ? '' : d.projectAdd;
   renderProjects();
   if (projectStepFor) document.getElementById('project-step-' + projectStepFor).focus();
+}
+
+function addProjectUpdate(form) {
+  const q = form.dataset.projectUpdate;
+  if (!S.quests.some(n => n.id === q) && !S.later.some(n => n.id === q)) return;
+  const input = form.querySelector('textarea');
+  const text = cleanText(input.value.slice(0, PROJECT_UPDATE_MAX)).trim();
+  if (!text) return;
+  S.projectUpdates.push({ id: uid(), q, t: Date.now(), text });
+  input.value = '';
+  save();
+  renderProjects();
+  toast('Update added');
 }
 
 const projectOf = id => {
