@@ -207,18 +207,22 @@ function foldOpen(id) {
     return false;
   }
 }
-document.addEventListener(
-  'toggle',
-  e => {
-    const k = FOLDS[e.target.id];
-    if (!k) return;
-    panels[e.target.id] = e.target.open;
-    try {
-      localStorage.setItem(k, e.target.open ? '1' : '0');
-    } catch (x) {}
-  },
-  true,
-);
+function rememberFold(details) {
+  const key = FOLDS[details.id];
+  if (!key) return;
+  panels[details.id] = details.open;
+  try {
+    localStorage.setItem(key, details.open ? '1' : '0');
+  } catch (e) {}
+}
+document.addEventListener('toggle', e => rememberFold(e.target), true);
+// A reload can leave the page before the browser dispatches the queued toggle event.
+window.addEventListener('pagehide', () => {
+  for (const id of Object.keys(FOLDS)) {
+    const details = document.getElementById(id);
+    if (details) rememberFold(details);
+  }
+});
 
 /* Today: the Waiting section (what Today's tasks are waiting on) */
 // Today's waiting steps, most urgent first, each with its task. A task with nothing else left to

@@ -78,6 +78,13 @@ test.describe('Checkpoint 1: Today on a phone', () => {
     await page.locator('#waitmore > summary').click();
     await page.reload();
     await expect(page.locator('#waitmore')).not.toHaveAttribute('open', '');
+    // Native toggle dispatch is queued. Leaving immediately still persists the DOM state.
+    const saved = await more.evaluate(details => {
+      details.open = true;
+      window.dispatchEvent(new PageTransitionEvent('pagehide'));
+      return localStorage.getItem('dashboard-wait-open');
+    });
+    expect(saved).toBe('1');
     expect(app.errors).toEqual([]);
   });
 
