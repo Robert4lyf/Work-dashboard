@@ -4699,7 +4699,8 @@ header.project-header .syncbtn[data-state='off']::before {
 .project-preview {
   flex: 1;
   min-block-size: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   margin-inline: -5px;
   padding: 5px;
 }
@@ -4757,6 +4758,9 @@ header.project-header .syncbtn[data-state='off']::before {
 .project-grip svg {
   width: 16px;
   height: 20px;
+}
+.project-card-heading .project-grip {
+  margin-inline: -4px;
 }
 .project-dragging .project-grip {
   cursor: grabbing;
