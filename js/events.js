@@ -39,6 +39,11 @@ $('#tabs').addEventListener('scroll', fadeTabs, { passive: true });
 window.addEventListener('resize', fadeTabs);
 // History lives under the Review tab; Focus has no tab (the header opens it).
 function go(v) {
+  if (v === 'work') {
+    workListMode = true;
+    path = [];
+    v = 'today';
+  }
   if (v === 'log') {
     reviewSub = v;
     v = 'review';
@@ -52,8 +57,9 @@ function go(v) {
   if (v !== 'today') $('#ptitle').hidden = true;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
+  const tabView = v === 'today' && workListMode ? 'projects' : v;
   document.querySelectorAll('nav button[data-v]').forEach(x => {
-    if (x.dataset.v === v) x.setAttribute('aria-current', 'page');
+    if (x.dataset.v === tabView) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
   [
@@ -73,7 +79,7 @@ function go(v) {
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
   restoreDrafts();
   // Keep the current tab visible when the tab bar is scrolled sideways.
-  const tab = document.querySelector(`nav [data-v="${v}"]`);
+  const tab = document.querySelector(`nav [data-v="${tabView}"]`);
   // (only when it's off screen: asking always makes the browser lay out the whole page first)
   if (tab) {
     const r = tab.getBoundingClientRect(),
@@ -291,14 +297,18 @@ function returnBack() {
   goPlace(r);
 }
 const atReturn = () => returnTo && view === 'today' && path.length === returnTo.depth;
+function openTodayTab(allWork = false) {
+  returnTo = viewFrom = null;
+  workListMode = allWork;
+  if (view === 'today' && path.length) openPath([]);
+  go('today');
+}
 document.querySelectorAll('nav button[data-v]').forEach(
   b =>
     (b.onclick = () => {
       if (!window.appReady) return; // (not started yet)
+      if (b.dataset.v === 'today') return openTodayTab();
       returnTo = viewFrom = null; // (a tab is a fresh start: back no longer leads to where a task came from)
-      if (b.dataset.v === 'today' && view === 'today' && path.length) {
-        openPath([]);
-      }
       if (b.dataset.v === 'projects') path = [];
       go(b.dataset.v);
     }),
@@ -599,6 +609,7 @@ document.addEventListener('click', e => {
   opsClick(d, b);
   createClick(d, b);
   projectClick(d);
+  if (d.todayPick) toggleTodayPick(d.todayPick);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -608,12 +619,21 @@ document.addEventListener('click', e => {
       // back, not on.)
       const goingBack =
         view === 'knowledge' && kbReturn && p.length === path.length && p.every((id, i) => path[i] === id);
+      const fromPlan = view === 'today' && !path.length && b.closest('.today-plan');
       const from =
-        view !== 'today' && RETURN_NAME[view] && !goingBack
+        fromPlan || (view !== 'today' && RETURN_NAME[view] && !goingBack)
           ? {
               ...placeHere(b),
               depth: p.length,
-              name: view !== 'knowledge' ? '' : wfOpen ? 'Process' : kbRun ? 'Guide' : '',
+              name: fromPlan
+                ? 'Today'
+                : view !== 'knowledge'
+                  ? ''
+                  : wfOpen
+                    ? 'Process'
+                    : kbRun
+                      ? 'Guide'
+                      : '',
             }
           : null;
       // (a step opened on a task's page that was itself opened from another view: the way back
@@ -779,7 +799,7 @@ document.addEventListener('click', e => {
       const bf = snapshot();
       S.quests.push(n);
       settle(bf);
-      toast('Added to today');
+      toast('Moved to Projects');
     }
   }
   if (d.dellater) {
@@ -1003,6 +1023,7 @@ document.addEventListener('click', e => {
         flows: S.flows,
         follows: S.follows,
         projectUpdates: S.projectUpdates,
+        todayPicks: S.todayPicks,
         runs: S.runs,
         execs: S.execs,
         workflows: S.workflows,
@@ -1033,6 +1054,7 @@ document.addEventListener('click', e => {
       'flows',
       'follows',
       'projectUpdates',
+      'todayPicks',
       'runs',
       'execs',
       'workflows',
@@ -1247,6 +1269,7 @@ function keepPlace() {
       JSON.stringify({
         view,
         path,
+        workListMode,
         projectsY: view === 'today' && returnTo?.view === 'projects' ? returnTo.y : null,
         sub: reviewSub,
         q: view === 'search' ? searchQ : '',
@@ -1264,6 +1287,7 @@ function takePlace() {
   // (opened at a deep link, a share or an app-icon shortcut: that's where to go)
   if (launchRoute || location.hash.startsWith('#/') || location.search.length > 1) return;
   if (!p || typeof p !== 'object' || !PLACE_VIEWS.includes(p.view)) return;
+  workListMode = p.workListMode === true;
   const ids = Array.isArray(p.path) ? p.path.filter(x => typeof x === 'string' && okRef(x)) : [];
   // (the task's page only if it's all still there; else Today's list)
   const r = ids.length && find(ids[ids.length - 1]);

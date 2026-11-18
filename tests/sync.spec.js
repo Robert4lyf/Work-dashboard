@@ -251,6 +251,18 @@ async function device(browser, srv, seed, opts = {}) {
     }, opts.clockBehind);
   if (seed) await page.addInitScript(s => localStorage.setItem('work-cockpit-v1', s), JSON.stringify(seed));
   await page.addInitScript(fakeSupabase);
+  await page.addInitScript(() => {
+    document.addEventListener(
+      'click',
+      e => {
+        if (e.target.closest?.('nav [data-v="today"]') && window.appReady) {
+          e.stopImmediatePropagation();
+          openTodayTab(true);
+        }
+      },
+      true,
+    );
+  });
   // (a reload waits for writes to the store, then for the app to have started)
   const reload = page.reload.bind(page);
   page.reload = async (...a) => {
@@ -260,7 +272,7 @@ async function device(browser, srv, seed, opts = {}) {
     await page.waitForFunction(() => window.appReady === true);
     return r;
   };
-  await page.goto('/#/today');
+  await page.goto('/#/work');
   await expect(page.locator('#syncBtn')).toHaveText('Synced');
   const d = {
     page,

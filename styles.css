@@ -4699,6 +4699,43 @@ header.project-header .syncbtn[data-state='off']::before {
   display: block;
   color: var(--muted);
 }
+.project-step-name {
+  flex: 1;
+  min-width: 0;
+}
+.today-pick {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.today-pick svg {
+  width: 19px;
+  height: 19px;
+}
+.today-pick.on {
+  color: var(--ok);
+}
+@media (hover: hover) and (pointer: fine) {
+  .today-pick {
+    opacity: 0;
+  }
+  :is(.project-card-heading, .project-step, .row):is(:hover, :focus-within) > .today-pick {
+    opacity: 1;
+  }
+}
+.today-plan {
+  margin: 12px 0;
+}
+.plan-remove {
+  margin-inline-end: 8px;
+}
 .project-card .check {
   position: relative;
   width: 34px;
@@ -4717,7 +4754,7 @@ header.project-header .syncbtn[data-state='off']::before {
 .project-checked svg {
   visibility: visible;
 }
-.project-step-done > span:last-child {
+.project-step-done .project-step-name {
   color: var(--muted);
   text-decoration: line-through;
 }

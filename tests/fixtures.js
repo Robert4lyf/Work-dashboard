@@ -23,9 +23,9 @@ const test = base.test.extend({
         .waitForFunction(() => typeof sb === 'undefined' || !sb || authSeen, null, { timeout: 5000 })
         .catch(() => {});
     };
-    // By default the existing task tests work on Today. A fresh reload clears the saved place
-    // then opens that view explicitly. `page.reload({ keepPlace: true })` is a real reload.
-    let startView = 'today';
+    // Existing task-list tests use All work. Tests for the new Today plan open on Projects.
+    // A fresh reload sets the requested starting view. keepPlace retains actual app navigation.
+    let startView = 'work';
     const reload = page.reload.bind(page);
     page.reload = async ({ keepPlace, ...o } = {}) => {
       await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null)).catch(() => {});
@@ -34,7 +34,14 @@ const test = base.test.extend({
           .evaluate(startView => {
             const drop = () => {
               try {
-                if (startView === 'today') sessionStorage.setItem('cockpit.place', '{"view":"today"}');
+                if (startView === 'work' || startView === 'today')
+                  sessionStorage.setItem(
+                    'cockpit.place',
+                    JSON.stringify({
+                      view: 'today',
+                      workListMode: startView === 'work',
+                    }),
+                  );
                 else sessionStorage.removeItem('cockpit.place');
               } catch (e) {}
             };
@@ -49,17 +56,28 @@ const test = base.test.extend({
     const app = {
       page,
       errors,
-      open: async ({ home = 'today' } = {}) => {
+      open: async ({ home = 'work' } = {}) => {
         startView = home;
         // A flow's link (ms-powerautomate:) would hand the page to another app; headless
         // Chromium then swallows later clicks. The tap is still seen by the app's own handlers.
-        await page.addInitScript(() =>
-          addEventListener('click', e => {
-            const a = e.target.closest && e.target.closest('a[href^="ms-powerautomate:"]');
-            if (a) e.preventDefault();
-          }),
+        await page.addInitScript(
+          home =>
+            addEventListener(
+              'click',
+              e => {
+                const a = e.target.closest && e.target.closest('a[href^="ms-powerautomate:"]');
+                if (a) e.preventDefault();
+                // The prior suite's Today navigation steps exercise the same list through All work.
+                if (home === 'work' && e.target.closest?.('nav [data-v="today"]') && window.appReady) {
+                  e.stopImmediatePropagation();
+                  openTodayTab(true);
+                }
+              },
+              true,
+            ),
+          home,
         );
-        await page.goto(home === 'today' ? '/#/today' : '/');
+        await page.goto(home === 'projects' ? '/' : '/#/' + home);
         await started();
       },
       // A Settings group (Release D: Settings is an index of groups, each a page of its own).

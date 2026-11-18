@@ -15,11 +15,11 @@ function inboxToNode(it) {
   }
   return n;
 }
-// Inbox item to Today (its Today button), with Undo.
+// Inbox item to Projects, with Undo.
 function promoteInbox(id) {
   const i = S.inbox.findIndex(x => x.id === id);
   if (i < 0) return;
-  withUndo('Moved to Today', () => {
+  withUndo('Moved to Projects', () => {
     const bf = snapshot();
     S.quests.push(inboxToNode(S.inbox[i]));
     S.inbox.splice(i, 1);
@@ -62,7 +62,7 @@ function renderInbox() {
       // Then waiting.
       h += `<label class="f" for="iwait-${it.id}">Waiting on (optional)</label><input class="fld" id="iwait-${it.id}" data-iwait="${it.id}" value="${esc((it.wait && it.wait.who) || '')}" maxlength="60" placeholder="Who you're waiting on" autocomplete="off">`;
     }
-    h += `<div class="iacts"><button class="btn sm blue" data-promote="${it.id}">Today</button><button class="btn sm" data-clear="${it.id}">Delete</button></div></div>`;
+    h += `<div class="iacts"><button class="btn sm blue" data-promote="${it.id}">Projects</button><button class="btn sm" data-clear="${it.id}">Delete</button></div></div>`;
   });
   if (S.inbox.length) h += '</div>';
   setHTML($('#v-inbox'), h);

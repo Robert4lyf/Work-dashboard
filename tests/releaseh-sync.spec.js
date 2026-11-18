@@ -6,6 +6,36 @@ const { test, expect } = require('@playwright/test');
 const { server, device, settle, report } = require('./fakesb');
 const { unfold } = require('./fixtures');
 
+test('independent tasks sent to Today from two devices sync into the same plan', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.quests.push(
+      fix({ id: 'report', text: 'Weekly report' }),
+      fix({ id: 'review', text: 'Review figures' }),
+    );
+    save();
+    renderAll();
+  });
+  await a.sync();
+  const b = await device(browser, srv);
+  await settle(a, b);
+  await a.offline(true);
+  await b.offline(true);
+  await a.page.getByRole('button', { name: 'Send to Today: Weekly report' }).press('Enter');
+  await b.page.getByRole('button', { name: 'Send to Today: Review figures' }).press('Enter');
+  await a.offline(false);
+  await b.offline(false);
+  await settle(a, b);
+  for (const d of [a, b]) {
+    await d.page.locator('nav [data-v="today"]').click();
+    await expect(d.page.locator('.plan-row')).toHaveCount(2);
+    await expect(d.page.locator('.today-plan')).toContainText('Weekly report');
+    await expect(d.page.locator('.today-plan')).toContainText('Review figures');
+    expect(d.errors).toEqual([]);
+  }
+});
+
 test('project history keeps both offline updates and the new card order syncs', async ({ browser }) => {
   const srv = server();
   const a = await device(browser, srv);
