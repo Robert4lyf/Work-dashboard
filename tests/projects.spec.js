@@ -58,10 +58,16 @@ test('sections accept project drops, can be reordered, and keep their accents an
   const report = urgent.getByRole('article', { name: 'Weekly reporting' });
   await expect(report).toBeVisible();
   await expect(report).toHaveCSS('border-left-color', 'rgb(209, 90, 98)');
+  await expect(urgent.locator('.project-section-head')).toHaveCSS('background-color', 'rgb(209, 90, 98)');
   await urgent.getByRole('button', { name: 'Edit section Urgent' }).click();
-  await page.getByLabel('Accent colour').selectOption('purple');
+  await page.getByLabel('Accent colour').selectOption('navy');
+  await expect(page.locator('#project-section-swatch')).toHaveCSS('background-color', 'rgb(38, 66, 143)');
   await page.getByRole('button', { name: 'Save section' }).click();
-  await expect(report).toHaveCSS('border-left-color', 'rgb(146, 115, 209)');
+  await expect(report).toHaveCSS('border-left-color', 'rgb(38, 66, 143)');
+  await expect(urgent.getByRole('button', { name: 'Urgent', exact: true })).toHaveCSS(
+    'color',
+    'rgb(255, 255, 255)',
+  );
   await report.getByRole('button', { name: 'Reorder Weekly reporting' }).press('Enter');
   await page.getByRole('button', { name: 'Move to Tuesdays' }).press('Enter');
   await expect(tuesdays.getByRole('article', { name: 'Weekly reporting' })).toBeVisible();

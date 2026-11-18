@@ -136,13 +136,14 @@ function renderProjects() {
     `<div class="project-grid"${id ? ` id="${id}"` : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder, selected)).join('')}</div>`;
   const sections = projectSectionGroups().map(section => {
     const { id, name, colour, active, upcoming, done } = section;
+    const accent = colour && PROJECT_SECTION_COLOURS[colour];
     const uncategorised = id === UNCATEGORISED;
     const expanded = !foldedProjectSections.has(id);
     const count = active.length + upcoming.length + done.length;
     const completedId = uncategorised ? 'projects-done' : 'projects-done-' + id;
     const completedOpen = uncategorised ? projectsDoneOpen : openProjectCompleted.has(id);
     const upcomingId = 'projects-upcoming-' + id;
-    return `<section class="project-board-section" id="project-section-${id}" data-project-section="${id}"${colour ? ` data-colour="${colour}"` : ''} aria-labelledby="project-section-name-${id}">
+    return `<section class="project-board-section" id="project-section-${id}" data-project-section="${id}"${accent ? ` data-colour="${colour}" style="--section-accent:${accent[1]};--section-ink:${accent[2] || '#111'}"` : ''} aria-labelledby="project-section-name-${id}">
       <div class="project-section-head">
         ${!uncategorised && S.projectSections.length > 1 ? `<button type="button" class="project-grip" data-project-section-reorder="${id}" aria-haspopup="dialog" aria-label="Reorder section ${esc(name)}" title="Drag to reorder or open move options">${projectGripIcon}</button>` : ''}
         <h2 id="project-section-name-${id}"><button type="button" class="project-section-toggle" data-project-section-toggle="${id}" aria-expanded="${expanded}" aria-controls="project-section-body-${id}"><span>${esc(name)}</span><small aria-hidden="true">${count}</small></button></h2>
@@ -275,8 +276,9 @@ function projectClick(d) {
 }
 
 function editProjectSection(section) {
+  const selected = section?.colour || 'blue';
   const colours = Object.entries(PROJECT_SECTION_COLOURS)
-    .map(([id, name]) => `<option value="${id}"${section?.colour === id ? ' selected' : ''}>${name}</option>`)
+    .map(([id, [name]]) => `<option value="${id}"${selected === id ? ' selected' : ''}>${name}</option>`)
     .join('');
   popSheet(
     `<form id="project-section-form" data-section="${section?.id || ''}">
@@ -284,7 +286,10 @@ function editProjectSection(section) {
     <label class="f" for="project-section-name">Section name</label>
     <input class="fld" id="project-section-name" required maxlength="${PROJECT_SECTION_NAME_MAX}" value="${esc(section?.name || '')}">
     <label class="f" for="project-section-colour">Accent colour</label>
-    <select class="fld" id="project-section-colour">${colours}</select>
+    <div class="project-colour-picker">
+      <select class="fld" id="project-section-colour">${colours}</select>
+      <span id="project-section-swatch" aria-hidden="true" style="background-color:${PROJECT_SECTION_COLOURS[selected][1]}"></span>
+    </div>
     <div class="acts">
       <button class="btn green">${section ? 'Save section' : 'Add section'}</button>
       <button type="button" class="btn" data-sheetclose="1">Cancel</button>
@@ -293,6 +298,11 @@ function editProjectSection(section) {
   </form>`,
     { labelledBy: 'sheettitle' },
   );
+  const picker = $('#project-section-colour');
+  const swatch = $('#project-section-swatch');
+  picker.addEventListener('change', () => {
+    swatch.style.backgroundColor = PROJECT_SECTION_COLOURS[picker.value][1];
+  });
 }
 
 function saveProjectSection(form) {

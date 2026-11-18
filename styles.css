@@ -4596,24 +4596,6 @@ header.project-header .syncbtn[data-state='off']::before {
   --section-accent: var(--edge);
   margin-bottom: 22px;
 }
-.project-board-section[data-colour='blue'] {
-  --section-accent: #528cdf;
-}
-.project-board-section[data-colour='teal'] {
-  --section-accent: #159789;
-}
-.project-board-section[data-colour='green'] {
-  --section-accent: #62994c;
-}
-.project-board-section[data-colour='amber'] {
-  --section-accent: #d89a30;
-}
-.project-board-section[data-colour='red'] {
-  --section-accent: #d15a62;
-}
-.project-board-section[data-colour='purple'] {
-  --section-accent: #9273d1;
-}
 .project-section-head {
   display: flex;
   align-items: center;
@@ -4623,12 +4605,33 @@ header.project-header .syncbtn[data-state='off']::before {
   border-inline-start: 4px solid var(--section-accent);
   background: var(--panel);
 }
-.project-board-section[data-colour] :is(.project-section-head, .project-card) {
-  background: color-mix(in srgb, var(--section-accent) 8%, var(--panel));
+.project-board-section[data-colour] > .project-section-head {
+  background: var(--section-accent);
+  color: var(--section-ink);
+}
+.project-board-section[data-colour] > .project-section-head :is(button, small) {
+  color: inherit;
+}
+.project-board-section[data-colour] > .project-section-head :focus-visible {
+  outline-color: var(--section-ink);
+}
+.project-board-section[data-colour] .project-section-edit {
+  text-decoration-color: currentColor;
 }
 .project-board-section[data-colour] .project-card {
+  background: color-mix(in srgb, var(--section-accent) 20%, var(--panel));
   border-inline-start-color: var(--section-accent);
-  box-shadow: inset 3px 0 var(--section-accent);
+  box-shadow: inset 5px 0 var(--section-accent);
+}
+.project-colour-picker {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.project-colour-picker span {
+  flex: 0 0 44px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
 }
 .project-section-head h2 {
   flex: 1;

@@ -3,12 +3,24 @@ const SUMMARY_MAX = 600;
 const PROJECT_UPDATE_MAX = 1000;
 const PROJECT_SECTION_NAME_MAX = 60;
 const PROJECT_SECTION_COLOURS = {
-  blue: 'Blue',
-  teal: 'Teal',
-  green: 'Green',
-  amber: 'Amber',
-  red: 'Red',
-  purple: 'Purple',
+  blue: ['Blue', '#528cdf'],
+  sky: ['Sky', '#48b9ef'],
+  indigo: ['Indigo', '#4f54c7', '#fff'],
+  navy: ['Navy', '#26428f', '#fff'],
+  teal: ['Teal', '#159789'],
+  mint: ['Mint', '#58cba6'],
+  green: ['Green', '#62994c'],
+  lime: ['Lime', '#a8cb31'],
+  forest: ['Forest', '#216a45', '#fff'],
+  amber: ['Amber', '#d89a30'],
+  yellow: ['Yellow', '#eed241'],
+  orange: ['Orange', '#ec7a30'],
+  red: ['Red', '#d15a62'],
+  coral: ['Coral', '#ef776d'],
+  pink: ['Pink', '#f575b6'],
+  magenta: ['Magenta', '#bd257f', '#fff'],
+  purple: ['Purple', '#9273d1'],
+  plum: ['Plum', '#783784', '#fff'],
 };
 const UNCATEGORISED = 'uncategorised';
 const RESUME_MAX = 400; // a saved place's note
