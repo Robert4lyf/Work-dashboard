@@ -200,7 +200,7 @@ test('review fix: after a cold launch at a route, back steps through the app onc
   await page.goBack();
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await page.goBack();
-  await expect(page.locator('#v-today .row')).toHaveCount(2);
+  await expect(page.getByRole('region', { name: 'Plan for today' })).toContainText('Nothing planned yet.');
   await expect(page.locator('#v-today h1')).toHaveCount(0); // (not reopened by a replayed route)
   await cold(page, '#/inbox/triage');
   await expect(page.locator('#v-inbox .tcard')).toBeVisible();

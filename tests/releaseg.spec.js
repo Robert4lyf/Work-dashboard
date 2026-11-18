@@ -274,7 +274,7 @@ test.describe('Checkpoint 4: accessibility', () => {
     const screens = {
       today: [
         () => go('today'),
-        ['Today', 'Needs attention', 'Top 3', 'Scheduled', 'Waiting', "Today's tasks"],
+        ['All work', 'Needs attention', 'Top 3', 'Scheduled', 'Waiting', 'Project tasks'],
       ],
       knowledge: [() => go('knowledge'), ['Knowledge']],
       review: [() => go('review'), ['Review']],

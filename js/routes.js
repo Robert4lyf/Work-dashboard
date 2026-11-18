@@ -2,7 +2,8 @@
    Android automation (Automate, Tasker, HTTP Shortcuts, an NFC card through one of them) or
    another app. Opening a link only navigates: nothing is changed, ticked, started or sent.
      #/projects         Projects
-     #/today            Today (the list, with the top 3)
+     #/today            Today (the plan, with the top 3)
+     #/work             All work (list or board)
      #/inbox            the Inbox
      #/inbox/triage     Sort the Inbox
      #/q/<id>           a task or a step (on Today; one on Upcoming or in the Inbox is shown there)
@@ -25,6 +26,7 @@
 const ROUTES = [
   'projects',
   'today',
+  'work',
   'inbox',
   'triage',
   'q',
@@ -60,7 +62,12 @@ function parseRoute(hash) {
   if (sub) return null;
   if (!ROUTES.includes(kind) || kind === 'triage' || kind === 'run') return null;
   if (['q', 'kb', 'wrun'].includes(kind) && !id) return null;
-  if (['projects', 'today', 'inbox', 'focus', 'continue', 'review', 'workflows', 'ops'].includes(kind) && id)
+  if (
+    ['projects', 'today', 'work', 'inbox', 'focus', 'continue', 'review', 'workflows', 'ops'].includes(
+      kind,
+    ) &&
+    id
+  )
     return null;
   return { kind, id };
 }
@@ -107,8 +114,13 @@ function followRoute(r, first) {
     if (view) go(view);
   };
   switch (r.kind) {
-    case 'projects':
     case 'today':
+      workListMode = false;
+      path = [];
+      go('today');
+      return;
+    case 'projects':
+    case 'work':
       path = [];
       go(r.kind);
       return;

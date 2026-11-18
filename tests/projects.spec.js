@@ -220,3 +220,44 @@ test.describe('touch drag', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
 });
+
+test('Today contains only the tasks sent from Projects, with the same completion state', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  const report = page.getByRole('article', { name: 'Weekly reporting' });
+  const send = report.getByRole('button', { name: 'Send to Today: Export ledger' });
+  await page.mouse.move(1, 1);
+  await expect(send).toHaveCSS('opacity', '0');
+  await report.getByText('Export ledger', { exact: true }).hover();
+  await expect(send).toHaveCSS('opacity', '1');
+  await send.click();
+  await page.getByRole('button', { name: 'Send to Today: Read the circular' }).focus();
+  await page.keyboard.press('Enter');
+  await app.go('today');
+  const plan = page.getByRole('region', { name: 'Plan for today' });
+  await expect(plan.locator('.plan-row .open > span')).toHaveText(['Export ledger', 'Read the circular']);
+  await expect(page.getByRole('heading', { name: "Today's tasks", exact: true })).toHaveCount(0);
+  await plan.getByRole('button', { name: /Export ledger Weekly reporting/ }).click();
+  await expect(page.locator('#v-today h1')).toHaveText('Export ledger');
+  await page.getByRole('button', { name: '‹ Today' }).click();
+  await expect(plan).toBeVisible();
+  await plan.getByRole('button', { name: 'Mark done: Export ledger' }).click();
+  await expect(plan.getByRole('button', { name: 'Mark not done: Export ledger' })).toBeVisible();
+  await app.go('projects');
+  await expect(report.getByRole('button', { name: 'Mark not done: Export ledger' })).toHaveCount(0);
+  await expect(report).toContainText('1 of 4 steps');
+  await page.reload();
+  await app.go('today');
+  await expect(plan.getByRole('button', { name: 'Mark not done: Export ledger' })).toBeVisible();
+  await plan.getByRole('button', { name: 'Remove from Today: Read the circular' }).click();
+  await expect(plan.getByText('Read the circular')).toHaveCount(0);
+  await page.clock.fastForward(24 * 60 * 60_000);
+  await expect(plan.getByText('Nothing planned yet.')).toBeVisible();
+  await app.go('projects');
+  await page.getByRole('button', { name: 'List & board' }).click();
+  await expect(page.getByRole('heading', { name: 'Project tasks' })).toBeVisible();
+  await app.go('today');
+  await expect(plan.getByText('Nothing planned yet.')).toBeVisible();
+});

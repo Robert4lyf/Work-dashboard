@@ -228,6 +228,7 @@ function norm(s) {
       later: [],
       projects: [],
       projectUpdates: [],
+      todayPicks: [],
       pdaily: {},
       interrupts: [],
       alarms: [],
@@ -267,6 +268,12 @@ function norm(s) {
     if (text) updates.set(u.id, { id: u.id, q: u.q, t: u.t, text });
   }
   S.projectUpdates = [...updates.values()];
+  const picks = new Map();
+  for (const pick of Array.isArray(S.todayPicks) ? S.todayPicks : []) {
+    if (pick && okRef(pick.id) && cleanDay(pick.day) && Number.isFinite(pick.at))
+      picks.set(pick.day + '|' + pick.id, { id: pick.id, day: pick.day, at: pick.at });
+  }
+  S.todayPicks = [...picks.values()];
   // Follow-ups on waiting items (Release B): append-only records, only well-formed ones.
   S.follows = (Array.isArray(S.follows) ? S.follows : [])
     .filter(f => okId(f) && okRef(f.n) && FOLLOW_KINDS.includes(f.k) && Number.isFinite(+f.t))
@@ -522,6 +529,7 @@ function rollover() {
     q => !repeats(tplFor(q)) || q.id === q.tpl + '-' + today() || (q.scheduled && !isDone(q)),
   );
   S.day = today();
+  S.todayPicks = S.todayPicks.filter(pick => pick.day >= S.day);
   // Yesterday's top 3 is over: today's is chosen afresh. (Back-dated to midnight like the rest
   // of the reset, so a choice already made today on another device wins over this.)
   if (S.top3 && S.top3.day !== today()) S.top3 = null;

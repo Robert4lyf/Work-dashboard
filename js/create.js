@@ -171,7 +171,7 @@ function openNewSheet() {
   const cat = kbCatOpen && kbCatOpen !== 'lost' && kbCat(kbCatOpen) ? kbCatOpen : '';
   popSheet(
     `<h2 id="sheettitle">What do you need to do?</h2><div class="qalist newlist">
-      <button class="qact" data-newkind="task"><b>Finish something</b><small>A task. It goes to the Inbox first, to sort into Today when you're ready.</small></button>
+      <button class="qact" data-newkind="task"><b>Finish something</b><small>A task. It goes to the Inbox first, then you can move it to Projects.</small></button>
       <button class="qact" data-newkind="process"><b>Do something again and again</b><small>A process: a checklist you can run each time, with automations, checks or waits on the steps that need them.</small></button>
       <button class="qact" data-newkind="article" data-cat="${cat}"><b>Keep information</b><small>A reference article: how-tos, contacts, links. Add steps to make it a guide you can follow.</small></button>
       <button class="qact" data-newkind="flow"><b>Launch a desktop automation</b><small>A Power Automate Desktop flow, as a button you tap when you want it to run.</small></button>

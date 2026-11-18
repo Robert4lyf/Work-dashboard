@@ -2,6 +2,7 @@
 let path = [],
   reorder = false,
   pending = null;
+let workListMode = false;
 const panels = {}; // which <details> panels are expanded, so re-renders keep them open
 const tick =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -69,8 +70,10 @@ function row(n, i, len, sib) {
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
+  const project = path.length ? S.quests.find(q => q.id === path[0]) : null;
+  const send = project && !reorder ? todayPickButton(project, n, todayPickSet()) : '';
   return withHash(
-    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`,
+    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${send}${right}</div>`,
   );
 }
 // A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
@@ -282,6 +285,57 @@ function list(ns, doneApart, steps) {
 // Today's list: what can be worked on, and what's finished today (not what's scheduled or only
 // waiting: those are in their own sections).
 const todayWork = qs => qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
+const picksForToday = () => {
+  const day = today();
+  return S.todayPicks.filter(pick => pick.day === day);
+};
+const todayPickSet = () => new Set(picksForToday().map(pick => pick.id));
+const canSendToday = (q, n) =>
+  !n.children.length && !isDone(q) && !isDone(n) && !q.scheduled && !q.wait && !n.wait;
+const sendTodayIcon =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4m8-4v4M4 10h16m-8 2v6m-3-3h6"/></svg>';
+function todayPickButton(q, n, selected, upcoming = false) {
+  if (upcoming || (!selected.has(n.id) && !canSendToday(q, n))) return '';
+  const on = selected.has(n.id);
+  const action = on ? 'Remove from Today' : 'Send to Today';
+  return `<button type="button" class="today-pick${on ? ' on' : ''}" data-today-pick="${n.id}" aria-label="${action}: ${esc(n.text)}" title="${action}">${on ? tick : sendTodayIcon}</button>`;
+}
+function toggleTodayPick(id) {
+  const day = today();
+  const existing = S.todayPicks.findIndex(pick => pick.id === id && pick.day === day);
+  const adding = existing < 0;
+  if (adding) {
+    const r = find(id);
+    if (!r || !canSendToday(r.parents[0] || r.n, r.n)) return;
+    S.todayPicks.push({ id, day, at: Date.now() });
+  } else S.todayPicks.splice(existing, 1);
+  save();
+  renderAll();
+  toast(adding ? 'Sent to Today' : 'Removed from Today');
+}
+function plannedItems() {
+  return picksForToday()
+    .sort((a, b) => a.at - b.at || byName(a.id, b.id))
+    .map(pick => find(pick.id))
+    .filter(Boolean);
+}
+function renderTodayPlan(items) {
+  const rows = items.map(({ n, parents }) => {
+    const q = parents[0] || n;
+    const done = isDone(n);
+    const status = !done && (q.scheduled ? 'Scheduled' : q.wait || n.wait ? 'Waiting' : '');
+    const check =
+      !n.children.length && (done || !status)
+        ? `<button class="check" data-toggle="${n.id}" aria-pressed="${done}" aria-label="${done ? 'Mark not done' : 'Mark done'}: ${esc(n.text)}">${tick}</button>`
+        : '';
+    return `<div class="row plan-row${done ? ' done' : ''}" data-qid="${n.id}">${check}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${q !== n ? `<small>${esc(q.text)}</small>` : ''}${status ? `<small>${status}</small>` : ''}</button><button class="linkbtn plan-remove" data-today-pick="${n.id}" aria-label="Remove from Today: ${esc(n.text)}">Remove</button></div>`;
+  });
+  return `<section class="today-plan" aria-labelledby="taskshead">${listHead('Plan for today', [])}${
+    rows.length
+      ? `<div class="list box">${rows.join('')}</div>`
+      : '<div class="slot">Nothing planned yet. <button class="linkbtn" data-goto="projects">Choose tasks in Projects</button>.</div>'
+  }</section>`;
+}
 /* Reordering a list that shows only some of the tasks under it (Today's, without the scheduled
    and waiting ones). There is one order, S.quests; the list is the tasks it shows, in that order.
    Up and down move a task past its neighbour in the list (to just before it, or just after it),
@@ -323,7 +377,10 @@ function todayTitle() {
     d = new Date();
   if (!el) return;
   el.hidden = view !== 'today' || path.length > 0;
-  setIfChanged(el, `<b>Today</b><span>${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}</span>`);
+  setIfChanged(
+    el,
+    `<b>${workListMode ? 'All work' : 'Today'}</b><span>${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}</span>`,
+  );
 }
 const colsMQ = matchMedia('(min-width: 1240px)');
 // (not while typing in it: the old arrangement still reads as one column until the next redraw)
@@ -357,28 +414,10 @@ function drawToday() {
     todayTitle();
     return renderNode(find(path[path.length - 1]));
   }
-  const qs = S.quests,
-    // (what can be worked on, and what's finished today; scheduled tasks and ones only waiting
-    // have sections of their own, in Reorder too: see moveAmong)
-    work = todayWork(qs);
+  const planned = workListMode ? [] : plannedItems();
+  const work = workListMode ? todayWork(S.quests) : planned.map(r => r.n);
   todayTitle();
-  // Today's work: the list (or board), or why there's none; narrowed by the filter and Find.
-  rowRank = new Map(top3Ids().map((id, i) => [id, i + 1]));
-  const asBoard = todayView === 'board' && work.length,
-    shown = filteredWork(work);
-  let tasks =
-    listHead("Today's tasks", asBoard ? [] : work, qs.length > 0) +
-    listFilter(work) +
-    (asBoard ? board(shown) : list(shown, true));
-  if (qs.length && !work.length) tasks += '<p class="hint nowork">Nothing to act on now.</p>';
-  else if (work.length && !shown.length)
-    tasks += `<p class="hint nowork">No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>`;
-  else if (findOn(work))
-    tasks += `<p class="hint nowork tnomatch" hidden>No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>`;
-  // New work comes in through the Inbox; Today is what you've chosen from it.
-  if (!qs.length)
-    tasks +=
-      '<div class="slot">Nothing on Today. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>';
+  const tasks = workListMode ? renderWorkList(work) : withHash(renderTodayPlan(planned));
   // The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
   // repeats, flows and alarms. (Overdue and due-today work is in Needs attention.)
   const soon = dueSoon().filter(s => s.t.length > 1 && s.n.due > today());
@@ -421,7 +460,33 @@ function drawToday() {
     ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
     : todayJump(work, sched, wait) + att + top3 + sched + wait + tasks + rest;
   setHTML($('#v-today'), h);
-  applyFind();
+  if (workListMode) applyFind();
+}
+function renderWorkList(work) {
+  rowRank = new Map(top3Ids().map((id, i) => [id, i + 1]));
+  const asBoard = todayView === 'board' && work.length;
+  const shown = filteredWork(work);
+  const tasks =
+    listHead('Project tasks', asBoard ? [] : work, S.quests.length > 0) +
+    listFilter(work) +
+    (asBoard ? board(shown) : list(shown, true));
+  if (!S.quests.length)
+    return (
+      tasks +
+      '<div class="slot">No tasks. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>'
+    );
+  if (!work.length) return tasks + '<p class="hint nowork">Nothing to act on now.</p>';
+  if (!shown.length)
+    return (
+      tasks +
+      '<p class="hint nowork">No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>'
+    );
+  if (findOn(work))
+    return (
+      tasks +
+      '<p class="hint nowork tnomatch" hidden>No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>'
+    );
+  return tasks;
 }
 // (Release H) On one column: a line at the top of Today saying what's on it further down, each a
 // tap to its section, so Today's tasks are one tap from the first screen however busy the day.
@@ -431,7 +496,7 @@ function todayJump(work, sched, wait) {
     parts = [
       sched && ['schedhead', 'Scheduled', S.quests.filter(isScheduled).length],
       wait && ['waithead', 'Waiting', todayWaiting().length],
-      work.length && ['taskshead', 'Tasks', left],
+      work.length && ['taskshead', workListMode ? 'Tasks' : 'Plan', left],
     ].filter(Boolean);
   if (parts.length < 2) return '';
   return `<div class="tjump chips" role="navigation" aria-label="On Today">${parts.map(([id, label, k]) => `<button class="chip" data-jump="${id}" aria-label="Go to ${label}: ${k}">${label} <small>${k}</small><span class="jarrow" aria-hidden="true">↓</span></button>`).join('')}</div>`;
@@ -540,7 +605,7 @@ function renderUpcoming() {
     const c = count(n);
     h += `<div class="uprow" data-upid="${n.id}"><div class="uptxt">${esc(n.text)} ${tagBadge(n.tag)}${c ? `<span class="tag opt">${c} step${c === 1 ? '' : 's'}</span>` : ''}${n.scheduled ? ` <button class="linkbtn" data-schedset="${n.id}">Scheduled ${esc(schedWhen(n))}</button>` : ''}</div>
       <input type="date" class="fld" data-restart="${n.id}" value="${n.start}" min="${shift(today(), 1)}" aria-label="Start date for ${esc(n.text)}">
-      <button class="btn" data-now="${n.id}">Today</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
+      <button class="btn" data-now="${n.id}">Start now</button><button class="x" data-dellater="${n.id}" aria-label="Delete ${esc(n.text)}">×</button></div>`;
   });
   return h + '</details>';
 }

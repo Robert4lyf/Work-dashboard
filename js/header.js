@@ -52,10 +52,14 @@ function renderHeader() {
   let h,
     acts = '';
   const full = headerFull(),
-    hd = document.querySelector('header');
+    hd = document.querySelector('header'),
+    plan = view === 'today' && !workListMode && !path.length ? plannedItems() : null;
   if (hd) hd.classList.toggle('compact', !full);
   if (hd) hd.classList.toggle('project-header', view === 'projects');
-  const projectTitle = view === 'projects' ? '<h1>Projects</h1>' : '';
+  const projectTitle =
+    view === 'projects'
+      ? '<h1>Projects</h1><button class="linkbtn" data-goto="work">List &amp; board</button>'
+      : '';
   if (S.timer && view !== 'focus') {
     const t = S.timer,
       paused = t.left != null;
@@ -65,8 +69,9 @@ function renderHeader() {
     acts = `<button class="btn sm ${paused ? 'green' : 'blue'}" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`;
   } else if (projectTitle) h = projectTitle;
   else {
-    const nx = recommend(),
-      ask = !nx && S.quests.find(q => needsNext(q) && !q.wait && !q.scheduled); // (every step ticked: what's next?)
+    const next = plan?.find(({ n, parents }) => canSendToday(parents[0] || n, n));
+    const nx = plan ? next && { n: next.n, q: next.parents[0] || next.n, why: 'list' } : recommend(),
+      ask = !plan && !nx && S.quests.find(q => needsNext(q) && !q.wait && !q.scheduled); // (every step ticked: what's next?)
     if (ask) {
       h = `<button class="go" data-open="${ask.id}"><small>Every step ticked in ${esc(ask.text)}</small><b>${full ? "What's next?" : esc(ask.text) + ": what's next?"}</b></button>`;
     } else if (nx && nx.why === 'place') {
@@ -83,6 +88,13 @@ function renderHeader() {
       h = `${full ? `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button>` : ''}<button class="go" data-open="${nx.n.id}"><small>${label}${where}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
       if (full && !S.timer)
         acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
+    } else if (plan) {
+      const message = !plan.length
+        ? 'Nothing planned yet'
+        : plan.every(({ n }) => isDone(n))
+          ? 'Plan complete'
+          : 'Nothing to act on right now';
+      h = `<div class="go"><small>Plan for today</small><b>${message}</b></div>`;
     } else {
       // (unfinished, but none of it to act on now: say what it's waiting for, not that it's done)
       const sc = S.quests.filter(isScheduled).length,
@@ -93,10 +105,11 @@ function renderHeader() {
   }
   setIfChanged($('#hnow'), h); // unchanged: left alone, keeping keyboard focus
   setIfChanged($('#hact'), acts);
-  const qs = S.quests,
+  const qs = plan ? plan.map(({ n }) => n) : S.quests,
     done = qs.filter(isDone).length,
     p = qs.length ? Math.round((done / qs.length) * 100) : 0;
   $('#hfill').style.width = p + '%';
+  $('#hprog').setAttribute('aria-label', plan ? 'Plan completion' : "Today's quests done");
   $('#hprog').setAttribute('aria-valuenow', p);
   // One quiet line of stats; anything needing attention is on Today and in tab badges.
   const focus = Object.values(S.daily[today()] || {}).reduce((a, b) => a + b, 0);

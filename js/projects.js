@@ -30,7 +30,7 @@ function projectHistory(q, updates, open) {
   </section>`;
 }
 
-function projectCard(q, updates, canReorder) {
+function projectCard(q, updates, canReorder, selected) {
   const done = isDone(q),
     upcoming = !!q.start,
     scheduled = isScheduled(q),
@@ -54,7 +54,8 @@ function projectCard(q, updates, canReorder) {
       const checked = isDone(n);
       return `<li class="project-step${checked ? ' project-step-done' : ''}" data-qid="${n.id}">
       ${!n.children.length && mayTick && (!n.wait || checked) ? projectCheck(n, checked ? 'Mark not done' : 'Mark done') : '<span class="project-step-dot" aria-hidden="true"></span>'}
-      <span>${esc(n.text)}${n.wait && !checked ? '<small>Waiting</small>' : ''}</span>
+      <span class="project-step-name">${esc(n.text)}${n.wait && !checked ? '<small>Waiting</small>' : ''}</span>
+      ${todayPickButton(q, n, selected, upcoming)}
     </li>`;
     })
     .join('');
@@ -65,6 +66,7 @@ function projectCard(q, updates, canReorder) {
       <div class="project-card-heading">
         ${!kids.length && mayTick ? projectCheck(q, done ? 'Mark not done' : 'Mark done') : ''}
         <h2 id="project-title-${q.id}"><button class="project-open" ${detail}><span>${esc(q.text)}</span>${chevron}</button></h2>
+        ${todayPickButton(q, q, selected, upcoming)}
         ${canReorder ? `<button class="project-grip" type="button" data-project-reorder="${q.id}" aria-haspopup="dialog" aria-label="Reorder ${esc(q.text)}" title="Drag to reorder or open move options"><svg viewBox="0 0 16 20" aria-hidden="true" fill="currentColor"><circle cx="5" cy="4" r="1.5"/><circle cx="11" cy="4" r="1.5"/><circle cx="5" cy="10" r="1.5"/><circle cx="11" cy="10" r="1.5"/><circle cx="5" cy="16" r="1.5"/><circle cx="11" cy="16" r="1.5"/></svg></button>` : ''}
       </div>
       ${meta.length ? `<div class="project-meta">${meta.map(item => `<span>${item}</span>`).join('')}</div>` : ''}
@@ -102,8 +104,9 @@ function renderProjects() {
     updatesByProject.get(entry.q).push(entry);
   }
   for (const list of updatesByProject.values()) list.sort((a, b) => b.t - a.t || byName(b.id, a.id));
+  const selected = todayPickSet();
   const grid = (qs, canReorder = false) =>
-    `<div class="project-grid"${canReorder ? ' id="active-project-grid"' : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder)).join('')}</div>`;
+    `<div class="project-grid"${canReorder ? ' id="active-project-grid"' : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder, selected)).join('')}</div>`;
   setHTML(
     el,
     `
