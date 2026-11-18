@@ -6,6 +6,47 @@ const { test, expect } = require('@playwright/test');
 const { server, device, settle, report } = require('./fakesb');
 const { unfold } = require('./fixtures');
 
+test('project history keeps both offline updates and the new card order syncs', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    S.quests.push(
+      fix({ id: 'report', text: 'Weekly report' }),
+      fix({ id: 'review', text: 'Review figures' }),
+    );
+    save();
+    renderAll();
+  });
+  await a.sync();
+  const b = await device(browser, srv);
+  await settle(a, b);
+  for (const [d, text] of [
+    [a, 'Draft sent'],
+    [b, 'Feedback received'],
+  ]) {
+    await d.offline(true);
+    await d.page.getByRole('button', { name: 'History for Weekly report' }).click();
+    await d.page.getByRole('textbox', { name: 'New project update' }).fill(text);
+    await d.page.getByRole('button', { name: 'Add update' }).click();
+  }
+  await a.offline(false);
+  await b.offline(false);
+  await settle(a, b);
+  for (const d of [a, b]) {
+    const updates = d.page.locator('.project-updates:visible');
+    await expect(updates).toContainText('Draft sent');
+    await expect(updates).toContainText('Feedback received');
+    expect(d.errors).toEqual([]);
+  }
+  await a.page.getByRole('button', { name: 'Reorder Weekly report' }).click();
+  await a.page.getByRole('button', { name: 'Move later' }).click();
+  await settle(a, b);
+  await expect(b.page.locator('#active-project-grid .project-card').first()).toHaveAttribute(
+    'data-qid',
+    'review',
+  );
+});
+
 const URL1 = 'ms-powerautomate:/console/flow/run?environmentid=e1&workflowid=w1&source=Other';
 const flows = [
   { id: 'f1', name: 'SSRS report', url: URL1, last: 0 },

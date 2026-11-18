@@ -1,5 +1,6 @@
 const KEY = 'work-cockpit-v1';
 const SUMMARY_MAX = 600;
+const PROJECT_UPDATE_MAX = 1000;
 const RESUME_MAX = 400; // a saved place's note
 const LINKS_MAX = 20; // resources linked to a task
 const TOP3_MAX = 3;
@@ -226,6 +227,7 @@ function norm(s) {
       daily: null,
       later: [],
       projects: [],
+      projectUpdates: [],
       pdaily: {},
       interrupts: [],
       alarms: [],
@@ -257,6 +259,14 @@ function norm(s) {
     device: okId({ id: a.device }) ? a.device : '',
   }));
   S.devices = S.devices.filter(okId);
+  const updates = new Map();
+  for (const u of Array.isArray(S.projectUpdates) ? S.projectUpdates : []) {
+    if (!okId(u) || !okRef(u.q) || typeof u.t !== 'number' || !Number.isFinite(new Date(u.t).getTime()))
+      continue;
+    const text = typeof u.text === 'string' ? cleanText(u.text.slice(0, PROJECT_UPDATE_MAX)).trim() : '';
+    if (text) updates.set(u.id, { id: u.id, q: u.q, t: u.t, text });
+  }
+  S.projectUpdates = [...updates.values()];
   // Follow-ups on waiting items (Release B): append-only records, only well-formed ones.
   S.follows = (Array.isArray(S.follows) ? S.follows : [])
     .filter(f => okId(f) && okRef(f.n) && FOLLOW_KINDS.includes(f.k) && Number.isFinite(+f.t))
