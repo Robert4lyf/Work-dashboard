@@ -7,8 +7,12 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 25, 9, 0, 30));
 });
 
-test('five tabs; History sits under Review; Focus opens from the header', async ({ app, page }) => {
+test('Projects and Today have tabs; History sits under Review; Focus opens from the header', async ({
+  app,
+  page,
+}) => {
   await expect(page.locator('nav [data-v]')).toHaveText([
+    'Projects',
     'Today',
     /^Inbox/,
     'Knowledge',

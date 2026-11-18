@@ -508,11 +508,11 @@ test('Settings is an index of groups; each opens as a page, back returns to the 
   await page.click('[data-setgo="rules"]');
   await expect(page.locator('#rulesec')).toHaveText('Rules');
   await expect(page.locator('#v-account .rulerow')).toHaveCount(1);
-  // Android back: the index, then Today.
+  // Android back: the index, then Projects.
   await page.evaluate(() => history.back());
   await expect(page.locator('#v-account [data-setgo]')).toHaveCount(7);
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('#v-projects')).toBeVisible();
   // The tab opens the index, even from inside a group.
   await app.settings('backup');
   await expect(page.locator('#exp')).toBeVisible();

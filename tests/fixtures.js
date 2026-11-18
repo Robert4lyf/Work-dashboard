@@ -23,23 +23,24 @@ const test = base.test.extend({
         .waitForFunction(() => typeof sb === 'undefined' || !sb || authSeen, null, { timeout: 5000 })
         .catch(() => {});
     };
-    // A reload here stands for leaving the app and opening it again, so it starts on Today, as a
-    // fresh open does: the place a tab keeps for its own reload (Release H, sessionStorage) is
-    // dropped once the page has kept it. `page.reload({ keepPlace: true })` is a real reload.
+    // By default the existing task tests work on Today. A fresh reload clears the saved place
+    // then opens that view explicitly. `page.reload({ keepPlace: true })` is a real reload.
+    let startView = 'today';
     const reload = page.reload.bind(page);
     page.reload = async ({ keepPlace, ...o } = {}) => {
       await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null)).catch(() => {});
       if (!keepPlace)
         await page
-          .evaluate(() => {
+          .evaluate(startView => {
             const drop = () => {
               try {
-                sessionStorage.removeItem('cockpit.place');
+                if (startView === 'today') sessionStorage.setItem('cockpit.place', '{"view":"today"}');
+                else sessionStorage.removeItem('cockpit.place');
               } catch (e) {}
             };
             addEventListener('pagehide', drop);
             document.addEventListener('visibilitychange', drop);
-          })
+          }, startView)
           .catch(() => {});
       const r = await reload(o);
       await started();
@@ -48,7 +49,8 @@ const test = base.test.extend({
     const app = {
       page,
       errors,
-      open: async () => {
+      open: async ({ home = 'today' } = {}) => {
+        startView = home;
         // A flow's link (ms-powerautomate:) would hand the page to another app; headless
         // Chromium then swallows later clicks. The tap is still seen by the app's own handlers.
         await page.addInitScript(() =>
@@ -57,7 +59,7 @@ const test = base.test.extend({
             if (a) e.preventDefault();
           }),
         );
-        await page.goto('/');
+        await page.goto(home === 'today' ? '/#/today' : '/');
         await started();
       },
       // A Settings group (Release D: Settings is an index of groups, each a page of its own).

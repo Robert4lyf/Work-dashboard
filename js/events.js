@@ -1,5 +1,5 @@
 /* nav & events */
-let view = 'today';
+let view = 'projects';
 // Only what can be seen is redrawn: the header, the view that's showing (and whatever covers
 // it). Other views are drawn when they're opened (see go), so a change or a sync doesn't redraw
 // every tab each time.
@@ -16,6 +16,7 @@ function renderView(v = view) {
     return;
   }
   const r = {
+    projects: renderProjects,
     today: renderToday,
     inbox: renderInbox,
     focus: renderFocus,
@@ -56,6 +57,7 @@ function go(v) {
     else x.removeAttribute('aria-current');
   });
   [
+    'projects',
     'today',
     'inbox',
     'waiting',
@@ -88,6 +90,7 @@ let returnTo = null, // { depth, name, ...placeHere() }: the view a task's page 
   listY = 0, // (where Today's list was scrolled to when a task was opened from it)
   listAt = null; // ({ id, top }: the task opened, and where its row was on the screen)
 const RETURN_NAME = {
+  projects: 'Projects',
   waiting: 'Waiting',
   review: 'Review',
   search: 'Search',
@@ -296,6 +299,7 @@ document.querySelectorAll('nav button[data-v]').forEach(
       if (b.dataset.v === 'today' && view === 'today' && path.length) {
         openPath([]);
       }
+      if (b.dataset.v === 'projects') path = [];
       go(b.dataset.v);
     }),
 );
@@ -304,17 +308,16 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (!window.appReady) return;
   const f = e.target;
-  if (f.id === 'sform') {
-    const v = $('#sin').value.trim();
-    if (!v) return;
-    const r = find(f.dataset.parent);
-    if (!r) return;
-    const b = snapshot(),
-      p = r.n;
-    p.children.push(fix({ id: uid(), text: v }));
-    p.done = false; // (it was finished before it had steps: with one to do, it isn't now)
-    settle(b);
-    $('#sin').focus();
+  if (f.id === 'sform' || f.dataset.projectStep) {
+    const input = f.querySelector('input'),
+      id = f.dataset.parent || f.dataset.projectStep,
+      r = find(id) || (f.dataset.projectStep && find(id, S.later)),
+      v = input.value.trim();
+    if (!r || r.parents.length || !v) return;
+    input.value = '';
+    addQuestStep(r.n, v);
+    document.getElementById(input.id)?.focus({ preventScroll: true });
+    if (f.dataset.projectStep) toast('Step added');
   }
   if (f.dataset.subfor) {
     const id = f.dataset.subfor,
@@ -594,6 +597,7 @@ document.addEventListener('click', e => {
   insightClick(d);
   opsClick(d, b);
   createClick(d, b);
+  projectClick(d);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -1211,16 +1215,28 @@ document.addEventListener('keydown', e => {
     if ($('#sheet')) sheetBack();
     else if (imgShown || kbImgShown) closeImgs();
     else if (zen) setZen(false);
+    else if (atReturn()) returnBack();
     else if (view === 'today' && path.length) openPath(path.slice(0, -1));
   }
 });
 
 /* Release H: where you were (the view, a task's page, a process run or an article open), kept
    for this tab, so a reload, or Android discarding the page in the background, opens there
-   again. Only for this tab (sessionStorage): opening the app afresh starts on Today. A deep link
+   again. Only for this tab (sessionStorage): opening the app afresh starts on Projects. A deep link
    (or a share, or a shortcut) wins; anything gone meanwhile falls back to Today. */
 const PLACE_KEY = 'cockpit.place';
-const PLACE_VIEWS = ['today', 'inbox', 'waiting', 'notes', 'knowledge', 'search', 'review', 'ops', 'focus'];
+const PLACE_VIEWS = [
+  'projects',
+  'today',
+  'inbox',
+  'waiting',
+  'notes',
+  'knowledge',
+  'search',
+  'review',
+  'ops',
+  'focus',
+];
 function keepPlace() {
   try {
     sessionStorage.setItem(
@@ -1228,6 +1244,7 @@ function keepPlace() {
       JSON.stringify({
         view,
         path,
+        projectsY: view === 'today' && returnTo?.view === 'projects' ? returnTo.y : null,
         sub: reviewSub,
         q: view === 'search' ? searchQ : '',
         kb: view === 'knowledge' ? { wfOpen, wfFrom, wfView, kbArt, kbRun, kbView } : null,
@@ -1248,6 +1265,16 @@ function takePlace() {
   // (the task's page only if it's all still there; else Today's list)
   const r = ids.length && find(ids[ids.length - 1]);
   path = r && [...r.parents.map(x => x.id), r.n.id].join('/') === ids.join('/') ? ids : [];
+  if (p.view === 'today' && path.length && Number.isFinite(p.projectsY)) {
+    const project = find(path[0]).n;
+    projectsDoneOpen = isDone(project);
+    returnTo = {
+      view: 'projects',
+      depth: 1,
+      y: p.projectsY,
+      opener: `.project-open[data-open="${CSS.escape(project.id)}"]`,
+    };
+  }
   if (p.view === 'review' && ['week', 'forecast', 'insights', 'log'].includes(p.sub)) reviewSub = p.sub;
   const k = p.kb;
   if (p.view === 'knowledge' && k && typeof k === 'object') {
@@ -1319,6 +1346,8 @@ setInterval(() => {
   sync();
   // Keeps the free time on Today current (not under a "Delete?" waiting for its second tap).
   if (!$('#v-today .armed')) inBackground(renderToday);
+  if (view === 'projects' && S.quests.some(q => isScheduled(q) && q.scheduled.time))
+    inBackground(renderProjects);
   renderHeader(); // and the next alarm
 }, 60000);
 
@@ -1387,7 +1416,7 @@ openPics().then(async db => {
 });
 // Android's back gesture: one history entry stands for "in the app". Going back runs the app's
 // own back step (close a picture, leave an article or a task's page, back to Today...) and
-// puts the entry back; only from Today's list does it leave the app.
+// puts the entry back; only from Projects does it leave the app.
 function appBack() {
   if (!$('#v-alarm').hidden) return true; // (an alarm is ringing: its buttons only)
   if (imgShown || kbImgShown) return (closeImgs(), true);
@@ -1433,7 +1462,11 @@ function appBack() {
   if (view === 'inbox' && triage) return (exitTriage(), true);
   if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view === 'account' && setSub) return (openSettings(null), true); // (a group: back to the index)
-  if (view !== 'today') return (go('today'), true);
+  if (view !== 'today' && path.length) return (go('today'), true);
+  if (view !== 'projects') {
+    path = [];
+    return (go('projects'), true);
+  }
   return false;
 }
 // (the app puts the page where it belongs on back: the browser's own restoring would undo it)

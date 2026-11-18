@@ -16,14 +16,14 @@ test('the back gesture from an article keeps the app open for the next one', asy
   await page.locator('#v-knowledge .tile', { hasText: 'Processes' }).click();
   await page.locator('#v-knowledge .kbrow', { hasText: 'Weekly returns' }).click();
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Weekly returns');
-  // Back: article → category → top level → Today, each step still inside the app.
+  // Back: article → category → top level → Projects, each step still inside the app.
   await page.evaluate(() => history.back());
   await expect(page.locator('#v-knowledge .kbcatname')).toHaveText('Processes');
   expect(errors).toEqual([]);
   await page.evaluate(() => history.back());
   await expect(page.locator('#v-knowledge .kbcatname')).toHaveCount(0);
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('#v-projects')).toBeVisible();
   expect(await page.evaluate(() => history.state && history.state.app)).toBe('in');
 });
 

@@ -287,11 +287,11 @@ test('Scenario D: an NFC card opens the Command Centre; a pinned workflow starts
   await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Read the overnight log');
   s = await app.state();
   expect(s.wruns).toHaveLength(1);
-  // Back goes to where the run was opened from (the Command Centre), then to Today.
+  // Back goes to where the run was opened from (the Command Centre), then to Projects.
   await page.evaluate(() => history.back());
   await expect(page.locator('#v-ops')).toBeVisible();
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('#v-projects')).toBeVisible();
   expect(app.errors).toEqual([]);
 });
 

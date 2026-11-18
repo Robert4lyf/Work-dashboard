@@ -60,6 +60,12 @@ function snapshot() {
   })(S.quests, []);
   return m;
 }
+function addQuestStep(project, text) {
+  const before = snapshot();
+  project.children.push(fix({ id: uid(), text }));
+  project.done = false;
+  settle(before);
+}
 // Finished tasks sink below open ones at every level; open ones keep their order,
 // so the top open task is always "Next up".
 function sinkDone(ns) {
@@ -498,7 +504,7 @@ function focusSel(a) {
    of what's shown, and a view is still drawn from scratch whenever it isn't Today. */
 // (by view, what page of it is drawn: a different page is drawn from scratch, so nothing of one
 // task's page, a field half typed in say, is carried over onto another's)
-const PATCHED = { 'v-today': () => 'p:' + path.join('/') };
+const PATCHED = { 'v-today': () => 'p:' + path.join('/'), 'v-projects': () => 'projects' };
 function withHash(html) {
   let h = 0x811c9dc5;
   for (let i = 0; i < html.length; i++) h = Math.imul(h ^ html.charCodeAt(i), 16777619);
