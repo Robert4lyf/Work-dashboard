@@ -190,9 +190,9 @@ test('project cards keep the same dimensions across rows when showing or editing
   await start(app, page);
   const cards = page.locator('#v-projects .project-card:visible');
   const sidewaysOverflow = () =>
-    cards.locator('.project-preview').evaluateAll(previews =>
-      previews.map(preview => preview.scrollWidth - preview.clientWidth),
-    );
+    cards
+      .locator('.project-preview')
+      .evaluateAll(previews => previews.map(preview => preview.scrollWidth - preview.clientWidth));
   const layout = () =>
     cards.evaluateAll(items =>
       items.map(card => {
