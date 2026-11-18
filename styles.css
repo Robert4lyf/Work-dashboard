@@ -4644,6 +4644,36 @@ header.project-header .syncbtn[data-state='off']::before {
   height: 16px;
   color: var(--muted);
 }
+.project-grip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  align-self: flex-start;
+  width: 44px;
+  height: 44px;
+  margin-inline: -6px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.project-grip svg {
+  width: 16px;
+  height: 20px;
+}
+.project-dragging .project-grip {
+  cursor: grabbing;
+}
+.project-dragging {
+  opacity: 0.55;
+}
+.project-drop-target {
+  outline: 3px solid var(--accent-ink);
+  outline-offset: -3px;
+}
 .project-meta {
   display: flex;
   flex-wrap: wrap;
