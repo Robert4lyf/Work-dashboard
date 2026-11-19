@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { unfold } = require('./fixtures');
+const { unfold, legacyWorkControls } = require('./fixtures');
 
 // A stand-in for Supabase, shared by several "devices" (browser contexts): the cockpit_items rows
 // live in the test, and each page reaches them through exposed functions. Supports the calls the
@@ -251,6 +251,7 @@ async function device(browser, srv, seed, opts = {}) {
     }, opts.clockBehind);
   if (seed) await page.addInitScript(s => localStorage.setItem('work-cockpit-v1', s), JSON.stringify(seed));
   await page.addInitScript(fakeSupabase);
+  await page.addInitScript(legacyWorkControls);
   await page.addInitScript(() => {
     document.addEventListener(
       'click',
@@ -274,6 +275,7 @@ async function device(browser, srv, seed, opts = {}) {
   };
   await page.goto('/#/work');
   await expect(page.locator('#syncBtn')).toHaveText('Synced');
+  await page.evaluate(() => openTodayTab(true));
   const d = {
     page,
     ctx,

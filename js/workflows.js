@@ -1541,7 +1541,19 @@ function wfRunView(r) {
     q = r.q && (find(r.q) || find(r.q, S.later)),
     final = WRUN_OVER.includes(r.status),
     ws = wsyncState(r);
-  let h = `<button class="linkbtn" data-wfback="1">‹ ${wfFrom === 'today' ? 'Today' : wfFrom === 'ops' ? 'Command Centre' : wfFrom ? 'Back' : wfView && wfById(wfView) ? esc(wfById(wfView).name) : 'Processes'}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
+  const backLabel =
+    wfFrom === 'today' || wfFrom === 'projects'
+      ? workListMode
+        ? 'Today'
+        : 'Projects'
+      : wfFrom === 'ops'
+        ? 'Command Centre'
+        : wfFrom
+          ? 'Back'
+          : wfView && wfById(wfView)
+            ? esc(wfById(wfView).name)
+            : 'Processes';
+  let h = `<button class="linkbtn" data-wfback="1">‹ ${backLabel}</button>${q ? `<p class="hint kbtrail">For: <button class="linkbtn" data-open="${q.n.id}">${esc(q.n.text)}</button></p>` : ''}
     <h2 class="kbtitle">${esc(r.name)}</h2><div class="prog"><div style="width:${p.total ? Math.round((p.done / p.total) * 100) : 0}%"></div></div>
     <p class="hint runprog"><span class="wst w-${r.status}">${runWord(r)}</span>${s ? ` · step ${i + 1} of ${p.total}` : ''}${!navigator.onLine && r.status === 'awaiting_automation' ? ' · offline: as last synced' : ''}${ws ? ` · <span class="wsync ws-${ws}">${WSYNC_WORD[ws]}</span>` : ''}</p>${wfConflictBox(r)}${ws === 'refused' ? wsyncRefused(r) : ''}`;
   const can = runActions(r),
@@ -1637,7 +1649,7 @@ function stageCard(r, s, i) {
     const opts = more
       .map(a => b(a, label[a], '', a === 'inbox' || a === 'ack' ? `data-wocc="${failOcc(r)}"` : ''))
       .join('');
-    return `<div class="pstep box failed"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}<p class="hint pnext">${next}</p>${wunprot(r)}<div class="acts wacts">${acts}</div><details class="moreopts" id="wfmore"${panels.wfmore ? ' open' : ''}><summary>Other options</summary><div class="acts wacts">${opts}</div><p class="hint">Acknowledging only stops the failure being flagged on Today and in the Command Centre; it doesn't fix it.</p></details></div>`;
+    return `<div class="pstep box failed"><p class="pnum">${i + 1}</p><h3>${esc(s.title)}</h3>${s.type !== 'manual' ? `<p class="hint ptype">${WF_TYPE_NAME[s.type]}</p>` : ''}${body}<p class="hint pnext">${next}</p>${wunprot(r)}<div class="acts wacts">${acts}</div><details class="moreopts" id="wfmore"${panels.wfmore ? ' open' : ''}><summary>Other options</summary><div class="acts wacts">${opts}</div><p class="hint">Acknowledging only stops the failure being flagged in the Command Centre; it doesn't fix it.</p></details></div>`;
   } else if (s.type === 'manual') {
     next = 'Marking it done moves the process to the next step.';
     acts = `${b('done', 'Mark done', 'green')}${skip}${b('fail', 'Report a problem')}`;

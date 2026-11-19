@@ -4,7 +4,6 @@
 // supabase/release-h.sql).
 const { test, expect } = require('@playwright/test');
 const { server, device, settle, report } = require('./fakesb');
-const { unfold } = require('./fixtures');
 
 test('a project assigned offline to a section deleted elsewhere falls back to Uncategorised', async ({
   browser,
@@ -41,7 +40,7 @@ test('a project assigned offline to a section deleted elsewhere falls back to Un
   }
 });
 
-test('independent tasks sent to Today from two devices sync into the same plan', async ({ browser }) => {
+test('two devices converge on one active project', async ({ browser }) => {
   const srv = server();
   const a = await device(browser, srv);
   await a.page.evaluate(() => {
@@ -57,16 +56,16 @@ test('independent tasks sent to Today from two devices sync into the same plan',
   await settle(a, b);
   await a.offline(true);
   await b.offline(true);
-  await a.page.getByRole('button', { name: 'Send to Today: Weekly report' }).press('Enter');
-  await b.page.getByRole('button', { name: 'Send to Today: Review figures' }).press('Enter');
+  await a.page.getByRole('button', { name: 'Make Weekly report active' }).press('Enter');
+  await b.page.getByRole('button', { name: 'Make Review figures active' }).press('Enter');
   await a.offline(false);
   await b.offline(false);
   await settle(a, b);
   for (const d of [a, b]) {
-    await d.page.locator('nav [data-v="today"]').click();
-    await expect(d.page.locator('.plan-row')).toHaveCount(2);
-    await expect(d.page.locator('.today-plan')).toContainText('Weekly report');
-    await expect(d.page.locator('.today-plan')).toContainText('Review figures');
+    const active = d.page.getByRole('region', { name: 'Active Task' });
+    await expect(active.getByRole('article')).toHaveCount(1);
+    await expect(active).toContainText('Review figures');
+    await expect(d.page.getByRole('region', { name: 'Uncategorised' })).toContainText('Weekly report');
     expect(d.errors).toEqual([]);
   }
 });
@@ -251,10 +250,7 @@ test('HIGH-2: a flow set to pass the attempt id gets it in its Run URL on every 
   await open(a);
   await a.page.click('a[data-flow="f2"][data-wstage="s2"]');
   expect((await hrefs(a))[1]).toBe(flows[1].url);
-  // Today's chips, the automations list, and an attempt's "Run again": each a new attempt's id.
-  await a.page.click('nav [data-v=today]');
-  await unfold(a.page, 'flowsd');
-  await a.page.click('#v-today a[data-flow="f1"]');
+  // The automations list and an attempt's "Run again" each carry a new attempt's id.
   await a.page.click('nav [data-v=knowledge]');
   await a.page.evaluate(() => {
     kbView = 'proc';
@@ -269,12 +265,12 @@ test('HIGH-2: a flow set to pass the attempt id gets it in its Run URL on every 
       .filter(x => x.flow === 'f1')
       .sort((p, q) => p.at - q.at)
       .map(x => x.id);
-  expect(ids).toHaveLength(4);
+  expect(ids).toHaveLength(3);
   const h = await hrefs(a);
   expect(h.slice(2)).toEqual(ids.slice(1).map(x => withId(URL1, x)));
   // A report naming f1's attempt for another flow is never taken as that attempt (server, and
   // the app folding a report that was).
-  const bad = await report(a, { token, flow: 'f2', status: 'failed', execution: ids[3] });
+  const bad = await report(a, { token, flow: 'f2', status: 'failed', execution: ids[2] });
   expect(bad.data.execution).toBe('');
   const moved = await a.page.evaluate(x => {
     foldExecEvent({
@@ -285,7 +281,7 @@ test('HIGH-2: a flow set to pass the attempt id gets it in its Run URL on every 
       reported_at: new Date().toISOString(),
     });
     return S.execs.find(e => e.id === x).status;
-  }, ids[3]);
+  }, ids[2]);
   expect(moved).toBe('requested');
   expect((await a.state()).execs.find(x => x.id === 'u9999')).toMatchObject({ flow: 'f2', status: 'failed' });
   noErrors(a, b);

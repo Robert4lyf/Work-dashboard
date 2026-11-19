@@ -60,7 +60,7 @@ const RULE_TEMPLATES = [
     do: { k: 'inbox', text: 'Next step after {name}' },
   },
   {
-    name: 'When a recurring process is due, add a task for it to Today',
+    name: 'When a recurring process is due, add a task for it to Projects',
     why: 'The run is made ready anyway; this puts the day’s work on the list too.',
     on: { k: 'wf_due' },
     do: { k: 'quest', text: 'Do {name}' },
@@ -150,7 +150,7 @@ function rulePreview(r) {
             ? `a run of ${(wfById(a.wf) || {}).name || 'a removed process'}, ready to start`
             : a.k === 'wait'
               ? `a waiting item on ${ruleFill(a.who, ev) || 'someone'}: “${ruleFill(a.text, ev) || r.name}”`
-              : `${a.k === 'inbox' ? 'an Inbox item' : 'a task on Today'}: “${ruleFill(a.text, ev) || r.name}”`;
+              : `${a.k === 'inbox' ? 'an Inbox item' : 'a task in Projects'}: “${ruleFill(a.text, ev) || r.name}”`;
   return {
     n: evs.length,
     samples: evs.slice(0, 3).map(made),
@@ -160,7 +160,7 @@ function rulePreview(r) {
 }
 const RULE_DO = {
   inbox: 'Add an Inbox item',
-  quest: 'Add a task to Today',
+  quest: 'Add a task to Projects',
   wait: 'Add a waiting item (Inbox)',
   wrun: 'Prepare a process (ready, not started)',
   notify: 'Show a notification on this device',

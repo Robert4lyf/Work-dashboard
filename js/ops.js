@@ -8,7 +8,7 @@
    last synced; signed out, they're this device's only. */
 const PIN_KINDS = { wf: 'Process', kb: 'Guide', flow: 'Desktop automation', q: 'Task', view: 'Page' },
   PIN_VIEWS = [
-    ['today', 'Today'],
+    ['projects', 'Projects'],
     ['inbox', 'Inbox'],
     ['waiting', 'Waiting Centre'],
     ['forecast', 'Forecast'],
@@ -22,7 +22,7 @@ function cleanPins(ps) {
   const seen = new Set();
   return ps
     .filter(p => p && typeof p === 'object' && PIN_KINDS[p.k] && okRef(p.id))
-    .map(p => ({ k: p.k, id: p.id }))
+    .map(p => ({ k: p.k, id: p.k === 'view' && p.id === 'today' ? 'projects' : p.id }))
     .filter(p => !seen.has(p.k + p.id) && seen.add(p.k + p.id))
     .slice(0, PINS_MAX);
 }
@@ -364,7 +364,7 @@ function renderOps() {
     prog = opsProgress(),
     coming = opsComing(),
     out = opsOutcomes();
-  let h = `<button class="linkbtn" data-goto="today">&lsaquo; Today</button><h2 class="opshead">Command Centre</h2><p class="hint opsync">${opsSyncLine()}</p>`;
+  let h = `<button class="linkbtn" data-goto="projects">&lsaquo; Projects</button><h2 class="opshead">Command Centre</h2><p class="hint opsync">${opsSyncLine()}</p>`;
   // Operations first (what needs you, then what's under way); with neither, one quiet line.
   if (att.length)
     h += `<section class="opsec"><div class="sechead"><h2>Needs attention <small>${att.length}</small></h2></div><div class="attlist box">${att.map(attentionRow).join('')}</div></section>`;

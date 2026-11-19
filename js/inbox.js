@@ -41,7 +41,7 @@ function renderInbox() {
   h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New Inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn green">Add</button></form>`;
   if (!S.inbox.length)
     h +=
-      '<div class="empty">Nothing captured. Type a thought above (or say it with the mic); sort it into Today later.</div>';
+      '<div class="empty">Nothing captured. Type a thought above (or say it with the mic); move it to Projects when you’re ready.</div>';
   else h += '<div class="list box">';
   S.inbox.forEach(it => {
     const kids = it.node ? it.node.children : [],

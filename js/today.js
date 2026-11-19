@@ -70,10 +70,8 @@ function row(n, i, len, sib) {
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
-  const project = path.length ? S.quests.find(q => q.id === path[0]) : null;
-  const send = project && !reorder ? todayPickButton(project, n, todayPickSet()) : '';
   return withHash(
-    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${send}${right}</div>`,
+    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`,
   );
 }
 // A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
@@ -285,57 +283,6 @@ function list(ns, doneApart, steps) {
 // Today's list: what can be worked on, and what's finished today (not what's scheduled or only
 // waiting: those are in their own sections).
 const todayWork = qs => qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
-const picksForToday = () => {
-  const day = today();
-  return S.todayPicks.filter(pick => pick.day === day);
-};
-const todayPickSet = () => new Set(picksForToday().map(pick => pick.id));
-const canSendToday = (q, n) =>
-  !n.children.length && !isDone(q) && !isDone(n) && !q.scheduled && !q.wait && !n.wait;
-const sendTodayIcon =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4m8-4v4M4 10h16m-8 2v6m-3-3h6"/></svg>';
-function todayPickButton(q, n, selected, upcoming = false) {
-  if (upcoming || (!selected.has(n.id) && !canSendToday(q, n))) return '';
-  const on = selected.has(n.id);
-  const action = on ? 'Remove from Today' : 'Send to Today';
-  return `<button type="button" class="today-pick${on ? ' on' : ''}" data-today-pick="${n.id}" aria-label="${action}: ${esc(n.text)}" title="${action}">${on ? tick : sendTodayIcon}</button>`;
-}
-function toggleTodayPick(id) {
-  const day = today();
-  const existing = S.todayPicks.findIndex(pick => pick.id === id && pick.day === day);
-  const adding = existing < 0;
-  if (adding) {
-    const r = find(id);
-    if (!r || !canSendToday(r.parents[0] || r.n, r.n)) return;
-    S.todayPicks.push({ id, day, at: Date.now() });
-  } else S.todayPicks.splice(existing, 1);
-  save();
-  renderAll();
-  toast(adding ? 'Sent to Today' : 'Removed from Today');
-}
-function plannedItems() {
-  return picksForToday()
-    .sort((a, b) => a.at - b.at || byName(a.id, b.id))
-    .map(pick => find(pick.id))
-    .filter(Boolean);
-}
-function renderTodayPlan(items) {
-  const rows = items.map(({ n, parents }) => {
-    const q = parents[0] || n;
-    const done = isDone(n);
-    const status = !done && (q.scheduled ? 'Scheduled' : q.wait || n.wait ? 'Waiting' : '');
-    const check =
-      !n.children.length && (done || !status)
-        ? `<button class="check" data-toggle="${n.id}" aria-pressed="${done}" aria-label="${done ? 'Mark not done' : 'Mark done'}: ${esc(n.text)}">${tick}</button>`
-        : '';
-    return `<div class="row plan-row${done ? ' done' : ''}" data-qid="${n.id}">${check}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${q !== n ? `<small>${esc(q.text)}</small>` : ''}${status ? `<small>${status}</small>` : ''}</button><button class="linkbtn plan-remove" data-today-pick="${n.id}" aria-label="Remove from Today: ${esc(n.text)}">Remove</button></div>`;
-  });
-  return `<section class="today-plan" aria-labelledby="taskshead">${listHead('Plan for today', [])}${
-    rows.length
-      ? `<div class="list box">${rows.join('')}</div>`
-      : '<div class="slot">Nothing planned yet. <button class="linkbtn" data-goto="projects">Choose tasks in Projects</button>.</div>'
-  }</section>`;
-}
 /* Reordering a list that shows only some of the tasks under it (Today's, without the scheduled
    and waiting ones). There is one order, S.quests; the list is the tasks it shows, in that order.
    Up and down move a task past its neighbour in the list (to just before it, or just after it),
@@ -376,7 +323,7 @@ function todayTitle() {
   const el = $('#ptitle'),
     d = new Date();
   if (!el) return;
-  el.hidden = view !== 'today' || path.length > 0;
+  el.hidden = view !== 'today' || path.length > 0 || !workListMode;
   setIfChanged(
     el,
     `<b>${workListMode ? 'All work' : 'Today'}</b><span>${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}</span>`,
@@ -414,10 +361,24 @@ function drawToday() {
     todayTitle();
     return renderNode(find(path[path.length - 1]));
   }
-  const planned = workListMode ? [] : plannedItems();
-  const work = workListMode ? todayWork(S.quests) : planned.map(r => r.n);
+  if (!workListMode) {
+    todayTitle();
+    if (projectUtility === 'upcoming') {
+      setHTML(
+        $('#v-today'),
+        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div><h1>Upcoming</h1>${renderUpcoming()}`,
+      );
+    } else if (projectUtility === 'alarms') {
+      setHTML(
+        $('#v-today'),
+        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div><h1>Alarms</h1>${renderAlarms()}`,
+      );
+    } else if (view === 'today') go('projects');
+    return;
+  }
+  const work = todayWork(S.quests);
   todayTitle();
-  const tasks = workListMode ? renderWorkList(work) : withHash(renderTodayPlan(planned));
+  const tasks = renderWorkList(work);
   // The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
   // repeats, flows and alarms. (Overdue and due-today work is in Needs attention.)
   const soon = dueSoon().filter(s => s.t.length > 1 && s.n.due > today());
@@ -496,7 +457,7 @@ function todayJump(work, sched, wait) {
     parts = [
       sched && ['schedhead', 'Scheduled', S.quests.filter(isScheduled).length],
       wait && ['waithead', 'Waiting', todayWaiting().length],
-      work.length && ['taskshead', workListMode ? 'Tasks' : 'Plan', left],
+      work.length && ['taskshead', 'Tasks', left],
     ].filter(Boolean);
   if (parts.length < 2) return '';
   return `<div class="tjump chips" role="navigation" aria-label="On Today">${parts.map(([id, label, k]) => `<button class="chip" data-jump="${id}" aria-label="Go to ${label}: ${k}">${label} <small>${k}</small><span class="jarrow" aria-hidden="true">↓</span></button>`).join('')}</div>`;
@@ -645,7 +606,11 @@ function renderNode({ n, parents }) {
     q = parents[0] || n; // (the quest: a step's page shares its resources and saved place)
   // (opened from another view: the way back names it)
   const from =
-    typeof atReturn === 'function' && atReturn() ? returnTo.name || RETURN_NAME[returnTo.view] : 'Today';
+    typeof atReturn === 'function' && atReturn()
+      ? returnTo.name || RETURN_NAME[returnTo.view]
+      : workListMode
+        ? 'Today'
+        : 'Projects';
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; ${from}</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
   // The facts: what's set on this task, each a tap to change. First what you're here for: how

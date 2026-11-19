@@ -1,5 +1,6 @@
 /* nav & events */
 let view = 'projects';
+let projectUtility = '';
 // Only what can be seen is redrawn: the header, the view that's showing (and whatever covers
 // it). Other views are drawn when they're opened (see go), so a change or a sync doesn't redraw
 // every tab each time.
@@ -39,11 +40,14 @@ $('#tabs').addEventListener('scroll', fadeTabs, { passive: true });
 window.addEventListener('resize', fadeTabs);
 // History lives under the Review tab; Focus has no tab (the header opens it).
 function go(v) {
-  if (v === 'work') {
-    workListMode = true;
+  if (v === 'alarms') {
     path = [];
+    projectUtility = 'alarms';
+    alarmsOpen = true;
     v = 'today';
   }
+  if (v === 'today' && !path.length && !projectUtility && !workListMode) v = 'projects';
+  if (v !== 'today') projectUtility = '';
   if (v === 'log') {
     reviewSub = v;
     v = 'review';
@@ -57,7 +61,7 @@ function go(v) {
   if (v !== 'today') $('#ptitle').hidden = true;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
-  const tabView = v === 'today' && workListMode ? 'projects' : v;
+  const tabView = v === 'today' ? 'projects' : v;
   document.querySelectorAll('nav button[data-v]').forEach(x => {
     if (x.dataset.v === tabView) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
@@ -212,6 +216,7 @@ function showUpcoming(id) {
     l = id && find(id, S.later),
     top = l && (l.parents[0] || l.n);
   path = [];
+  projectUtility = 'upcoming';
   go('today');
   const u = $('#upd');
   if (u) u.open = panels.upd = true;
@@ -299,6 +304,7 @@ function returnBack() {
 const atReturn = () => returnTo && view === 'today' && path.length === returnTo.depth;
 function openTodayTab(allWork = false) {
   returnTo = viewFrom = null;
+  projectUtility = '';
   workListMode = allWork;
   if (view === 'today' && path.length) openPath([]);
   go('today');
@@ -307,9 +313,11 @@ document.querySelectorAll('nav button[data-v]').forEach(
   b =>
     (b.onclick = () => {
       if (!window.appReady) return; // (not started yet)
-      if (b.dataset.v === 'today') return openTodayTab();
       returnTo = viewFrom = null; // (a tab is a fresh start: back no longer leads to where a task came from)
-      if (b.dataset.v === 'projects') path = [];
+      if (b.dataset.v === 'projects') {
+        path = [];
+        workListMode = false;
+      }
       go(b.dataset.v);
     }),
 );
@@ -610,7 +618,6 @@ document.addEventListener('click', e => {
   opsClick(d, b);
   createClick(d, b);
   projectClick(d);
-  if (d.todayPick) toggleTodayPick(d.todayPick);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -620,21 +627,12 @@ document.addEventListener('click', e => {
       // back, not on.)
       const goingBack =
         view === 'knowledge' && kbReturn && p.length === path.length && p.every((id, i) => path[i] === id);
-      const fromPlan = view === 'today' && !path.length && b.closest('.today-plan');
       const from =
-        fromPlan || (view !== 'today' && RETURN_NAME[view] && !goingBack)
+        view !== 'today' && RETURN_NAME[view] && !goingBack
           ? {
               ...placeHere(b),
               depth: p.length,
-              name: fromPlan
-                ? 'Today'
-                : view !== 'knowledge'
-                  ? ''
-                  : wfOpen
-                    ? 'Process'
-                    : kbRun
-                      ? 'Guide'
-                      : '',
+              name: view !== 'knowledge' ? '' : wfOpen ? 'Process' : kbRun ? 'Guide' : '',
             }
           : null;
       // (a step opened on a task's page that was itself opened from another view: the way back
@@ -658,7 +656,7 @@ document.addEventListener('click', e => {
   }
   if (d.v && b.closest('header, #v-waiting, #waitsec')) {
     const from = !b.closest('header') && placeHere(b);
-    if (d.v === 'today' && b.closest('header')) path = []; // (the list, not an open task)
+    if (d.v === 'projects') path = [];
     if (b.classList.contains('halarm')) alarmsOpen = true; // (the alarms, unfolded)
     go(d.v);
     if (b.classList.contains('halarm') && $('#alarmd')) $('#alarmd').scrollIntoView({ block: 'nearest' });
@@ -685,7 +683,8 @@ document.addEventListener('click', e => {
   if (d.goto) {
     // (Release H: from Search or the Command Centre, back returns there; not a ‹ Today link,
     // which is itself the way back)
-    const from = d.goto !== 'today' && placeHere(b);
+    const from = !['today', 'projects'].includes(d.goto) && placeHere(b);
+    if (d.goto === 'projects') path = [];
     if (d.goto === 'inbox') triage = null; // (the capture box, not a walk under way)
     go(d.goto);
     landed(from);
@@ -1026,6 +1025,7 @@ document.addEventListener('click', e => {
         projectUpdates: S.projectUpdates,
         projectSections: S.projectSections,
         projectPlacements: S.projectPlacements,
+        activeProject: S.activeProject,
         todayPicks: S.todayPicks,
         runs: S.runs,
         execs: S.execs,
@@ -1045,6 +1045,7 @@ document.addEventListener('click', e => {
       return toast("That backup couldn't be read", false, 3000);
     }
     Object.assign(S, keep);
+    if (pending.activeProject === undefined) S.activeProject = kept.activeProject;
     if (pending.cap === undefined && hadCap) S.cap = hadCap; // (a copy from before capacity)
     if (imgs) S.noteImgs = imgs;
     // (pictures still waiting for their article: kept too, or they'd be deleted everywhere)
@@ -1228,8 +1229,9 @@ document.addEventListener('keydown', e => {
     go('inbox');
     field('#iin');
   } else if (k === 't') {
-    if (view === 'today' && path.length) openPath([]);
-    go('today');
+    path = [];
+    workListMode = false;
+    go('projects');
   } else if (k === '/') {
     e.preventDefault();
     openSearch();
@@ -1274,7 +1276,6 @@ function keepPlace() {
       JSON.stringify({
         view,
         path,
-        workListMode,
         projectsY: view === 'today' && returnTo?.view === 'projects' ? returnTo.y : null,
         sub: reviewSub,
         q: view === 'search' ? searchQ : '',
@@ -1292,7 +1293,6 @@ function takePlace() {
   // (opened at a deep link, a share or an app-icon shortcut: that's where to go)
   if (launchRoute || location.hash.startsWith('#/') || location.search.length > 1) return;
   if (!p || typeof p !== 'object' || !PLACE_VIEWS.includes(p.view)) return;
-  workListMode = p.workListMode === true;
   const ids = Array.isArray(p.path) ? p.path.filter(x => typeof x === 'string' && okRef(x)) : [];
   // (the task's page only if it's all still there; else Today's list)
   const r = ids.length && find(ids[ids.length - 1]);
@@ -1377,7 +1377,7 @@ setInterval(() => {
   }
   sync();
   // Keeps the free time on Today current (not under a "Delete?" waiting for its second tap).
-  if (!$('#v-today .armed')) inBackground(renderToday);
+  if (view === 'today' && !$('#v-today .armed')) inBackground(renderToday);
   if (view === 'projects' && S.quests.some(q => isScheduled(q) && q.scheduled.time))
     inBackground(renderProjects);
   renderHeader(); // and the next alarm

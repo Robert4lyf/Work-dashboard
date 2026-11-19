@@ -2,11 +2,10 @@
    Android automation (Automate, Tasker, HTTP Shortcuts, an NFC card through one of them) or
    another app. Opening a link only navigates: nothing is changed, ticked, started or sent.
      #/projects         Projects
-     #/today            Today (the plan, with the top 3)
-     #/work             All work (list or board)
+     #/today, #/work     Existing shortcuts now open Projects
      #/inbox            the Inbox
      #/inbox/triage     Sort the Inbox
-     #/q/<id>           a task or a step (on Today; one on Upcoming or in the Inbox is shown there)
+     #/q/<id>           a task or a step (items on Upcoming or in the Inbox are shown there)
      #/kb/<id>          a Knowledge article (a procedure shows its steps)
      #/kb/<id>/run      a procedure, started or resumed
      #/waiting          the Waiting Centre
@@ -115,14 +114,11 @@ function followRoute(r, first) {
   };
   switch (r.kind) {
     case 'today':
+    case 'work':
+    case 'projects':
       workListMode = false;
       path = [];
-      go('today');
-      return;
-    case 'projects':
-    case 'work':
-      path = [];
-      go(r.kind);
+      go('projects');
       return;
     case 'inbox':
       triage = null;
@@ -135,16 +131,12 @@ function followRoute(r, first) {
       return;
     case 'q': {
       const at = locate(r.id);
-      if (!at) return miss('task', 'today');
+      if (!at) return miss('task', 'projects');
       if (at.where === 'today') {
         openPath([...at.r.parents.map(p => p.id), at.r.n.id]);
         go('today');
       } else if (at.where === 'later') {
-        path = [];
-        go('today');
-        const u = $('#upd');
-        if (u) u.open = panels.upd = true;
-        toast('On Upcoming: ' + at.r.n.text, false, 3000);
+        showUpcoming(r.id);
       } else {
         triage = null;
         expanded.add(at.it.id);
@@ -229,10 +221,9 @@ function retryRoute(last) {
 
 /* Settings > Shortcuts: a link for a chosen place, to copy into a shortcut, an automation or an
    NFC action. Only navigation: no link can tick, start or send anything. */
-let shortcutKind = 'today',
+let shortcutKind = 'projects',
   shortcutId = '';
 const SHORTCUTS = [
-  ['today', 'Start work: Today', ''],
   ['projects', 'Projects', ''],
   ['continue', 'Continue: where you left off', ''],
   ['triage', 'Sort the Inbox', ''],

@@ -4592,6 +4592,21 @@ header.project-header .syncbtn[data-state='off']::before {
   justify-content: flex-end;
   margin-bottom: 14px;
 }
+.active-project {
+  margin-bottom: 22px;
+}
+.active-project h2 {
+  margin: 0 0 8px;
+  font-size: var(--fs-h);
+}
+.active-project .project-card {
+  border-inline-start: 5px solid var(--accent-ink);
+}
+.project-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .project-board-section {
   --section-accent: var(--edge);
   margin-bottom: 22px;
@@ -4801,39 +4816,6 @@ header.project-header .syncbtn[data-state='off']::before {
   flex: 1;
   min-width: 0;
 }
-.today-pick {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-.today-pick svg {
-  width: 19px;
-  height: 19px;
-}
-.today-pick.on {
-  color: var(--ok);
-}
-@media (hover: hover) and (pointer: fine) {
-  .today-pick {
-    opacity: 0;
-  }
-  :is(.project-card-heading, .project-step, .row):is(:hover, :focus-within) > .today-pick {
-    opacity: 1;
-  }
-}
-.today-plan {
-  margin: 12px 0;
-}
-.plan-remove {
-  margin-inline-end: 8px;
-}
 .project-card .check {
   position: relative;
   width: 34px;
@@ -4856,9 +4838,20 @@ header.project-header .syncbtn[data-state='off']::before {
   color: var(--muted);
   text-decoration: line-through;
 }
-.project-step-dot {
+.project-step-dot,
+.project-step-clock {
   flex: 0 0 34px;
   text-align: center;
+}
+.project-step-clock {
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  color: var(--warn);
+}
+.project-step-clock svg {
+  width: 20px;
+  height: 20px;
 }
 .project-step-dot::before {
   content: '•';
