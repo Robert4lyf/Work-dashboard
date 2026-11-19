@@ -178,9 +178,7 @@ textarea {
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
-/* (on the yellow header, the Top 3's turquoise, the red attention bar and the current tab, in
-   either theme: a black ring, which shows on all of them) */
-header :focus-visible,
+/* Use a dark ring on the coloured section bars and current tab in either theme. */
 .top3 > .sechead :focus-visible,
 .attsum :is(summary, .attcc):focus-visible,
 nav button[aria-current='page']:focus-visible {
@@ -198,6 +196,7 @@ section[tabindex='-1']:focus-visible {
 
 /* Shared toolbar */
 header {
+  background: var(--bg);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
