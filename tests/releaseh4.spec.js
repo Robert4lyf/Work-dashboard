@@ -255,20 +255,23 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
     expect(await page.evaluate(() => S.follows.some(f => f.note === 'Called Accounts'))).toBe(true);
   });
 
-  test('a reload keeps your place: a task, a run; a task gone meanwhile is Today; a deep link wins', async ({
+  test('a reload keeps your place: a task, a run; a missing task returns to Projects; a deep link wins', async ({
     app,
     page,
   }) => {
-    await day(app, page);
-    await page.click('#v-today .list .row[data-qid="g2"] .open');
+    await page.clock.install({ time: new Date(2026, 10, 4, 11, 0) });
+    await app.open({ home: 'projects' });
+    await app.setState(gDay);
+    await page.reload({ keepPlace: true });
+    await page.click('.project-open[data-open="g2"]');
     await page.reload({ keepPlace: true });
     expect(await where(page)).toMatchObject({ view: 'today', path: ['g2'] });
     await expect(page.locator('#v-today [data-crumb="-1"]')).toBeVisible();
     await page.evaluate(() => openWorkflowRun('r3'));
     await page.reload({ keepPlace: true });
     expect(await where(page)).toMatchObject({ view: 'knowledge', wfOpen: 'r3' });
-    await expect(page.locator('#v-knowledge [data-wfback]')).toHaveText('‹ Today');
-    // The run is gone by the time the page comes back: Today.
+    await expect(page.locator('#v-knowledge [data-wfback]')).toHaveText('‹ Projects');
+    // The run is gone by the time the page comes back: Projects.
     // (kept, then the run removed as another device would; the page going doesn't keep it again)
     await page.evaluate(() => {
       keepPlace();
@@ -277,9 +280,9 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
       window.appReady = false;
     });
     await page.reload({ keepPlace: true });
-    expect(await where(page)).toMatchObject({ view: 'today', wfOpen: null, path: [] });
-    // A task deleted meanwhile: Today's list.
-    await page.click('#v-today .list .row[data-qid="g3"] .open');
+    expect(await where(page)).toMatchObject({ view: 'projects', wfOpen: null, path: [] });
+    // A task deleted meanwhile: the Projects grid.
+    await page.click('.project-open[data-open="g3"]');
     await page.evaluate(() => {
       keepPlace();
       S.quests = S.quests.filter(q => q.id !== 'g3');
@@ -287,14 +290,15 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
       window.appReady = false;
     });
     await page.reload({ keepPlace: true });
-    expect(await where(page)).toMatchObject({ view: 'today', path: [] });
-    await expect(page.locator('#v-today .list')).toBeVisible();
+    expect(await where(page)).toMatchObject({ view: 'projects', path: [] });
+    await expect(page.locator('#v-projects')).toBeVisible();
     // A deep link wins over the place kept.
-    await page.click('#v-today .list .row[data-qid="g5"] .open');
+    await page.click('.project-open[data-open="g5"]');
     await page.evaluate(() => (location.hash = '#/waiting'));
     await expect.poll(async () => (await where(page)).view).toBe('waiting');
     // (and opening the app at one, in the same tab)
-    await page.click('nav [data-v=today]');
+    await page.click('nav [data-v=projects]');
+    await page.click('.project-open[data-open="g5"]');
     expect(await where(page)).toMatchObject({ view: 'today', path: ['g5'] });
     await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null));
     await page.goto('about:blank');

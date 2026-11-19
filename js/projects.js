@@ -14,6 +14,15 @@ try {
   if (Array.isArray(saved)) saved.filter(okRef).forEach(id => foldedProjectSections.add(id));
 } catch (e) {}
 const openProjectCompleted = new Set();
+const waitingClock =
+  '<span class="project-step-clock" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>';
+
+function activeProject() {
+  return (
+    S.quests.find(q => q.id === S.activeProject && !isDone(q)) ||
+    S.later.find(q => q.id === S.activeProject && !isDone(q))
+  );
+}
 
 function projectCheck(n, label) {
   const done = isDone(n);
@@ -39,7 +48,7 @@ function projectHistory(q, updates, open) {
   </section>`;
 }
 
-function projectCard(q, updates, canReorder, selected) {
+function projectCard(q, updates, canReorder, isActive = false) {
   const done = isDone(q),
     upcoming = !!q.start,
     scheduled = isScheduled(q),
@@ -62,9 +71,8 @@ function projectCard(q, updates, canReorder, selected) {
     .map(n => {
       const checked = isDone(n);
       return `<li class="project-step${checked ? ' project-step-done' : ''}" data-qid="${n.id}">
-      ${!n.children.length && mayTick && (!n.wait || checked) ? projectCheck(n, checked ? 'Mark not done' : 'Mark done') : '<span class="project-step-dot" aria-hidden="true"></span>'}
+      ${!n.children.length && mayTick && (!n.wait || checked) ? projectCheck(n, checked ? 'Mark not done' : 'Mark done') : n.wait && !checked ? waitingClock : '<span class="project-step-dot" aria-hidden="true"></span>'}
       <span class="project-step-name">${esc(n.text)}${n.wait && !checked ? '<small>Waiting</small>' : ''}</span>
-      ${todayPickButton(q, n, selected, upcoming)}
     </li>`;
     })
     .join('');
@@ -75,7 +83,7 @@ function projectCard(q, updates, canReorder, selected) {
       <div class="project-card-heading">
         ${!kids.length && mayTick ? projectCheck(q, done ? 'Mark not done' : 'Mark done') : ''}
         <h2 id="project-title-${q.id}"><button class="project-open" ${detail}><span>${esc(q.text)}</span>${chevron}</button></h2>
-        ${todayPickButton(q, q, selected, upcoming)}
+        ${q.wait && !kids.length && !done ? waitingClock : ''}
         ${canReorder ? `<button class="project-grip" type="button" data-project-reorder="${q.id}" aria-haspopup="dialog" aria-label="Reorder ${esc(q.text)}" title="Drag to move or open move options">${projectGripIcon}</button>` : ''}
       </div>
       ${meta.length ? `<div class="project-meta">${meta.map(item => `<span>${item}</span>`).join('')}</div>` : ''}
@@ -83,6 +91,7 @@ function projectCard(q, updates, canReorder, selected) {
       ${projectHistory(q, updates, historyOpen)}
     </div>
     <div class="project-actions">
+      ${done ? '' : `<button type="button" class="linkbtn project-activate" data-project-activate="${q.id}" aria-label="Make ${esc(q.text)} active" aria-pressed="${isActive}">${isActive ? '✓ Active' : 'Make active'}</button>`}
       <button class="linkbtn" data-project-add="${q.id}" aria-expanded="${projectStepFor === q.id}" aria-label="Add step to ${esc(q.text)}">+ Add step</button>
       ${!upcoming && remaining ? `<button class="linkbtn" ${detail} aria-label="Show all steps for ${esc(q.text)}">${remaining} more ${remaining === 1 ? 'step' : 'steps'}</button>` : ''}
       <button class="linkbtn" data-project-history="${q.id}" aria-controls="project-history-${q.id}" aria-expanded="${historyOpen}" aria-label="History for ${esc(q.text)}">History</button>
@@ -130,12 +139,14 @@ function renderProjects() {
     updatesByProject.get(entry.q).push(entry);
   }
   for (const list of updatesByProject.values()) list.sort((a, b) => b.t - a.t || byName(b.id, a.id));
-  const selected = todayPickSet();
+  const pinned = activeProject();
   const canMoveSections = S.projectSections.length > 0;
   const grid = (qs, canReorder, id = '') =>
-    `<div class="project-grid"${id ? ` id="${id}"` : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder, selected)).join('')}</div>`;
+    `<div class="project-grid"${id ? ` id="${id}"` : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder)).join('')}</div>`;
   const sections = projectSectionGroups().map(section => {
-    const { id, name, colour, active, upcoming, done } = section;
+    const { id, name, colour, done } = section;
+    const active = section.active.filter(q => q !== pinned);
+    const upcoming = section.upcoming.filter(q => q !== pinned);
     const accent = colour && PROJECT_SECTION_COLOURS[colour];
     const uncategorised = id === UNCATEGORISED;
     const expanded = !foldedProjectSections.has(id);
@@ -159,11 +170,27 @@ function renderProjects() {
   });
   setHTML(
     el,
-    `<div class="project-board-actions"><button type="button" class="btn sm" data-project-section-add="1" aria-haspopup="dialog">Add section</button></div>${sections.join('')}`,
+    `<div class="project-board-actions"><button type="button" class="btn sm" data-project-section-add="1" aria-haspopup="dialog">Add section</button></div>
+    <section class="active-project" aria-labelledby="active-project-title">
+      <h2 id="active-project-title">Active Task</h2>
+      ${pinned ? `<div class="project-grid">${projectCard(pinned, updatesByProject.get(pinned.id), false, true)}</div>` : '<p class="hint">Choose Make active on a project.</p>'}
+    </section>${sections.join('')}
+    <div class="project-tools"><button class="linkbtn" data-goto="waiting">Waiting Centre</button><button class="linkbtn" data-goto="alarms">Alarms</button></div>`,
   );
 }
 
 function projectClick(d) {
+  if (d.projectActivate) {
+    const q = [...S.quests, ...S.later].find(item => item.id === d.projectActivate && !isDone(item));
+    if (!q) return;
+    const activating = S.activeProject !== q.id;
+    S.activeProject = activating ? q.id : '';
+    save();
+    renderProjects();
+    if (activating) $('#active-project-title')?.scrollIntoView({ block: 'nearest' });
+    $(`[data-project-activate="${q.id}"]`)?.focus({ preventScroll: activating });
+    return;
+  }
   if (d.projectSectionAdd || d.projectSectionEdit) {
     editProjectSection(S.projectSections.find(section => section.id === d.projectSectionEdit));
     return;
@@ -337,8 +364,10 @@ function moveProjectSection(id, targetId) {
 }
 
 function locateProjectCard(id, groups = projectSectionGroups()) {
+  const pinned = activeProject();
   for (const group of groups) {
-    for (const cards of [group.active, group.upcoming, group.done]) {
+    for (const groupCards of [group.active, group.upcoming, group.done]) {
+      const cards = groupCards.filter(q => q !== pinned);
       const at = cards.findIndex(q => q.id === id);
       if (at !== -1) return { group, cards, at };
     }
@@ -354,7 +383,7 @@ function moveProject(id, sectionId, targetId) {
   const project = source.cards[source.at];
   const changedSection = source.group.id !== sectionId;
   const from = S.quests.indexOf(project);
-  const peers = isDone(project) ? destination.done : destination.active;
+  const peers = (isDone(project) ? destination.done : destination.active).filter(q => q !== activeProject());
   const target = peers.find(q => q.id === targetId);
   const anchor = target || (changedSection ? peers.at(-1) : null);
   const to = anchor ? S.quests.indexOf(anchor) : -1;

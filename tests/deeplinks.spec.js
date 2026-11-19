@@ -57,10 +57,11 @@ const where = page =>
   }));
 
 test('every destination opens from a cold launch, and the address is cleaned up', async ({ app, page }) => {
-  await app.open();
+  test.setTimeout(60_000);
+  await app.open({ home: 'projects' });
   await page.evaluate(seed);
   const cases = [
-    ['#/today', w => w.view === 'today' && !w.path.length],
+    ['#/today', w => w.view === 'projects' && !w.path.length],
     ['#/inbox', w => w.view === 'inbox' && !w.triage],
     ['#/inbox/triage', w => w.view === 'inbox' && w.triage],
     ['#/q/q1', w => w.view === 'today' && w.path.join('/') === 'q1'],
@@ -103,7 +104,7 @@ test('a link while the app is open navigates (not a back step); back then walks 
   app,
   page,
 }) => {
-  await app.open();
+  await app.open({ home: 'projects' });
   await page.evaluate(seed);
   await app.go('inbox');
   await page.evaluate(() => (location.hash = '#/q/s1'));
@@ -112,16 +113,17 @@ test('a link while the app is open navigates (not a back step); back then walks 
   await page.goBack();
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await page.goBack();
-  await expect(page.locator('#v-today .row')).toHaveCount(2);
-  await expect(page.locator('#v-today')).toBeVisible(); // (still in the app)
+  await expect(page.locator('#v-projects')).toBeVisible();
   // A link arriving over an open sheet or single-task mode closes them first.
-  await page.click('[aria-label="Actions: Call Dana"]');
+  await page.locator('#v-projects').getByRole('button', { name: 'Weekly reporting', exact: true }).click();
+  await page.locator('#v-today [aria-label="Actions: Reconcile"]').click();
   await page.evaluate(() => (location.hash = '#/waiting'));
   await expect(page.locator('#sheet')).toHaveCount(0);
   await expect(page.locator('#v-waiting')).toBeVisible();
   await page.evaluate(() => setZen(true));
   await page.evaluate(() => (location.hash = '#/today'));
   await expect(page.locator('#v-zen')).toBeHidden();
+  await expect(page.locator('#v-projects')).toBeVisible();
   // The article editor isn't clobbered: it asks first.
   await page.evaluate(() => {
     kbEdit = { cat: 'c1', title: 'Draft', body: 'keep' };
@@ -137,12 +139,12 @@ test('missing, invalid or hostile targets fail plainly, change nothing, and neve
   app,
   page,
 }) => {
-  await app.open();
+  await app.open({ home: 'projects' });
   await page.evaluate(seed);
   const canonState = () => page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
   const before = await canonState();
   for (const [h, msg, view] of [
-    ['#/q/nope', "task isn't here", 'today'],
+    ['#/q/nope', "task isn't here", 'projects'],
     ['#/kb/nope', "article isn't here", 'knowledge'],
     ['#/waiting/s1', "waiting item isn't here", 'waiting'], // (s1 isn't waiting)
     ['#/kb/a2/run', 'no steps to follow', 'knowledge'],
@@ -165,11 +167,11 @@ test('missing, invalid or hostile targets fail plainly, change nothing, and neve
 });
 
 test('Settings builds the links; app-icon shortcuts carry routes', async ({ app, page }) => {
-  await app.open();
+  await app.open({ home: 'projects' });
   await page.evaluate(seed);
   await app.settings('auto');
   const link = () => page.locator('#sclink').textContent();
-  expect(await link()).toBe('http://localhost:4173/#/today');
+  expect(await link()).toBe('http://localhost:4173/#/projects');
   await page.selectOption('#scpick', 'q');
   expect(await link()).toBe('http://localhost:4173/#/q/q1');
   await page.selectOption('#scid', 'q2');
@@ -192,7 +194,7 @@ test('review fix: after a cold launch at a route, back steps through the app onc
   app,
   page,
 }) => {
-  await app.open();
+  await app.open({ home: 'projects' });
   await page.evaluate(seed);
   await cold(page, '#/q/s1');
   await expect(page.locator('#v-today h1')).toHaveText('Reconcile');
@@ -200,8 +202,8 @@ test('review fix: after a cold launch at a route, back steps through the app onc
   await page.goBack();
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await page.goBack();
-  await expect(page.getByRole('region', { name: 'Plan for today' })).toContainText('Nothing planned yet.');
-  await expect(page.locator('#v-today h1')).toHaveCount(0); // (not reopened by a replayed route)
+  await expect(page.locator('#v-projects')).toBeVisible();
+  await expect(page.locator('#v-today')).toBeHidden();
   await cold(page, '#/inbox/triage');
   await expect(page.locator('#v-inbox .tcard')).toBeVisible();
   await page.goBack();

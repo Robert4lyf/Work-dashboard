@@ -252,6 +252,7 @@ function norm(s) {
       projectUpdates: [],
       projectSections: [],
       projectPlacements: [],
+      activeProject: '',
       todayPicks: [],
       pdaily: {},
       interrupts: [],
@@ -307,6 +308,7 @@ function norm(s) {
       placements.set(entry.id, { id: entry.id, section: entry.section });
   }
   S.projectPlacements = [...placements.values()];
+  S.activeProject = okRef(S.activeProject) ? S.activeProject : '';
   const picks = new Map();
   for (const pick of Array.isArray(S.todayPicks) ? S.todayPicks : []) {
     if (pick && okRef(pick.id) && cleanDay(pick.day) && Number.isFinite(pick.at))

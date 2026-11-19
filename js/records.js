@@ -33,6 +33,7 @@ const LISTS = {
 };
 function toRecords(s) {
   const m = new Map();
+  if (s.activeProject) m.set('meta:activeproject', { id: s.activeProject });
   for (const [kind, [prop, key]] of Object.entries(LISTS))
     (s[prop] || []).forEach(x => m.set(kind + ':' + key(x), x));
   // Only once there are notes: a device that never had any mustn't send an empty copy that
@@ -121,6 +122,7 @@ function fromRecords(m, day) {
       Array.isArray(sectionOrder) ? sectionOrder : [],
     ),
     projectPlacements: by.pplacement || [],
+    activeProject: m.get('meta:activeproject')?.id,
     todayPicks: by.todaypick || [],
     tags: ordered(by.tag, order.tags, x => x.name),
     log: (by.log || []).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)),
@@ -213,6 +215,7 @@ function saveSyncState() {
 // Record kinds this version knows. Rows of other kinds (from a newer version on another
 // device) are left alone, never deleted for being missing here.
 const META_KEYS = [
+  'activeproject',
   'notes',
   'order',
   'prefs',

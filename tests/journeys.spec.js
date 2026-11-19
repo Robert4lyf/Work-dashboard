@@ -199,11 +199,11 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   ]);
 });
 
-test('Workflow C: an NFC card opens Today: top 3 → task workspace → resume deliberately, nothing run by the link', async ({
+test('Workflow C: an old NFC shortcut opens Projects and a project can be resumed deliberately, nothing run by the link', async ({
   app,
   page,
 }) => {
-  await app.open();
+  await app.open({ home: 'projects' });
   await page.evaluate(() => {
     S.flows = [{ id: 'f1', name: 'Morning flow', url: 'ms-powerautomate:/console/flow/run?x=1', last: 0 }];
     S.track = true;
@@ -217,23 +217,22 @@ test('Workflow C: an NFC card opens Today: top 3 → task workspace → resume d
       }),
       fix({ id: 'q2', text: 'Call Sam' }),
     ];
-    S.top3 = { day: today(), ids: ['q1', 'q2'] };
     save();
     renderAll();
   });
   await page.evaluate(() => storeDone());
-  // 1-3. The card's automation opens the start-of-work link; the app opens on Today.
+  // 1-3. The card's automation opens the start-of-work link; the app opens on Projects.
   await page.goto('about:blank');
   await page.goto('/#/today');
   await page.waitForFunction(() => window.appReady === true);
-  // 4. The top 3 is there; nothing was launched, started or changed by opening the link.
-  await expect(page.locator('#v-today .top3 .t3row')).toHaveCount(2);
+  // 4. The project cards are there; nothing was launched, started or changed by opening the link.
+  await expect(page.locator('#v-projects').getByRole('article')).toHaveCount(2);
   let s = await app.state();
   expect(s.execs).toHaveLength(0);
   expect(s.timer).toBeNull();
   expect(s.flows[0].last).toBe(0);
   // 5-6. The task opens with its resources and saved place.
-  await page.click('.t3row[data-t3="q1"] .open');
+  await page.locator('#v-projects').getByRole('button', { name: 'Weekly reporting', exact: true }).click();
   await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
   await expect(page.locator('#placecard')).toContainText('Check the supplier credits');
   await expect(page.locator('#resd .resrow')).toContainText('Morning flow');

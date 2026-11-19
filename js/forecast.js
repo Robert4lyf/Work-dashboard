@@ -365,12 +365,12 @@ function forecastClick(d, b) {
   }
   if (d.fmove) {
     const r = find(d.fmove);
-    if (!r || r.parents.length) return toast("That task isn't on Today any more", false, 3000);
+    if (!r || r.parents.length) return toast("That task isn't in Projects any more", false, 3000);
     const date = d.fdate;
     sheet(
       {
         title: `Move “${r.n.text}” to ${dayLabel(date)}?`,
-        text: 'It goes to Upcoming and comes back to Today that day.',
+        text: 'It goes to Upcoming and comes back to Projects that day.',
         ok: 'Move',
       },
       () => schedule('q', d.fmove, date), // (its toast says where it went, with Undo)

@@ -52,7 +52,7 @@ test('rule templates make a rule in two taps; the editor says when it can run; t
     'When a process fails, add an Inbox item',
     'When an automation fails, flag it in the Inbox',
     'When a reply arrives, add the next step to the Inbox',
-    'When a recurring process is due, add a task for it to Today',
+    'When a recurring process is due, add a task for it to Projects',
     'When a chase date comes, add a reminder to the Inbox',
     'From scratch',
   ]);
@@ -61,7 +61,7 @@ test('rule templates make a rule in two taps; the editor says when it can run; t
   await expect(page.locator('#rlon')).toHaveValue('exec_failed');
   await expect(page.locator('.rlwhen')).toContainText('not in the background');
   await expect(page.locator('.rlprev')).toHaveText(
-    'When a desktop automation reports a failure, add an inbox item: “Check {name}: {err}”. In the last 30 days this would have fired 2 times.',
+    'When a desktop automation reports a failure, add an Inbox item: “Check {name}: {err}”. In the last 30 days this would have fired 2 times.',
   );
   // The preview reads the records and creates nothing.
   const before = await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
@@ -84,7 +84,7 @@ test('rule templates make a rule in two taps; the editor says when it can run; t
   await expect(page.locator('#sheet')).toHaveCount(0);
   // The list: trigger, action, when it runs, enabled, last run.
   const row = page.locator('#v-account .rulerow').first();
-  await expect(row).toContainText('When a desktop automation reports a failure, add an inbox item');
+  await expect(row).toContainText('When a desktop automation reports a failure, add an Inbox item');
   await expect(row).toContainText('Runs when the automation’s report reaches the app');
   await expect(row).toContainText('Has not run yet');
   await expect(row.locator('[data-ruleon]')).toHaveText('On');

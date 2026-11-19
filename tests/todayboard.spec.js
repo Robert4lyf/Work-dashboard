@@ -73,7 +73,7 @@ test('on the board: a tile opens its task, back returns to the board; one withou
   expect((await app.state()).quests.find(q => q.id === 'q5').done).toBe(true);
   // The last step of a quest: asks what's next, as in the list.
   await page.click('.qtopen:has-text("Filbert Close")');
-  await page.click('[aria-label="Mark done: h"]');
+  await page.click('#v-today [aria-label="Mark done: h"]');
   await expect(page.locator('#sheettitle')).toHaveText("What's next?");
   await page.click('#sheet button:has-text("Not now")');
   await page.click('[data-crumb="-1"]');
