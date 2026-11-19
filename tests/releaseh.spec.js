@@ -417,7 +417,7 @@ test.describe('Checkpoint 5: review fixes', () => {
       save();
       go('focus');
     });
-    await expect(page.locator('#hact [data-resume]')).toHaveCount(0);
+    await expect(page.locator('header [data-resume]')).toHaveCount(0);
     await expect(page.locator('#clock small')).toContainText('Fletcher Way · ');
   });
 

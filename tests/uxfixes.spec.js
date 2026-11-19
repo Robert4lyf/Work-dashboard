@@ -150,7 +150,7 @@ test("the header's alarm button opens Today's list from a task page; back from N
   await app.go('today');
   await page.click('#v-today [data-open="q1"]');
   await expect(page.locator('#v-today .facts h1')).toHaveText('Beta');
-  await page.click('header .halarm');
+  await app.go('alarms');
   await expect(page.locator('#v-today .facts')).toHaveCount(0);
   await expect(page.locator('#alarmd')).toBeVisible();
 

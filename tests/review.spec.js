@@ -29,16 +29,7 @@ test('Projects and Today have tabs; History sits under Review; Focus opens from 
   await page.click('[data-rsub="log"]');
   await expect(page.locator('#v-log')).toBeVisible();
   await expect(page.locator('nav [data-v=review]')).toHaveAttribute('aria-current', 'page');
-  // (the header shows today's focus time once there is some; tapping it opens Focus)
-  await page.evaluate(() => {
-    S.daily[today()] = { Design: 25 };
-    renderHeader();
-  });
-  // (Release D: the full header, with its stats, is Today's; elsewhere it's one line)
-  await expect(page.locator('header')).toHaveClass(/compact/);
-  await expect(page.locator('header .hfoot')).toBeHidden();
-  await page.click('nav [data-v=today]');
-  await page.click('header [data-v=focus]');
+  await app.go('focus');
   await expect(page.locator('#v-focus')).toBeVisible();
   await page.keyboard.press('l'); // history shortcut still works
   await expect(page.locator('#v-log')).toBeVisible();

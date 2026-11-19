@@ -26,12 +26,11 @@ test('ticking the last step asks; Not now keeps the task open, on Today and the 
   expect(s.log.map(x => x.text)).toEqual(['Draft']); // (the step, not the task)
   await page.click('#sheet button:has-text("Not now")');
   await expect(sheet(page)).toHaveCount(0);
-  // The task's page asks too; Today's row says so, and the header points at it.
+  // The task's page asks too; Today's row says so.
   await expect(page.locator('.nextask')).toBeVisible();
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#v-today .row .tag.asknext')).toBeVisible();
   await expect(page.locator('#donesec')).toHaveCount(0);
-  await expect(page.locator('header .go b')).toHaveText("What's next?");
   await setDay(page, 2026, 9, 24);
   s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Contract']);
@@ -242,7 +241,8 @@ test('single-task mode asks what\'s next for a task with every step ticked, not 
   page,
 }) => {
   await page.click('[data-crumb="-1"]');
-  await page.click('header [data-zen]');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('z');
   await page.click('#v-zen [data-toggle]');
   await page.click('#sheet button:has-text("Not now")');
   await expect(page.locator('#v-zen .zt')).toHaveText("Every step is ticked. What's next?");

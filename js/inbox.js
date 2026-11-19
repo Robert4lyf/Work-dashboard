@@ -38,7 +38,7 @@ function clearInbox(id) {
 function renderInbox() {
   if (triage) return setHTML($('#v-inbox'), renderTriage());
   let h = `<div class="sechead"><h2>Inbox</h2>${S.inbox.length ? '<button class="linkbtn" data-triagestart="1">Sort the Inbox</button>' : ''}</div>`;
-  h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New Inbox item" autocomplete="off">${mic ? `<button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button>` : ''}<button class="btn green">Add</button></form>`;
+  h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New Inbox item" autocomplete="off"><button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button><button class="btn green">Add</button></form>`;
   if (!S.inbox.length)
     h +=
       '<div class="empty">Nothing captured. Type a thought above (or say it with the mic); move it to Projects when you’re ready.</div>';
@@ -113,14 +113,18 @@ function receiveShare() {
   toast('Added to the Inbox');
 }
 
-/* voice capture: browsers with speech recognition only */
+/* Voice capture */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-const mic = !!SR;
 const micIcon =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></svg>';
 let listening = false,
   rec = null;
+function keyboardDictation() {
+  $('#iin')?.focus();
+  toast('Use the microphone on your keyboard to dictate', false, 5000);
+}
 function toggleMic() {
+  if (!SR) return keyboardDictation();
   if (listening) {
     rec && rec.stop();
     return;
@@ -132,7 +136,7 @@ function toggleMic() {
     rec.interimResults = true;
     rec.continuous = false;
   } catch (e) {
-    toast("Voice isn't available here");
+    keyboardDictation();
     return;
   }
   rec.onresult = e => {
@@ -144,6 +148,7 @@ function toggleMic() {
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed')
       toast('Microphone blocked. Allow it in browser settings', false, 3000);
     else if (e.error === 'no-speech') toast("Didn't catch that");
+    else if (e.error === 'network' || e.error === 'language-not-supported') keyboardDictation();
     else if (e.error !== 'aborted') toast("Voice didn't work, try again");
   };
   rec.onend = () => {
@@ -159,6 +164,7 @@ function toggleMic() {
     renderInbox();
   } catch (e) {
     listening = false;
-    toast("Voice didn't work, try again");
+    rec = null;
+    keyboardDictation();
   }
 }

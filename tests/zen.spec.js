@@ -12,7 +12,8 @@ test('single-task mode shows one step, ticks it off and moves on', async ({ app,
   await app.addSub('Draft');
   await app.addSub('Review');
   await app.addQuest('Email');
-  await page.click('header [data-zen]');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('z');
   await expect(page.locator('#v-zen')).toBeVisible();
   await expect(page.locator('header')).toBeHidden();
   await expect(page.locator('nav')).toBeHidden();
@@ -49,14 +50,14 @@ test('timer in single-task mode: start, pause, and Done saves the time', async (
   await expect(page.locator('.zt')).toHaveText('Nothing left to do.');
 });
 
-test("the header's Focus button opens the task the header shows", async ({ app, page }) => {
+test('task actions can focus a task other than the selection on Focus', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.addQuest('Email');
-  // An older pick on the Focus tab doesn't win over what the header shows.
+  // An older pick on the Focus tab doesn't override an explicit task action.
   await app.setState(s => (s.focusQ = s.quests[1].id));
   await page.reload();
-  await expect(page.locator('#hnow')).toContainText('Report');
-  await page.click('header [data-zen]');
+  await page.getByRole('button', { name: 'Actions: Report' }).click();
+  await page.getByRole('button', { name: 'Focus on this' }).click();
   await expect(page.locator('.zt')).toHaveText('Report');
 });
 
@@ -72,7 +73,8 @@ test('Focus on another task while a session is paused asks first: back to it, or
     save();
     renderAll();
   }, email);
-  await page.click('header [data-zen]');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('z');
   await expect(page.locator('.zt')).toHaveText('Report');
   await page.click('[data-zstart]');
   await page.clock.fastForward('03:00');

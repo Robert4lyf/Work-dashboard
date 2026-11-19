@@ -657,9 +657,7 @@ document.addEventListener('click', e => {
   if (d.v && b.closest('header, #v-waiting, #waitsec')) {
     const from = !b.closest('header') && placeHere(b);
     if (d.v === 'projects') path = [];
-    if (b.classList.contains('halarm')) alarmsOpen = true; // (the alarms, unfolded)
     go(d.v);
-    if (b.classList.contains('halarm') && $('#alarmd')) $('#alarmd').scrollIntoView({ block: 'nearest' });
     landed(from);
   }
   if (b.id === 'searchBtn') openSearch();

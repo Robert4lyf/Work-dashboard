@@ -145,7 +145,7 @@ test.describe('Checkpoint 2: contrast in every appearance', () => {
               if (r < min)
                 out.push(`${sel}${pseudo || ''} ${r.toFixed(2)} "${e.textContent.trim().slice(0, 20)}"`);
             });
-          check('header .go small, header .go b, header .clk, header .btn, header::before');
+          check('header .hsearch, header .syncbtn, header .timer-link, header .btn');
           check('#v-today .sechead h2, #v-today .sechead .linkbtn');
           check('#v-today .tag');
           check('#v-today .btn');
@@ -153,28 +153,6 @@ test.describe('Checkpoint 2: contrast in every appearance', () => {
           return out;
         });
       expect(await audit()).toEqual([]);
-      // The header's own label bar (a pseudo-element: checked against the header's colour).
-      const hdr = await page.evaluate(() => {
-        const h = getComputedStyle(document.querySelector('header'));
-        return [
-          h.backgroundImage,
-          getComputedStyle(document.querySelector('header'), '::before').color,
-          h.backgroundColor,
-        ];
-      });
-      expect(hdr[0]).toBe('none');
-      expect(
-        await page.evaluate(([c, b]) => {
-          const rgb = s => (s.match(/[\d.]+/g) || []).map(Number).slice(0, 3);
-          const lum = c =>
-            c
-              .map(v => v / 255)
-              .map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
-              .reduce((a, v, i) => a + v * [0.2126, 0.7152, 0.0722][i], 0);
-          const [x, y] = [lum(rgb(c)), lum(rgb(b))];
-          return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-        }, hdr.slice(1)),
-      ).toBeGreaterThan(4.5);
       // A field's typed text and its placeholder; a sheet's text and buttons.
       await app.go('inbox');
       const fld = await page.evaluate(() => {
@@ -665,12 +643,8 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
       const widths = sel => page.$$eval(sel, x => x.map(e => Math.round(e.getBoundingClientRect().width)));
       // (about 70px before: the name squeezed beside the time, Done and ⋯)
       for (const w of await widths('#v-today .secrow .open > span')) expect(w).toBeGreaterThan(160);
-      // The header's label on one line.
-      const lab = await page.evaluate(() => {
-        const cs = getComputedStyle(document.querySelector('header'), '::before');
-        return parseFloat(cs.height) / parseFloat(cs.lineHeight || cs.fontSize * 1.2);
-      });
-      expect(lab).toBeLessThan(2);
+      await expect(page.locator('#searchBtn')).toBeInViewport();
+      await expect(page.locator('#syncBtn')).toBeInViewport();
       await page.click('#reorder');
       for (const w of await widths('#v-today .list .row .open > span')) expect(w).toBeGreaterThan(160);
       // A label is one line, never broken mid-word.
@@ -704,7 +678,7 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
     }
   });
 
-  test('dark, and automatic dark: the focus ring and the sync dot show on the yellow header', async ({
+  test('dark, and automatic dark: the focus ring and the sync dot show on the toolbar', async ({
     app,
     page,
   }) => {

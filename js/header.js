@@ -11,8 +11,7 @@ function nextStep() {
   }
   return null;
 }
-// What to work on next, by one rule, so the header, Focus, single-task mode and the checklists
-// agree (a running session is shown instead, by the header itself): a place saved today or
+// What to work on next in Focus and single-task mode: a place saved today or
 // yesterday (the newest), else the first Top 3 task with a step to do, else the first step in
 // list order. Nothing is reordered, chosen or started by it. `why` says which: 'place', 'top3'
 // (with its rank) or 'list'.
@@ -39,72 +38,17 @@ function recommend() {
   const nx = nextStep();
   return nx ? { ...nx, why: 'list' } : null;
 }
-// Where the header is full: Today and Focus, where the work itself is. Elsewhere (Knowledge,
-// Review, Settings, the Command Centre, Search) it's one line: the current work as a way back to it (a
-// running timer, with its Pause), search and sync. The same content either way, so nothing is
-// lost by moving between them.
-const headerFull = () => view === 'today' || view === 'focus';
-// (compact: the task and its step on one line, so a step called "Review" doesn't read as a title)
-const headNowText = nx => (nx.n !== nx.q ? nx.q.text + ' · ' + nx.n.text : nx.n.text);
 function renderHeader() {
-  // The next step on a line of its own; what you can do about it on the row below, with search
-  // and sync.
-  let h,
-    acts = '';
-  const full = headerFull(),
-    hd = document.querySelector('header');
-  if (hd) hd.classList.toggle('compact', !full);
-  if (hd) hd.classList.toggle('project-header', view === 'projects');
-  const projectTitle = view === 'projects' ? '<h1>Projects</h1>' : '';
-  if (S.timer && view !== 'focus') {
-    const t = S.timer,
-      paused = t.left != null;
-    h =
-      projectTitle +
-      `<button class="go" data-v="focus"><span class="clk" id="hclock">${mmss(remaining())}</span><small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t))}</small></button>`;
-    acts = `<button class="btn sm ${paused ? 'green' : 'blue'}" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`;
-  } else if (projectTitle) h = projectTitle;
-  else {
-    const nx = recommend(),
-      ask = !nx && S.quests.find(q => needsNext(q) && !q.wait && !q.scheduled); // (every step ticked: what's next?)
-    if (ask) {
-      h = `<button class="go" data-open="${ask.id}"><small>Every step ticked in ${esc(ask.text)}</small><b>${full ? "What's next?" : esc(ask.text) + ": what's next?"}</b></button>`;
-    } else if (nx && nx.why === 'place') {
-      // Where work stopped: picking it up opens the saved place, in single-task mode.
-      h = `<button class="go" data-open="${nx.q.id}"><small>Saved place · ${esc(nx.q.text)}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
-      // (Release H: on a task's page it gives way to the page's own action, quieter; with a focus
-      // session on, paused on the Focus page say, it isn't offered: that session comes first)
-      if (full && !S.timer)
-        acts = `<button class="btn sm${view === 'today' && path.length ? '' : ' green'}" data-resume="${nx.q.id}">Continue</button>`;
-    } else if (nx) {
-      const label = nx.why === 'top3' ? `Top 3 priority ${nx.rank}` : 'Next task',
-        where = nx.n !== nx.q ? ' · ' + esc(nx.q.text) : '';
-      // (compact: no tick, so a quick tap on another page can't finish a step by mistake)
-      h = `${full ? `<button class="check" data-toggle="${nx.n.id}" aria-pressed="false" aria-label="Mark done: ${esc(nx.n.text)}">${tick}</button>` : ''}<button class="go" data-open="${nx.n.id}"><small>${label}${where}</small><b>${esc(full ? nx.n.text : headNowText(nx))}</b></button>`;
-      if (full && !S.timer)
-        acts = `<button class="btn sm zenbtn" data-zen="1" data-q="${nx.n.id}">Focus</button>`;
-    } else {
-      // (unfinished, but none of it to act on now: say what it's waiting for, not that it's done)
-      const sc = S.quests.filter(isScheduled).length,
-        wt = S.quests.filter(q => taskState(q) === 'waiting').length,
-        why = [sc ? sc + ' scheduled' : '', wt ? wt + ' waiting' : ''].filter(Boolean).join(' · ');
-      h = `<button class="go" data-v="projects"><small>${why ? 'Next task · ' + why : 'Next task'}</small><b>${why ? 'Nothing to act on right now' : S.quests.length ? 'All done for today' : 'Nothing planned yet'}</b></button>`;
-    }
-  }
-  setIfChanged($('#hnow'), h); // unchanged: left alone, keeping keyboard focus
-  setIfChanged($('#hact'), acts);
-  const qs = S.quests,
-    done = qs.filter(isDone).length,
-    p = qs.length ? Math.round((done / qs.length) * 100) : 0;
-  $('#hfill').style.width = p + '%';
-  $('#hprog').setAttribute('aria-valuenow', p);
-  // One quiet line of stats; anything needing attention is on Today and in tab badges.
-  const focus = Object.values(S.daily[today()] || {}).reduce((a, b) => a + b, 0);
-  let st = focus ? `<button data-v="focus">${hm(focus)} focus</button>` : '';
-  const na = nextAlarm();
-  if (na)
-    st += `<button data-v="alarms" class="halarm">Alarm ${na.snooze ? hhmmOf(na.snooze) : na.time}</button>`;
-  setIfChanged($('#hstats'), st);
+  document.querySelector('header').classList.toggle('project-header', view === 'projects');
+  $('#project-title').hidden = view !== 'projects';
+  const t = view !== 'focus' && S.timer;
+  const paused = t && t.left != null;
+  setIfChanged(
+    $('#headerTimer'),
+    t
+      ? `<button class="timer-link" data-v="focus"><span id="hclock">${mmss(remaining())}</span><small>${paused ? 'Paused · ' : ''}${esc(timerLabel(t))}</small></button><button class="btn sm" data-pause="1">${paused ? 'Resume' : 'Pause'}</button>`
+      : '',
+  );
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;
   b.textContent = S.inbox.length;

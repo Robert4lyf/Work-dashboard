@@ -178,9 +178,7 @@ textarea {
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
-/* (on the yellow header, the Top 3's turquoise, the red attention bar and the current tab, in
-   either theme: a black ring, which shows on all of them) */
-header :focus-visible,
+/* Use a dark ring on the coloured section bars and current tab in either theme. */
 .top3 > .sechead :focus-visible,
 .attsum :is(summary, .attcc):focus-visible,
 nav button[aria-current='page']:focus-visible {
@@ -196,191 +194,50 @@ section[tabindex='-1']:focus-visible {
   padding: 16px 16px 110px;
 }
 
-/* header */
+/* Shared toolbar */
 header {
-  background: var(--grad);
-  color: #0a0a0a;
-  border: 2px solid #0a0a0a;
-  box-shadow: none;
-  padding: 10px 12px 8px;
-  margin-bottom: 12px;
-  border-radius: var(--radius);
-}
-header .now {
+  background: var(--bg);
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 0 0 6px;
-  min-height: 34px;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--edge);
 }
-.now .check {
-  border-color: rgba(255, 255, 255, 0.7);
-  background: #ffffff;
-  border: 2px solid #0a0a0a;
-}
-.now .go {
-  flex: 1;
+.header-timer {
+  display: flex;
+  flex: 1 1 10rem;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  overflow: hidden;
+}
+.header-timer:empty {
+  display: none;
+}
+.timer-link {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  min-height: 40px;
+  align-items: center;
   background: none;
   border: 0;
   padding: 0;
-  color: #0a0a0a;
-  text-align: left;
+  color: var(--ink);
+  text-align: start;
   cursor: pointer;
-  overflow-wrap: anywhere;
 }
-/* The label and the step on up to two lines each: the whole step is on its page, a tap away. */
-.now .go small {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  font-size: var(--fs-xs);
-  color: #0a0a0a;
-}
-.now .go b {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  font-weight: 600;
-}
-.now .clk {
-  font-size: var(--fs-h);
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
-.now .btn {
-  padding: 6px 10px;
-  font-size: var(--fs-sm);
-}
-.hprog {
-  height: 3px;
-  border: 0;
-  background: rgba(10, 10, 10, 0.15);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.hprog div {
-  height: 100%;
-  background: #0a0a0a;
-  transition: width 0.3s ease;
-}
-.hfoot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 4px;
-  min-height: 24px;
-}
-.hfoot:has(.hstats:empty) {
-  display: none;
-}
-.hnowin {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-/* controls on the gradient: white, the primary one solid */
-header .btn {
-  background: #ffffff;
-  color: #0a0a0a;
-  border-color: #0a0a0a;
-}
-header .btn.green {
-  background: #0a0a0a;
-  color: #ffd400;
-  border-color: #0a0a0a;
-}
-header .syncbtn[data-state='error'] {
-  color: #c8001a;
-}
-/* Compact (away from Today): one line, the current work as a way back to it, then the running
-   timer's Pause if there is one, search and sync. The label stays for screen readers. */
-header.compact {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px 4px 12px;
-  margin-bottom: 12px;
-}
-header.compact .now {
-  flex: 1;
-  min-width: 0;
-  min-height: 40px;
-  margin: 0;
-}
-header.compact .hbar {
-  flex: none;
-  margin: 0;
-  gap: 4px;
-}
-header.compact .hact:empty,
-header.compact .hprog,
-header.compact .hfoot {
-  display: none;
-}
-header.compact .now .go small {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-header.compact .now .go {
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-}
-/* (only before the work itself: not before 'All done for today') */
-header.compact .now .go[data-open] b::before {
-  content: 'Now: ';
-  color: #0a0a0a;
-  font-weight: 800;
-}
-header.compact .now .go b {
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  font-size: var(--fs-sm);
-}
-header.compact .now .clk {
-  font-size: var(--fs);
-  flex: none;
-  white-space: nowrap;
-}
-/* (a running timer keeps its label: the clock alone doesn't say what it's timing) */
-header.compact .now .go:has(.clk) {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-header.compact .now .go:has(.clk) small {
-  position: static;
-  display: block;
-  width: auto;
-  height: auto;
-  clip: auto;
+.timer-link small {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  min-width: 0;
 }
-/* Under the next step: what to do about it on the left, search and sync on the right. */
-.hbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0 0 8px;
+#hclock {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
 }
-/* (the narrowest phones: the header's label on one line) */
 /* long names: two lines in a list, the whole name on the task's page */
 .t3row .open > span,
 .secrow .open > span,
@@ -390,16 +247,6 @@ header.compact .now .go:has(.clk) small {
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
-}
-.hact {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-}
-.hnowin > .check,
-.hact > *,
-.hbtns > * {
-  flex: none; /* (never squeezed away by a long next step) */
 }
 .hsearch svg {
   width: 18px;
@@ -417,25 +264,12 @@ header.compact .now .go:has(.clk) small {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
-.hstats {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
-  font-size: var(--fs-sm);
-}
-.hstats button {
-  background: none;
-  border: 0;
-  padding: 2px 0;
-  color: #0a0a0a;
-  cursor: pointer;
-}
 .hbtns {
   flex: none;
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-inline-start: auto;
 }
 .hsearch,
 .syncbtn {
@@ -448,7 +282,7 @@ header.compact .now .go:has(.clk) small {
   gap: 6px;
   background: none;
   border: 0;
-  color: #0a0a0a;
+  color: var(--ink);
   padding: 2px 0;
   font-size: var(--fs-sm);
   cursor: pointer;
@@ -476,22 +310,6 @@ header.compact .now .go:has(.clk) small {
 }
 .syncbtn[data-state='error'] {
   color: var(--err);
-}
-header .syncbtn::before {
-  background: #0a0a0a;
-}
-header .syncbtn[data-state='ok']::before {
-  background: #0b6b31;
-}
-header .syncbtn[data-state='syncing']::before {
-  background: #1f3fb0;
-}
-header .syncbtn[data-state='offline']::before {
-  background: transparent;
-  box-shadow: inset 0 0 0 2px #0a0a0a;
-}
-header .syncbtn[data-state='error']::before {
-  background: #b0001a;
 }
 .msg {
   margin: 14px 0 0;
@@ -1699,12 +1517,6 @@ body.zen nav {
 }
 .hrow2 p {
   margin: 4px 0 0;
-  font-size: var(--fs-sm);
-}
-/* header focus button, attention strip */
-.now .zenbtn {
-  flex: none;
-  padding: 5px 10px;
   font-size: var(--fs-sm);
 }
 .chip.warn {
@@ -3372,30 +3184,6 @@ details.more > details {
   border-top: 0;
   background: var(--panel);
 }
-/* what you're on: the header, under its own label */
-header:not(.compact) {
-  border-width: 3px;
-  padding-top: 0;
-}
-header:not(.compact)::before {
-  content: 'Current work / next action';
-  display: block;
-  margin: 0 -12px 8px;
-  padding: 6px 12px 6px 40px;
-  border-bottom: 3px solid #111111;
-  font-weight: 900;
-  font-size: var(--fs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  background: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M7%204.5l12%207.5-12%207.5z%22%2F%3E%3C%2Fsvg%3E')
-    12px center / 20px no-repeat;
-}
-/* (the narrowest phones: the header's label on one line, the short form of it) */
-@media (max-width: 359px) {
-  header:not(.compact)::before {
-    content: 'Current work';
-  }
-}
 /* what needs you: a red panel */
 .attsum > summary b::before,
 .attsum > .attsumline b::before {
@@ -3791,7 +3579,7 @@ nav button[aria-current='page'] {
   .x,
   .btn.sm,
   .open,
-  .now .go,
+  .timer-link,
   .ititle,
   .crumbs button,
   .tag.estpick,
@@ -3809,7 +3597,7 @@ nav button[aria-current='page'] {
   .attcc,
   .btn.sm,
   .open,
-  .now .go,
+  .timer-link,
   .ititle,
   .crumbs button,
   .dellink
@@ -4560,32 +4348,12 @@ summary,
 
 /* Projects home */
 header.project-header {
-  background: transparent;
-  color: var(--ink);
-  border: 0;
-  border-bottom: 1px solid var(--edge);
-  border-radius: 0;
-  padding: 0 0 10px;
+  padding-bottom: 10px;
   margin-bottom: 16px;
-}
-header.project-header .now {
-  min-height: 44px;
-}
-header.project-header .hnowin {
-  display: flex;
-  flex-wrap: wrap;
-  column-gap: 16px;
-  align-items: center;
 }
 header.project-header h1 {
   font-size: clamp(1.65rem, 4vw, 2.2rem);
   margin: 0;
-}
-header.project-header :is(.hsearch, .syncbtn, .now .go, .now .go small) {
-  color: var(--ink);
-}
-header.project-header .syncbtn[data-state='off']::before {
-  background: var(--muted);
 }
 .project-board-actions {
   display: flex;
@@ -4601,11 +4369,6 @@ header.project-header .syncbtn[data-state='off']::before {
 }
 .active-project .project-card {
   border-inline-start: 5px solid var(--accent-ink);
-}
-.project-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 .project-board-section {
   --section-accent: var(--edge);

@@ -110,7 +110,7 @@ test('waiting is on a step: set from the task, shown on Today and the Waiting ta
   await expect(page.locator('#v-today .wrow')).toContainText('on Sam');
   await expect(page.locator('#v-today .wrow')).toContainText('Budget review');
   // It's blocked, so Next up moves on to the next task.
-  await expect(page.locator('#hnow')).toContainText('Write report');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Write report');
   await expect(page.locator('#attsum')).toContainText('1 today');
   await expect(page.locator('#v-today .attn [data-wgo]')).toContainText('Chase Sam today');
 
@@ -146,7 +146,7 @@ test('waiting is on a step: set from the task, shown on Today and the Waiting ta
   await v.locator('.row', { hasText: 'Budget review' }).locator('[data-waitclear]').click();
   s = await app.state();
   expect(s.quests[0].children[0].wait).toBeUndefined();
-  await expect(page.locator('#hnow')).toContainText('Q3 figures');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Q3 figures');
   await expect(v.locator('.row')).toHaveCount(1);
   // Ticking one off from the Waiting tab finishes it (and its task, its only step).
   await v.locator('[data-toggle]').click();
@@ -244,7 +244,7 @@ test('a task with a step waiting on someone shows as waiting too', async ({ app,
   await expect(row).toHaveClass(/waiting/);
   await expect(row.locator('.tag.wait')).toHaveText('Waiting on Sam');
   // The rest of the task carries on: Next up skips the waiting step.
-  await expect(page.locator('#hnow')).toContainText('Write summary');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Write summary');
   // Once the step is back, the task isn't waiting.
   await app.setState(s => delete s.quests[0].children[0].wait);
   await page.reload();

@@ -138,7 +138,7 @@ test('5–8: a task only waiting is under Waiting and out of the list, its place
   expect(app.errors).toEqual([]);
 });
 
-test('9: Top 3, the header and Focus skip scheduled and waiting work; a chosen one that becomes scheduled is set aside, not replaced', async ({
+test('9: Top 3 and Focus skip scheduled and waiting work; a chosen one that becomes scheduled is set aside, not replaced', async ({
   app,
   page,
 }) => {
@@ -155,10 +155,10 @@ test('9: Top 3, the header and Focus skip scheduled and waiting work; a chosen o
     'Set aside (scheduled or waiting): Supplier review call, Finance system access',
   );
   expect((await app.state()).top3.ids).toEqual(['m2', 'b1', 'q4']); // (still chosen)
-  await expect(page.locator('#hnow small')).toContainText('Top 3 priority 1');
-  await expect(page.locator('#hnow b')).toHaveText('Draft');
+  expect(await page.evaluate(() => recommend()?.rank)).toBe(1);
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Draft');
   expect(await page.evaluate(() => focusTarget())).toBe('q4a');
-  // Everything left scheduled or waiting: the header says so, not that all is done.
+  // Everything left is scheduled or waiting.
   await page.evaluate(() => {
     S.quests.forEach(q => {
       if (!q.scheduled && taskState(q) !== 'waiting') {
@@ -169,8 +169,7 @@ test('9: Top 3, the header and Focus skip scheduled and waiting work; a chosen o
     save();
     renderAll();
   });
-  await expect(page.locator('#hnow b')).toHaveText('Nothing to act on right now');
-  await expect(page.locator('#hnow small')).toContainText('3 scheduled · 1 waiting');
+  expect(await page.evaluate(() => recommend())).toBeNull();
   await expect(page.locator('#v-today .nowork')).toBeHidden(); // (Done today still has rows)
   expect(app.errors).toEqual([]);
 });

@@ -22,7 +22,7 @@ test.describe('desktop', () => {
     const row = t => page.locator(`#v-today .row:has(.open > span:text-is("${t}"))`);
     await row('C').dragTo(row('A'), { targetPosition: { x: 20, y: 5 } });
     expect(await app.order()).toEqual(['C', 'A', 'B']);
-    await expect(page.locator('#hnow b')).toHaveText('C');
+    expect(await page.evaluate(() => recommend()?.n.text)).toBe('C');
   });
 
   test('a task only waiting is under Waiting, out of the list; dragging the rest keeps its place', async ({
@@ -41,7 +41,8 @@ test.describe('desktop', () => {
   });
 
   test('a running session shows only itself until paused', async ({ page }) => {
-    await page.click('header [data-zen]');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('z');
     await page.click('#v-zen [data-zstart]');
     await expect(page.locator('#v-zen')).toBeVisible();
     for (const s of ['header', 'nav', '#v-today']) await expect(page.locator(s)).toBeHidden();

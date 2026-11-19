@@ -26,27 +26,12 @@
     <div class="wrap">
       <div class="ptitle" id="ptitle" role="heading" aria-level="1" hidden></div>
       <header>
-        <div class="now">
-          <div class="hnowin" id="hnow"></div>
+        <h1 id="project-title">Projects</h1>
+        <div class="header-timer" id="headerTimer"></div>
+        <div class="hbtns">
+          <button class="hsearch" id="searchBtn" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+          <button class="syncbtn" id="syncBtn" aria-live="polite"><span class="sr">Sync off</span></button>
         </div>
-        <div class="hbar">
-          <div class="hact" id="hact"></div>
-          <div class="hbtns">
-            <button class="hsearch" id="searchBtn" aria-label="Search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
-            <button class="syncbtn" id="syncBtn" aria-live="polite"><span class="sr">Sync off</span></button>
-          </div>
-        </div>
-        <div
-          class="hprog"
-          role="progressbar"
-          aria-label="Today's quests done"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          id="hprog"
-        >
-          <div id="hfill"></div>
-        </div>
-        <div class="hfoot"><div class="hstats" id="hstats"></div></div>
       </header>
 
       <section id="v-projects" aria-label="Projects"></section>

@@ -32,7 +32,7 @@ const timerLabel = t => {
     .filter(Boolean)
     .join(': ');
 };
-// What the next session is for: the task picked here, else the header's recommendation.
+// What the next session is for: the task picked here, else the next recommended step.
 function focusTarget() {
   if (S.focusQ === 'none') return null;
   // (a chosen task since scheduled, or a step now waiting on someone, isn't one to focus on)

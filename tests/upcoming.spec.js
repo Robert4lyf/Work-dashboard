@@ -22,7 +22,7 @@ test('a task scheduled for Tomorrow leaves Today and comes back on the day', asy
   expect(s.quests.map(q => q.text)).toEqual(['Email']);
   expect(s.later[0]).toMatchObject({ text: 'Report', start: '2026-09-24', tag: 'Design' });
   await expect(page.locator('#upd summary')).toHaveText('Upcoming (1)');
-  await expect(page.locator('#hnow b')).toHaveText('Email');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Email');
   await setDay(page, 2026, 9, 24);
   s = await app.state();
   expect(s.later).toEqual([]);

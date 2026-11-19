@@ -91,9 +91,9 @@ test('a ringing alarm takes the keyboard: Dismiss is focused, shortcuts and the 
 test('the header keeps keyboard focus through its minute refresh; Delete arms on the first tap after a row menu', async ({
   page,
 }) => {
-  await page.focus('#hnow .go');
+  await page.focus('#searchBtn');
   await page.evaluate(() => renderHeader());
-  expect(await page.evaluate(() => document.activeElement.closest('#hnow') !== null)).toBe(true);
+  await expect(page.locator('#searchBtn')).toBeFocused();
 
   await page.evaluate(() => {
     S.quests = [fix({ id: 'q1', text: 'Row' })];
@@ -248,10 +248,6 @@ test('round 5: the keyboard stays in the view after an action; Restore backup is
   await page.keyboard.press('Space');
   // (the task folded into "Done today": the keyboard stays in the view)
   expect(await page.evaluate(() => document.activeElement.closest('#v-today') !== null)).toBe(true);
-  // The header's tick too: it moves on to the next task, and keeps the keyboard.
-  await page.focus('#hnow [data-toggle]');
-  await page.keyboard.press('Space');
-  expect(await page.evaluate(() => document.activeElement.closest('#hnow') !== null)).toBe(true);
   // A row's actions sheet: closing it gives the keyboard back to the ⋯ that opened it.
   await page.focus('[data-qact="k3"]');
   await page.keyboard.press('Enter');
