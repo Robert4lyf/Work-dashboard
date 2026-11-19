@@ -45,10 +45,7 @@ const upRowShown = (page, id) =>
 test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test('an Upcoming task from the forecast, the Waiting Centre or Search opens at its row; back returns', async ({
-    app,
-    page,
-  }) => {
+  test('Upcoming links open the right project and return to their source', async ({ app, page }) => {
     await day(app, page, s => {
       s.later[0].wait = { who: 'Board', note: '', due: '2026-11-04', since: '2026-11-03' };
     });
@@ -78,12 +75,12 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
     // ...and Search, with its words still there.
     await page.click('#searchBtn');
     await page.fill('#sq', 'briefing');
-    await page.click('#v-search [data-goupd="m4"]');
-    expect(await upRowShown(page, 'm4')).toBe(true);
+    await page.click('#v-search [data-upcoming-project="m4"]');
+    await expect(page.locator('#v-project-record h1')).toHaveText('Board briefing');
     await back(page);
     expect((await where(page)).view).toBe('search');
     await expect(page.locator('#sq')).toHaveValue('briefing');
-    await expect(page.locator('#v-search [data-goupd="m4"]')).toBeVisible();
+    await expect(page.locator('#v-search [data-upcoming-project="m4"]')).toBeVisible();
   });
 
   test('Search results that are not tasks come back to Search on back', async ({ app, page }) => {
