@@ -136,7 +136,7 @@ test('the interrupted step ticked, the task finished, moved or deleted: no stale
   // The step it pointed at is ticked: the note stays, says so, and Resume goes to the next step.
   await page.click('[aria-label="Actions: Reconciliation"]');
   await page.click('#sheet [data-open]');
-  await page.click('[aria-label="Mark done: March totals"]');
+  await page.click('#v-today [aria-label="Mark done: March totals"]');
   await expect(page.locator('#placecard .placestep')).toHaveText('At: March totals (ticked since)');
   await page.click('.qfoot [data-resume]');
   await expect(page.locator('#v-zen .zt')).toHaveText('April totals');
@@ -159,7 +159,7 @@ test('the interrupted step ticked, the task finished, moved or deleted: no stale
   await expect(page.locator('#v-today .row .tag.place')).toHaveCount(1);
   // Finished: nothing to come back to.
   await app.openQuest('Reconciliation');
-  await page.click('[aria-label="Mark done: April totals"]');
+  await page.click('#v-today [aria-label="Mark done: April totals"]');
   await page.click('#sheet [data-sheetans="finish"]');
   expect((await app.state()).quests.find(q => q.text === 'Reconciliation').resume).toBeUndefined();
   await expect(page.locator('#v-today .tag.place')).toHaveCount(0);

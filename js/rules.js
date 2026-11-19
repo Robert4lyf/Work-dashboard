@@ -399,7 +399,7 @@ const ruleDoLine = r => {
   if (a.k === 'wrun') return 'prepare a run of ' + ((wfById(a.wf) || {}).name || 'a removed process');
   if (a.k === 'wait')
     return `add a waiting item on ${a.who || 'someone'}: “${a.text}” (chase in ${plural(a.days, 'day')})`;
-  return RULE_DO[a.k].toLowerCase() + (a.text ? `: “${a.text}”` : '');
+  return lc(RULE_DO[a.k]) + (a.text ? `: “${a.text}”` : '');
 };
 /* Settings: the list, each with its switch and log; the editor sheet */
 let ruleEdit = null;

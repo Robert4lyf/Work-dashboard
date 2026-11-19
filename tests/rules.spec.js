@@ -206,7 +206,7 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await app.settings('rules');
   await expect(page.locator('#v-account .rulerow')).toHaveCount(5);
   await expect(page.locator('#v-account .rulerow').nth(0)).toContainText(
-    'When a task is finished (named like “report”), add an inbox item: “File {name}”',
+    'When a task is finished (named like “report”), add an Inbox item: “File {name}”',
   );
   await expect(page.locator('#v-account .rulerow').nth(0)).toContainText('Has not run yet');
   await expect(page.locator('#v-account .rulerow').nth(0)).toContainText(
@@ -224,7 +224,7 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   await page.fill('#rltext', 'Chase the week’s approvals');
   await page.fill('#rlest', '20');
   await expect(page.locator('.rlprev')).toContainText(
-    'When the app is opened on Fri, add a task to today: “Chase the week’s approvals”.',
+    'When the app is opened on Fri, add a task to Projects: “Chase the week’s approvals”.',
   );
   await page.click('#sheetok');
   await expect(page.locator('#sheet')).toHaveCount(0);
