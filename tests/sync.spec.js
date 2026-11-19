@@ -349,7 +349,7 @@ test('offline edits to different items on two devices are all kept', async ({ br
   await b.ctx.setOffline(true);
   await a.add('From A');
   await b.add('From B');
-  await b.page.click('[aria-label="Mark done: Shared"]');
+  await b.page.locator('#v-today').getByRole('button', { name: 'Mark done: Shared' }).click();
   await a.ctx.setOffline(false);
   await b.ctx.setOffline(false);
   await settle(a, b);
@@ -438,7 +438,7 @@ test('daily repeats created on two devices are not doubled', async ({ browser })
   await a.page.click('#mored > summary');
   await a.page.click('#rptd summary');
   await a.page.click('[data-rpreset="daily"]');
-  await a.page.click('[aria-label="Mark done: Standup"]');
+  await a.page.locator('#v-today .node').getByRole('button', { name: 'Mark done', exact: true }).click();
   await a.sync();
   // All that happened yesterday (the daily reset's changes count as of midnight).
   srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 86400e3));
