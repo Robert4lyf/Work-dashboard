@@ -65,7 +65,7 @@ test('History shows focus time by tag and finished items', async ({ app, page })
   await page.click('#start');
   await page.clock.fastForward('26:00');
   await page.keyboard.press('Escape');
-  await page.click('[aria-label="Mark done: Report"]');
+  await page.locator('#v-focus').getByRole('button', { name: 'Done', exact: true }).click();
   await app.go('log');
   await expect(page.locator('#v-log')).toContainText('Untagged');
   await expect(page.locator('#v-log')).toContainText('Report');
