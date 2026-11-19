@@ -27,7 +27,7 @@ test('an alarm rings at its time until dismissed, and can be snoozed', async ({ 
   await expect(row.locator('[data-aon]')).toHaveText('Off');
   await row.locator('[data-aon]').click();
   await expect(row.locator('[data-aon]')).toHaveText('On');
-  await expect(page.locator('#hstats')).toContainText('Alarm 09:30');
+  await expect(page.locator('#alarmd summary')).toContainText('next 09:30');
   await expect(page.locator('#v-alarm')).toBeHidden();
 
   await page.clock.fastForward('30:00');
@@ -39,7 +39,7 @@ test('an alarm rings at its time until dismissed, and can be snoozed', async ({ 
   // Snooze: quiet for 5 minutes, then again.
   await ring.locator('[data-asnooze]').click();
   await expect(ring).toBeHidden();
-  await expect(page.locator('#hstats')).toContainText('Alarm 09:35');
+  await expect(page.locator('#alarmd summary')).toContainText('next 09:35');
   await page.clock.fastForward('05:05');
   await expect(ring).toBeVisible();
 
@@ -68,7 +68,6 @@ test('a time already gone today can’t be switched on; several alarms can be se
     '11:00',
     '14:15',
   ]);
-  await expect(page.locator('#hstats')).toContainText('Alarm 11:00');
 });
 
 test('overnight every alarm switches off but stays listed', async ({ app, page }) => {

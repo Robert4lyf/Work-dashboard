@@ -147,7 +147,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   expect(s.follows.map(f => f.k)).toEqual(['start']);
   // The task is blocked: Next up moves on; Today says 0 to chase yet.
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#hnow')).toContainText('Other work');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Other work');
   await expect(page.locator('#v-today .attn')).toContainText('Nothing needs attention');
   // 3-4. The chase date arrives: Today's chip, the Centre's "To chase", the 9am notice.
   await page.clock.setSystemTime(new Date(2026, 10, 4, 9));
@@ -188,7 +188,7 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   expect(s.follows.map(f => f.k)).toEqual(['start', 'chase', 'resolve']);
   await expect(page.locator('#v-waiting .empty')).toContainText('Nothing to chase');
   await app.go('today');
-  await expect(page.locator('#hnow')).toContainText('Budget approval');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Budget approval');
   await app.openQuest('Q3 report');
   await page.click('#v-today .open >> text="Budget approval"');
   await page.evaluate(() => (document.querySelector('#waitd').open = true));

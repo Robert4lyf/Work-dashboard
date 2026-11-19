@@ -174,8 +174,7 @@ function renderProjects() {
     <section class="active-project" aria-labelledby="active-project-title">
       <h2 id="active-project-title">Active Task</h2>
       ${pinned ? `<div class="project-grid">${projectCard(pinned, updatesByProject.get(pinned.id), false, true)}</div>` : '<p class="hint">Choose Make active on a project.</p>'}
-    </section>${sections.join('')}
-    <div class="project-tools"><button class="linkbtn" data-goto="waiting">Waiting Centre</button><button class="linkbtn" data-goto="alarms">Alarms</button></div>`,
+    </section>${sections.join('')}`,
   );
 }
 

@@ -4,10 +4,10 @@ test.beforeEach(async ({ app }) => app.open());
 
 test('completing a task logs it, sinks it and moves Next up', async ({ app, page }) => {
   for (const t of ['A', 'B', 'C']) await app.addQuest(t);
-  await expect(page.locator('#hnow b')).toHaveText('A');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('A');
   await page.click('[aria-label="Mark done: A"]');
   expect(await app.order()).toEqual(['B', 'C', 'A']);
-  await expect(page.locator('#hnow b')).toHaveText('B');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('B');
   expect((await app.state()).log.map(x => x.text)).toEqual(['A']);
   // Finished tasks fold away under "Done today"; open it to un-tick one.
   await page.click('#donesec > summary');
@@ -22,7 +22,7 @@ test('reorder: Top makes a task Next up; open items stay above done ones', async
   await page.click('#reorder');
   await page.click('[data-top]:not([disabled]) >> nth=0');
   expect(await app.order()).toEqual(['C', 'B', 'A']);
-  await expect(page.locator('#hnow b')).toHaveText('C');
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('C');
   const bDownDisabled = await page.evaluate(
     () =>
       [...document.querySelectorAll('#v-today .row')]
@@ -33,14 +33,14 @@ test('reorder: Top makes a task Next up; open items stay above done ones', async
   await expect(page.locator('.row.done [data-top]')).toHaveCount(0);
 });
 
-test('steps: next step, sinking, and header tick', async ({ app, page }) => {
+test('steps: next step and sinking', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await app.addSub('Draft');
   await app.addSub('Review');
-  await expect(page.locator('#hnow')).toContainText('Next task · Report');
-  await page.click('header .check');
-  await expect(page.locator('#hnow b')).toHaveText('Review');
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Report');
+  await page.locator('#v-today').getByRole('button', { name: 'Mark done: Draft' }).click();
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Review');
   expect(await app.order()).toEqual(['Review', 'Draft']);
 });
 
@@ -88,7 +88,6 @@ test('overdue count shows at the top of Today', async ({ app, page }) => {
   await page.dispatchEvent('#fdue', 'change');
   await page.click('[data-crumb="-1"]');
   await expect(page.locator('#v-today .attn')).toContainText('1 overdue');
-  await expect(page.locator('#hstats')).not.toContainText('overdue'); // the header stays calm
 });
 
 test('a background refresh keeps what you are typing', async ({ app, page }) => {
@@ -119,28 +118,6 @@ test('Today has no add box: new work comes in through the Inbox', async ({ app, 
   await app.openQuest('Plan offsite');
   await page.keyboard.press('n');
   await expect(page.locator('#sin')).toBeFocused();
-});
-
-test('the header: the next step on up to two lines, then Focus, Search and the sync dot below', async ({
-  app,
-  page,
-}) => {
-  await app.addQuest('Report on everything that happened this quarter, team by team, with figures');
-  await expect(page.locator('#hact [data-zen]')).toHaveText('Focus');
-  await expect(page.locator('#hstats')).toBeEmpty(); // (no stats line until there's focus time or an alarm)
-  await expect(page.locator('#searchBtn')).toBeVisible();
-  // A long step wraps onto two lines at most (then cut short), with the buttons on the row under it.
-  const title = await page.locator('#hnow .go b').boundingBox(),
-    focus = await page.locator('#hact [data-zen]').boundingBox(),
-    search = await page.locator('#searchBtn').boundingBox();
-  const line = await page.locator('#hnow .go b').evaluate(b => parseFloat(getComputedStyle(b).lineHeight));
-  expect(title.height).toBeGreaterThan(line * 1.5);
-  expect(title.height).toBeLessThan(line * 2.5);
-  expect(focus.y).toBeGreaterThan(title.y + title.height - 1);
-  expect(Math.abs(search.y + search.height / 2 - (focus.y + focus.height / 2))).toBeLessThan(6);
-  // (and stays compact: the header plus its "Current work / next action" label bar)
-  const h = await page.locator('header').boundingBox();
-  expect(h.height).toBeLessThan(200);
 });
 
 test('a change redraws only the view on screen; another view is drawn when opened', async ({ app, page }) => {

@@ -452,45 +452,36 @@ test('Insights: a repeated failure links to that automation’s own latest failu
 
 /* checkpoint 3: the header, Settings, Forecast, finding a process */
 
-test('the header is full on Today and Focus, one line elsewhere; a running timer keeps its clock and Pause; nothing is lost moving between', async ({
+test('the shared toolbar has no task recommendation and keeps timer controls when a session is running', async ({
   app,
   page,
 }) => {
-  await app.open();
+  await app.open({ home: 'projects' });
   await app.setState(processDay);
   await page.reload();
-  const hgt = () => page.$eval('header', h => Math.round(h.getBoundingClientRect().height));
-  const full = await hgt();
-  await expect(page.locator('header')).not.toHaveClass(/compact/);
-  await expect(page.locator('header [data-resume]')).toBeVisible();
-  for (const v of ['knowledge', 'review', 'account']) {
+  const header = page.getByRole('banner');
+  await expect(header.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  for (const v of ['inbox', 'knowledge', 'review', 'account', 'projects']) {
     await page.click(`nav [data-v=${v}]`);
-    await expect(page.locator('header')).toHaveClass(/compact/);
-    // One line: search, sync, and the current work as a way back to it (no tick to tap by mistake).
-    await expect(page.locator('header #searchBtn')).toBeVisible();
-    await expect(page.locator('header #syncBtn')).toBeVisible();
-    await expect(page.locator('header .now .go')).toContainText('Review');
-    await expect(page.locator('header [data-toggle]')).toHaveCount(0);
-    expect(await hgt()).toBeLessThan(full - 40);
+    await expect(header.getByRole('button', { name: 'Search' })).toBeVisible();
+    await expect(header.locator('#syncBtn')).toBeVisible();
+    await expect(header.locator('.now, [data-open], [data-toggle], [data-resume]')).toHaveCount(0);
   }
-  // The way back opens the task where work stopped.
-  await page.click('header .now .go');
-  await expect(page.locator('#v-today')).toBeVisible();
-  await expect(page.locator('header')).not.toHaveClass(/compact/);
-  // A focus session: the compact header keeps its clock, its label and its Pause.
+  const projects = page.locator('#v-projects');
+  await expect(projects.getByRole('button', { name: /Waiting Centre|Alarms/ })).toHaveCount(0);
   await page.evaluate(() => {
     S.timer = { id: 't1', end: Date.now() + 20 * 60e3, tag: '', mins: 25, q: 'q4b' };
     save();
     go('knowledge');
   });
-  await expect(page.locator('header #hclock')).toBeVisible();
-  await expect(page.locator('header .now .go small')).toBeVisible();
-  await page.click('header [data-pause]');
+  await expect(header.locator('#hclock')).toBeVisible();
+  await expect(header.locator('.timer-link small')).toBeVisible();
+  await header.getByRole('button', { name: 'Pause' }).click();
   expect(await page.evaluate(() => S.timer.left != null)).toBe(true);
-  await expect(page.locator('header [data-pause]')).toHaveText('Resume');
-  // The Focus page keeps the full header.
-  await page.evaluate(() => go('focus'));
-  await expect(page.locator('header')).not.toHaveClass(/compact/);
+  await expect(header.getByRole('button', { name: 'Resume' })).toBeVisible();
+  await header.locator('.timer-link').click();
+  await expect(page.locator('#v-focus #clock')).toBeVisible();
+  await expect(header.locator('#hclock')).toHaveCount(0);
   expect(app.errors).toEqual([]);
 });
 

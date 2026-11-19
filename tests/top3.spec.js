@@ -38,7 +38,7 @@ test('one, two and three can be chosen, in order; the fourth is refused; the lis
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   expect(await titles(page)).toEqual(['Task C', 'Task A', 'Task B']);
   expect(await app.order()).toEqual(['Task A', 'Task B', 'Task C', 'Task D']); // (the list keeps its order)
-  await expect(page.locator('#hnow b')).toHaveText('Task A'); // (Next up is still the list's first)
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Task A'); // (Next up is still the list's first)
   // Each row: progress, and a way to work on it.
   await expect(page.locator('.t3row[data-t3="qB"] small')).toHaveText('0 of 1 steps · Next: Step B1');
   await expect(page.locator('.t3row[data-t3="qA"] small')).toHaveText('To do');

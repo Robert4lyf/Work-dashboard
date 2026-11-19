@@ -150,22 +150,21 @@ test('a flow failure of its own stays its own item; a stale launch inside a run 
   expect(await attRows(page, '#attd')).toEqual([['Report run', 'Open process']]);
 });
 
-test('the header follows one rule: saved place today, else Top 3, else list order; nothing reordered', async ({
+test('the focus recommendation follows one rule: saved place today, else Top 3, else list order; nothing reordered', async ({
   app,
   page,
 }) => {
   await busy(app, page);
-  const head = page.locator('#hnow');
-  // A place saved an hour ago comes first, with Continue.
-  await expect(head).toContainText('Saved place · Q4 budget report');
-  await expect(page.locator('#hact [data-resume="q4"]')).toHaveText('Continue');
+  // A place saved an hour ago comes first.
+  expect(await page.evaluate(() => recommend()?.why)).toBe('place');
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Q4 budget report');
   // An older saved place doesn't take over: Top 3's first task with a step to do does.
   await page.evaluate(() => {
     S.quests[4].resume.at = Date.now() - 3 * 864e5;
     renderAll();
   });
-  await expect(head).toContainText('Top 3 priority 1 · Team rota');
-  await expect(head.locator('b')).toHaveText('Draft');
+  expect(await page.evaluate(() => recommend()?.rank)).toBe(1);
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Draft');
   // Focus starts on the same thing.
   expect(await page.evaluate(() => focusTarget())).toBe('q5a');
   // #1 waiting on someone, or done: the next priority.
@@ -174,7 +173,7 @@ test('the header follows one rule: saved place today, else Top 3, else list orde
     renderAll();
   });
   // (Release E: numbered as the Top 3 card shows them, where the waiting one is set aside)
-  await expect(head).toContainText('Top 3 priority 1 · Q4 budget report');
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Q4 budget report');
   await page.evaluate(() => {
     S.top3.ids = ['q9'];
     S.quests[9].children.forEach(c => (c.done = true));
@@ -182,7 +181,7 @@ test('the header follows one rule: saved place today, else Top 3, else list orde
     renderAll();
   });
   // No Top 3 task with a step left: list order, as before.
-  await expect(head).toContainText('Next task · Walsingham sale');
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Walsingham sale');
   const order = await app.order();
   expect(order[0]).toBe('Walsingham sale');
   // The Top 3 itself is untouched by any of this.
@@ -195,13 +194,13 @@ test('a running session wins; changing the Top 3 meanwhile leaves it alone', asy
     delete S.quests[4].resume;
     renderAll();
   });
-  await page.click('#hact [data-zen]');
+  await page.keyboard.press('z');
   await page.click('#v-zen [data-zstart]');
   expect((await app.state()).timer.q).toBe('q5a');
   // (the header carries the clock, not a recommendation)
-  await expect(page.locator('#hnow #hclock')).toHaveCount(1);
+  await expect(page.locator('header #hclock')).toHaveCount(1);
   await page.evaluate(() => setTop3(['q9', 'q5']));
-  await expect(page.locator('#hnow #hclock')).toHaveCount(1);
+  await expect(page.locator('header #hclock')).toHaveCount(1);
   expect((await app.state()).timer.q).toBe('q5a');
 });
 

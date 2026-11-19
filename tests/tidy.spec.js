@@ -79,7 +79,7 @@ test('the header alarm opens the folded alarm list', async ({ app, page }) => {
   });
   await page.reload();
   await expect(page.locator('#alarmd')).not.toHaveAttribute('open', '');
-  await page.click('header .halarm');
+  await app.go('alarms');
   await expect(page.locator('#alarmd')).toHaveAttribute('open', '');
 });
 

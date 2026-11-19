@@ -55,7 +55,7 @@ test('an opened inbox item: waiting, do later and steps (which go to Today with 
   expect(q.children.map(c => c.text)).toEqual(['Book room', 'Agenda']);
 });
 
-test('mic is hidden where speech recognition is unavailable', async ({ browser }) => {
+test('mic offers keyboard dictation when speech recognition is unavailable', async ({ browser }) => {
   const page = await browser.newPage();
   await page.route(
     u => !u.href.startsWith('http://localhost'),
@@ -66,7 +66,12 @@ test('mic is hidden where speech recognition is unavailable', async ({ browser }
     delete window.webkitSpeechRecognition;
   });
   await page.goto('/');
-  await expect(page.locator('#mic')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Inbox', exact: true }).click();
+  const mic = page.getByRole('button', { name: 'Speak to capture' });
+  await expect(mic).toBeVisible();
+  await mic.click();
+  await expect(page.getByRole('textbox', { name: 'New Inbox item' })).toBeFocused();
+  await expect(page.locator('#toast')).toContainText('microphone on your keyboard');
   await page.close();
 });
 

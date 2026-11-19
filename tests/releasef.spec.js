@@ -145,7 +145,7 @@ test.describe('Checkpoint 2: contrast in every appearance', () => {
               if (r < min)
                 out.push(`${sel}${pseudo || ''} ${r.toFixed(2)} "${e.textContent.trim().slice(0, 20)}"`);
             });
-          check('header .go small, header .go b, header .clk, header .btn, header::before');
+          check('header .hsearch, header .syncbtn, header .timer-link, header .btn');
           check('#v-today .sechead h2, #v-today .sechead .linkbtn');
           check('#v-today .tag');
           check('#v-today .btn');
