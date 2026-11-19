@@ -250,6 +250,7 @@ function norm(s) {
       later: [],
       projects: [],
       projectUpdates: [],
+      completedProjects: [],
       projectSections: [],
       projectPlacements: [],
       activeProject: '',
@@ -293,6 +294,17 @@ function norm(s) {
     if (text) updates.set(u.id, { id: u.id, q: u.q, t: u.t, text });
   }
   S.projectUpdates = [...updates.values()];
+  const completed = new Map();
+  for (const entry of Array.isArray(S.completedProjects) ? S.completedProjects : []) {
+    const n = entry?.project;
+    if (!okRef(entry?.id) || n?.id !== entry.id || typeof n.text !== 'string' || !cleanDay(entry.d)) continue;
+    const project = cleanArchivedProject(n);
+    if (!project || (entry.fromLog === true && completed.has(entry.id))) continue;
+    const record = { id: entry.id, d: entry.d, project };
+    if (entry.fromLog === true) record.fromLog = true;
+    completed.set(entry.id, record);
+  }
+  S.completedProjects = [...completed.values()];
   const sections = new Map();
   for (const section of Array.isArray(S.projectSections) ? S.projectSections : []) {
     if (!okId(section) || section.id === UNCATEGORISED || typeof section.name !== 'string') continue;
@@ -562,7 +574,7 @@ function rollover() {
   if (S.day === today()) return;
   dropUndo(); // (an undo from yesterday would bring back yesterday, and its reset again)
   // (not one finished today on another device, whose reset came first: it's done today)
-  S.quests = S.quests.filter(q => !isDone(q) || S.log.some(x => x.id === q.id && x.d === today()));
+  archiveCompletedProjects();
   // A repeating task is on Today only on the day it's for: one from an earlier day goes, finished
   // or not (today's copy, made by another device's reset first, stays).
   // (one scheduled and not yet recorded stays: its outcome is still to be recorded)

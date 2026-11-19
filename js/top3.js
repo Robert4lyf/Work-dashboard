@@ -174,7 +174,7 @@ function top3PickerHtml(hint) {
   if (held.length)
     h += `<p class="hint t3held">Not available: ${held.map(q => esc(q.text) + ' (' + (q.scheduled ? 'scheduled' : 'waiting') + ')').join(', ')}.</p>`;
   if (!chosen.length && !rest.length && !kept.length)
-    h += '<p class="hint">Nothing on Today to choose from.</p>';
+    h += '<p class="hint">No open projects to choose from.</p>';
   h += `</div><div class="acts"><button class="btn green" type="button" data-sheetclose="1">Done</button>${ids.length || kept.length ? '<button class="btn" type="button" data-stay="1" data-t3none="1">Clear</button>' : ''}</div>`;
   return h;
 }

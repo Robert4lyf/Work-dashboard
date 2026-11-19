@@ -647,9 +647,9 @@ function renderNode({ n, parents }) {
     h += `<p class="qnext"><small>Next</small><b>Nothing until you hear back</b></p>`;
   // Where you left off (the task's; on a step's page, when it's this step or no step).
   if (q.resume && !isDone(q) && placeFits(q, n)) h += placeCard(q);
-  // Its summary, under its name: where it's at, written by you (or drafted by Claude, on asking).
+  // The project summary is written by the user.
   if (top)
-    h += `<label class="f" for="fsum">Summary and updates <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="${n.summary ? 3 : 1}" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>${summaryBox(n)}`;
+    h += `<label class="f" for="fsum">Summary <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="${n.summary ? 3 : 1}" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>`;
   // Its tag, folded to the one it has (tap to change).
   if (top)
     h += `<details id="tagd" class="tagd"${panels.tagd ? ' open' : ''}><summary>Tag: ${n.tag ? tagBadge(n.tag) : '<span class="hint">none</span>'}</summary>${tagPicker('q', n.id, n.tag)}</details>`;
@@ -665,8 +665,9 @@ function renderNode({ n, parents }) {
     h += listHead('Steps', n.children);
     h += list(n.children, false, true);
     h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a step" aria-label="New step" autocomplete="off"><button class="btn">Add</button></form>`;
-    h += suggestBox(n);
   }
+  if (top)
+    h += `<button class="linkbtn project-detail-history" aria-haspopup="dialog" data-project-history="${n.id}">History</button>`;
   // Everything else, folded away.
   h += `<details id="mored" class="more"${panels.mored ? ' open' : ''}><summary>More: notes, deadline, ${top ? 'do later, repeat, ' : ''}move…</summary>`;
   if (top) h += laterPicker('q', n.id);
@@ -701,166 +702,4 @@ function renderNode({ n, parents }) {
   h += actionBtn(pa);
   h += `<button class="btn qmore" data-qact="${n.id}" aria-label="More actions" aria-haspopup="dialog">${dots}</button></div>`;
   setHTML($('#v-today'), h);
-}
-
-/* Summarise (AI): the task's name, its steps (ticked, waiting and on whom) and its summary go
-   to the suggest-steps Supabase function, which asks Claude for a short plain-English summary of
-   what's been done. It's offered as a draft: the summary is yours unless you choose to use it. */
-let sumAI = null; // { id, busy, text, error }
-const SUMMARY_OK = 'dashboard-summary-ok'; // (this device was told what's sent, once)
-function summaryBox(n) {
-  if (!sb || !session) return '';
-  const s = sumAI && sumAI.id === n.id ? sumAI : null;
-  if (!s) return `<button class="linkbtn sumaibtn" data-sumai="${n.id}">Summarise (AI)</button>`;
-  if (s.busy) return '<p class="hint sumbusy">Writing a summary…</p>';
-  if (s.error)
-    return `<div class="suggest sumdraft"><p class="hint">${esc(s.error)}</p><div class="acts"><button class="btn sm" data-sumclose="1">OK</button></div></div>`;
-  return `<div class="suggest sumdraft"><p class="hint">Claude's summary:</p><p class="sumtext">${esc(s.text)}</p><div class="acts"><button class="btn sm green" data-sumuse="replace">${n.summary ? 'Replace mine' : 'Use this'}</button>${n.summary ? '<button class="btn sm" data-sumuse="add">Add to mine</button>' : ''}<button class="btn sm" data-sumclose="1">Cancel</button></div></div>`;
-}
-async function askSummary(id) {
-  const r = find(id);
-  if (!r || !sb || !session) return;
-  let told = false;
-  try {
-    told = localStorage.getItem(SUMMARY_OK) === '1';
-  } catch (e) {}
-  if (!told)
-    return sheet(
-      {
-        title: 'Summarise with AI',
-        text: "This sends this task's name, its steps (which are ticked or waiting, and on whom) and its summary, and nothing else, to Anthropic's Claude to write a short summary. Only use it if your organisation allows this for work information.",
-        ok: 'Continue',
-      },
-      () => {
-        try {
-          localStorage.setItem(SUMMARY_OK, '1');
-        } catch (e) {}
-        askSummary(id);
-      },
-    );
-  sumAI = { id, busy: true };
-  renderToday();
-  let next;
-  try {
-    const { data, error } = await sb.functions.invoke('suggest-steps', {
-      body: {
-        mode: 'summary',
-        quest: r.n.text,
-        summary: r.n.summary || '',
-        steps: r.n.children.map(c => ({
-          text: c.text,
-          done: isDone(c),
-          waiting: !isDone(c) && c.wait ? c.wait.who || 'someone' : '',
-        })),
-      },
-    });
-    if (error || !data || typeof data.summary !== 'string') throw error || new Error('no summary');
-    const text = cleanText(data.summary.trim()).slice(0, SUMMARY_MAX);
-    next = text ? { id, text } : { id, error: 'Claude had nothing to add for this one.' };
-  } catch (e) {
-    next = {
-      id,
-      error: navigator.onLine
-        ? "Couldn't get a summary. The suggest-steps function may need updating (see the README)."
-        : 'A summary needs a connection.',
-    };
-  }
-  if (!sumAI || sumAI.id !== id) return; // (closed, or another asked, meanwhile)
-  sumAI = next;
-  renderToday();
-}
-function useSummary(how) {
-  const s = sumAI,
-    r = s && find(s.id);
-  sumAI = null;
-  if (r && s.text) {
-    const mine = r.n.summary || '';
-    r.n.summary = (how === 'add' && mine ? mine + '\n' + s.text : s.text).slice(0, SUMMARY_MAX);
-    save();
-  }
-  renderAll();
-}
-
-/* Suggest steps (AI): the task's name and its steps' names (nothing else) go to the
-   suggest-steps Supabase function, which asks Claude for a few next steps. They're offered as a
-   list to tick; only the ticked ones are added. Needs sync signed in (the function checks it). */
-let suggest = null; // { id, busy, items: [{ text, on }], error }
-const SUGGEST_OK = 'dashboard-suggest-ok'; // (this device was told what's sent, once)
-function suggestBox(n) {
-  if (!sb || !session) return '';
-  const s = suggest && suggest.id === n.id ? suggest : null;
-  if (!s) return `<button class="linkbtn suggestbtn" data-suggest="${n.id}">Suggest steps (AI)</button>`;
-  if (s.busy) return '<p class="hint suggestbusy">Getting suggestions…</p>';
-  let h = '<div class="suggest box">';
-  if (s.error) h += `<p class="hint">${esc(s.error)}</p>`;
-  else
-    h +=
-      '<p class="hint">Suggested steps: untick any you don\'t want.</p>' +
-      s.items
-        .map(
-          (x, i) =>
-            `<label class="optbox"><input type="checkbox" data-sugpick="${i}"${x.on ? ' checked' : ''}>${esc(x.text)}</label>`,
-        )
-        .join('');
-  h += `<div class="acts">${s.error ? '' : `<button class="btn sm green" data-sugadd="${n.id}">Add ticked</button>`}<button class="btn sm" data-sugclose="1">${s.error ? 'OK' : 'Cancel'}</button></div></div>`;
-  return h;
-}
-async function askSuggest(id) {
-  const r = find(id);
-  if (!r || !sb || !session) return;
-  let told = false;
-  try {
-    told = localStorage.getItem(SUGGEST_OK) === '1';
-  } catch (e) {}
-  if (!told)
-    return sheet(
-      {
-        title: 'Suggest steps with AI',
-        text: "This sends this task's name and its steps' names, and nothing else, to Anthropic's Claude to suggest next steps. Only use it if your organisation allows this for work information.",
-        ok: 'Continue',
-      },
-      () => {
-        try {
-          localStorage.setItem(SUGGEST_OK, '1');
-        } catch (e) {}
-        askSuggest(id);
-      },
-    );
-  suggest = { id, busy: true, items: [] };
-  renderToday();
-  let next;
-  try {
-    const { data, error } = await sb.functions.invoke('suggest-steps', {
-      body: { quest: r.n.text, steps: r.n.children.map(c => c.text) },
-    });
-    if (error || !data || !Array.isArray(data.steps)) throw error || new Error('no steps');
-    const items = data.steps
-      .map(t => ({ text: cleanText(String(t)).slice(0, 120), on: true }))
-      .filter(x => x.text);
-    next = { id, items, error: items.length ? '' : 'No new steps to suggest for this one.' };
-  } catch (e) {
-    next = {
-      id,
-      items: [],
-      error: navigator.onLine
-        ? "Couldn't get suggestions. The suggest-steps function may not be set up yet (see the README)."
-        : 'Suggestions need a connection.',
-    };
-  }
-  if (!suggest || suggest.id !== id) return; // (closed, or another asked, meanwhile)
-  suggest = next;
-  renderToday();
-}
-function addSuggested(id) {
-  const r = find(id),
-    s = suggest;
-  suggest = null;
-  if (!r || !s || s.id !== id) return renderToday();
-  const picked = s.items.filter(x => x.on);
-  if (!picked.length) return renderToday();
-  const bf = snapshot();
-  picked.forEach(x => r.n.children.push(fix({ id: uid(), text: x.text })));
-  r.n.done = false;
-  settle(bf);
-  toast('Added ' + plural(picked.length, 'step'));
 }

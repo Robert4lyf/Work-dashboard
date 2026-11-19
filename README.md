@@ -62,7 +62,7 @@ If you deploy from a branch instead of the workflow, change `VERSION` in `sw.js`
 
 ## Notifications (optional, one-time setup)
 
-Real notifications, even with the app closed: when a focus session ends, on the morning a deadline or chase date is due, when an Upcoming task returns to Today, when an alarm rings, and for alerts from your scripts (below).
+Real notifications, even with the app closed: when a focus session ends, on the morning a deadline or chase date is due, when an upcoming project returns to Projects, when an alarm rings, and for alerts from your scripts (below).
 
 1. Run the updated `supabase-setup.sql` (adds the notification tables).
 2. In the app: **Settings > Notifications > Generate keys**. Copy the two keys it shows (the private key isn't saved anywhere else).
@@ -86,10 +86,10 @@ Send a POST to the **Alert URL** with the header `apikey: <apikey value>` and a 
 | `token`      | yes      | the capture token                                                                                                                                                           |
 | `title`      | yes      | the notification title, and the item's name                                                                                                                                 |
 | `body`       | no       | details: the notification text, and the item's notes                                                                                                                        |
-| `to`         | no       | `inbox` (default): notification + Inbox item; `phone`: notification only; `today`: notification + a task on Today; `waiting`: notification + an Inbox item waiting on `who` |
+| `to`         | no       | `inbox` (default): notification + Inbox item; `phone`: notification only; `today`: notification + a project; `waiting`: notification + an Inbox item waiting on `who` |
 | `who`, `due` | no       | for `waiting`: who you're waiting on, and when to chase (`yyyy-mm-dd`)                                                                                                      |
 
-The notification arrives within about a minute. Keep work details out of messages ("Invoice flow failed at step 4", not the data itself); the token only lets callers add alerts and items to the Inbox or Today (never read anything), and **New link** replaces it. Limits: 60 alerts an hour; titles are cut to 200 characters and the notification text to 300 (the item keeps up to 4,000).
+The notification arrives within about a minute. Keep work details out of messages ("Invoice flow failed at step 4", not the data itself); the token only lets callers add alerts and items to the Inbox or Projects (never read anything), and **New link** replaces it. Limits: 60 alerts an hour; titles are cut to 200 characters and the notification text to 300 (the item keeps up to 4,000).
 
 **PowerShell**
 
@@ -169,10 +169,10 @@ A link with a route opens a place in the app: from a home-screen shortcut, a boo
 
 | Route                          | Opens                                                                    |
 | ------------------------------ | ------------------------------------------------------------------------ |
-| `#/today`                      | Today, with the Top 3                                                    |
+| `#/projects` · `#/today`        | Projects (the older Today shortcut also opens Projects)                 |
 | `#/continue`                   | the task with the newest saved place, else the one Next up is in         |
 | `#/inbox` · `#/inbox/triage`   | the Inbox · Process inbox                                                |
-| `#/q/<id>`                     | a task or step (on Upcoming it opens that list; in the Inbox, that item) |
+| `#/q/<id>`                     | a project, step, completed project or Inbox item by ID |
 | `#/kb/<id>` · `#/kb/<id>/run`  | an article · a procedure, started or resumed                             |
 | `#/waiting` · `#/waiting/<id>` | the Waiting Centre · one item, marked                                    |
 | `#/focus` · `#/review`         | the Focus tab (no session is started or changed) · the weekly review     |
@@ -182,24 +182,6 @@ The link works with the app open, from a fresh launch, from the installed app, a
 **Android.** HTTP Shortcuts: a shortcut of type "Open URL" (or a browser shortcut) with the link. Tasker: an action **Net > Browse URL** with the link; for an NFC card, a profile with the **NFC Tag** plugin (or Tasker's own NFC event on supported phones) running that task. Automate: an **NFC read** block (or any trigger) followed by **App start** with the link, or an **Open URL** block. The app itself can't read NFC: the automation app recognises the card and opens the link, and the installed app opens at that place. The home-screen app's long-press menu also offers **Capture**, **Process inbox** and **Continue work**. Nothing can run a flow or change work from a link: those take a tap in the app.
 
 **Which link for what:** a deep link opens a place; the capture link (Settings > Advanced) adds an Inbox item or sends an alert from a script; the execution token (Settings > Flows and automations) reports a flow's status. Each does only its one thing.
-
-## Suggest steps with AI (optional)
-
-A **Suggest steps (AI)** link on a task's page asks Claude for a few next steps, offered as a list to tick; only the ticked ones are added. It sends the task's name and its steps' names, and nothing else (no notes, other tasks, or anything from Knowledge). The first time on each device it says so and asks before sending. Check your organisation allows this for work information before turning it on.
-
-It only shows while you're signed in to sync, and needs a small Supabase function that holds the API key, so the key never reaches the app:
-
-1. At https://console.anthropic.com create an account (separate from a Claude subscription), add some credit, and create an API key. It uses the small, fast model (Claude Haiku 5.5): each suggestion costs a fraction of a penny.
-2. In Supabase, open **Edge Functions**, choose **Deploy a new function > Via Editor**, name it `suggest-steps`, and paste in the whole of `supabase/functions/suggest-steps/index.ts` (it's the only file). Leave **"Enforce JWT verification" on**: only signed-in users of your project get an answer. With the Supabase CLI: `supabase functions deploy suggest-steps`.
-3. In **Edge Functions > Secrets**, add `ANTHROPIC_API_KEY` with the key from step 1. Never put the key in `config.js` or anywhere in this repository: it's public.
-
-If it says it couldn't get suggestions, the function's **Logs** in Supabase show why (a missing or wrong key, or no credit left).
-
-### Summarise with AI
-
-The same function also writes summaries. On a task's page, under its name, is an optional **Summary and updates** box that you write yourself; it shows under the task's name on Today. **Summarise (AI)** beside it asks Claude for a short plain-English summary of what's been done, offered as a draft: you choose whether to use it instead of yours, add it below yours, or cancel. It sends the task's name, its steps (which are ticked or waiting, and on whom) and its summary, and nothing else; the first time on each device it says so and asks before sending.
-
-If you set up the function before summaries were added, paste the updated `supabase/functions/suggest-steps/index.ts` over it once (**Edge Functions > suggest-steps > Code**, then **Deploy**). Until then, Summarise says it couldn't get a summary.
 
 ## How sync behaves
 

@@ -158,7 +158,7 @@ function kbFlows() {
   h += `<form id="flowform"><label class="f" for="flowname">Button name</label><input class="fld" id="flowname" maxlength="60" autocomplete="off" required>
     <label class="f" for="flowurl">Run URL</label><input class="fld" id="flowurl" placeholder="ms-powerautomate:/console/flow/run?..." autocomplete="off" required>
     <div class="acts"><button class="btn">Add automation</button></div></form>
-    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. Each one gets a button here and on Today. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run. With result tracking on, “Pass the attempt’s id” adds the attempt's id to the Run URL as the flow's input <code>ExecId</code>, for its report (the flow needs an input variable named ExecId; see the README).</p></details>`;
+    <p class="hint kbhint">In Power Automate Desktop, open the flow's Properties, then Details, and copy its Run URL. Each one gets a button here. The buttons work on a computer with Power Automate Desktop installed; it may ask you to confirm each run. With result tracking on, “Pass the attempt’s id” adds the attempt's id to the Run URL as the flow's input <code>ExecId</code>, for its report (the flow needs an input variable named ExecId; see the README).</p></details>`;
   return h;
 }
 // The notes (one scratchpad, synced), pinned at the top of Knowledge.

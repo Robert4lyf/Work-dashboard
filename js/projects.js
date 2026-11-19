@@ -3,7 +3,7 @@
 let projectStepFor = '',
   projectsDoneOpen = false;
 const PROJECT_STEP_LIMIT = 3;
-const openProjectHistory = new Set();
+let projectRecord = null;
 const projectUpdateDate = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 const projectGripIcon =
   '<svg viewBox="0 0 16 20" aria-hidden="true" fill="currentColor"><circle cx="5" cy="4" r="1.5"/><circle cx="11" cy="4" r="1.5"/><circle cx="5" cy="10" r="1.5"/><circle cx="11" cy="10" r="1.5"/><circle cx="5" cy="16" r="1.5"/><circle cx="11" cy="16" r="1.5"/></svg>';
@@ -14,6 +14,11 @@ try {
   if (Array.isArray(saved)) saved.filter(okRef).forEach(id => foldedProjectSections.add(id));
 } catch (e) {}
 const openProjectCompleted = new Set();
+function saveProjectSectionFolds() {
+  try {
+    localStorage.setItem(PROJECT_FOLDS_KEY, JSON.stringify([...foldedProjectSections]));
+  } catch (e) {}
+}
 const waitingClock =
   '<span class="project-step-clock" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>';
 
@@ -29,26 +34,45 @@ function projectCheck(n, label) {
   return `<button class="check${done ? ' project-checked' : ''}" type="button" data-toggle="${n.id}" aria-pressed="${done}" aria-label="${label}: ${esc(n.text)}">${tick}</button>`;
 }
 
-function projectHistory(q, updates, open) {
-  return `<section class="project-history" id="project-history-${q.id}" aria-label="Project history"${open ? '' : ' hidden'}>
-    ${withHash(`<form class="project-update" data-project-update="${q.id}">
-      <textarea class="fld" id="project-update-${q.id}" maxlength="${PROJECT_UPDATE_MAX}" rows="2" placeholder="Write an update" aria-label="New project update" required></textarea>
+function projectHistoryLog(id) {
+  const updates = S.projectUpdates
+    .filter(entry => entry.q === id)
+    .sort((a, b) => b.t - a.t || byName(b.id, a.id));
+  return updates.length
+    ? `<ol class="project-updates">${updates.map(entry => `<li><time datetime="${new Date(entry.t).toISOString()}">${projectUpdateDate.format(entry.t)}</time><p>${esc(entry.text)}</p></li>`).join('')}</ol>`
+    : '<p class="hint">No updates yet.</p>';
+}
+function renderOpenProjectHistory() {
+  const form = $('#sheet [data-project-update]');
+  if (form) setHTML($('#project-history-entries'), projectHistoryLog(form.dataset.projectUpdate));
+}
+function openProjectHistory(id) {
+  const project = S.quests.find(item => item.id === id) || S.later.find(item => item.id === id);
+  if (!project) return;
+  popSheet(
+    `<h2 id="sheettitle">Project history</h2><p>${esc(project.text)}</p>
+    <form class="project-update" data-project-update="${id}">
+      <textarea class="fld" maxlength="${PROJECT_UPDATE_MAX}" rows="2" placeholder="Write an update" aria-label="New project update" required></textarea>
       <button class="btn sm">Add update</button>
-    </form>`)}
-    ${
-      open && updates?.length
-        ? `<ol class="project-updates">${updates
-            .map(
-              u =>
-                `<li id="project-entry-${u.id}"><time datetime="${new Date(u.t).toISOString()}">${projectUpdateDate.format(u.t)}</time><p>${esc(u.text)}</p></li>`,
-            )
-            .join('')}</ol>`
-        : ''
-    }
-  </section>`;
+    </form>
+    <div id="project-history-entries">${projectHistoryLog(id)}</div>
+    <button type="button" class="btn sm" data-sheetclose="1">Close</button>`,
+    { labelledBy: 'sheettitle' },
+  );
 }
 
-function projectCard(q, updates, canReorder, isActive = false) {
+function projectWaitLine(n) {
+  const { who, due } = n.wait;
+  const label = [
+    who ? 'Waiting on ' + who : 'Waiting',
+    due ? (due < today() ? 'Chase now' : due === today() ? 'Chase today' : 'Chase ' + niceDate(due)) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return `<button type="button" class="linkbtn project-wait" data-wact="${n.id}" aria-haspopup="dialog">${esc(label)}</button>`;
+}
+
+function projectCard(q, canReorder, isActive = false) {
   const done = isDone(q),
     upcoming = !!q.start,
     scheduled = isScheduled(q),
@@ -62,22 +86,21 @@ function projectCard(q, updates, canReorder, isActive = false) {
     meta = [
       status,
       schedTag(q),
-      waiting || q.wait ? 'Waiting' : '',
+      q.wait && !done ? projectWaitLine(q) : waiting ? 'Waiting' : '',
       kids.length ? `${finished.length} of ${kids.length} steps` : '',
       dueTag(q) || stepDueTag(q),
     ].filter(Boolean),
-    detail = `${upcoming ? 'data-goupd' : 'data-open'}="${q.id}"`;
+    detail = `${upcoming ? 'data-upcoming-project' : 'data-open'}="${q.id}"`;
   const steps = preview
     .map(n => {
       const checked = isDone(n);
       return `<li class="project-step${checked ? ' project-step-done' : ''}" data-qid="${n.id}">
       ${!n.children.length && mayTick && (!n.wait || checked) ? projectCheck(n, checked ? 'Mark not done' : 'Mark done') : n.wait && !checked ? waitingClock : '<span class="project-step-dot" aria-hidden="true"></span>'}
-      <span class="project-step-name">${esc(n.text)}${n.wait && !checked ? '<small>Waiting</small>' : ''}</span>
+      <span class="project-step-name"><span>${esc(n.text)}</span>${n.wait && !checked ? projectWaitLine(n) : ''}</span>
     </li>`;
     })
     .join('');
   const remaining = kids.length - preview.length;
-  const historyOpen = openProjectHistory.has(q.id);
   return `<article class="project-card" data-qid="${q.id}" aria-labelledby="project-title-${q.id}">
     <div class="project-preview">
       <div class="project-card-heading">
@@ -88,13 +111,12 @@ function projectCard(q, updates, canReorder, isActive = false) {
       </div>
       ${meta.length ? `<div class="project-meta">${meta.map(item => `<span>${item}</span>`).join('')}</div>` : ''}
       ${steps ? `<ul class="project-steps">${steps}</ul>` : ''}
-      ${projectHistory(q, updates, historyOpen)}
     </div>
     <div class="project-actions">
       ${done ? '' : `<button type="button" class="linkbtn project-activate" data-project-activate="${q.id}" aria-label="Make ${esc(q.text)} active" aria-pressed="${isActive}">${isActive ? '✓ Active' : 'Make active'}</button>`}
       <button class="linkbtn" data-project-add="${q.id}" aria-expanded="${projectStepFor === q.id}" aria-label="Add step to ${esc(q.text)}">+ Add step</button>
       ${!upcoming && remaining ? `<button class="linkbtn" ${detail} aria-label="Show all steps for ${esc(q.text)}">${remaining} more ${remaining === 1 ? 'step' : 'steps'}</button>` : ''}
-      <button class="linkbtn" data-project-history="${q.id}" aria-controls="project-history-${q.id}" aria-expanded="${historyOpen}" aria-label="History for ${esc(q.text)}">History</button>
+      <button class="linkbtn" data-project-history="${q.id}" aria-haspopup="dialog" aria-label="History for ${esc(q.text)}">History</button>
     </div>
     ${
       projectStepFor === q.id
@@ -132,17 +154,10 @@ function renderProjects() {
   }
   const known = [...S.quests, ...S.later];
   if (!known.some(q => q.id === projectStepFor)) projectStepFor = '';
-  const updatesByProject = new Map();
-  for (const entry of S.projectUpdates) {
-    if (!openProjectHistory.has(entry.q)) continue;
-    if (!updatesByProject.has(entry.q)) updatesByProject.set(entry.q, []);
-    updatesByProject.get(entry.q).push(entry);
-  }
-  for (const list of updatesByProject.values()) list.sort((a, b) => b.t - a.t || byName(b.id, a.id));
   const pinned = activeProject();
   const canMoveSections = S.projectSections.length > 0;
   const grid = (qs, canReorder, id = '') =>
-    `<div class="project-grid"${id ? ` id="${id}"` : ''}>${qs.map(q => projectCard(q, updatesByProject.get(q.id), canReorder)).join('')}</div>`;
+    `<div class="project-grid"${id ? ` id="${id}"` : ''}>${qs.map(q => projectCard(q, canReorder)).join('')}</div>`;
   const sections = projectSectionGroups().map(section => {
     const { id, name, colour, done } = section;
     const active = section.active.filter(q => q !== pinned);
@@ -170,15 +185,22 @@ function renderProjects() {
   });
   setHTML(
     el,
-    `<div class="project-board-actions"><button type="button" class="btn sm" data-project-section-add="1" aria-haspopup="dialog">Add section</button></div>
+    `<div class="project-board-actions">
+      <button type="button" class="linkbtn" data-project-section-add="1" aria-haspopup="dialog">Add section</button>
+      <button type="button" class="btn sm green" data-project-new="1" aria-haspopup="dialog">New project</button>
+    </div>
     <section class="active-project" aria-labelledby="active-project-title">
       <h2 id="active-project-title">Active Task</h2>
-      ${pinned ? `<div class="project-grid">${projectCard(pinned, updatesByProject.get(pinned.id), false, true)}</div>` : '<p class="hint">Choose Make active on a project.</p>'}
+      ${pinned ? `<div class="project-grid">${projectCard(pinned, false, true)}</div>` : '<p class="hint">Choose Make active on a project.</p>'}
     </section>${sections.join('')}`,
   );
 }
 
-function projectClick(d) {
+function projectClick(d, button) {
+  if (d.projectNew) return openNewProject();
+  if (d.upcomingProject) return openProjectRecord(d.upcomingProject, 'upcoming', button);
+  if (d.completedProject) return openProjectRecord(d.completedProject, 'completed', button);
+  if (d.projectRecordBack) return backFromProjectRecord();
   if (d.projectActivate) {
     const q = [...S.quests, ...S.later].find(item => item.id === d.projectActivate && !isDone(item));
     if (!q) return;
@@ -220,9 +242,7 @@ function projectClick(d) {
   if (d.projectSectionToggle) {
     if (!foldedProjectSections.delete(d.projectSectionToggle))
       foldedProjectSections.add(d.projectSectionToggle);
-    try {
-      localStorage.setItem(PROJECT_FOLDS_KEY, JSON.stringify([...foldedProjectSections]));
-    } catch (e) {}
+    saveProjectSectionFolds();
     renderProjects();
     return;
   }
@@ -282,19 +302,7 @@ function projectClick(d) {
     moveProject(d.projectPlace, d.section);
     return;
   }
-  if (d.projectHistory) {
-    const id = d.projectHistory;
-    if (!openProjectHistory.delete(id)) openProjectHistory.add(id);
-    renderProjects();
-    const history = document.getElementById('project-history-' + id);
-    if (history) {
-      const preview = history.parentElement;
-      preview.scrollTop = history.hidden
-        ? 0
-        : preview.scrollTop + history.getBoundingClientRect().top - preview.getBoundingClientRect().top;
-    }
-    return;
-  }
+  if (d.projectHistory) return openProjectHistory(d.projectHistory);
   if (!d.projectAdd) return;
   projectStepFor = projectStepFor === d.projectAdd ? '' : d.projectAdd;
   renderProjects();
@@ -509,7 +517,9 @@ function addProjectUpdate(form) {
   S.projectUpdates.push({ id: uid(), q, t: Date.now(), text });
   input.value = '';
   save();
-  renderProjects();
+  renderOpenProjectHistory();
+  if (view === 'project-record') renderProjectRecord();
+  input.focus({ preventScroll: true });
   toast('Update added');
 }
 
@@ -521,4 +531,183 @@ function addPDaily(d, p, mins) {
   if (!p) return;
   const o = (S.pdaily[d] = S.pdaily[d] || {});
   o[p] = (o[p] || 0) + mins;
+}
+
+function openNewProject() {
+  popSheet(
+    `<form id="new-project-form">
+      <h2 id="sheettitle">New project</h2>
+      <label class="f" for="new-project-name">Project name</label>
+      <input class="fld" id="new-project-name" maxlength="120" required>
+      ${
+        S.projectSections.length
+          ? `<label class="f" for="new-project-section">Section</label>
+      <select class="fld" id="new-project-section"><option value="">Uncategorised</option>${S.projectSections.map(section => `<option value="${section.id}">${esc(section.name)}</option>`).join('')}</select>`
+          : ''
+      }
+      <div class="acts"><button class="btn green">Create project</button><button type="button" class="btn" data-sheetclose="1">Cancel</button></div>
+    </form>`,
+    { labelledBy: 'sheettitle' },
+  );
+}
+function saveNewProject() {
+  const input = $('#new-project-name');
+  const text = cleanText(input.value).trim();
+  if (!text) {
+    input.value = '';
+    input.reportValidity();
+    return;
+  }
+  const section = S.projectSections.find(item => item.id === $('#new-project-section')?.value);
+  const q = fix({ id: uid(), text, since: today() });
+  S.quests.unshift(q);
+  if (section) S.projectPlacements.push({ id: q.id, section: section.id });
+  const sectionId = section?.id || UNCATEGORISED;
+  if (foldedProjectSections.delete(sectionId)) saveProjectSectionFolds();
+  closeSheet();
+  save();
+  renderProjects();
+  const title = document.getElementById('project-title-' + q.id).querySelector('button');
+  title.focus();
+  toast('Project created');
+}
+
+// Store finished work separately so it can't turn up in the current day's work or repeat rules.
+function cleanArchivedProject(n) {
+  if (!okRef(n?.id) || typeof n.text !== 'string') return null;
+  return {
+    id: n.id,
+    text: cleanText(n.text),
+    notes: typeof n.notes === 'string' ? cleanText(n.notes) : '',
+    summary: typeof n.summary === 'string' ? cleanText(n.summary) : '',
+    done: !!n.done,
+    children: (Array.isArray(n.children) ? n.children : []).map(cleanArchivedProject).filter(Boolean),
+  };
+}
+function completedProjectLog() {
+  const entries = new Map();
+  for (const entry of S.log) {
+    if (entry?.trail?.length || !okRef(entry?.id) || !cleanDay(entry.d) || typeof entry.text !== 'string')
+      continue;
+    const previous = entries.get(entry.id);
+    if (!previous || previous.d <= entry.d) entries.set(entry.id, entry);
+  }
+  return entries;
+}
+
+function archivedProjectEntry({ id, d, text }) {
+  return { id, d, project: cleanArchivedProject({ id, text, done: true }), fromLog: true };
+}
+function projectIdsOutsideBoard() {
+  return new Set([...S.later, ...S.inbox.map(item => item.node).filter(Boolean)].map(q => q.id));
+}
+function archiveCompletedProjects() {
+  const log = completedProjectLog();
+  const archived = new Map(S.completedProjects.map(entry => [entry.id, entry]));
+  const capture = n => ({
+    id: n.id,
+    text: n.text,
+    notes: n.notes,
+    summary: n.summary || '',
+    done: !!isDone(n),
+    children: n.children.map(capture),
+  });
+  S.quests = S.quests.filter(q => {
+    const date = log.get(q.id)?.d;
+    if (!isDone(q) || date === today()) return true;
+    archived.set(q.id, { id: q.id, d: date || cleanDay(S.day) || today(), project: capture(q) });
+    return false;
+  });
+  // Copies from before archiving retain the project name and date in the completion log.
+  const live = projectIdsOutsideBoard();
+  for (const q of S.quests) live.add(q.id);
+  for (const [id, entry] of log)
+    if (!live.has(id) && !archived.has(id)) archived.set(id, archivedProjectEntry(entry));
+  S.completedProjects = [...archived.values()];
+}
+function completedProjectEntries() {
+  const log = completedProjectLog();
+  const entries = new Map(S.completedProjects.map(entry => [entry.id, entry]));
+  for (const [id, entry] of log) if (!entries.has(id)) entries.set(id, archivedProjectEntry(entry));
+  for (const id of projectIdsOutsideBoard()) entries.delete(id);
+  for (const q of S.quests) {
+    if (isDone(q)) entries.set(q.id, { id: q.id, d: log.get(q.id)?.d || today(), project: q });
+    else entries.delete(q.id);
+  }
+  return [...entries.values()].sort(
+    (a, b) => b.d.localeCompare(a.d) || byName(a.project.text, b.project.text),
+  );
+}
+function renderCompletedProjects() {
+  const entries = completedProjectEntries();
+  return `<h2>Completed projects</h2>${
+    entries.length
+      ? `<div class="box completed-projects">${entries
+          .map(
+            entry =>
+              `<button type="button" class="soonrow" data-completed-project="${entry.id}"><span>${esc(entry.project.text)}</span><small>${esc(niceDate(entry.d))}</small></button>`,
+          )
+          .join('')}</div>`
+      : '<p class="hint">No completed projects yet.</p>'
+  }`;
+}
+function openProjectRecord(id, kind, button) {
+  const from = placeHere(button);
+  returnTo = null;
+  path = [];
+  projectRecord = { id, kind };
+  go('project-record');
+  landed(from);
+  renderProjectRecord();
+}
+function backFromProjectRecord() {
+  if (viewFrom?.sig === placeSig()) return backFrom();
+  if (projectRecord?.kind === 'completed') {
+    reviewSub = 'completed';
+    go('review');
+  } else go('projects');
+}
+function renderProjectRecord() {
+  const completed = projectRecord?.kind === 'completed';
+  const entry = completed ? completedProjectEntries().find(entry => entry.id === projectRecord.id) : null;
+  const q = completed ? entry?.project : S.later.find(item => item.id === projectRecord?.id);
+  const back =
+    viewFrom?.sig === placeSig() && viewFrom.view === 'search'
+      ? 'Search'
+      : completed
+        ? 'Completed projects'
+        : 'Projects';
+  const crumbs = `<div class="crumbs"><button type="button" data-project-record-back="1">&lsaquo; ${back}</button></div>`;
+  if (!q) {
+    const moved = !completed && S.quests.find(item => item.id === projectRecord?.id);
+    setHTML(
+      $('#v-project-record'),
+      crumbs +
+        (moved
+          ? `<p>This project is now in Projects.</p><button class="btn sm" data-open="${moved.id}">Open project</button>`
+          : '<p class="hint">This project is no longer here.</p>'),
+    );
+    return;
+  }
+  const steps = items =>
+    items.length
+      ? `<ul class="project-record-steps">${items.map(item => `<li><span aria-hidden="true">${item.done ? '✓' : '○'}</span><span class="sr">${item.done ? 'Done: ' : 'Open: '}</span> ${esc(item.text)}${steps(item.children)}</li>`).join('')}</ul>`
+      : '';
+  const status = completed ? 'Completed ' + niceDate(entry.d) : 'Starts ' + niceDate(q.start);
+  const controls = completed
+    ? ''
+    : `<div class="acts"><button class="btn sm green" data-now="${q.id}">Move to Projects now</button>
+    <label class="project-record-date">Start date <input class="fld" type="date" data-restart="${q.id}" min="${shift(today(), 1)}" value="${esc(q.start)}"></label>
+    <button class="linkbtn" data-project-history="${q.id}" aria-haspopup="dialog">Add history update</button></div>`;
+  setHTML(
+    $('#v-project-record'),
+    `${crumbs}<article class="project-record box">
+    <p class="hint">${esc(status)}${!completed && q.scheduled?.time ? ' · ' + esc(q.scheduled.time) : ''}</p>
+    <h1>${esc(q.text)}</h1>
+    ${q.summary ? `<p class="project-record-copy">${esc(q.summary)}</p>` : ''}
+    ${q.children.length ? `<h2>Steps</h2>${steps(q.children)}` : ''}
+    ${q.notes ? `<h2>Notes</h2><p class="project-record-copy">${esc(q.notes)}</p>` : ''}
+    ${controls}<h2>History</h2>${projectHistoryLog(q.id)}
+    </article>`,
+  );
 }

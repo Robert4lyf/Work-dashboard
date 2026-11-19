@@ -7,6 +7,7 @@ let projectUtility = '';
 function renderAll() {
   renderHeader();
   renderView();
+  renderOpenProjectHistory();
   syncRinging();
   renderZen();
 }
@@ -18,6 +19,7 @@ function renderView(v = view) {
   }
   const r = {
     projects: renderProjects,
+    'project-record': renderProjectRecord,
     today: renderToday,
     inbox: renderInbox,
     focus: renderFocus,
@@ -61,13 +63,21 @@ function go(v) {
   if (v !== 'today') $('#ptitle').hidden = true;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
-  const tabView = v === 'today' ? 'projects' : v;
+  const tabView =
+    v === 'project-record'
+      ? projectRecord.kind === 'completed'
+        ? 'review'
+        : 'projects'
+      : v === 'today'
+        ? 'projects'
+        : v;
   document.querySelectorAll('nav button[data-v]').forEach(x => {
     if (x.dataset.v === tabView) x.setAttribute('aria-current', 'page');
     else x.removeAttribute('aria-current');
   });
   [
     'projects',
+    'project-record',
     'today',
     'inbox',
     'waiting',
@@ -134,6 +144,7 @@ function placeSig() {
   return JSON.stringify([
     view,
     on('today') ? path : '',
+    on('project-record') ? projectRecord : '',
     on('knowledge') ? [kbArt, kbRun, wfOpen, wfView, !!kbEdit, !!wfEdit] : '',
     on('account') ? setSub : '',
     on('inbox') ? !!triage : '',
@@ -326,6 +337,7 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (!window.appReady) return;
   const f = e.target;
+  if (f.id === 'new-project-form') return saveNewProject();
   if (f.id === 'project-section-form') return saveProjectSection(f);
   if (f.dataset.projectUpdate) return addProjectUpdate(f);
   if (f.id === 'sform' || f.dataset.projectStep) {
@@ -454,11 +466,6 @@ document.addEventListener('change', e => {
     el.value = '';
     return;
   }
-  if (el.dataset.sugpick !== undefined) {
-    const x = suggest && suggest.items[+el.dataset.sugpick];
-    if (x) x.on = el.checked;
-    return;
-  }
   if (el.dataset.iwait) {
     const it = S.inbox.find(x => x.id === el.dataset.iwait),
       who = el.value.trim();
@@ -495,7 +502,7 @@ document.addEventListener('change', e => {
       S.later.sort((a, b) => (a.start < b.start ? -1 : a.start > b.start ? 1 : 0));
       save();
     }
-    renderToday();
+    renderView();
     return;
   }
   if (el.id === 'fq') {
@@ -617,7 +624,7 @@ document.addEventListener('click', e => {
   insightClick(d);
   opsClick(d, b);
   createClick(d, b);
-  projectClick(d);
+  projectClick(d, b);
   if (d.open) {
     const r = find(d.open);
     if (r) {
@@ -791,12 +798,18 @@ document.addEventListener('click', e => {
   if (d.now) {
     const i = S.later.findIndex(x => x.id === d.now);
     if (i >= 0) {
+      const openFromRecord = view === 'project-record' && projectRecord.id === d.now;
       const n = S.later.splice(i, 1)[0];
       delete n.start;
       if (n.scheduled) n.scheduled.date = today(); // (brought to today: it happens today)
       const bf = snapshot();
       S.quests.push(n);
       settle(bf);
+      if (openFromRecord) {
+        viewFrom = null;
+        openPath([n.id]);
+        go('today');
+      }
       toast('Moved to Projects');
     }
   }
@@ -810,18 +823,6 @@ document.addEventListener('click', e => {
   }
   if (d.promote) promoteInbox(d.promote);
   if (d.tview) setTodayView(d.tview);
-  if (d.suggest) askSuggest(d.suggest);
-  if (d.sumai) askSummary(d.sumai);
-  if (d.sumuse) useSummary(d.sumuse);
-  if (d.sumclose) {
-    sumAI = null;
-    renderToday();
-  }
-  if (d.sugadd) addSuggested(d.sugadd);
-  if (d.sugclose) {
-    suggest = null;
-    renderToday();
-  }
   if (d.rsub) {
     reviewSub = d.rsub;
     go(d.rsub === 'log' ? 'log' : 'review');
@@ -1021,6 +1022,7 @@ document.addEventListener('click', e => {
         flows: S.flows,
         follows: S.follows,
         projectUpdates: S.projectUpdates,
+        completedProjects: S.completedProjects,
         projectSections: S.projectSections,
         projectPlacements: S.projectPlacements,
         activeProject: S.activeProject,
@@ -1056,6 +1058,7 @@ document.addEventListener('click', e => {
       'flows',
       'follows',
       'projectUpdates',
+      'completedProjects',
       'projectSections',
       'projectPlacements',
       'todayPicks',
@@ -1257,6 +1260,7 @@ document.addEventListener('keydown', e => {
 const PLACE_KEY = 'cockpit.place';
 const PLACE_VIEWS = [
   'projects',
+  'project-record',
   'today',
   'inbox',
   'waiting',
@@ -1274,6 +1278,7 @@ function keepPlace() {
       JSON.stringify({
         view,
         path,
+        record: view === 'project-record' ? projectRecord : null,
         projectsY: view === 'today' && returnTo?.view === 'projects' ? returnTo.y : null,
         sub: reviewSub,
         q: view === 'search' ? searchQ : '',
@@ -1305,7 +1310,12 @@ function takePlace() {
       opener: `.project-open[data-open="${CSS.escape(project.id)}"]`,
     };
   }
-  if (p.view === 'review' && ['week', 'forecast', 'insights', 'log'].includes(p.sub)) reviewSub = p.sub;
+  if (p.view === 'project-record') {
+    if (!okRef(p.record?.id) || !['upcoming', 'completed'].includes(p.record.kind)) return;
+    projectRecord = p.record;
+  }
+  if (p.view === 'review' && ['week', 'forecast', 'insights', 'log', 'completed'].includes(p.sub))
+    reviewSub = p.sub;
   const k = p.kb;
   if (p.view === 'knowledge' && k && typeof k === 'object') {
     if (typeof k.wfOpen === 'string' && k.wfOpen) {
@@ -1467,6 +1477,7 @@ function appBack() {
   }
   // (a page a link led to from another view, still showing: back there. Release H)
   if (viewFrom && viewFrom.sig === placeSig()) return (backFrom(), true);
+  if (view === 'project-record') return (backFromProjectRecord(), true);
   if (view === 'knowledge' && kbRun) {
     kbRunClick({ runback: '1' }, {});
     return true;
