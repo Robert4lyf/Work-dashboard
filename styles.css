@@ -4700,7 +4700,7 @@ header.project-header h1 {
   width: 100%;
   gap: 12px;
 }
-.completed-projects small {
+.completed-projects time {
   flex: none;
 }
 .project-detail-history {
@@ -4713,4 +4713,9 @@ header.project-header h1 {
   .project-preview {
     overflow: visible;
   }
+}
+
+.project-updates [data-history-entry]:focus {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
 }

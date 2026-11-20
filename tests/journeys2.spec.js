@@ -21,6 +21,7 @@ test('Journey A: capture a task, process it, move it to Today, add a step, finis
   app,
   page,
 }) => {
+  await page.clock.install({ time: new Date(2026, 10, 19, 10, 0) });
   await app.open();
   const t = tapper(page);
   await t.click('nav [data-v=inbox]');

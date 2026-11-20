@@ -184,10 +184,32 @@ test('detail uses the existing task page and returns to Projects after reload an
   await expect(upcoming).toBeFocused();
   await upcoming.click();
   const record = page.locator('#v-project-record');
+  await record.getByText('Edit project', { exact: true }).click();
+  await record.getByRole('textbox', { name: 'Name', exact: true }).fill('Month-end review');
+  await record.getByRole('textbox', { name: 'Name', exact: true }).press('Tab');
+  await record.getByRole('textbox', { name: 'Notes' }).fill('Prepare the draft');
+  await record.getByRole('textbox', { name: 'New step' }).fill('Check the figures');
+  await record.getByRole('button', { name: 'Add step' }).click();
+  await record.getByText('Check the figures', { exact: true }).click();
+  await record
+    .locator('details[open]')
+    .getByRole('textbox', { name: 'Name', exact: true })
+    .last()
+    .fill('Check the final figures');
+  await record
+    .locator('details[open]')
+    .getByRole('textbox', { name: 'Name', exact: true })
+    .last()
+    .press('Tab');
+  expect((await app.state()).later[0]).toMatchObject({
+    text: 'Month-end review',
+    notes: 'Prepare the draft',
+    children: [{ text: 'Check the final figures' }],
+  });
   await record.getByLabel('Start date').fill('2026-11-27');
   await expect(record).toContainText('Starts 27 Nov');
   await record.getByRole('button', { name: 'Move to Projects now' }).click();
-  await expect(page.locator('#v-today h1')).toHaveText('Month end');
+  await expect(page.locator('#v-today h1')).toHaveText('Month-end review');
   expect((await app.state()).later).toHaveLength(0);
 });
 
@@ -248,6 +270,15 @@ test('card History opens a separate sheet and dated updates survive reload', asy
   const history = page.getByRole('dialog', { name: 'Project history' });
   const update = history.getByRole('textbox', { name: 'New project update' });
   await update.fill('Draft sent for review');
+  await history.getByRole('button', { name: 'Close' }).click();
+  await toggle.click();
+  await expect(update).toHaveValue('Draft sent for review');
+  await page.keyboard.press('Escape');
+  await toggle.click();
+  await expect(update).toHaveValue('Draft sent for review');
+  await page.locator('#sheet .sheetback').click({ position: { x: 5, y: 5 } });
+  await toggle.click();
+  await expect(update).toHaveValue('Draft sent for review');
   await history.getByRole('button', { name: 'Add update' }).click();
   await expect(update).toHaveValue('');
   await expect(history.locator('time')).toHaveCount(1);
@@ -388,7 +419,10 @@ test('completed projects retain their steps and searchable history across rollov
   page,
 }) => {
   await start(app, page);
+  await addSection(page, 'Finance', 'teal');
   const report = page.getByRole('article', { name: 'Weekly reporting' });
+  await report.getByRole('button', { name: 'Reorder Weekly reporting' }).click();
+  await page.getByRole('button', { name: 'Move to Finance' }).click();
   await report.getByRole('button', { name: 'History for Weekly reporting' }).click();
   const history = page.getByRole('dialog', { name: 'Project history' });
   await history
@@ -399,6 +433,10 @@ test('completed projects retain their steps and searchable history across rollov
   await page.evaluate(() => {
     const before = snapshot();
     const n = find('report').n;
+    n.due = '2026-11-21';
+    n.links = [
+      { id: 'checklist', kind: 'url', url: 'https://example.com/checklist', label: 'Reporting checklist' },
+    ];
     n.children.forEach(step => (step.done = true));
     n.done = true;
     settle(before);
@@ -408,10 +446,24 @@ test('completed projects retain their steps and searchable history across rollov
   await expect(report).toHaveCount(0);
   await page.getByRole('button', { name: 'Review', exact: true }).click();
   await page.getByRole('button', { name: 'Completed projects', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'November 2026' })).toBeVisible();
+  await page.evaluate(() => {
+    S.completedProjects.push({
+      id: 'lastyear',
+      d: '2025-12-01',
+      project: fix({ id: 'lastyear', text: 'Last year’s report', done: true }),
+    });
+    renderAll();
+  });
+  const older = page.getByRole('region', { name: 'December 2025' });
+  await expect(older.getByRole('button', { name: /Last year’s report/ })).toContainText('1 Dec 2025');
+
   await page.getByRole('button', { name: /^Weekly reporting/ }).click();
   const detail = page.locator('#v-project-record');
   await expect(detail.getByRole('heading', { name: 'Weekly reporting' })).toBeVisible();
   await expect(detail.getByText('Export ledger')).toBeVisible();
+  await expect(detail.getByText('Deadline 21 Nov')).toBeVisible();
+  await expect(detail.getByRole('link', { name: /Reporting checklist/ })).toBeVisible();
   await expect(detail.getByText('Sent via the quarterly export portal')).toBeVisible();
   await page.getByRole('button', { name: '‹ Completed projects' }).click();
   await expect(page.getByRole('heading', { name: 'Completed projects' })).toBeVisible();
@@ -422,6 +474,116 @@ test('completed projects retain their steps and searchable history across rollov
     .getByRole('button', { name: /^Weekly reporting/ })
     .click();
   await expect(detail.getByText('Sent via the quarterly export portal')).toBeVisible();
+  await expect(detail.locator('[data-history-entry]')).toBeFocused();
   await page.reload({ keepPlace: true });
   await expect(detail.getByRole('heading', { name: 'Weekly reporting' })).toBeVisible();
+  await detail.getByRole('button', { name: 'Reopen project' }).click();
+  await expect(page.locator('#v-today h1')).toHaveText('Weekly reporting');
+  await app.go('projects');
+  await expect(
+    page.getByRole('region', { name: 'Finance' }).getByRole('article', { name: 'Weekly reporting' }),
+  ).toBeVisible();
+  expect((await app.state()).quests.find(q => q.id === 'report')).toMatchObject({
+    done: false,
+    due: '2026-11-21',
+  });
+});
+
+test('a reopened recurring project stays open and does not block the next occurrence', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  await page.evaluate(() => {
+    const template = { id: 'daily', text: 'Daily report', days: [0, 1, 2, 3, 4, 5, 6], children: [] };
+    S.templates.push(template);
+    S.quests.push(
+      fix({
+        id: template.id + '-' + today(),
+        text: template.text,
+        tpl: template.id,
+        children: [{ id: 'daily-step', text: 'Send figures' }],
+      }),
+    );
+    renderAll();
+  });
+  await page.getByRole('button', { name: 'Mark done: Send figures' }).click();
+  await page.clock.setSystemTime(new Date(2026, 10, 19, 11));
+  await page.reload();
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Completed projects', exact: true }).click();
+  await page.getByRole('button', { name: /^Daily report/ }).click();
+  await page.getByRole('button', { name: 'Reopen project' }).click();
+  await page.reload();
+  const reopened = () => page.evaluate(() => isDone(find('daily-2026-11-18').n));
+  expect(await reopened()).toBe(false);
+
+  await page.clock.fastForward(24 * 60 * 60 * 1000);
+  const reports = page.getByRole('article', { name: 'Daily report', exact: true });
+  await expect(reports).toHaveCount(2);
+  expect(await reopened()).toBe(false);
+  expect((await app.state()).quests.find(q => q.id === 'daily-2026-11-20')?.tpl).toBe('daily');
+});
+
+test('a history draft can be posted after its project is archived overnight', async ({ app, page }) => {
+  await start(app, page);
+  await page.getByText('Completed today', { exact: false }).click();
+  await page.getByRole('button', { name: 'History for Archive invoices' }).click();
+  const history = page.getByRole('dialog', { name: 'Project history' });
+  const draft = history.getByRole('textbox', { name: 'New project update' });
+  await draft.fill('Final invoice received');
+  await page.clock.fastForward(24 * 60 * 60 * 1000);
+  expect((await app.state()).completedProjects.some(entry => entry.id === 'archive')).toBe(true);
+  await history.getByRole('button', { name: 'Add update' }).click();
+  await expect(history.getByText('Final invoice received')).toBeVisible();
+  await expect(draft).toBeEmpty();
+  await history.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Completed projects', exact: true }).click();
+  await page.getByRole('button', { name: /^Archive invoices/ }).click();
+  const record = page.locator('#v-project-record');
+  await expect(record.getByText('Final invoice received')).toBeVisible();
+  await record.getByRole('button', { name: 'Add history update' }).click();
+  await draft.fill('Payment confirmed');
+  await history.getByRole('button', { name: 'Close' }).click();
+  await record.getByRole('button', { name: 'Add history update' }).click();
+  await expect(draft).toHaveValue('Payment confirmed');
+  await history.getByRole('button', { name: 'Add update' }).click();
+  await history.getByRole('button', { name: 'Close' }).click();
+  await expect(record.getByText('Payment confirmed')).toBeVisible();
+});
+
+test('an Upcoming meeting can be rescheduled from Projects', async ({ app, page }) => {
+  await start(app, page);
+  await app.setState(s => {
+    s.later[0].scheduled = { date: s.later[0].start, time: '14:30' };
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Month end', exact: true }).click();
+  const record = page.locator('#v-project-record');
+  await record.getByRole('button', { name: 'Reschedule' }).click();
+  const schedule = page.getByRole('dialog', { name: 'Schedule' });
+  await expect(schedule.getByLabel('Date', { exact: true })).toHaveValue('2026-11-24');
+  await expect(schedule.getByLabel(/Time/)).toHaveValue('14:30');
+  await schedule.getByLabel('Date', { exact: true }).fill('2026-11-25');
+  await schedule.getByLabel(/Time/).fill('15:45');
+  await schedule.getByRole('button', { name: 'Save' }).click();
+  await expect(record).toContainText('Starts 25 Nov · 15:45');
+  await page.reload({ keepPlace: true });
+  await expect(record).toContainText('Starts 25 Nov · 15:45');
+});
+
+test('the Active Task surfaces the next actionable step and nearest follow-up', async ({ app, page }) => {
+  await start(app, page);
+  await page.evaluate(() => {
+    const q = find('report').n;
+    q.children
+      .slice(0, 3)
+      .forEach((step, i) => (step.wait = { who: 'Colleague ' + i, due: shift(today(), 4 - i) }));
+    renderAll();
+  });
+  await page.getByRole('button', { name: 'Make Weekly reporting active' }).click();
+  const active = page.getByRole('region', { name: 'Active Task' });
+  await expect(active.locator('.project-step').first()).toContainText('Next · Send report');
+  await expect(active.locator('.project-step').nth(1)).toContainText('Waiting on Colleague 2');
 });

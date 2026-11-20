@@ -1263,6 +1263,7 @@ test('a launch on one device, reports from a script: both devices show the same 
   const srv = server();
   const a = await device(browser, srv);
   await a.page.evaluate(() => {
+    S.reviewed = today(); // Keep the weekly Review reminder out of the failure count.
     S.flows = [{ id: 'f1', name: 'Weekly report', url: 'ms-powerautomate:/console/flow/run?x=1', last: 0 }];
     save();
     renderAll();

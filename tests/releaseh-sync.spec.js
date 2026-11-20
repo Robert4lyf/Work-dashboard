@@ -120,6 +120,8 @@ test('completed project snapshots and updates sync to a new device', async ({ br
       id: 'finished',
       text: 'Weekly submission',
       done: true,
+      due: shift(today(), 2),
+      links: [{ id: 'guide', kind: 'url', label: 'Payroll guide', url: 'https://example.com/guide' }],
       children: [{ id: 'send', text: 'Send figures', done: true }],
     });
     S.quests.push(q);
@@ -130,14 +132,17 @@ test('completed project snapshots and updates sync to a new device', async ({ br
     save();
   });
   await a.sync();
+  expect(srv.rows.get('pcompleted:finished').data.project.links).toBeUndefined();
+  expect(srv.rows.get('pcompleted_full:finished').data.project.links).toHaveLength(1);
   const b = await device(browser, srv);
   await settle(a, b);
-  await b.page.getByRole('button', { name: 'Review', exact: true }).click();
+  await b.page.locator('nav [data-v=review]').click();
   await b.page.getByRole('button', { name: 'Completed projects', exact: true }).click();
   await b.page.getByRole('button', { name: /^Weekly submission/ }).click();
   const detail = b.page.locator('#v-project-record');
   await expect(detail.getByText('Send figures')).toBeVisible();
   await expect(detail.getByText('Received by Payroll')).toBeVisible();
+  await expect(detail.getByRole('link', { name: /Payroll guide/ })).toBeVisible();
   expect(b.errors).toEqual([]);
 });
 

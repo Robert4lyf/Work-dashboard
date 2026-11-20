@@ -302,6 +302,8 @@ function norm(s) {
     if (!project || (entry.fromLog === true && completed.has(entry.id))) continue;
     const record = { id: entry.id, d: entry.d, project };
     if (entry.fromLog === true) record.fromLog = true;
+    if (entry.completeSnapshot === true) record.completeSnapshot = true;
+    if (okRef(entry.section)) record.section = entry.section;
     completed.set(entry.id, record);
   }
   S.completedProjects = [...completed.values()];
@@ -600,7 +602,7 @@ function rollover() {
       // (an earlier day's scheduled copy, kept to be marked done, isn't today's)
       const kept = q => q.scheduled && q.scheduled.date < d && q.id !== t.id + '-' + d;
       const has = // (a copy moved to Upcoming or the Inbox still counts, or it would come back doubled)
-        S.quests.some(q => (q.tpl === t.id || q.text === t.text) && !kept(q)) ||
+        S.quests.some(q => (q.tpl === t.id || (!q.reopened && q.text === t.text)) && !kept(q)) ||
         S.later.some(q => q.tpl === t.id) ||
         S.inbox.some(i => i.node && i.node.tpl === t.id);
       if (hit && !gone && !has) {
