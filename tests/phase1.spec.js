@@ -30,7 +30,8 @@ test('an empty day: one quiet attention line, the Command Centre one tap away, n
     'All clear: nothing needs you and nothing is running.',
   );
   // Empty operational sections aren't drawn; Quick launch and the checklists are.
-  await expect(page.locator('#v-ops h2')).toHaveText(['Command Centre', 'Quick launch', 'Checklists']);
+  await expect(page.getByRole('heading', { name: 'Command Centre', level: 1 })).toBeVisible();
+  await expect(page.locator('#v-ops h2')).toHaveText(['Quick launch', 'Checklists']);
   await page.evaluate(() => history.back());
   await expect(page.locator('#v-today')).toBeVisible();
 });

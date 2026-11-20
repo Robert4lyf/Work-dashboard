@@ -1037,7 +1037,7 @@ function renderAccount() {
   if (pending)
     h += `<div class="banner box"><p>Replace everything with this backup? It has ${plural(pending.quests.length, 'task')} and ${plural((pending.inbox || []).length, 'inbox item')}. Your current data${session ? ' on every synced device' : ''} will be replaced (notification keys and device names are kept).</p><div class="acts"><button class="btn pink" id="doRestore">Replace</button><button class="btn" id="noRestore">Cancel</button></div></div>`;
   if (!setSub) {
-    h += `<h2 class="kbtitle">Settings</h2><div class="list box setlist">${SET_GROUPS.map(
+    h += `<div class="list box setlist">${SET_GROUPS.map(
       ([k, label]) =>
         `<div class="row"><button class="open" data-setgo="${k}"><span>${label}</span><small>${esc(setGroupLine(k))}</small></button><span class="chev" aria-hidden="true">${chevron}</span></div>`,
     ).join('')}</div>`;

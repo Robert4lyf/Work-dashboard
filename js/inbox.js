@@ -37,8 +37,10 @@ function clearInbox(id) {
 }
 function renderInbox() {
   if (triage) return setHTML($('#v-inbox'), renderTriage());
-  let h = `<div class="sechead"><h2>Inbox</h2>${S.inbox.length ? '<button class="linkbtn" data-triagestart="1">Sort the Inbox</button>' : ''}</div>`;
-  h += `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New Inbox item" autocomplete="off"><button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button><button class="btn green">Add</button></form>`;
+  let h = `<form class="addrow" id="iform"><input id="iin" maxlength="600" placeholder="Capture a thought" aria-label="New Inbox item" autocomplete="off"><button type="button" class="btn mic${listening ? ' on' : ''}" id="mic" aria-label="${listening ? 'Stop listening' : 'Speak to capture'}" aria-pressed="${listening}">${micIcon}</button><button class="btn green">Add</button></form>`;
+  if (S.inbox.length)
+    h +=
+      '<div class="inbox-actions"><button class="linkbtn" data-triagestart="1">Sort the Inbox</button></div>';
   if (!S.inbox.length)
     h +=
       '<div class="empty">Nothing captured. Type a thought above (or say it with the mic); move it to Projects when you’re ready.</div>';

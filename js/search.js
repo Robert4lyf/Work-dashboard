@@ -5,7 +5,7 @@ const SEARCH_MAX = 20; // per group
 function renderSearch() {
   setHTML(
     $('#v-search'),
-    `<h2>Search</h2><input class="fld" type="search" id="sq" placeholder="Projects, Inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
+    `<input class="fld" type="search" id="sq" placeholder="Projects, Inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
   );
 }
 function openSearch() {

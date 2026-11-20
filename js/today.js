@@ -366,12 +366,12 @@ function drawToday() {
     if (projectUtility === 'upcoming') {
       setHTML(
         $('#v-today'),
-        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div><h1>Upcoming</h1>${renderUpcoming()}`,
+        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div>${renderUpcoming()}`,
       );
     } else if (projectUtility === 'alarms') {
       setHTML(
         $('#v-today'),
-        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div><h1>Alarms</h1>${renderAlarms()}`,
+        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div>${renderAlarms()}`,
       );
     } else if (view === 'today') go('projects');
     return;
