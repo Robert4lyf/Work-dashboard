@@ -887,10 +887,6 @@ nav button[aria-current='page'] {
   min-height: 5.5em;
   resize: vertical;
 }
-.sumdraft .sumtext {
-  margin: 4px 0 8px;
-  white-space: pre-line;
-}
 /* a quest's steps on Today, a block each */
 .stepbar {
   display: flex;
@@ -2151,17 +2147,6 @@ details.more > details {
 .item .subs .x {
   font-size: var(--fs-h);
   padding: 2px 8px;
-}
-/* Suggest steps (AI) on a quest's page */
-.suggestbtn {
-  margin: 0 0 14px;
-}
-.suggest {
-  padding: 10px 14px;
-  margin: 0 0 18px;
-}
-.suggest .optbox {
-  margin: 6px 0;
 }
 /* Release A: quick actions (a row's ⋯ and its sheet), the quest workspace, the top 3,
    a saved place, resources, and inbox triage */
@@ -4571,10 +4556,6 @@ header.project-header h1 {
   min-height: 44px;
   overflow-wrap: anywhere;
 }
-.project-step small {
-  display: block;
-  color: var(--muted);
-}
 .project-step-name {
   flex: 1;
   min-width: 0;
@@ -4636,11 +4617,6 @@ header.project-header h1 {
   flex: none;
   margin: 0 0 4px;
 }
-.project-history {
-  margin-top: 8px;
-  padding: 8px 0 4px;
-  border-top: 1px solid var(--edge);
-}
 .project-update {
   display: grid;
   gap: 6px;
@@ -4681,5 +4657,60 @@ header.project-header h1 {
 @media (min-width: 640px) and (max-width: 999px) {
   .wrap:has(> #v-projects:not([hidden])) {
     max-width: 820px;
+  }
+}
+
+.project-board-actions {
+  gap: 12px;
+}
+.project-wait {
+  display: block;
+  min-height: 24px;
+  font-size: var(--fs-xs);
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.project-record {
+  padding: 16px;
+}
+.project-record h1 {
+  margin-top: 4px;
+}
+.project-record-copy {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.project-record-date {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.project-record-date input {
+  width: auto;
+}
+.project-record-steps {
+  padding-inline-start: 20px;
+}
+.project-record-steps li {
+  margin-block: 6px;
+  overflow-wrap: anywhere;
+}
+.completed-projects .soonrow {
+  width: 100%;
+  gap: 12px;
+}
+.completed-projects small {
+  flex: none;
+}
+.project-detail-history {
+  margin-block: 8px;
+}
+@media (max-width: 640px) {
+  .project-card {
+    block-size: auto;
+  }
+  .project-preview {
+    overflow: visible;
   }
 }

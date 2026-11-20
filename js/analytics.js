@@ -412,7 +412,7 @@ function findings(x) {
       n: late.length,
       at: Date.now(),
       title: `${late.length} tasks are overdue`,
-      why: `The oldest was due ${dayLabel(late.map(n => n.due).sort()[0])}. Overdue work is counted from the tasks on Today, not from history.`,
+      why: `The oldest was due ${dayLabel(late.map(n => n.due).sort()[0])}. Overdue work is counted from the open projects, not from history.`,
       act: ['See them in the Command Centre', 'data-goto="ops"'],
     });
   // 5. Waiting that needs chasing again and again: three or more follow-ups on one item in the period, still open.

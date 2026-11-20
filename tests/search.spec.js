@@ -33,13 +33,13 @@ test('search finds tasks, steps, inbox, notes, knowledge, flows and done items, 
   await page.fill('#sq', 'budget');
   const groups = page.locator('#sres .sgroup > h2');
   await expect(groups).toHaveText([
-    'Today 2',
+    'Projects 2',
     'Upcoming 1',
+    'Completed projects 1',
     'Inbox 1',
     'Notes 1',
     'Reference 1',
     'Desktop automations 1',
-    'Done 1',
   ]);
   await expect(page.locator('#sres mark').first()).toHaveText('budget');
   // A step shows where it sits; the knowledge match shows the text around it.

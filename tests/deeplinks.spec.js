@@ -85,7 +85,7 @@ test('every destination opens from a cold launch, and the address is cleaned up'
   await cold(page, '#/waiting/s2');
   await expect(page.locator('#v-waiting .row.marked')).toContainText('Sign-off');
   await cold(page, '#/q/L1');
-  await expect(page.locator('#upd')).toHaveAttribute('open', '');
+  await expect(page.locator('#v-project-record h1')).toBeVisible();
   await page.evaluate(() => {
     S.inbox[0].node = fix({ id: 'n1', text: 'Idea', children: [fix({ id: 'k1', text: 'Sub' })] });
     save();

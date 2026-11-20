@@ -241,7 +241,7 @@ function wantedNotices(now = Date.now()) {
       out.push({
         key: 'start:' + n.id + ':' + n.start,
         at: at9(n.start),
-        title: 'Back on Today',
+        title: 'Back in Projects',
         body: n.text,
       });
   });

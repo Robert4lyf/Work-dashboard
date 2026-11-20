@@ -5,7 +5,7 @@ const SEARCH_MAX = 20; // per group
 function renderSearch() {
   setHTML(
     $('#v-search'),
-    `<h2>Search</h2><input class="fld" type="search" id="sq" placeholder="Tasks, Inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
+    `<h2>Search</h2><input class="fld" type="search" id="sq" placeholder="Projects, Inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
   );
 }
 function openSearch() {
@@ -83,12 +83,43 @@ function searchResults() {
       w(n.children, [...trail, n.text]);
     });
   })(S.quests, []);
-  group('Today', qs);
+  group('Projects', qs);
   group(
     'Upcoming',
     S.later
       .filter(n => has(n.text) || has(n.notes))
-      .map(n => row(`data-goupd="${n.id}"`, n.text, day(n.start))),
+      .map(n => row(`data-upcoming-project="${n.id}"`, n.text, day(n.start))),
+  );
+  const archive = completedProjectEntries();
+  const matchesProject = n =>
+    has(n.text) || has(n.summary) || has(n.notes) || n.children.some(matchesProject);
+  group(
+    'Completed projects',
+    archive
+      .filter(entry => matchesProject(entry.project))
+      .map(entry =>
+        row(`data-completed-project="${entry.id}"`, entry.project.text, 'Completed ' + day(entry.d)),
+      ),
+  );
+  const liveProjects = new Map(S.quests.map(n => [n.id, n]));
+  const upcomingProjects = new Map(S.later.map(n => [n.id, n]));
+  const completedProjects = new Map(archive.map(entry => [entry.id, entry.project]));
+  group(
+    'Project history',
+    S.projectUpdates
+      .filter(entry => has(entry.text))
+      .sort((a, b) => b.t - a.t)
+      .flatMap(entry => {
+        const id = entry.q;
+        const project = completedProjects.get(id) || liveProjects.get(id) || upcomingProjects.get(id);
+        if (!project) return [];
+        const action = completedProjects.has(id)
+          ? 'data-completed-project'
+          : liveProjects.has(id)
+            ? 'data-project-history'
+            : 'data-upcoming-project';
+        return row(`${action}="${id}"`, project.text, snippet(entry.text, q));
+      }),
   );
   group(
     'Inbox',
@@ -162,7 +193,10 @@ function searchResults() {
   group(
     'Done',
     S.log
-      .filter(x => has(x.text) || (Array.isArray(x.trail) && x.trail.some(has)))
+      .filter(x => {
+        const trail = Array.isArray(x.trail) ? x.trail : [];
+        return (trail.length || !completedProjects.has(x.id)) && (has(x.text) || trail.some(has));
+      })
       .slice()
       .reverse()
       .map(

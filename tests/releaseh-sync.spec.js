@@ -100,6 +100,7 @@ test('project history keeps both offline updates and the new card order syncs', 
     const updates = d.page.locator('.project-updates:visible');
     await expect(updates).toContainText('Draft sent');
     await expect(updates).toContainText('Feedback received');
+    await d.page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
     expect(d.errors).toEqual([]);
   }
   await a.page.getByRole('button', { name: 'Reorder Weekly report' }).click();
@@ -109,6 +110,35 @@ test('project history keeps both offline updates and the new card order syncs', 
     'data-qid',
     'review',
   );
+});
+
+test('completed project snapshots and updates sync to a new device', async ({ browser }) => {
+  const srv = server();
+  const a = await device(browser, srv);
+  await a.page.evaluate(() => {
+    const q = fix({
+      id: 'finished',
+      text: 'Weekly submission',
+      done: true,
+      children: [{ id: 'send', text: 'Send figures', done: true }],
+    });
+    S.quests.push(q);
+    S.projectUpdates.push({ id: 'history1', q: q.id, t: Date.now(), text: 'Received by Payroll' });
+    S.day = shift(today(), -1);
+    S.log.push({ id: q.id, text: q.text, d: S.day, trail: [] });
+    rollover();
+    save();
+  });
+  await a.sync();
+  const b = await device(browser, srv);
+  await settle(a, b);
+  await b.page.getByRole('button', { name: 'Review', exact: true }).click();
+  await b.page.getByRole('button', { name: 'Completed projects', exact: true }).click();
+  await b.page.getByRole('button', { name: /^Weekly submission/ }).click();
+  const detail = b.page.locator('#v-project-record');
+  await expect(detail.getByText('Send figures')).toBeVisible();
+  await expect(detail.getByText('Received by Payroll')).toBeVisible();
+  expect(b.errors).toEqual([]);
 });
 
 const URL1 = 'ms-powerautomate:/console/flow/run?environmentid=e1&workflowid=w1&source=Other';

@@ -25,6 +25,7 @@ test('Projects and Today have tabs; History sits under Review; Focus opens from 
     'Forecast',
     'Insights',
     'History',
+    'Completed projects',
   ]);
   await page.click('[data-rsub="log"]');
   await expect(page.locator('#v-log')).toBeVisible();

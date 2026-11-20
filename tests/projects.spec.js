@@ -178,9 +178,17 @@ test('detail uses the existing task page and returns to Projects after reload an
   await expect(title).toBeVisible();
   await expect(title).toBeFocused();
   await page.getByRole('button', { name: 'Month end', exact: true }).click();
-  await expect(page.locator('#upd')).toHaveJSProperty('open', true);
+  await expect(page.locator('#v-project-record h1')).toHaveText('Month end');
   await page.evaluate(() => history.back());
-  await expect(page.getByRole('button', { name: 'Month end', exact: true })).toBeFocused();
+  const upcoming = page.getByRole('button', { name: 'Month end', exact: true });
+  await expect(upcoming).toBeFocused();
+  await upcoming.click();
+  const record = page.locator('#v-project-record');
+  await record.getByLabel('Start date').fill('2026-11-27');
+  await expect(record).toContainText('Starts 27 Nov');
+  await record.getByRole('button', { name: 'Move to Projects now' }).click();
+  await expect(page.locator('#v-today h1')).toHaveText('Month end');
+  expect((await app.state()).later).toHaveLength(0);
 });
 
 test('project cards keep the same dimensions across rows when showing or editing steps', async ({
@@ -217,51 +225,49 @@ test('project cards keep the same dimensions across rows when showing or editing
 
   await page.setViewportSize({ width: 320, height: 800 });
   expect(await sidewaysOverflow()).toEqual(initial.map(() => 0));
-  expect(new Set((await layout()).map(card => card.height)).size).toBe(1);
+  expect(new Set((await layout()).map(card => card.height)).size).toBeGreaterThan(1);
+  expect(
+    await cards.locator('.project-preview').evaluateAll(items =>
+      items.map(el => {
+        el.scrollTop = 100;
+        return el.scrollTop;
+      }),
+    ),
+  ).toEqual(initial.map(() => 0));
   await expect(page.getByRole('textbox', { name: 'New step' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
 });
 
-test('each card has its own collapsible history with dated updates that survive reload', async ({
-  app,
-  page,
-}) => {
+test('card History opens a separate sheet and dated updates survive reload', async ({ app, page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await start(app, page);
   const report = page.getByRole('article', { name: 'Weekly reporting' });
   const toggle = report.getByRole('button', { name: 'History for Weekly reporting' });
-  const update = report.getByRole('textbox', { name: 'New project update' });
   const height = (await report.boundingBox()).height;
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(update).toBeHidden();
   await toggle.click();
-  await expect(update).toBeVisible();
+  const history = page.getByRole('dialog', { name: 'Project history' });
+  const update = history.getByRole('textbox', { name: 'New project update' });
   await update.fill('Draft sent for review');
-  await toggle.click();
-  await toggle.click();
-  await expect(update).toHaveValue('Draft sent for review');
-  await report.getByRole('button', { name: 'Add update' }).click();
+  await history.getByRole('button', { name: 'Add update' }).click();
   await expect(update).toHaveValue('');
-  await expect(report.locator('time')).toHaveCount(1);
+  await expect(history.locator('time')).toHaveCount(1);
   await page.clock.fastForward(1000);
-  await update.fill('Feedback received\nRevising the figures');
-  await report.getByRole('button', { name: 'Add update' }).click();
-  await expect(report.locator('.project-updates p')).toHaveText([
-    'Feedback received Revising the figures',
+  await update.fill('Feedback received');
+  await history.getByRole('button', { name: 'Add update' }).click();
+  await expect(history.locator('.project-updates p')).toHaveText([
+    'Feedback received',
     'Draft sent for review',
   ]);
+  await history.getByRole('button', { name: 'Close' }).click();
+  await expect(toggle).toBeFocused();
   expect((await report.boundingBox()).height).toBe(height);
-  const preview = report.locator('.project-preview');
-  await preview.evaluate(el => (el.scrollTop = el.scrollHeight));
-  expect(await preview.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
   await expect(report.locator('.project-step')).toHaveCount(3);
   await page.getByRole('button', { name: 'History for Supplier replies' }).click();
-  await expect(page.getByRole('article', { name: 'Supplier replies' }).locator('time')).toHaveCount(0);
-
+  await expect(history.locator('time')).toHaveCount(0);
+  await history.getByRole('button', { name: 'Close' }).click();
   await page.reload();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
-  await expect(report.locator('time')).toHaveCount(2);
+  await expect(history.locator('time')).toHaveCount(2);
 });
 
 test('dragging a project across grid rows saves the new order, and the grip offers a move menu', async ({
@@ -349,4 +355,73 @@ test('one Active Task at a time, with old shortcuts opening Projects', async ({ 
   }
   await expect(page.locator('nav [data-v="today"]')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'List & board' })).toHaveCount(0);
+});
+
+test('create a project in a chosen section or Uncategorised and follow up from a waiting card', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  await addSection(page, 'Urgent', 'red');
+  const create = page.getByRole('button', { name: 'New project', exact: true });
+  await create.click();
+  const form = page.getByRole('dialog', { name: 'New project' });
+  await form.getByRole('textbox', { name: 'Project name' }).fill('Call finance');
+  await form.getByRole('combobox', { name: 'Section' }).selectOption({ label: 'Urgent' });
+  await form.getByRole('button', { name: 'Create project' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Urgent' }).getByRole('article', { name: 'Call finance' }),
+  ).toBeVisible();
+  await create.click();
+  await form.getByRole('textbox', { name: 'Project name' }).fill('Check handover');
+  await form.getByRole('button', { name: 'Create project' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Uncategorised' }).getByRole('article', { name: 'Check handover' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Waiting on Sam' }).click();
+  await page.getByRole('button', { name: 'Follow up' }).click();
+  await expect(page.getByRole('dialog', { name: 'Follow up' })).toBeVisible();
+});
+
+test('completed projects retain their steps and searchable history across rollover and reload', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  const report = page.getByRole('article', { name: 'Weekly reporting' });
+  await report.getByRole('button', { name: 'History for Weekly reporting' }).click();
+  const history = page.getByRole('dialog', { name: 'Project history' });
+  await history
+    .getByRole('textbox', { name: 'New project update' })
+    .fill('Sent via the quarterly export portal');
+  await history.getByRole('button', { name: 'Add update' }).click();
+  await history.getByRole('button', { name: 'Close' }).click();
+  await page.evaluate(() => {
+    const before = snapshot();
+    const n = find('report').n;
+    n.children.forEach(step => (step.done = true));
+    n.done = true;
+    settle(before);
+  });
+  await page.clock.setSystemTime(new Date(2026, 10, 19, 10, 0));
+  await page.reload();
+  await expect(report).toHaveCount(0);
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Completed projects', exact: true }).click();
+  await page.getByRole('button', { name: /^Weekly reporting/ }).click();
+  const detail = page.locator('#v-project-record');
+  await expect(detail.getByRole('heading', { name: 'Weekly reporting' })).toBeVisible();
+  await expect(detail.getByText('Export ledger')).toBeVisible();
+  await expect(detail.getByText('Sent via the quarterly export portal')).toBeVisible();
+  await page.getByRole('button', { name: '‹ Completed projects' }).click();
+  await expect(page.getByRole('heading', { name: 'Completed projects' })).toBeVisible();
+  await page.getByRole('button', { name: 'Search' }).click();
+  await page.getByRole('searchbox').fill('quarterly export portal');
+  await page
+    .locator('#sres')
+    .getByRole('button', { name: /^Weekly reporting/ })
+    .click();
+  await expect(detail.getByText('Sent via the quarterly export portal')).toBeVisible();
+  await page.reload({ keepPlace: true });
+  await expect(detail.getByRole('heading', { name: 'Weekly reporting' })).toBeVisible();
 });

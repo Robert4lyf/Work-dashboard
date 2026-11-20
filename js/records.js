@@ -10,6 +10,8 @@ const LISTS = {
   template: ['templates', x => x.id],
   project: ['projects', x => x.id],
   pupdate: ['projectUpdates', x => x.id],
+  // Legacy log entries have their own key so they cannot replace a full snapshot.
+  pcompleted: ['completedProjects', x => x.id + (x.fromLog ? '|log' : '')],
   psection: ['projectSections', x => x.id],
   pplacement: ['projectPlacements', x => x.id],
   todaypick: ['todayPicks', x => x.day + '|' + x.id],
@@ -117,6 +119,7 @@ function fromRecords(m, day) {
     templates: ordered(by.template, order.templates),
     projects: ordered(by.project, order.projects),
     projectUpdates: by.pupdate || [],
+    completedProjects: by.pcompleted || [],
     projectSections: ordered(
       (by.psection || []).filter(section => okRef(section?.id)).sort((a, b) => byName(a.id, b.id)),
       Array.isArray(sectionOrder) ? sectionOrder : [],

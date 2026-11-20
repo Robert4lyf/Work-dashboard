@@ -94,6 +94,7 @@ function locate(id) {
   if (l) return { where: 'later', r: l };
   const it = S.inbox.find(x => x.id === id) || S.inbox.find(x => x.node && find(id, [x.node]));
   if (it) return { where: 'inbox', it };
+  if (completedProjectEntries().some(entry => entry.id === id)) return { where: 'completed' };
   return null;
 }
 function followRoute(r, first) {
@@ -136,7 +137,9 @@ function followRoute(r, first) {
         openPath([...at.r.parents.map(p => p.id), at.r.n.id]);
         go('today');
       } else if (at.where === 'later') {
-        showUpcoming(r.id);
+        openProjectRecord(at.r.parents[0]?.id || at.r.n.id, 'upcoming');
+      } else if (at.where === 'completed') {
+        openProjectRecord(r.id, 'completed');
       } else {
         triage = null;
         expanded.add(at.it.id);
