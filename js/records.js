@@ -12,6 +12,7 @@ const LISTS = {
   pupdate: ['projectUpdates', x => x.id],
   // Legacy log entries have their own key so they cannot replace a full snapshot.
   pcompleted: ['completedProjects', x => x.id + (x.fromLog ? '|log' : '')],
+  pcompleted_full: ['completedProjects', x => x.id],
   psection: ['projectSections', x => x.id],
   pplacement: ['projectPlacements', x => x.id],
   todaypick: ['todayPicks', x => x.day + '|' + x.id],
@@ -36,8 +37,30 @@ const LISTS = {
 function toRecords(s) {
   const m = new Map();
   if (s.activeProject) m.set('meta:activeproject', { id: s.activeProject });
-  for (const [kind, [prop, key]] of Object.entries(LISTS))
-    (s[prop] || []).forEach(x => m.set(kind + ':' + key(x), x));
+  const archiveSummary = n => ({
+    id: n.id,
+    text: n.text,
+    notes: n.notes || '',
+    summary: n.summary || '',
+    done: !!n.done,
+    children: n.children.map(archiveSummary),
+  });
+  for (const [kind, [prop, key]] of Object.entries(LISTS)) {
+    for (const item of s[prop] || []) {
+      if (kind === 'pcompleted_full' && !item.completeSnapshot) continue;
+      // Older devices keep a readable summary. Their normalisation cannot strip the full snapshot.
+      const value =
+        kind === 'pcompleted'
+          ? {
+              id: item.id,
+              d: item.d,
+              project: archiveSummary(item.project),
+              ...(item.fromLog ? { fromLog: true } : {}),
+            }
+          : item;
+      m.set(kind + ':' + key(item), value);
+    }
+  }
   // Only once there are notes: a device that never had any mustn't send an empty copy that
   // could win over real notes from another device. (Clearing them deletes the record.)
   if (s.notes) m.set('meta:notes', { text: s.notes });
@@ -119,7 +142,7 @@ function fromRecords(m, day) {
     templates: ordered(by.template, order.templates),
     projects: ordered(by.project, order.projects),
     projectUpdates: by.pupdate || [],
-    completedProjects: by.pcompleted || [],
+    completedProjects: [...(by.pcompleted || []), ...(by.pcompleted_full || [])],
     projectSections: ordered(
       (by.psection || []).filter(section => okRef(section?.id)).sort((a, b) => byName(a.id, b.id)),
       Array.isArray(sectionOrder) ? sectionOrder : [],

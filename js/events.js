@@ -405,6 +405,8 @@ document.addEventListener('submit', e => {
   }
 });
 
+const fieldTask = id =>
+  find(id) || (view === 'project-record' && projectRecord?.kind === 'upcoming' ? find(id, S.later) : null);
 document.addEventListener('change', e => {
   if (!window.appReady) return;
   const el = e.target;
@@ -519,7 +521,7 @@ document.addEventListener('change', e => {
   }
   const fld = el.dataset.field;
   if (!fld) return;
-  const r = find(el.dataset.id);
+  const r = fieldTask(el.dataset.id);
   if (!r) return;
   if (fld === 'text') {
     const v = el.value.trim();
@@ -568,7 +570,7 @@ document.addEventListener('input', e => {
   if (el.id === 'resq') return resourceSearch(el.value, el.dataset.id);
   if (el.closest('#ruleform')) return typedRuleForm();
   if (el.dataset.field === 'summary') {
-    const r = find(el.dataset.id);
+    const r = fieldTask(el.dataset.id);
     if (!r) return;
     const v = cleanText(el.value).slice(0, SUMMARY_MAX);
     if (v.trim()) r.n.summary = v;
@@ -577,7 +579,7 @@ document.addEventListener('input', e => {
     return;
   }
   if (el.dataset.field !== 'notes') return;
-  const r = find(el.dataset.id);
+  const r = fieldTask(el.dataset.id);
   if (r) {
     r.n.notes = el.value;
     save();

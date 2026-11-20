@@ -118,7 +118,11 @@ function searchResults() {
           : liveProjects.has(id)
             ? 'data-project-history'
             : 'data-upcoming-project';
-        return row(`${action}="${id}"`, project.text, snippet(entry.text, q));
+        return row(
+          `${action}="${id}" data-history-target="${entry.id}"`,
+          project.text,
+          snippet(entry.text, q),
+        );
       }),
   );
   group(

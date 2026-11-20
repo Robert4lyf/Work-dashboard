@@ -102,9 +102,10 @@ test('the forecast is the same every time: due first, split across days, overrun
   app,
   page,
 }) => {
+  await page.clock.install({ time: new Date(2026, 10, 19, 10, 0) });
   await app.open();
   await page.evaluate(seed);
-  const wd = new Date().getDay();
+  const wd = await page.evaluate(() => new Date().getDay());
   const f = await alloc(page, 7);
   // Today: capacity for today; Big report (due tomorrow, 7h) takes today's room then tomorrow's;
   // what doesn't fit by tomorrow is tomorrow's overrun.
@@ -170,7 +171,7 @@ test('the forecast is the same every time: due first, split across days, overrun
   await page.click('#sheetok');
   const s = await app.state();
   expect(s.quests.map(q => q.id)).toEqual(['a', 'c', 'd']);
-  expect(s.later[0]).toMatchObject({ id: 'b', start: shift(today(), 3) });
+  expect(s.later[0]).toMatchObject({ id: 'b', start: await page.evaluate(() => shift(today(), 3)) });
   await expect(page.locator('.rday.over')).toHaveCount(0);
   await page.click('.rday >> nth=1');
   await expect(page.locator('.fday')).toContainText('Gamma');

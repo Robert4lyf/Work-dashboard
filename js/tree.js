@@ -367,7 +367,7 @@ function sheetTyped() {
 }
 // Back (or Escape) on a sheet.
 function sheetBack() {
-  if (!sheetTyped() || $('#sheetwarn')) return closeSheet();
+  if ($('#sheet [data-project-update]') || !sheetTyped() || $('#sheetwarn')) return closeSheet();
   askDiscard();
 }
 function askDiscard() {
@@ -401,7 +401,7 @@ document.addEventListener(
     }
     if (t && t.closest('.sheetback') && sheetTyped()) {
       e.stopImmediatePropagation();
-      return askDiscard();
+      return sheetBack();
     }
     if (e.target.closest && e.target.closest('[data-sheetclose]')) {
       e.stopImmediatePropagation();
@@ -504,7 +504,11 @@ function focusSel(a) {
    of what's shown, and a view is still drawn from scratch whenever it isn't Today. */
 // (by view, what page of it is drawn: a different page is drawn from scratch, so nothing of one
 // task's page, a field half typed in say, is carried over onto another's)
-const PATCHED = { 'v-today': () => 'p:' + path.join('/'), 'v-projects': () => 'projects' };
+const PATCHED = {
+  'v-today': () => 'p:' + path.join('/'),
+  'v-projects': () => 'projects',
+  'v-project-record': () => projectRecord.kind + ':' + projectRecord.id,
+};
 function withHash(html) {
   let h = 0x811c9dc5;
   for (let i = 0; i < html.length; i++) h = Math.imul(h ^ html.charCodeAt(i), 16777619);

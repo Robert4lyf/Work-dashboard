@@ -302,6 +302,8 @@ function norm(s) {
     if (!project || (entry.fromLog === true && completed.has(entry.id))) continue;
     const record = { id: entry.id, d: entry.d, project };
     if (entry.fromLog === true) record.fromLog = true;
+    if (entry.completeSnapshot === true) record.completeSnapshot = true;
+    if (okRef(entry.section)) record.section = entry.section;
     completed.set(entry.id, record);
   }
   S.completedProjects = [...completed.values()];
