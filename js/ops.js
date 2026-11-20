@@ -364,7 +364,7 @@ function renderOps() {
     prog = opsProgress(),
     coming = opsComing(),
     out = opsOutcomes();
-  let h = `<button class="linkbtn" data-goto="projects">&lsaquo; Projects</button><h2 class="opshead">Command Centre</h2><p class="hint opsync">${opsSyncLine()}</p>`;
+  let h = `<button class="linkbtn" data-goto="projects">&lsaquo; Projects</button><p class="hint opsync">${opsSyncLine()}</p>`;
   // Operations first (what needs you, then what's under way); with neither, one quiet line.
   if (att.length)
     h += `<section class="opsec"><div class="sechead"><h2>Needs attention <small>${att.length}</small></h2></div><div class="attlist box">${att.map(attentionRow).join('')}</div></section>`;

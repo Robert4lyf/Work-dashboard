@@ -310,11 +310,8 @@ test.describe('Checkpoint 4: accessibility', () => {
         ).toBe(true);
       expect(r.noname, k).toEqual([]);
     }
-    // The headings added for screen readers aren't drawn.
     await page.evaluate(() => go('knowledge'));
-    expect(await page.$eval('#v-knowledge h2.sr', e => e.getBoundingClientRect().height)).toBeLessThanOrEqual(
-      1,
-    );
+    await expect(page.getByRole('heading', { name: 'Knowledge', exact: true, level: 1 })).toBeVisible();
   });
 });
 

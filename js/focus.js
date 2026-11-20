@@ -126,8 +126,7 @@ function setZen(on) {
 }
 
 function renderFocus() {
-  let h = '<h2>Focus</h2>';
-  if (!zen) h += afterPrompts();
+  let h = zen ? '' : afterPrompts();
   if (S.timer) {
     const t = S.timer,
       q = t.q && find(t.q),

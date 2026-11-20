@@ -38,9 +38,28 @@ function recommend() {
   const nx = nextStep();
   return nx ? { ...nx, why: 'list' } : null;
 }
+const pageTitles = {
+  projects: 'Projects',
+  inbox: 'Inbox',
+  knowledge: 'Knowledge',
+  review: 'Review',
+  account: 'Settings',
+  search: 'Search',
+  focus: 'Focus',
+  waiting: 'Waiting',
+  notes: 'Scratchpad',
+  ops: 'Command Centre',
+};
+const projectUtilityTitles = { upcoming: 'Upcoming', alarms: 'Alarms' };
 function renderHeader() {
-  document.querySelector('header').classList.toggle('project-header', view === 'projects');
-  $('#project-title').hidden = view !== 'projects';
+  const title =
+    (view === 'today' && !workListMode && !path.length
+      ? projectUtilityTitles[projectUtility]
+      : pageTitles[view]) || '';
+  const heading = $('#page-title');
+  heading.hidden = !title;
+  if (heading.textContent !== title) heading.textContent = title;
+  heading.parentElement.classList.toggle('page-header', !!title);
   const t = view !== 'focus' && S.timer;
   const paused = t && t.left != null;
   setIfChanged(

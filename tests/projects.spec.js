@@ -1,5 +1,30 @@
 const { test, expect } = require('./fixtures');
 
+test('main pages share the Projects heading and toolbar layout on a phone', async ({ app, page }) => {
+  await page.setViewportSize({ width: 320, height: 750 });
+  await app.open({ home: 'projects' });
+  const header = page.locator('header');
+  const heading = header.getByRole('heading', { level: 1 });
+  const search = header.getByRole('button', { name: 'Search', exact: true });
+  const headingLayout = () =>
+    heading.evaluate(el => ({
+      left: el.getBoundingClientRect().left,
+      top: el.getBoundingClientRect().top,
+      fontSize: getComputedStyle(el).fontSize,
+    }));
+  const projectsLayout = await headingLayout();
+  const nav = page.getByRole('navigation', { name: 'Sections' });
+  for (const name of ['Inbox', 'Knowledge', 'Review', 'Settings', 'Projects']) {
+    await nav.getByRole('button', { name: new RegExp('^' + name) }).click();
+    await expect(heading).toHaveText(name);
+    await expect(page.getByRole('heading', { name, exact: true })).toHaveCount(1);
+    expect(await headingLayout()).toEqual(projectsLayout);
+  }
+  await search.click();
+  await expect(heading).toHaveText('Search');
+  await expect(page.getByRole('searchbox')).toBeFocused();
+});
+
 async function addSection(page, name, colour) {
   await page.getByRole('button', { name: 'Add section' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add section' });

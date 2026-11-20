@@ -276,7 +276,7 @@ test('Scenario D: an NFC card opens the Command Centre; a pinned workflow starts
   await page.goto('about:blank');
   await page.goto('/#/ops');
   await page.waitForFunction(() => window.appReady === true);
-  await expect(page.locator('#v-ops .opshead')).toHaveText('Command Centre');
+  await expect(page.getByRole('heading', { name: 'Command Centre', level: 1 })).toBeVisible();
   let s = await app.state();
   expect(s.wruns).toHaveLength(0);
   expect(s.execs).toHaveLength(0);

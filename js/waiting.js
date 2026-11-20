@@ -349,11 +349,11 @@ const BUCKETS = [
 function renderWaiting() {
   const all = waitingSorted();
   // The add box starts closed, so the tab opens on the list.
-  let h = `<button class="linkbtn" data-goto="projects">&lsaquo; Projects</button><div class="sechead"><h2>Waiting</h2>${
+  let h = `<button class="linkbtn" data-goto="projects">&lsaquo; Projects</button>${
     all.length > 1
-      ? `<span class="viewsw" role="group" aria-label="Group by"><button class="chip" data-wview="urgency" aria-pressed="${waitView === 'urgency'}">Urgency</button><button class="chip" data-wview="person" aria-pressed="${waitView === 'person'}">Person</button></span>`
+      ? `<div class="viewsw" role="group" aria-label="Group by"><button class="chip" data-wview="urgency" aria-pressed="${waitView === 'urgency'}">Urgency</button><button class="chip" data-wview="person" aria-pressed="${waitView === 'person'}">Person</button></div>`
       : ''
-  }</div><details id="waddd"${panels.waddd ? ' open' : ''}><summary>Add a waiting item</summary><form class="pform box" id="wform">
+  }<details id="waddd"${panels.waddd ? ' open' : ''}><summary>Add a waiting item</summary><form class="pform box" id="wform">
     <input class="fld" id="wwhat" maxlength="120" placeholder="What you're waiting for" aria-label="What" autocomplete="off">
     <div class="prow2"><input class="fld" id="wfrom" maxlength="60" placeholder="From whom" aria-label="From whom" list="wholist2" autocomplete="off"><input class="fld" type="date" id="wchase" aria-label="Chase on (optional)"></div>
     ${whoList().replace('wholist', 'wholist2')}<button class="btn">Add</button></form></details>`;
