@@ -62,8 +62,15 @@ function projectHistoryDraft(id, value) {
   } catch (e) {}
   return '';
 }
+function projectForHistory(id) {
+  return (
+    S.quests.find(item => item.id === id) ||
+    S.later.find(item => item.id === id) ||
+    completedProjectEntries().find(item => item.id === id)?.project
+  );
+}
 function openProjectHistory(id, updateId) {
-  const project = S.quests.find(item => item.id === id) || S.later.find(item => item.id === id);
+  const project = projectForHistory(id);
   if (!project) return;
   popSheet(
     `<h2 id="sheettitle">Project history</h2><p>${esc(project.text)}</p>
@@ -538,7 +545,7 @@ window.addEventListener('blur', cancelProjectDrag);
 
 function addProjectUpdate(form) {
   const q = form.dataset.projectUpdate;
-  if (!S.quests.some(n => n.id === q) && !S.later.some(n => n.id === q)) return;
+  if (!projectForHistory(q)) return toast('This project is no longer available', false);
   const input = form.querySelector('textarea');
   const text = cleanText(input.value.slice(0, PROJECT_UPDATE_MAX)).trim();
   if (!text) return;
@@ -716,6 +723,8 @@ function reopenArchivedProject(id) {
     delete q.scheduled;
     // Reopening an occurrence leaves the repeat template and future occurrences alone.
     delete q.tpl;
+    q.reopened = true;
+    if (needsNext(q)) q.asked = 1; // Its earlier completion log must not close it on reload.
     if (!live) S.quests.unshift(q);
     S.completedProjects = S.completedProjects.filter(item => item.id !== id);
     S.projectPlacements = S.projectPlacements.filter(item => item.id !== id);
@@ -777,11 +786,16 @@ function renderProjectRecord() {
       ? `<ul class="project-record-steps">${items.map(item => `<li><span aria-hidden="true">${item.done ? '✓' : '○'}</span><span class="sr">${item.done ? 'Done: ' : 'Open: '}</span> ${esc(item.text)}${steps(item.children)}</li>`).join('')}</ul>`
       : '';
   const status = completed ? 'Completed ' + completedDate(entry.d) : 'Starts ' + niceDate(q.start);
+  const addHistory = `<button class="linkbtn" data-project-history="${q.id}" aria-haspopup="dialog">Add history update</button>`;
   const controls = completed
-    ? `<button class="btn sm" data-reopen-archived="${q.id}">Reopen project</button>`
+    ? `<div class="acts"><button class="btn sm" data-reopen-archived="${q.id}">Reopen project</button>${addHistory}</div>`
     : `<div class="acts"><button class="btn sm green" data-now="${q.id}">Move to Projects now</button>
-    <label class="project-record-date">Start date <input class="fld" type="date" data-restart="${q.id}" min="${shift(today(), 1)}" value="${esc(q.start)}"></label>
-    <button class="linkbtn" data-project-history="${q.id}" aria-haspopup="dialog">Add history update</button></div>`;
+    ${
+      q.scheduled
+        ? `<button class="btn sm" data-schedset="${q.id}" aria-haspopup="dialog">Reschedule</button>`
+        : `<label class="project-record-date">Start date <input class="fld" type="date" data-restart="${q.id}" min="${shift(today(), 1)}" value="${esc(q.start)}"></label>`
+    }
+    ${addHistory}</div>`;
   setHTML(
     $('#v-project-record'),
     `${crumbs}<article class="project-record box">

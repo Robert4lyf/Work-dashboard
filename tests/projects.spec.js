@@ -489,6 +489,90 @@ test('completed projects retain their steps and searchable history across rollov
   });
 });
 
+test('a reopened recurring project stays open and does not block the next occurrence', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  await page.evaluate(() => {
+    const template = { id: 'daily', text: 'Daily report', days: [0, 1, 2, 3, 4, 5, 6], children: [] };
+    S.templates.push(template);
+    S.quests.push(
+      fix({
+        id: template.id + '-' + today(),
+        text: template.text,
+        tpl: template.id,
+        children: [{ id: 'daily-step', text: 'Send figures' }],
+      }),
+    );
+    renderAll();
+  });
+  await page.getByRole('button', { name: 'Mark done: Send figures' }).click();
+  await page.clock.setSystemTime(new Date(2026, 10, 19, 11));
+  await page.reload();
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Completed projects', exact: true }).click();
+  await page.getByRole('button', { name: /^Daily report/ }).click();
+  await page.getByRole('button', { name: 'Reopen project' }).click();
+  await page.reload();
+  const reopened = () => page.evaluate(() => isDone(find('daily-2026-11-18').n));
+  expect(await reopened()).toBe(false);
+
+  await page.clock.fastForward(24 * 60 * 60 * 1000);
+  const reports = page.getByRole('article', { name: 'Daily report', exact: true });
+  await expect(reports).toHaveCount(2);
+  expect(await reopened()).toBe(false);
+  expect((await app.state()).quests.find(q => q.id === 'daily-2026-11-20')?.tpl).toBe('daily');
+});
+
+test('a history draft can be posted after its project is archived overnight', async ({ app, page }) => {
+  await start(app, page);
+  await page.getByText('Completed today', { exact: false }).click();
+  await page.getByRole('button', { name: 'History for Archive invoices' }).click();
+  const history = page.getByRole('dialog', { name: 'Project history' });
+  const draft = history.getByRole('textbox', { name: 'New project update' });
+  await draft.fill('Final invoice received');
+  await page.clock.fastForward(24 * 60 * 60 * 1000);
+  expect((await app.state()).completedProjects.some(entry => entry.id === 'archive')).toBe(true);
+  await history.getByRole('button', { name: 'Add update' }).click();
+  await expect(history.getByText('Final invoice received')).toBeVisible();
+  await expect(draft).toBeEmpty();
+  await history.getByRole('button', { name: 'Close' }).click();
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  await page.getByRole('button', { name: 'Completed projects', exact: true }).click();
+  await page.getByRole('button', { name: /^Archive invoices/ }).click();
+  const record = page.locator('#v-project-record');
+  await expect(record.getByText('Final invoice received')).toBeVisible();
+  await record.getByRole('button', { name: 'Add history update' }).click();
+  await draft.fill('Payment confirmed');
+  await history.getByRole('button', { name: 'Close' }).click();
+  await record.getByRole('button', { name: 'Add history update' }).click();
+  await expect(draft).toHaveValue('Payment confirmed');
+  await history.getByRole('button', { name: 'Add update' }).click();
+  await history.getByRole('button', { name: 'Close' }).click();
+  await expect(record.getByText('Payment confirmed')).toBeVisible();
+});
+
+test('an Upcoming meeting can be rescheduled from Projects', async ({ app, page }) => {
+  await start(app, page);
+  await app.setState(s => {
+    s.later[0].scheduled = { date: s.later[0].start, time: '14:30' };
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Month end', exact: true }).click();
+  const record = page.locator('#v-project-record');
+  await record.getByRole('button', { name: 'Reschedule' }).click();
+  const schedule = page.getByRole('dialog', { name: 'Schedule' });
+  await expect(schedule.getByLabel('Date', { exact: true })).toHaveValue('2026-11-24');
+  await expect(schedule.getByLabel(/Time/)).toHaveValue('14:30');
+  await schedule.getByLabel('Date', { exact: true }).fill('2026-11-25');
+  await schedule.getByLabel(/Time/).fill('15:45');
+  await schedule.getByRole('button', { name: 'Save' }).click();
+  await expect(record).toContainText('Starts 25 Nov · 15:45');
+  await page.reload({ keepPlace: true });
+  await expect(record).toContainText('Starts 25 Nov · 15:45');
+});
+
 test('the Active Task surfaces the next actionable step and nearest follow-up', async ({ app, page }) => {
   await start(app, page);
   await page.evaluate(() => {
