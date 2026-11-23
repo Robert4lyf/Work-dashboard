@@ -38,10 +38,10 @@ function searchMark(i) {
   searchSel = hits.length ? Math.max(-1, Math.min(i, hits.length - 1)) : -1;
   hits.forEach((h, n) => {
     h.classList.toggle('sel', n === searchSel);
-    h.id = 'shit-' + n;
+    h.id = 'srhit-' + n;
   });
   if (!box) return;
-  if (searchSel >= 0) box.setAttribute('aria-activedescendant', 'shit-' + searchSel);
+  if (searchSel >= 0) box.setAttribute('aria-activedescendant', 'srhit-' + searchSel);
   else box.removeAttribute('aria-activedescendant');
 }
 // A key pressed in the search box: true when it was taken.
