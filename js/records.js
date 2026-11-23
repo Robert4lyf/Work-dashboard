@@ -233,8 +233,10 @@ function saveSyncState() {
   // Not while the local copy couldn't be saved: after a reload the two must still agree, or
   // the old copy would look like a newer edit and go over the server's.
   if (!localSaved) return;
-  if (typeof picDb !== 'undefined' && picDb) return writeKV({ sync: JSON.stringify(sync2) });
+  // (guarded: bookkeeping from an older copy than another tab has since saved is dropped)
+  if (typeof picDb !== 'undefined' && picDb) return writeKV({ sync: JSON.stringify(sync2) }, true);
   try {
+    if (typeof tabYield === 'function' && tabYield()) return;
     localStorage.setItem(SYNC_KEY, JSON.stringify(sync2));
     if (typeof tabSavedLocal === 'function') tabSavedLocal();
   } catch (e) {}

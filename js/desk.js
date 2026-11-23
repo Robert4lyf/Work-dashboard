@@ -245,15 +245,32 @@ function splitMirror(draw) {
     splitDrawing = false;
   }
 }
-// The open project's card, brought into the part of the board that shows.
-function splitReveal() {
-  if (!splitOn()) return;
+// The open project's card, brought into the part of the board that shows: the board's own box,
+// as far as that is in the window (its foot is below the fold until the page is scrolled).
+function splitCardAt() {
   const pane = $('#v-projects'),
-    card = pane.querySelector('.project-current');
-  if (!card) return;
+    card = splitOn() && pane.querySelector('.project-current');
+  if (!card || !card.getClientRects().length) return null;
   const p = pane.getBoundingClientRect(),
-    c = card.getBoundingClientRect();
-  if (c.top < p.top || c.bottom > p.bottom) pane.scrollTop += c.top - p.top - 12;
+    c = card.getBoundingClientRect(),
+    top = Math.max(p.top, 0),
+    bottom = Math.min(p.bottom, innerHeight);
+  return { pane, above: top - c.top, below: c.bottom - bottom };
+}
+function splitReveal() {
+  const at = splitCardAt();
+  if (!at) return;
+  if (at.above > 0) at.pane.scrollTop -= at.above + 12;
+  else if (at.below > 0) at.pane.scrollTop += at.below + 12;
+}
+// The board drawn again beside the page. If the open project's card was showing and the redraw
+// moved it out of sight (finished, it goes under Completed today), it's brought back; a board
+// scrolled away from it to look at something else is left where it is.
+function splitBoard() {
+  const at = splitCardAt(),
+    shown = !!at && at.above <= 0 && at.below <= 0;
+  splitMirror(renderProjects);
+  if (shown) splitReveal();
 }
 splitMQ.addEventListener('change', () => {
   if (!window.appReady) return;

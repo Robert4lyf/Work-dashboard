@@ -321,7 +321,7 @@ function renderToday() {
     const l = $(`#v-today .blane[data-lane="${k}"] .lanetiles`);
     if (l) l.scrollLeft = laneX[k];
   }
-  splitMirror(renderProjects); // (a wide window: the board beside a project's page, see desk.js)
+  splitBoard(); // (a wide window: the board beside a project's page, see desk.js)
 }
 // The page's title above the header: on Today's list only (a task's page has its own).
 function todayTitle() {
@@ -588,7 +588,8 @@ function scheduleNow(kind, id, date) {
     if (!r || r.parents.length) return;
     r.arr.splice(r.arr.indexOf(r.n), 1);
     n = r.n;
-    path = [];
+    // (its own page closes; another project's, open beside the board it was put off from, stays)
+    if (path[0] === id) path = [];
   } else {
     const i = S.inbox.findIndex(x => x.id === id);
     if (i < 0) return;

@@ -683,7 +683,8 @@ document.addEventListener('click', e => {
       if (view !== 'today') go('today');
       // (opened from Today itself: back is to Today's list, whatever came before)
       returnTo = from || keep;
-      if (from) {
+      // (drawn again now that the way back is known: its ‹ names where it leads)
+      if (from || beside) {
         renderToday();
         restoreDrafts();
       }
@@ -1243,8 +1244,9 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ($('#sheet') && e.key !== 'Escape') return; // a sheet is up: its buttons only
-  // (a letter is the same key with Caps Lock on)
-  const k = /^[A-Z]$/.test(e.key) ? e.key.toLowerCase() : e.key;
+  // (a letter is the same key with Caps Lock on; with Shift it's left alone, as before)
+  const caps = !e.shiftKey && e.getModifierState && e.getModifierState('CapsLock'),
+    k = caps && /^[A-Z]$/.test(e.key) ? e.key.toLowerCase() : e.key;
   // During a running session only pause and help work (see focusLocked).
   if (focusLocked() && k !== 'p' && k !== '?') return;
   // Single-task mode covers the page: only its own keys.
@@ -1392,19 +1394,26 @@ document.addEventListener('visibilitychange', () => {
       wd = a && a.type === 'date' && a.closest('#waitd[data-waitid]');
     if (wd) saveWaitPanel(wd.dataset.waitid, true);
   }
+  // (another tab saved while this one was away and it hasn't been taken in yet: that first, so
+  // the day's reset or a session's end isn't worked out, and saved, from the older copy)
   if (!document.hidden) {
-    const started = rolloverLocal(); // (a sync, when signed in)
-    // A session another device already stopped mustn't be finished here too: hear from the
-    // server first when possible.
-    if (timerDue() && started) {
-      const held = holdDue();
-      syncDone().finally(() => releaseHeld(held));
-    } else if (timerDue() && !holdTimer) finishTimer(true);
-    else inBackground(renderAll); // (keeps anything being typed)
-    if (!started) sync();
-    verifyPush();
+    if (tabStale()) takeSavedSoon().finally(cameBack);
+    else cameBack();
   }
 });
+function cameBack() {
+  if (document.hidden) return;
+  const started = rolloverLocal(); // (a sync, when signed in)
+  // A session another device already stopped mustn't be finished here too: hear from the
+  // server first when possible.
+  if (timerDue() && started) {
+    const held = holdDue();
+    syncDone().finally(() => releaseHeld(held));
+  } else if (timerDue() && !holdTimer) finishTimer(true);
+  else inBackground(renderAll); // (keeps anything being typed)
+  if (!started) sync();
+  verifyPush();
+}
 window.addEventListener('online', () => window.appReady && sync());
 window.addEventListener('offline', () => {
   if (session) setSync('offline');
@@ -1438,6 +1447,7 @@ function start(pics, kv) {
       sync2 = Object.assign({ cursor: 0, synced: {}, dirty: {}, snapAt: 0 }, JSON.parse(kv.sync));
     } catch (e) {}
   else moving = !!picDb;
+  tabStart(kv.stamp); // (what the store held when this tab read it: see js/tabs.js)
   load(pics, kv.state);
   if (kv.state === null) moving = !!picDb;
   if (moving) {
@@ -1480,6 +1490,7 @@ function start(pics, kv) {
   // (the app's data, pictures included, isn't cleared by the phone when space runs low)
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   window.appReady = true;
+  tabReady(); // (another tab saved while this one was starting: that copy is taken in now)
 }
 openPics().then(async db => {
   picDb = db;

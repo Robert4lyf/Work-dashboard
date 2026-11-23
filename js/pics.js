@@ -93,17 +93,40 @@ function saveWarn(on) {
 // Each write is stamped with the tab that made it, so another tab of the app open at the same
 // time can tell the saved copy is no longer the one it holds (see js/tabs.js).
 const TAB_ID = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-let tabWrites = 0;
-function writeKV(entries) {
+let tabWrites = 0,
+  // The stamp the store should carry when this tab's next write runs: its own last write's, or
+  // that of the copy it last took in.
+  tabExpect = '';
+// `guarded`: a write the app makes by itself (the sync's bookkeeping, rows a sync took in, the
+// day's reset), not one for something the user just did. It goes ahead only if the store still
+// holds what this tab last wrote or took in. If another tab has saved since, this tab is working
+// from an older copy: the write is dropped, and this tab takes the newer copy in instead (the
+// sync then runs again from there). Checked inside the write's own transaction, so nothing can
+// slip in between the check and the write.
+function writeKV(entries, guarded) {
   const done = new Promise(ok => {
     if (!picDb) return ok(false);
     try {
       const tx = picDb.transaction('kv', 'readwrite'),
         st = tx.objectStore('kv'),
-        stamp = TAB_ID + ':' + ++tabWrites;
-      for (const k in entries) st.put(entries[k], k);
-      st.put(stamp, 'stamp');
+        stamp = TAB_ID + ':' + ++tabWrites,
+        expect = tabExpect;
+      let wrote = false;
+      const put = () => {
+        for (const k in entries) st.put(entries[k], k);
+        st.put(stamp, 'stamp');
+        wrote = true;
+      };
+      tabExpect = stamp; // (the next write follows this one; if this one is dropped, so is that)
+      if (guarded) {
+        const held = st.get('stamp');
+        held.onsuccess = () => (typeof held.result === 'string' ? held.result : '') === expect && put();
+      } else put();
       tx.oncomplete = () => {
+        if (!wrote) {
+          if (typeof takeSavedSoon === 'function') takeSavedSoon();
+          return ok(false);
+        }
         // (only a save of the state itself shows things are saved again, not the sync's notes)
         if ('state' in entries) saveWarn(false);
         if (typeof tabSaved === 'function') tabSaved(stamp);
@@ -181,7 +204,7 @@ function storePics() {
     tx.oncomplete = () => {
       want.forEach(p => picStored.add(p.id));
       if (localSaved)
-        persistLocal(); // (now without their data)
+        persistLocal(true); // (now without their data)
       else save(); // (couldn't be saved with it: now it can, in full)
     };
     tx.onerror = tx.onabort = () => {}; // (no room there either: they stay in the saved copy)

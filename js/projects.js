@@ -201,7 +201,10 @@ function renderProjects() {
     const expanded = !foldedProjectSections.has(id);
     const count = active.length + upcoming.length + done.length;
     const completedId = uncategorised ? 'projects-done' : 'projects-done-' + id;
-    const completedOpen = uncategorised ? projectsDoneOpen : openProjectCompleted.has(id);
+    // (the project whose page is open beside the board shows on it, finished or not)
+    const completedOpen =
+      (uncategorised ? projectsDoneOpen : openProjectCompleted.has(id)) ||
+      done.some(q => q.id === splitOpenId());
     const upcomingId = 'projects-upcoming-' + id;
     return `<section class="project-board-section" id="project-section-${id}" data-project-section="${id}"${accent ? ` data-colour="${colour}" style="--section-accent:${accent[1]};--section-ink:${accent[2] || '#111'}"` : ''} aria-labelledby="project-section-name-${id}">
       <div class="project-section-head">
@@ -747,7 +750,9 @@ function reopenArchivedProject(id) {
 }
 function openProjectRecord(id, kind, button) {
   const from = placeHere(button);
-  returnTo = null;
+  // (looked at from the board beside a project's page, on a wide window: back returns to that
+  // page, and from there to Projects where it was, as before the look)
+  if (!splitOn()) returnTo = null;
   path = [];
   projectRecord = { id, kind };
   go('project-record');

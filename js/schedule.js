@@ -134,7 +134,7 @@ function applySchedule(n, r, onToday, later, sc, date) {
     delete n.since;
     delete n.kept;
     S.later.push(n);
-    path = [];
+    if (path[0] === n.id) path = []; // (not another project's page, open beside the board)
   } else if (later && date === today()) {
     S.later.splice(S.later.indexOf(n), 1);
     delete n.start;

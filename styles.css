@@ -4970,7 +4970,9 @@ kbd {
     max-height: calc(100vh - 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 2px 8px 24px 2px;
+    /* (room at the foot: until the page is scrolled the board starts under the header, so its
+       last cards would otherwise end below the window with no way to bring them up) */
+    padding: 2px 8px 120px 2px;
     scrollbar-width: thin;
   }
   body.split .wrap:has(> #v-today:not([hidden]) .node) > #v-today {
@@ -5008,8 +5010,18 @@ kbd {
     color: #111111;
     border-color: #111111;
   }
-  body.split #v-projects .project-current :is(.project-open svg, .project-grip, .project-meta, .linkbtn) {
+  body.split
+    #v-projects
+    .project-current
+    :is(.project-open svg, .project-grip, .project-meta, .linkbtn, .project-step-clock) {
     color: #111111;
+  }
+  body.split #v-projects .project-current .linkbtn {
+    text-decoration-color: #111111;
+  }
+  /* (no active task: its heading alone says nothing in a list this narrow) */
+  body.split #v-projects .active-project:has(> .hint) {
+    display: none;
   }
   body.split #v-projects .project-current :focus-visible {
     outline-color: #0a0a0a;

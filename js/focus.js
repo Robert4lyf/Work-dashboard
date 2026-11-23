@@ -350,6 +350,9 @@ function timerTick() {
     if (document.title !== TITLE) document.title = TITLE;
     return;
   }
+  // (another tab's save not taken in yet, say on waking from the background: that first, or the
+  // session would be finished, and saved, on this tab's older copy)
+  if (timerDue() && tabStale()) return void takeSavedSoon();
   if (timerDue() && (t.id || 'held') !== holdTimer) return inBackground(() => finishTimer());
   const txt = mmss(remaining());
   document.title = txt + (t.left != null ? ' paused' : '') + ' · ' + TITLE;

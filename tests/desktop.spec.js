@@ -541,7 +541,11 @@ test('Search remembers where it was opened from after a result that isn’t a ta
 
 test('J works with Caps Lock on', async ({ app, page }) => {
   await start(app, page);
-  await page.keyboard.press('J');
+  await page.evaluate(() =>
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'J', bubbles: true, modifierCapsLock: true, cancelable: true }),
+    ),
+  );
   expect(await focused(page)).toBe('Alpha');
 });
 
@@ -564,4 +568,124 @@ test('a project opened from the side board by right-click > Open still goes back
   expect(await where(page)).toEqual(['projects', '']);
   expect(Math.abs((await page.evaluate(() => scrollY)) - y)).toBeLessThan(3);
   expect(await focused(page)).toBe('Bravo');
+});
+
+// Bug-hunt round (UI pass): the board beside a project's page.
+test.describe('the board beside a page: actions on another project', () => {
+  const pane = page => page.locator('#v-projects');
+  test('putting another project off keeps the open page and a step half typed on it', async ({
+    app,
+    page,
+  }) => {
+    await start(app, page);
+    await page.getByRole('button', { name: 'Golf', exact: true }).click();
+    await page.fill('#sin', 'half a step');
+    await pane(page).getByRole('button', { name: 'Hotel', exact: true }).click({ button: 'right' });
+    await page.getByRole('dialog').getByRole('button', { name: 'Do tomorrow' }).click();
+    expect(await where(page)).toEqual(['today', 'q6']);
+    await expect(page.locator('#sin')).toHaveValue('half a step');
+    expect((await app.state()).later.map(q => q.text)).toEqual(['Hotel']);
+    // The open project itself put off: its page closes, as before.
+    await page.getByRole('button', { name: 'More actions' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Do tomorrow' }).click();
+    expect(await where(page)).toEqual(['projects', '']);
+  });
+
+  test('the ‹ crumb names where it leads after picking another project from the board', async ({
+    app,
+    page,
+  }) => {
+    await start(app, page);
+    await page.click('nav [data-v=inbox]');
+    await page.keyboard.press('Control+k');
+    await page.keyboard.type('Hotel');
+    await page.keyboard.press('Enter');
+    const crumb = page.locator('#v-today [data-crumb="-1"]');
+    await expect(crumb).toContainText('Search');
+    await pane(page).getByRole('button', { name: 'Bravo', exact: true }).click();
+    await expect(crumb).toContainText('Projects');
+    await crumb.click();
+    expect(await where(page)).toEqual(['projects', '']);
+  });
+
+  test('the open project’s card is wholly in the window, also once it is finished', async ({ app, page }) => {
+    await start(app, page, { width: 1440, height: 700 });
+    await page.getByRole('button', { name: 'Solo task', exact: true }).click();
+    const inWindow = () =>
+      page.evaluate(() => {
+        const c = document.querySelector('#v-projects .project-current').getBoundingClientRect();
+        return c.top >= 0 && c.bottom <= innerHeight && c.height > 0;
+      });
+    expect(await inWindow()).toBe(true);
+    // Finished from its page: its card goes under Completed today, which opens to show it.
+    await pane(page).getByRole('button', { name: 'Golf', exact: true }).click();
+    await page.locator('#v-today').getByRole('button', { name: 'Mark done: Draft Golf' }).click();
+    await page.locator('#v-today').getByRole('button', { name: 'Mark done: Send Golf' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Finish task' }).click();
+    await expect(pane(page).locator('.project-current')).toBeVisible();
+    await expect(pane(page).locator('.project-current')).toContainText('Golf');
+    expect(await inWindow()).toBe(true);
+  });
+
+  test('the board scrolled away from the open card stays where it is when the page changes', async ({
+    app,
+    page,
+  }) => {
+    await start(app, page, { width: 1440, height: 500 });
+    await page.getByRole('button', { name: 'Alpha', exact: true }).click();
+    await pane(page).evaluate(el => (el.scrollTop = el.scrollHeight));
+    const at = await pane(page).evaluate(el => el.scrollTop);
+    expect(at).toBeGreaterThan(100);
+    await page.locator('#v-today').getByRole('button', { name: 'Mark done: Draft Alpha' }).click();
+    expect(await pane(page).evaluate(el => el.scrollTop)).toBe(at);
+  });
+
+  test('a look at an Upcoming project from the board keeps the way back to Projects', async ({
+    app,
+    page,
+  }) => {
+    await start(app, page, { width: 1440, height: 700 });
+    await page.evaluate(() => {
+      S.later = [fix({ id: 'up1', text: 'Upcoming one', start: shift(today(), 3) })];
+      save();
+      renderAll();
+    });
+    await page.evaluate(() => window.scrollTo(0, 300));
+    await page.getByRole('button', { name: 'Golf', exact: true }).click();
+    // (where Projects was when the card was clicked: the click itself may scroll it into view)
+    const y = await page.evaluate(() => returnTo.y);
+    expect(y).toBeGreaterThan(100);
+    await pane(page).locator('[data-upcoming-project="up1"]').first().click();
+    expect((await where(page))[0]).toBe('project-record');
+    await page.keyboard.press('Escape');
+    expect(await where(page)).toEqual(['today', 'q6']);
+    await page.keyboard.press('Escape');
+    expect(await where(page)).toEqual(['projects', '']);
+    expect(Math.abs((await page.evaluate(() => scrollY)) - y)).toBeLessThan(3);
+  });
+
+  test('dark theme: a waiting project’s clock shows on the open card', async ({ app, page }) => {
+    await page.setViewportSize(WIDE);
+    await app.open({ home: 'projects' });
+    await app.setState(s => {
+      s.quests = [
+        { id: 'w', text: 'Waiting one', children: [], wait: { who: 'Bob', note: '', due: '', since: '' } },
+      ];
+    });
+    await page.reload();
+    await page.evaluate(() => (document.documentElement.dataset.theme = 'dark'));
+    await page.getByRole('button', { name: 'Waiting one', exact: true }).click();
+    const stroke = await page.evaluate(
+      () =>
+        getComputedStyle(document.querySelector('#v-projects .project-current .project-step-clock svg'))
+          .stroke,
+    );
+    expect(stroke).toBe('rgb(17, 17, 17)');
+  });
+});
+
+test('Shift with a letter is still not a shortcut', async ({ app, page }) => {
+  await start(app, page);
+  await page.keyboard.press('Shift+S');
+  expect(await where(page)).toEqual(['projects', '']);
 });
