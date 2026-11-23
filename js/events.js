@@ -334,6 +334,9 @@ document.querySelectorAll('nav button[data-v]').forEach(
         path = [];
         workListMode = false;
       }
+      // (a computer: History has its own place in the sidebar, so Review's tab opens Review
+      // itself, not the History last looked at)
+      if (b.dataset.v === 'review' && deskMQ.matches && reviewSub === 'log') reviewSub = 'week';
       go(b.dataset.v);
     }),
 );
@@ -659,7 +662,11 @@ document.addEventListener('click', e => {
         path.every((id, i) => p[i] === id);
       // (another project picked from the board beside this one's page, on a wide window: back
       // still returns to Projects, with the keyboard on the card last opened)
-      const beside = view === 'today' && !!b.closest('#v-projects') && splitOn();
+      // (or from that card's actions, by right-click: the sheet's button is off the page by now)
+      const beside =
+        view === 'today' &&
+        splitOn() &&
+        (!!b.closest('#v-projects') || (!b.isConnected && p.length === 1 && p[0] !== path[0]));
       const keep = deeper
         ? returnTo
         : beside
@@ -1236,7 +1243,8 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ($('#sheet') && e.key !== 'Escape') return; // a sheet is up: its buttons only
-  const k = e.key;
+  // (a letter is the same key with Caps Lock on)
+  const k = /^[A-Z]$/.test(e.key) ? e.key.toLowerCase() : e.key;
   // During a running session only pause and help work (see focusLocked).
   if (focusLocked() && k !== 'p' && k !== '?') return;
   // Single-task mode covers the page: only its own keys.
@@ -1528,9 +1536,11 @@ function appBack(nested) {
   if (atReturn()) return (returnBack(), true);
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
   if (view === 'inbox' && triage) return (exitTriage(), true);
-  if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view === 'account' && setSub) return (openSettings(null), true); // (a group: back to the index)
+  // Search, with nothing newer to go back to: where it was opened from (search.js).
+  if (view === 'search' && searchFrom) return (backFromSearch(), true);
   if (nested && view !== 'search') return false;
+  if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view !== 'today' && path.length) return (go('today'), true);
   if (view !== 'projects') {
     path = [];

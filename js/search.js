@@ -9,17 +9,26 @@ function renderSearch() {
   );
   searchMark(deskMQ.matches ? Math.max(0, searchSel) : -1);
 }
+// Where Search was opened from: back (or Escape) on Search returns there, as it was, once
+// anything opened from its results has been gone back from.
+let searchFrom = null;
 function openSearch() {
-  // (back, or Escape, returns to where Search was opened from, as it was)
-  const from = view !== 'search' && placeHere();
+  if (view !== 'search') searchFrom = { ...placeHere(), util: projectUtility };
   go('search');
   renderSearch();
-  landed(from);
   const i = $('#sq');
   if (i) {
     i.focus();
     i.select();
   }
+}
+function backFromSearch() {
+  const f = searchFrom;
+  searchFrom = null;
+  keepDrafts();
+  // (the Upcoming or Alarms page: go() shows Projects for a Today with nothing chosen)
+  if (f.view === 'today' && !f.path.length && f.util) projectUtility = f.util;
+  goPlace(f);
 }
 function typedSearch(v) {
   searchQ = v;
@@ -33,21 +42,17 @@ function typedSearch(v) {
 let searchSel = -1;
 const searchHits = () => [...document.querySelectorAll('#sres button.srow, #sres .srow a')];
 function searchMark(i) {
-  const hits = searchHits(),
-    box = $('#sq');
+  const hits = searchHits();
   searchSel = hits.length ? Math.max(-1, Math.min(i, hits.length - 1)) : -1;
-  hits.forEach((h, n) => {
-    h.classList.toggle('sel', n === searchSel);
-    h.id = 'srhit-' + n;
-  });
-  if (!box) return;
-  if (searchSel >= 0) box.setAttribute('aria-activedescendant', 'srhit-' + searchSel);
-  else box.removeAttribute('aria-activedescendant');
+  // (a class only, no id: a redraw finds the result that has the keyboard by its own attributes)
+  hits.forEach((h, n) => h.classList.toggle('sel', n === searchSel));
 }
 // A key pressed in the search box: true when it was taken.
 function searchKey(e) {
   const hits = searchHits(),
     box = $('#sq');
+  // (a word still being composed, or Shift with an arrow to select words: the box's own)
+  if (e.isComposing || e.shiftKey) return false;
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
     if (!hits.length) return false;
     searchMark(Math.max(0, searchSel + (e.key === 'ArrowDown' ? 1 : -1)));

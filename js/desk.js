@@ -41,7 +41,8 @@ document.addEventListener('click', e => {
 });
 
 /* the keyboard shortcuts, as a list (the ? key, or the sidebar's link) */
-const MOD_KEY = /Mac|iPhone|iPad/.test(navigator.platform || '') ? '⌘' : 'Ctrl';
+const ON_MAC = /Mac|iPhone|iPad/.test(navigator.platform || '');
+const MOD_KEY = ON_MAC ? '⌘' : 'Ctrl';
 const KEY_LIST = [
   [['/', MOD_KEY + ' K'], 'Search everything'],
   [['N', 'I'], 'Capture to the Inbox (on a project’s page, N adds a step)'],
@@ -77,11 +78,14 @@ function openKeys() {
 /* Ctrl (or ⌘) with a key: K searches from anywhere; Z takes the Undo on offer. In a field Z is the
    field's own undo, as ever. Returns true when the key was taken. */
 function deskChord(e) {
+  // (on a Mac it's ⌘: Ctrl+K there deletes to the end of a line in a field)
+  if (ON_MAC ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey) return false;
   if (e.altKey || e.shiftKey || !$('#v-alarm').hidden) return false;
+  // (not under a sheet, nor in single-task mode: what they cover isn't to be changed from there)
+  if ($('#sheet') || focusLocked() || zen) return false;
   const k = e.key.toLowerCase(),
     el = e.target;
   if (k === 'k') {
-    if ($('#sheet') || focusLocked() || zen) return false;
     openSearch();
     return true;
   }

@@ -503,7 +503,8 @@ function scrollProjectDrag() {
   const edge = 90;
   const y = drag.y;
   if (y < edge || y > innerHeight - edge) {
-    window.scrollBy(0, y < edge ? -10 : 10);
+    // (beside a project's page, on a wide window, the board scrolls by itself: desk.js)
+    (splitOn() ? projectView : window).scrollBy(0, y < edge ? -10 : 10);
     markProjectDrop();
   }
   drag.frame = requestAnimationFrame(scrollProjectDrag);

@@ -4782,6 +4782,10 @@ kbd {
   outline-offset: 2px;
   border-radius: var(--radius-xs);
 }
+/* (the keyboard on a result itself, by Tab or J: that one shows, not two rings) */
+#sres:focus-within .sel:not(:focus-visible) {
+  outline: 0;
+}
 #sres .srow {
   scroll-margin-block: 80px;
 }
@@ -4858,7 +4862,6 @@ kbd {
     max-width: none;
     max-height: calc(100vh - 48px);
     max-height: calc(100dvh - 48px);
-    padding: 18px 20px 20px;
     box-shadow: var(--shadow-2);
   }
   body.zen #sheet .sheetbox {
@@ -4915,15 +4918,14 @@ kbd {
     transform: translateX(2px);
   }
   .list .row:hover,
-  .soonrow:hover,
-  button.srow:hover,
+  button.soonrow:hover,
   .qact:not([disabled]):hover,
   .attlist > :hover,
   .project-section-toggle:hover,
   details > summary:hover {
     background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
-  .chip:not([aria-pressed='true']):hover,
+  .chip:not([aria-pressed='true'], .del, .warn, .due, .ops):hover,
   .day:not([aria-pressed='true']):hover {
     background: var(--panel-2);
   }
@@ -4947,7 +4949,7 @@ kbd {
 /* a wide window: a project's page with the board beside it (see splitOn in js/desk.js). The
    board keeps its own scroll at the left; the page scrolls as ever. */
 @media (min-width: 1240px) {
-  body.split .wrap:has(> #v-today:not([hidden]) .node) {
+  body.split:not(.zen) .wrap:has(> #v-today:not([hidden]) .node) {
     display: grid;
     grid-template-columns: minmax(300px, 380px) minmax(0, 760px);
     grid-template-rows: auto 1fr;
@@ -5012,4 +5014,9 @@ kbd {
   body.split #v-projects .project-current :focus-visible {
     outline-color: #0a0a0a;
   }
+}
+/* (single-task mode covers the page whatever it was showing: a task's page from 1000px used to
+   stay on screen above it, pushing the one task below the fold) */
+body.zen .wrap:has(> #v-today:not([hidden]) .node) {
+  display: none;
 }

@@ -459,3 +459,109 @@ test.describe('a wide window: a project’s page with the board beside it', () =
     await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Charlie');
   });
 });
+
+// Bug-hunt round (static audit of the desktop change).
+test('single-task mode covers a project’s page on a wide window, with or without the board beside it', async ({
+  app,
+  page,
+}) => {
+  for (const width of [1440, 1100]) {
+    await start(app, page, { width, height: 900 });
+    await page.getByRole('button', { name: 'Alpha', exact: true }).click();
+    await page.keyboard.press('z');
+    await expect(page.locator('#v-zen')).toBeVisible();
+    await expect(page.locator('.wrap')).toBeHidden();
+    expect((await page.locator('#v-zen').boundingBox()).y).toBeLessThan(5);
+    await page.keyboard.press('z');
+    await expect(page.locator('.wrap')).toBeVisible();
+  }
+});
+
+test('a search result keeps the keyboard when the page is drawn again', async ({ app, page }) => {
+  await start(app, page);
+  await page.keyboard.press('/');
+  await page.keyboard.type('draft');
+  await page.locator('#sres .srow').nth(2).focus();
+  await page.evaluate(() => inBackground(renderAll));
+  expect(await focused(page)).toContain('Draft Charlie');
+  await page.evaluate(() => renderAll());
+  expect(await focused(page)).toContain('Draft Charlie');
+});
+
+test('Ctrl+Z and Ctrl+K leave what’s under a sheet alone', async ({ app, page }) => {
+  await start(app, page);
+  await page.click('nav [data-v=inbox]');
+  await page.locator('#v-inbox').getByRole('button', { name: 'Delete' }).first().click();
+  await page.keyboard.press('?');
+  await expect(page.locator('#sheet .sheetbox')).toBeVisible();
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+k');
+  expect((await app.state()).inbox).toHaveLength(1);
+  await expect(page.locator('#sheet .sheetbox')).toBeVisible();
+  expect(await where(page)).toEqual(['inbox', '']);
+});
+
+test('after the sidebar’s History, the Review tab opens Review itself; Escape on the Scratchpad stays put', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  await page.locator('#sidemore').getByRole('button', { name: 'History', exact: true }).click();
+  await page.click('nav [data-v=review]');
+  await expect(page.locator('#v-log')).toBeHidden();
+  await expect(page.locator('nav [data-v=review]')).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#v-review [data-rsub=week]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#sidemore').getByRole('button', { name: 'Scratchpad', exact: true }).click();
+  await page.evaluate(() => document.activeElement.blur());
+  await page.keyboard.press('Escape');
+  expect(await where(page)).toEqual(['notes', '']);
+});
+
+test('on a phone the Review tab still opens the part of Review last looked at', async ({ app, page }) => {
+  await start(app, page, { width: 390, height: 844 });
+  await page.click('nav [data-v=review]');
+  await page.locator('#v-review [data-rsub=log]').click();
+  await page.click('nav [data-v=inbox]');
+  await page.click('nav [data-v=review]');
+  await expect(page.locator('#v-log')).toBeVisible();
+});
+
+test('Search remembers where it was opened from after a result that isn’t a task', async ({ app, page }) => {
+  await start(app, page);
+  await page.click('nav [data-v=review]');
+  await page.keyboard.press('/');
+  await page.keyboard.type('landlord');
+  await page.keyboard.press('Enter');
+  expect(await where(page)).toEqual(['inbox', '']);
+  await page.goBack();
+  expect(await where(page)).toEqual(['search', '']);
+  await page.goBack();
+  expect(await where(page)).toEqual(['review', '']);
+});
+
+test('J works with Caps Lock on', async ({ app, page }) => {
+  await start(app, page);
+  await page.keyboard.press('J');
+  expect(await focused(page)).toBe('Alpha');
+});
+
+test('a project opened from the side board by right-click > Open still goes back to Projects where it was', async ({
+  app,
+  page,
+}) => {
+  await start(app, page, { width: 1440, height: 700 });
+  await page.mouse.wheel(0, 250);
+  await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(100);
+  const y = await page.evaluate(() => scrollY);
+  await page.getByRole('button', { name: 'Echo', exact: true }).click();
+  await page
+    .locator('#v-projects')
+    .getByRole('button', { name: 'Bravo', exact: true })
+    .click({ button: 'right' });
+  await page.getByRole('dialog').getByRole('button', { name: 'Open', exact: true }).click();
+  expect(await where(page)).toEqual(['today', 'q1']);
+  await page.keyboard.press('Escape');
+  expect(await where(page)).toEqual(['projects', '']);
+  expect(Math.abs((await page.evaluate(() => scrollY)) - y)).toBeLessThan(3);
+  expect(await focused(page)).toBe('Bravo');
+});
