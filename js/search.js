@@ -7,10 +7,14 @@ function renderSearch() {
     $('#v-search'),
     `<input class="fld" type="search" id="sq" placeholder="Projects, Inbox, notes, knowledge…" aria-label="Search everything" autocomplete="off" value="${esc(searchQ)}"><div id="sres">${searchResults()}</div>`,
   );
+  searchMark(deskMQ.matches ? Math.max(0, searchSel) : -1);
 }
 function openSearch() {
+  // (back, or Escape, returns to where Search was opened from, as it was)
+  const from = view !== 'search' && placeHere();
   go('search');
   renderSearch();
+  landed(from);
   const i = $('#sq');
   if (i) {
     i.focus();
@@ -20,6 +24,48 @@ function openSearch() {
 function typedSearch(v) {
   searchQ = v;
   $('#sres').innerHTML = searchResults();
+  searchMark(deskMQ.matches ? 0 : -1);
+}
+/* With a keyboard (a computer): the arrow keys choose a result while the box keeps the keyboard,
+   Enter opens it, Escape clears the words and then goes back. On a wide window the first result is
+   chosen as soon as there is one. (On a phone nothing is chosen, and the keyboard's search key
+   still just puts the keyboard away.) */
+let searchSel = -1;
+const searchHits = () => [...document.querySelectorAll('#sres button.srow, #sres .srow a')];
+function searchMark(i) {
+  const hits = searchHits(),
+    box = $('#sq');
+  searchSel = hits.length ? Math.max(-1, Math.min(i, hits.length - 1)) : -1;
+  hits.forEach((h, n) => {
+    h.classList.toggle('sel', n === searchSel);
+    h.id = 'shit-' + n;
+  });
+  if (!box) return;
+  if (searchSel >= 0) box.setAttribute('aria-activedescendant', 'shit-' + searchSel);
+  else box.removeAttribute('aria-activedescendant');
+}
+// A key pressed in the search box: true when it was taken.
+function searchKey(e) {
+  const hits = searchHits(),
+    box = $('#sq');
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!hits.length) return false;
+    searchMark(Math.max(0, searchSel + (e.key === 'ArrowDown' ? 1 : -1)));
+    hits[searchSel].scrollIntoView({ block: 'nearest' });
+    return true;
+  }
+  if (e.key === 'Enter' && hits[searchSel]) {
+    hits[searchSel].click();
+    return true;
+  }
+  if (e.key === 'Escape') {
+    if (box.value) {
+      box.value = '';
+      typedSearch('');
+    } else appBack(true);
+    return true;
+  }
+  return false;
 }
 // The typed words, matched in any case and across any run of spaces or line breaks.
 const searchRe = q =>

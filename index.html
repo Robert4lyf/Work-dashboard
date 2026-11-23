@@ -59,6 +59,15 @@
         </button>
         <button data-v="account">Settings</button>
       </div>
+      <!-- A computer's sidebar has room for the places that have no tab on a phone. -->
+      <div class="sidemore" id="sidemore">
+        <button data-side="ops">Command Centre</button>
+        <button data-side="waiting">Waiting</button>
+        <button data-side="focus">Focus</button>
+        <button data-side="notes">Scratchpad</button>
+        <button data-side="log">History</button>
+        <button data-side="keys" class="sidekeys" aria-haspopup="dialog">Keyboard shortcuts <kbd>?</kbd></button>
+      </div>
     </nav>
     <section id="v-zen" hidden aria-label="Single-task mode"></section>
     <section id="v-alarm" hidden aria-label="Alarm" role="alertdialog" aria-modal="true"></section>
@@ -107,6 +116,8 @@
     <script src="js/analytics.js"></script>
     <script src="js/ops.js"></script>
     <script src="js/create.js"></script>
+    <script src="js/tabs.js"></script>
+    <script src="js/desk.js"></script>
     <script src="js/events.js"></script>
   </body>
 </html>

@@ -236,6 +236,7 @@ function saveSyncState() {
   if (typeof picDb !== 'undefined' && picDb) return writeKV({ sync: JSON.stringify(sync2) });
   try {
     localStorage.setItem(SYNC_KEY, JSON.stringify(sync2));
+    if (typeof tabSavedLocal === 'function') tabSavedLocal();
   } catch (e) {}
 }
 // Record kinds this version knows. Rows of other kinds (from a newer version on another

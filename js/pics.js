@@ -53,14 +53,16 @@ function readPics(db) {
 // The saved copy and the sync bookkeeping, as JSON strings (null: not there).
 function readKV(db) {
   return new Promise(ok => {
-    const out = { state: null, sync: null };
+    const out = { state: null, sync: null, stamp: '' };
     if (!db) return ok(out);
     try {
       const st = db.transaction('kv').objectStore('kv'),
         a = st.get('state'),
-        b = st.get('sync');
+        b = st.get('sync'),
+        c = st.get('stamp');
       a.onsuccess = () => (out.state = typeof a.result === 'string' ? a.result : null);
       b.onsuccess = () => (out.sync = typeof b.result === 'string' ? b.result : null);
+      c.onsuccess = () => (out.stamp = typeof c.result === 'string' ? c.result : '');
       st.transaction.oncomplete = () => ok(out);
       st.transaction.onerror = st.transaction.onabort = () => ok(out);
     } catch (e) {
@@ -88,16 +90,23 @@ function saveWarn(on) {
     storeWarned = false;
   }
 }
+// Each write is stamped with the tab that made it, so another tab of the app open at the same
+// time can tell the saved copy is no longer the one it holds (see js/tabs.js).
+const TAB_ID = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+let tabWrites = 0;
 function writeKV(entries) {
   const done = new Promise(ok => {
     if (!picDb) return ok(false);
     try {
       const tx = picDb.transaction('kv', 'readwrite'),
-        st = tx.objectStore('kv');
+        st = tx.objectStore('kv'),
+        stamp = TAB_ID + ':' + ++tabWrites;
       for (const k in entries) st.put(entries[k], k);
+      st.put(stamp, 'stamp');
       tx.oncomplete = () => {
         // (only a save of the state itself shows things are saved again, not the sync's notes)
         if ('state' in entries) saveWarn(false);
+        if (typeof tabSaved === 'function') tabSaved(stamp);
         ok(true);
       };
       tx.onerror = tx.onabort = () => {

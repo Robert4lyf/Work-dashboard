@@ -520,6 +520,7 @@ function persistLocal() {
   }
   try {
     localStorage.setItem(KEY, stateJSON());
+    if (typeof tabSavedLocal === 'function') tabSavedLocal();
     return (localSaved = true);
   } catch (e) {
     return (localSaved = false); // no room (or storage blocked)

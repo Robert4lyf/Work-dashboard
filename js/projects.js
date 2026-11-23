@@ -134,7 +134,8 @@ function projectCard(q, canReorder, isActive = false) {
     })
     .join('');
   const remaining = kids.filter(step => !preview.includes(step)).length;
-  return `<article class="project-card" data-qid="${q.id}" aria-labelledby="project-title-${q.id}">
+  const current = splitOpenId() === q.id; // (its page is open beside the board: desk.js)
+  return `<article class="project-card${current ? ' project-current' : ''}" data-qid="${q.id}" aria-labelledby="project-title-${q.id}"${current ? ' aria-current="true"' : ''}>
     <div class="project-preview">
       <div class="project-card-heading">
         ${!kids.length && mayTick ? projectCheck(q, done ? 'Mark not done' : 'Mark done') : ''}
@@ -227,6 +228,7 @@ function renderProjects() {
       ${pinned ? `<div class="project-grid">${projectCard(pinned, false, true)}</div>` : '<p class="hint">Choose Make active on a project.</p>'}
     </section>${sections.join('')}`,
   );
+  splitMirror(renderToday); // (a wide window: beside a project's page, drawn again with it)
 }
 
 function projectClick(d, button) {
