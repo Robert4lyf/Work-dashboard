@@ -62,7 +62,6 @@ function forecastDays(span) {
 function forecastItems(span) {
   const t = today(),
     end = shift(t, span - 1),
-    top3 = top3Ids(),
     items = [],
     none = [];
   S.quests.forEach((q, i) => {
@@ -79,7 +78,6 @@ function forecastItems(span) {
       from: q.scheduled ? q.scheduled.date : t,
       due: q.due && q.due < t ? t : q.due || '',
       late: !!(q.due && q.due < t),
-      top: top3.includes(q.id) ? 0 : 1,
       i,
       ...(q.scheduled ? { fixed: true, sched: q.scheduled } : {}),
     });
@@ -95,7 +93,6 @@ function forecastItems(span) {
       min,
       from,
       due: q.due || '',
-      top: 1,
       i: 1000 + i,
       later: true,
       ...(q.scheduled ? { fixed: true, sched: q.scheduled } : {}),
@@ -121,7 +118,6 @@ function forecastItems(span) {
           from: d,
           due: d,
           fixed: true,
-          top: 1,
           i: 2000,
         });
     }
@@ -131,7 +127,7 @@ function forecastItems(span) {
   items.sort((a, b) => {
     if (a.fixed !== b.fixed) return a.fixed ? -1 : 1;
     if (dueKey(a) !== dueKey(b)) return dueKey(a) < dueKey(b) ? -1 : 1;
-    return a.top - b.top || a.i - b.i;
+    return a.i - b.i;
   });
   return { items, none };
 }

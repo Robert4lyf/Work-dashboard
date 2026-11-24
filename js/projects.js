@@ -829,7 +829,8 @@ function projectEditorFields(
   n,
   [name, due, notes] = ['project-name-' + n.id, 'project-due-' + n.id, 'project-notes-' + n.id],
 ) {
-  return `<label class="f" for="${name}">Name</label><input class="fld" id="${name}" data-field="text" data-id="${n.id}" value="${esc(n.text)}" maxlength="120">
+  // (no name field on a task's own page: Rename is in its actions)
+  return `${name ? `<label class="f" for="${name}">Name</label><input class="fld" id="${name}" data-field="text" data-id="${n.id}" value="${esc(n.text)}" maxlength="120">` : ''}
     <label class="f" for="${due}">Deadline</label><input class="fld" type="date" id="${due}" data-field="due" data-id="${n.id}" value="${esc(n.due || '')}">
     <label class="f" for="${notes}">Notes</label><textarea class="fld" id="${notes}" data-field="notes" data-id="${n.id}">${esc(n.notes || '')}</textarea>`;
 }

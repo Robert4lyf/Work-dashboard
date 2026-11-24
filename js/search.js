@@ -26,7 +26,7 @@ function backFromSearch() {
   const f = searchFrom;
   searchFrom = null;
   keepDrafts();
-  // (the Upcoming or Alarms page: go() shows Projects for a Today with nothing chosen)
+  // (the Upcoming page: go() shows Projects for a Today with nothing chosen)
   if (f.view === 'today' && !f.path.length && f.util) projectUtility = f.util;
   goPlace(f);
 }

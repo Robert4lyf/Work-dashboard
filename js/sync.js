@@ -171,7 +171,6 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     dropUndo();
     // (with this device's own refused run changes, which aren't records: see wfConflict)
     norm(Object.assign(fromRecords(recs, S.day), { editedAt: S.editedAt, wconflicts: S.wconflicts }));
-    settleTop3();
     // (a run taken in, as cleaned here, is explained: not a change of this device's, see wrunSeen)
     tookRuns.forEach(k => {
       const w = wrunById(k.slice(5));
@@ -194,7 +193,7 @@ async function firstSync() {
   if (rows.length) {
     // This device already has things of its own: they can join the account's, or go.
     // (asked only when signing in; a sync that starts on its own keeps them, which is safe)
-    // (everything of its own counts, not just quests: notes, Knowledge, pictures, alarms...)
+    // (everything of its own counts, not just quests: notes, Knowledge, pictures...)
     const n =
       S.quests.length +
       S.inbox.length +
@@ -203,7 +202,6 @@ async function firstSync() {
       S.kbcats.length +
       S.flows.length +
       S.noteImgs.length +
-      S.alarms.length +
       S.templates.length +
       (S.notes ? 1 : 0);
     const keep =
@@ -806,8 +804,6 @@ async function sync() {
       retryRoute(); // (a deep link whose target wasn't here before this sync)
       askMerge = false; // (only the sync straight after a sign-in may ask)
       setSync('ok');
-      // After the first sync, so a new device never writes before it has the server's copy.
-      registerDevice();
     });
   } catch (e) {
     console.warn('sync failed', e);
@@ -992,7 +988,7 @@ function setLook(k, v) {
 let setSub = null; // the group open, or null for the index
 const SET_GROUPS = [
   ['sync', 'Sync and account'],
-  ['look', 'Appearance and this device'],
+  ['look', 'Appearance'],
   ['tags', 'Tags'],
   ['rules', 'Rules'],
   ['auto', 'Automations and integrations'],
@@ -1031,7 +1027,7 @@ function setGroupLine(k) {
         ? 'Not signed in'
         : 'Signed in as ' + (session.user.email || '');
   if (k === 'look')
-    return `${{ '': 'Colours match the system', light: 'Light', dark: 'Dark' }[look.theme || ''] || 'Light'} · ${look.font === 'large' ? 'larger text' : 'standard text'} · ${thisDevice.name || 'this device'}`;
+    return `${{ '': 'Colours match the system', light: 'Light', dark: 'Dark' }[look.theme || ''] || 'Light'} · ${look.font === 'large' ? 'larger text' : 'standard text'}`;
   if (k === 'tags') return S.tags.map(x => x.name).join(', ') || 'None yet';
   if (k === 'rules') {
     const on = S.rules.filter(r => r.enabled).length;
@@ -1081,9 +1077,7 @@ function renderAccount() {
   if (setSub === 'look')
     h += `<p class="hint" id="looksec" style="margin:0 0 6px">This device only.</p>
     <p class="f" id="lookthemel">Colours</p><div class="chips" role="group" aria-labelledby="lookthemel">${opt('theme', '', 'Match system')}${opt('theme', 'light', 'Light')}${opt('theme', 'dark', 'Dark')}</div>
-    <p class="f" id="looksizel">Text size</p><div class="chips" role="group" aria-labelledby="looksizel">${opt('font', '', 'Standard')}${opt('font', 'large', 'Larger')}</div>
-
-    <label class="f" for="devname">This device's name (to choose where an alarm rings)</label><input class="fld" id="devname" value="${esc(thisDevice.name)}" maxlength="40" style="max-width:20em">${renderDevices()}`;
+    <p class="f" id="looksizel">Text size</p><div class="chips" role="group" aria-labelledby="looksizel">${opt('font', '', 'Standard')}${opt('font', 'large', 'Larger')}</div>`;
   if (setSub === 'tags') {
     h += '<p class="hint" id="tagsec">Tags group tasks by kind of work; a task has one at most.</p>';
     S.tags.forEach(
@@ -1095,7 +1089,7 @@ function renderAccount() {
   }
   if (setSub === 'backup')
     h +=
-      '<p class="hint" id="backupsec">A backup is one file with everything. Restoring replaces tasks, inbox, notes, alarms and history, and asks first.</p><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
+      '<p class="hint" id="backupsec">A backup is one file with everything. Restoring replaces tasks, inbox, notes and history, and asks first.</p><div class="acts"><button class="btn" id="exp">Save backup</button><button class="btn" id="impbtn">Restore backup</button><input type="file" id="imp" accept=".json,application/json" hidden aria-hidden="true"></div>';
   if (setSub === 'rules') h += renderRuleSettings().replace(/^<h2 style="margin-top:26px"/, '<h2');
   if (setSub === 'auto') {
     if (sb && session) h += renderExecSettings();

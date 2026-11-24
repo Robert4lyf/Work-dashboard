@@ -38,13 +38,13 @@ function questActions(id, fromList) {
     if (!n.children.length) act('Mark done', `data-toggle="${id}"`, 'go');
     act('Reschedule', `data-schedset="${id}"`, '', schedWhen(n));
     act('Unschedule', `data-schedclear="${id}"`);
-    // (chosen for Top 3 before it was scheduled: set aside there, and can be taken out)
-    if (S.quests.includes(n) && inTop3(id)) act('Remove from Top 3', `data-top3="${id}"`);
+    act('Rename', `data-rename="${id}"`);
     act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
     return a;
   }
   if (!d && q.scheduled) {
     if (!n.children.length) act('Mark done', `data-toggle="${id}"`);
+    act('Rename', `data-rename="${id}"`);
     act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
     return a;
   }
@@ -57,8 +57,6 @@ function questActions(id, fromList) {
       if (t) act(t === n ? 'Focus on this' : 'Focus: ' + t.text, `data-zen="1" data-q="${t.id}"`, 'go');
     }
   }
-  if (top && !d && S.quests.includes(n) && (inTop3(id) || canAct(n)))
-    act(inTop3(id) ? 'Remove from Top 3' : 'Add to Top 3', `data-top3="${id}"`);
   if (!d) act(q.resume ? 'Update saved place' : 'Save my place', `data-saveplace="${id}"`);
   if (q.resume && !isDone(q)) act('Clear saved place', `data-clearplace="${q.id}"`);
   if (!n.children.length) act(d ? 'Mark not done' : 'Mark done', `data-toggle="${id}"`);
@@ -72,6 +70,7 @@ function questActions(id, fromList) {
     act('Do next week', `data-sched="${id}" data-kind="q" data-when="${nextMonday()}"`);
     act('Move to Inbox', `data-toinbox="${id}"`);
   }
+  act('Rename', `data-rename="${id}"`);
   act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
   return a;
 }

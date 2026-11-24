@@ -179,8 +179,7 @@ textarea {
   border-radius: var(--radius-xs);
 }
 /* Use a dark ring on the coloured section bars and current tab in either theme. */
-.top3 > .sechead :focus-visible,
-.attsum :is(summary, .attcc):focus-visible,
+
 nav button[aria-current='page']:focus-visible {
   outline-color: #0a0a0a;
 }
@@ -254,8 +253,7 @@ header.page-header {
   font-weight: 650;
 }
 /* long names: two lines in a list, the whole name on the task's page */
-.t3row .open > span,
-.secrow .open > span,
+
 .list .row .open > span {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -416,9 +414,7 @@ h2 {
 }
 /* A row's own action in a list is a quiet one: the filled accent is kept for a page's primary
    action, so a list of rows doesn't read as a wall of buttons. */
-.list .row > .btn:is(.green, .blue),
-.t3row .btn:is(.green, .blue),
-.secrow .btn:is(.green, .blue) {
+.list .row > .btn:is(.green, .blue) {
   background: var(--panel);
   color: var(--ink);
   border-color: var(--edge);
@@ -780,15 +776,13 @@ nav button[aria-current='page'] {
 .list {
   margin-bottom: 14px;
 }
-.row,
-.secrow {
+.row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 6px 10px 12px;
 }
-.list > * + *,
-.slist > * + * {
+.list > * + * {
   border-top: 1px solid var(--line);
 }
 .open {
@@ -827,71 +821,9 @@ nav button[aria-current='page'] {
 .board {
   margin-bottom: 18px;
 }
-.blane h3 {
-  font-size: var(--fs-sm);
-  margin: 14px 0 8px;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-.blane h3 small {
-  color: var(--muted);
-}
-.lanetiles {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
-  padding: 2px 6px 10px 2px;
-}
-.qtile {
-  flex: 0 0 min(62%, 220px);
-  scroll-snap-align: start;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--edge);
-  box-shadow: var(--shadow-1);
-  padding: 10px;
-  border-radius: var(--radius);
-}
-.qtile .check {
-  flex: none;
-}
-.qtopen {
-  flex: 1;
-  min-width: 0;
-  background: none;
-  border: 0;
-  padding: 0;
-  text-align: left;
-  cursor: pointer;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-.qtopen > span {
-  display: block;
-  font-weight: 600;
-}
-.qtopen small {
-  display: block;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  margin-top: 4px;
-}
-.qtopen .qtnext {
-  display: block;
-  margin-top: 2px;
-}
-.qtile.done .qtopen > span {
-  text-decoration: line-through;
-  color: var(--muted);
-}
+
 /* a quest's summary on Today, under its name (two lines at most) */
-:is(.open, .qtopen) .qsum {
+:is(.open) .qsum {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1714,66 +1646,7 @@ nav .badge[hidden] {
 .alarms {
   margin: -4px 0 18px;
 }
-.arow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-}
-.arow:first-of-type {
-  border-top: 0;
-}
-.arow .fld {
-  flex: 1 1 8em;
-  min-width: 0;
-  padding: 6px 8px;
-}
-.arow .atime {
-  flex: 0 0 auto; /* room for a 12-hour clock's AM/PM */
-}
-.arow:not(.on) .atime {
-  opacity: 0.6;
-}
-#v-alarm {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  justify-content: safe center; /* several ringing at once: scroll, never cut off */
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  gap: 16px;
-  padding: 24px 20px;
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-}
-#v-alarm[hidden] {
-  display: none;
-}
-body.ringing {
-  overflow: hidden; /* the page behind stays put */
-}
-.ring {
-  max-width: 480px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 20px;
-  text-align: center;
-}
-.ringtime {
-  font-size: clamp(32px, 10vw, 56px);
-  margin: 0;
-}
-.ringlabel {
-  font-size: var(--fs-h);
-  margin: 8px 0 16px;
-  overflow-wrap: anywhere;
-}
-.ring .acts {
-  justify-content: center;
-}
+
 /* knowledge: flows, categories and articles */
 .flows {
   display: flex;
@@ -1800,7 +1673,7 @@ body.ringing {
 #kbres {
   margin-top: 10px;
 }
-.kcat > summary small,
+
 .kbrow small {
   color: var(--muted);
   font-weight: 400;
@@ -1965,15 +1838,12 @@ summary {
 .notestile:first-of-type {
   border-top: 1px solid var(--edge);
 }
-#donesec > summary small,
+
 #waitsec > summary small {
   color: var(--muted);
   font-weight: 400;
 }
-#donesec .row .open > span {
-  text-decoration: line-through;
-  color: var(--muted);
-}
+
 /* the quest page: facts card, steps, then the rest folded away; actions always to hand */
 .facts .factsrow {
   margin: 8px 0 2px;
@@ -2122,30 +1992,6 @@ details.more > details {
 .tagd[open] > summary {
   margin-bottom: 8px;
 }
-/* a device in Settings, with its two-tap Forget */
-.tchip {
-  display: inline-flex;
-  border: 1px solid var(--edge);
-  background: var(--panel);
-  border-radius: 0;
-  overflow: hidden;
-}
-.tchip button {
-  background: none;
-  border: 0;
-  padding: 6px 10px;
-  cursor: pointer;
-}
-.tchip .tdel {
-  border-left: 1px solid var(--edge);
-  color: var(--muted);
-  padding: 6px 8px;
-}
-.tchip .tdel.armed {
-  background: var(--err);
-  color: var(--bg);
-  font-weight: 600;
-}
 /* an Inbox item's subquests, added before it goes to Today */
 .item .subs {
   list-style: none;
@@ -2191,9 +2037,7 @@ details.more > details {
   opacity: 1;
   color: var(--ink);
 }
-.qtile .qmore {
-  margin: -4px -4px 0 0;
-}
+
 .qfoot .btn.qmore {
   flex: 0 0 48px;
   opacity: 1;
@@ -2232,8 +2076,7 @@ details.more > details {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
-.qalist > .qact:first-child,
-.t3prow:first-child .qact {
+.qalist > .qact:first-child {
   border-top: 0;
 }
 .qact small {
@@ -2343,113 +2186,6 @@ details.more > details {
 }
 #v-focus .linkbtn[data-saveplace] {
   margin: 8px 0 0;
-}
-/* the top 3 on Today */
-.top3 {
-  margin-bottom: 12px;
-}
-.t3row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  border-top: 1px solid var(--line);
-}
-.t3row:first-child {
-  border-top: 0;
-}
-.t3n {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  background: var(--on-signal);
-  color: var(--signal);
-  font-size: var(--fs);
-  font-weight: 900;
-  border-radius: 0;
-}
-.t3row.done .t3n {
-  background: var(--ok);
-  color: var(--on-accent);
-}
-.t3row.done .open > span {
-  text-decoration: line-through;
-  color: var(--muted);
-}
-.t3row .open small .tag {
-  margin-top: 2px;
-}
-.t3row .btn.sm,
-.t3row .tag {
-  flex: none;
-  margin: 0;
-}
-.t3row .btn.sm {
-  max-width: 40%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.top3empty {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 12px;
-  padding: 8px 14px;
-  margin-bottom: 12px;
-}
-.top3empty .linkbtn {
-  color: var(--ink);
-}
-.t3pick {
-  display: flex;
-  flex-direction: column;
-}
-.t3prow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.t3prow .qact {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-.t3prow .qact .t3n {
-  background: var(--panel);
-}
-/* chosen, set aside (scheduled or waiting): named, with a way to take it out */
-.t3kept {
-  min-height: 48px;
-  padding: 6px 4px 6px 12px;
-  border-top: 1px solid var(--line);
-}
-.t3kname {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.t3kname small {
-  display: block;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-.t3prow .qact[aria-pressed='true'] .t3n {
-  background: var(--accent);
-  color: var(--on-accent);
-}
-.t3prow .qact:not([aria-pressed='true']) .t3n {
-  box-shadow: inset 0 0 0 1px var(--edge-strong);
-}
-.t3prow .mv {
-  width: 36px;
-  height: 36px;
 }
 /* resources on a quest's page */
 .resd {
@@ -2598,45 +2334,7 @@ details.more > details {
   #waitsec .row .check {
     grid-row: 2;
   }
-  .t3row {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 4px 10px;
-  }
-  .t3row .btn.sm,
-  .t3row .tag {
-    grid-column: 2;
-    justify-self: start;
-    max-width: none;
-  }
-  /* Today's Scheduled and Waiting rows: the name across the row, Done or Follow up and ⋯ under it */
-  .secrow {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 4px 10px;
-  }
-  .secrow > .open {
-    grid-column: 2 / -1;
-  }
-  .wrow > .open {
-    grid-column: 1 / -1;
-  }
-  .secrow > .btn {
-    grid-row: 2;
-    grid-column: 2;
-    justify-self: start;
-  }
-  .wrow > .btn {
-    grid-column: 1 / 3;
-  }
-  .secrow > .qmore {
-    grid-row: 2;
-    grid-column: 3;
-  }
-  .schedrow > .stime {
-    grid-row: 1 / span 2;
-    align-self: start;
-  }
+
   /* Reorder: the move buttons on a line of their own, under the name */
   .list .row:has(> .mv) {
     flex-wrap: wrap;
@@ -2656,7 +2354,6 @@ details.more > details {
 /* (rows scrolled into view land clear of the sticky footer and the tab bar) */
 .row,
 .resrow,
-.t3row,
 .crow,
 .row > *,
 .resrow > * {
@@ -3015,106 +2712,38 @@ details.more > details {
   margin: 0 0 8px;
 }
 /* Today (Release E): Scheduled and Waiting, sections like Top 3 and Today's tasks */
-.todaysec {
-  margin: 0 0 12px;
-}
-.schedrow .stime small {
-  display: block;
-  font-weight: 600;
-  color: var(--muted);
-}
+
 .schedpick {
   cursor: pointer;
 }
-.schedrow .stime {
-  flex: none;
-  width: 3.2em;
-  line-height: 1.1;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  font-size: var(--fs-h);
-  letter-spacing: -0.02em;
-}
-.schedrow.sch-passed .stime,
-.schedrow.sch-past .stime {
-  color: var(--muted);
-}
-.schedrow.sch-passed .open small,
-.schedrow.sch-past .open small {
-  color: var(--ink);
-  font-weight: 600;
-}
+
 .tag.sched {
   background: var(--info);
   color: var(--on-status);
 }
-.wrow .open small .tag {
-  margin-left: 2px;
-}
-.nowork {
-  margin: 0 0 14px;
-}
-.t3out {
-  margin: 8px 0 0;
-}
+
 .schedflds .fld {
   min-width: 0;
   width: 100%;
 }
-.schedrow {
-  gap: 10px;
-}
+
 .schedflds {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0 12px;
 }
-.wrow {
-  box-shadow: inset 4px 0 0 var(--wait);
-}
 
-/* Structured brutalist: Today's sections are labelled panels, each under a bar of its own colour
-   (yellow: what you're on; red: only what has failed or is overdue; turquoise: the Top 3; neutral:
-   routine sections, scheduled, waiting and the list), with its sign; heavy outlines; a sidebar on
-   a desktop. */
-.ptitle {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 12px;
-  margin: 0 0 10px;
-}
-.ptitle[hidden] {
-  display: none;
-}
-.ptitle b {
-  display: block;
-  font-size: 34px;
-  font-weight: 900;
-  letter-spacing: -0.035em;
-  line-height: 1;
-}
-.ptitle span {
-  display: block;
-  font-size: var(--fs-sm);
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
 /* the bars */
-#v-today .top3 > .sechead,
-#v-today .todaysec > .sechead,
-:is(#v-today, .tmain) > .sechead {
+
+:is(#v-today) > .sechead {
   margin: 0;
   padding: 6px 12px;
   border: 3px solid var(--edge);
   background: var(--bar);
   color: var(--bar-ink, #111111);
 }
-#v-today .top3 > .sechead h2,
-#v-today .todaysec > .sechead h2,
-:is(#v-today, .tmain) > .sechead > h2 {
+
+:is(#v-today) > .sechead > h2 {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3124,9 +2753,8 @@ details.more > details {
   letter-spacing: 0.02em;
   color: var(--bar-ink, #111111);
 }
-#v-today .top3 > .sechead h2::before,
-#v-today .todaysec > .sechead h2::before,
-:is(#v-today, .tmain) > .sechead > h2::before {
+
+:is(#v-today) > .sechead > h2::before {
   content: '';
   flex: none;
   width: 22px;
@@ -3135,48 +2763,21 @@ details.more > details {
   -webkit-mask: var(--sign) center / contain no-repeat;
   mask: var(--sign) center / contain no-repeat;
 }
-#v-today .top3 > .sechead :is(.linkbtn, small),
-#v-today .todaysec > .sechead :is(.linkbtn, small),
-:is(#v-today, .tmain) > .sechead :is(.linkbtn, small) {
+
+:is(#v-today) > .sechead :is(.linkbtn, small) {
   color: var(--bar-ink, #111111);
   text-decoration-color: currentColor;
 }
-.top3 {
-  --bar: var(--sec-blue);
-  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%224.5%22%2F%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%22.6%22%2F%3E%3C%2Fsvg%3E');
-  padding: 0;
-  border-width: 3px;
-}
-#v-today .top3 > .sechead {
-  border-width: 0 0 3px;
-}
-.top3 .t3list,
-.top3 .t3out,
-.top3 .t3back {
-  padding: 0 12px;
-}
-.top3 .t3back {
-  margin: 8px 0;
-}
-.schedsec {
-  --bar: var(--sec-routine);
-  --bar-ink: var(--sec-routine-ink);
-  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%223.5%22%20y%3D%225%22%20width%3D%2217%22%20height%3D%2215.5%22%20rx%3D%221.5%22%2F%3E%3Cpath%20d%3D%22M3.5%2010h17M8%203v4M16%203v4%22%2F%3E%3C%2Fsvg%3E');
-}
-.waitsec2 {
-  --bar: var(--sec-routine);
-  --bar-ink: var(--sec-routine-ink);
-  --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%229%22%2F%3E%3Cpath%20d%3D%22M12%207v5l3.5%202%22%2F%3E%3C%2Fsvg%3E');
-}
-:is(#v-today, .tmain) > .sechead {
+
+:is(#v-today) > .sechead {
   flex-wrap: wrap;
   row-gap: 8px;
   --bar: var(--sec-routine);
   --bar-ink: var(--sec-routine-ink);
   --sign: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M9%206h11M9%2012h11M9%2018h11M4%206h.5M4%2012h.5M4%2018h.5%22%2F%3E%3C%2Fsvg%3E');
 }
-#v-today .todaysec > .slist.box,
-:is(#v-today, .tmain) > .sechead + .list.box {
+
+:is(#v-today) > .sechead + .list.box {
   border-width: 3px;
   border-top: 0;
 }
@@ -3187,21 +2788,6 @@ details.more > details {
   border: 3px solid var(--edge);
   border-top: 0;
   background: var(--panel);
-}
-/* what needs you: a red panel */
-.attsum > summary b::before,
-.attsum > .attsumline b::before {
-  content: '';
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  margin-right: 8px;
-  vertical-align: -4px;
-  background: currentColor;
-  -webkit-mask: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203.5l9.5%2017h-19z%22%2F%3E%3Cpath%20d%3D%22M12%2010v4.5M12%2017.6v.2%22%2F%3E%3C%2Fsvg%3E')
-    center / contain no-repeat;
-  mask: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%222.6%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M12%203.5l9.5%2017h-19z%22%2F%3E%3Cpath%20d%3D%22M12%2010v4.5M12%2017.6v.2%22%2F%3E%3C%2Fsvg%3E')
-    center / contain no-repeat;
 }
 /* a task's own tags (Work, Client...) as pills; states stay square blocks */
 .tag[style*='background'] {
@@ -3312,48 +2898,6 @@ nav button[aria-current='page'] {
   .wrap {
     max-width: 1320px;
   }
-  body:not(.zen) .wrap:has(> #v-today:not([hidden]) > .tside) {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
-    grid-template-rows: auto auto 1fr;
-    column-gap: 24px;
-    align-items: start;
-  }
-  .wrap:has(> #v-today:not([hidden]) > .tside) > .ptitle {
-    grid-column: 1 / -1;
-    grid-row: 1;
-  }
-  .wrap:has(> #v-today:not([hidden]) > .tside) > header {
-    grid-column: 1;
-    grid-row: 2;
-    margin: 0 0 18px;
-  }
-  .wrap:has(> #v-today:not([hidden]) > .tside) > #v-today {
-    display: contents;
-  }
-  #v-today > .tmain {
-    grid-column: 1;
-    grid-row: 3;
-    min-width: 0;
-  }
-  #v-today > .tside {
-    grid-column: 2;
-    grid-row: 2 / span 2;
-    min-width: 0;
-  }
-  .tside > * + * {
-    margin-top: 18px;
-  }
-  /* (with nothing to show, still a panel, so the column starts square with the header) */
-  .tside .attn.attnone {
-    margin: 0;
-    padding: 12px;
-    border: 3px solid var(--edge);
-    background: var(--panel);
-    color: var(--ink);
-    font-size: var(--fs);
-    font-weight: 800;
-  }
 }
 /* Release G: Today's list, easier to scan. A task's steps as a count and a thin line along the
    row's foot (no taller than the row); a Top 3 priority marked with its number; the filter and
@@ -3388,180 +2932,9 @@ nav button[aria-current='page'] {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
-.t3mark::before {
-  /* (the number isn't part of the name: drawn, and read out, before it) */
-  content: attr(data-rank);
-  display: inline-grid;
-  place-items: center;
-  min-width: 1.35em;
-  height: 1.35em;
-  margin-right: 8px;
-  padding: 0 3px;
-  vertical-align: 0.06em;
-  font-size: 0.82em;
-  font-weight: 900;
-  background: var(--sec-blue);
-  color: #111111;
-  border: 1.5px solid #111111;
-}
-.tfilter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  padding: 8px 12px;
-  border: 3px solid var(--edge);
-  border-top: 0;
-  background: var(--panel);
-}
-:is(#v-today, .tmain) > .tfilter + .list.box {
-  border-width: 3px;
-  border-top: 0;
-}
-.tfilter .chips {
-  display: flex;
-  gap: 6px;
-}
-.tfilter .chip {
-  min-height: 44px;
-}
-.tfilter .chip small {
-  font-weight: 800;
-  margin-left: 2px;
-}
-.tfindbtn {
-  margin-left: auto;
-  min-width: 44px;
-  min-height: 44px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-}
-.tfindbtn svg {
-  width: 20px;
-  height: 20px;
-}
-.tfind {
-  flex: 1 1 100%;
-  min-width: 0;
-  min-height: 44px;
-  margin: 0;
-}
-/* Needs attention, compact: the bar, the one that matters most, then the rest folded */
-.attlist.attfirst {
-  margin: 0;
-  border-width: 3px;
-  border-top-width: 0;
-}
-.attmore {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.attmore > summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 3px solid var(--edge);
-  border-top: 0;
-  background: var(--panel);
-  font-weight: 800;
-  cursor: pointer;
-}
-.attmore > summary::before {
-  content: '▸';
-}
-.attmore[open] > summary::before {
-  content: '▾';
-}
-.attmore > summary::-webkit-details-marker {
-  display: none;
-}
-.attmore > .attlist {
-  margin: 0;
-  border-width: 3px;
-  border-top-width: 0;
-}
-/* Release H: the rest of Today's Scheduled and Waiting, a tap away inside their own panel */
-.secmore {
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line);
-}
-.secmore > summary {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 2px 8px;
-  min-height: 44px;
-  padding: 6px 12px;
-  font-weight: 800;
-  cursor: pointer;
-  list-style: none;
-}
-.secmore > summary::-webkit-details-marker {
-  display: none;
-}
-.secmore > summary::before {
-  content: '▸';
-}
-.secmore[open] > summary::before {
-  content: '▾';
-}
-.secmore > summary small {
-  font-weight: 600;
-  color: var(--muted);
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.secmore > summary small.wchase {
-  color: var(--ink);
-  font-weight: 800;
-}
-.secmore > .slist {
-  border-top: 1px solid var(--line);
-}
-/* (the line at the top of Today: a tap to each section further down) */
-.tjump {
-  display: flex;
-  gap: 8px;
-  margin: 0 0 12px;
-}
-.tjump {
-  flex-wrap: nowrap;
-}
-.tjump .chip {
-  flex: 1 1 auto;
-  min-width: 0;
-  justify-content: center;
-  gap: 4px;
-  padding: 0 8px;
-  white-space: nowrap;
-  overflow: hidden;
-}
+
 /* (Larger text: the arrow goes first, so the three keep to one line) */
-:root[data-font='large'] .tjump .jarrow {
-  display: none;
-}
-:root[data-font='large'] .tjump .chip {
-  padding: 0 4px;
-}
-.tjump .jarrow {
-  font-weight: 900;
-}
-@media (max-width: 359px) {
-  .tjump {
-    gap: 6px;
-  }
-  .tjump .chip {
-    padding: 0 4px;
-  }
-  .tjump .jarrow {
-    display: none;
-  }
-}
+
 #v-today .sechead:has(> h2) {
   scroll-margin-top: 8px;
 }
@@ -3576,7 +2949,6 @@ nav button[aria-current='page'] {
   .mv,
   .hsearch,
   .syncbtn,
-  .attcc,
   .chip,
   .linkbtn,
   .day,
@@ -3598,7 +2970,6 @@ nav button[aria-current='page'] {
   .mv,
   .hsearch,
   .syncbtn,
-  .attcc,
   .btn.sm,
   .open,
   .timer-link,
@@ -3634,13 +3005,6 @@ summary,
   min-height: 44px;
   box-sizing: border-box;
 }
-/* (Command Centre clips its own overflow, so it can't reach out: it's 44px tall itself) */
-#v-today .attn .attcc {
-  min-height: 44px;
-}
-#v-today .attn .attcc::after {
-  content: none;
-}
 /* (Release G) changes not saved on this device: a line that stays until a save works */
 #savewarn {
   position: sticky;
@@ -3659,21 +3023,6 @@ summary,
 }
 .fsum[rows='1']:focus {
   min-height: 7em;
-}
-/* (Release G) the Top 3 picker's Done and Clear stay in reach below a long list */
-#sheet .t3pick + .acts {
-  position: sticky;
-  bottom: 0;
-  margin: 0 -16px;
-  padding: 10px 16px;
-  background: var(--panel);
-  border-top: 1px solid var(--line);
-}
-/* (Release G, measured) folded sections at the foot of Today aren't laid out until opened or
-   near. (Rows themselves were tried too: 28-38% off a redraw, but the browser drawing them in
-   over several frames moved the list under a returning reader: not worth it.) */
-#v-today .todaymore > details:not([open]) {
-  content-visibility: auto;
 }
 /* Settings: the index of groups, a row each, opening its page */
 .setlist .row {
@@ -3921,58 +3270,11 @@ summary,
 
 /* Today, Phase 1: one "Needs attention" line (opening to the items), the way to the Command
    Centre beside it, and the secondary sections folded at the end. */
-.attn {
-  position: relative;
-  margin: 0 0 12px;
-}
-.attn.attnone {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  min-height: 40px;
-}
-.attsum {
-  margin: 0;
-  border-top: 0;
-  padding-top: 0;
-}
-.attsum > summary,
-.attsum > .attsumline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 10px;
-  min-height: 48px;
-  box-sizing: border-box;
-  padding: 11px calc(10.5 * var(--fs-xs) + 13px) 11px 12px;
-  border: 3px solid var(--edge);
-  background: var(--panel);
-  border-radius: var(--radius);
-}
-.attsum > summary small,
-.attsumline small {
-  font-weight: 400;
-  font-size: var(--fs-sm);
-}
-.attsum:is(.sev0, .sev1) > :is(summary, .attsumline) {
-  background: var(--sec-red);
-  color: #111111;
-  border-color: var(--edge);
-}
-.attsum[open] > summary {
-  border-bottom-width: 0;
-}
+
 .attlist {
   margin: 0 0 14px;
 }
-.attsum > .attlist {
-  margin: 0;
-  border-width: 3px;
-  border-top-width: 0;
-}
+
 .attrow {
   display: flex;
   padding: 2px 12px;
@@ -3980,31 +3282,7 @@ summary,
 .attlist > * + * {
   border-top: 1px solid var(--line);
 }
-.attn .attcc {
-  position: absolute;
-  top: 4px;
-  right: 6px;
-  /* a fixed width, and the summary keeps that much (and a gap) clear: whatever the font, the
-     summary's words wrap rather than run under it */
-  width: 10.5em;
-  box-sizing: border-box;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-height: 40px;
-  padding: 4px 6px;
-  font-size: var(--fs-xs);
-  background: var(--panel);
-  color: var(--ink);
-  border: 1px solid var(--edge);
-  text-decoration: none;
-  border-radius: 0;
-}
-.attn.attnone .attcc {
-  position: static;
-  flex: none;
-  width: auto;
-}
+
 .attrow .open > small {
   margin-top: 2px;
 }
@@ -4019,40 +3297,13 @@ summary,
 .attrow.sev0 .open > span {
   color: var(--err);
 }
-.todaymore {
-  margin-top: 18px;
-}
-#soond .soon {
-  padding: 0;
-  margin: 0;
-  background: none;
-  border: 0;
-}
-#flowsd .flows {
-  margin-top: 8px;
-}
+
 /* the Command Centre: an all-clear line in place of empty sections; the checklists last */
 .opsquiet {
   margin: 0 0 14px;
 }
 .opsroutines {
   margin-top: 0;
-}
-.attsum > summary > b::before {
-  content: '▸ ';
-}
-.attsum[open] > summary > b::before {
-  content: '▾ ';
-}
-.attsum > summary::-webkit-details-marker {
-  display: none;
-}
-.attfail {
-  margin: 0;
-  border-top-width: 0;
-}
-.attsum[open] + .attfail {
-  border-top-width: 1.5px;
 }
 
 /* Phase 2: Knowledge in two views, the "+ New" sheet, the process overview */
@@ -5051,4 +4302,10 @@ kbd {
    stay on screen above it, pushing the one task below the fold) */
 body.zen .wrap:has(> #v-today:not([hidden]) .node) {
   display: none;
+}
+/* (the Command Centre's own way back: the sidebar is there on a computer) */
+@media (min-width: 1000px) {
+  #v-ops > .linkbtn[data-goto='projects'] {
+    display: none;
+  }
 }

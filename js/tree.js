@@ -175,19 +175,6 @@ const spent = n => {
   const set = new Set(ids(n));
   return S.sessions.filter(s => set.has(s.q)).reduce((a, s) => a + s.mins, 0);
 };
-function dueSoon() {
-  const out = [],
-    lim = shift(today(), 3);
-  (function w(ns, trail) {
-    ns.forEach(n => {
-      if (isDone(n)) return;
-      const t = [...trail, n.text];
-      if (n.due && n.due <= lim) out.push({ n, t });
-      w(n.children, t);
-    });
-  })(S.quests, []);
-  return out.sort((a, b) => (a.n.due < b.n.due ? -1 : a.n.due > b.n.due ? 1 : 0)).slice(0, 5);
-}
 // (Its resources repeat with it: a weekly report needs its procedure every week. A saved place
 // doesn't: that's this time's, like waiting.)
 const strip = n => ({
@@ -310,8 +297,6 @@ function popSheet(html, { labelledBy = '', label = '' } = {}) {
 }
 const SHEET_BEHIND = ['.wrap', 'nav', '#v-zen'];
 function sheetInert(on) {
-  // (not while an alarm rings: that keeps the page out of reach itself)
-  if (!on && !$('#v-alarm').hidden) return;
   SHEET_BEHIND.forEach(s => {
     const e = $(s);
     if (e) e.inert = on;

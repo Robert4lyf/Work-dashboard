@@ -12,9 +12,8 @@ function nextStep() {
   return null;
 }
 // What to work on next in Focus and single-task mode: a place saved today or
-// yesterday (the newest), else the first Top 3 task with a step to do, else the first step in
-// list order. Nothing is reordered, chosen or started by it. `why` says which: 'place', 'top3'
-// (with its rank) or 'list'.
+// yesterday (the newest), else the first step in list order. Nothing is reordered, chosen or
+// started by it. `why` says which: 'place' or 'list'.
 function recommend() {
   const since = shift(today(), -1),
     placed = S.quests
@@ -24,16 +23,6 @@ function recommend() {
     const st = placeStep(placed),
       n = st && !isDone(st) && !st.wait ? st : actionLeaf(placed);
     if (n) return { n, q: placed, why: 'place' };
-  }
-  // (ranked as the Top 3 card shows them: top3Ids leaves out the set-aside ones)
-  const ids = top3Ids();
-  let rank = 0;
-  for (let i = 0; i < ids.length; i++) {
-    const q = S.quests.find(x => x.id === ids[i]);
-    if (!q) continue;
-    rank++;
-    const n = actionLeaf(q);
-    if (n) return { n, q, why: 'top3', rank };
   }
   const nx = nextStep();
   return nx ? { ...nx, why: 'list' } : null;
@@ -50,12 +39,10 @@ const pageTitles = {
   notes: 'Scratchpad',
   ops: 'Command Centre',
 };
-const projectUtilityTitles = { upcoming: 'Upcoming', alarms: 'Alarms' };
+const projectUtilityTitles = { upcoming: 'Upcoming' };
 function renderHeader() {
   const title =
-    (view === 'today' && !workListMode && !path.length
-      ? projectUtilityTitles[projectUtility]
-      : pageTitles[view]) || '';
+    (view === 'today' && !path.length ? projectUtilityTitles[projectUtility] : pageTitles[view]) || '';
   const heading = $('#page-title');
   heading.hidden = !title;
   if (heading.textContent !== title) heading.textContent = title;

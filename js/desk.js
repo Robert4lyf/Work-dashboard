@@ -80,7 +80,7 @@ function openKeys() {
 function deskChord(e) {
   // (on a Mac it's ⌘: Ctrl+K there deletes to the end of a line in a field)
   if (ON_MAC ? !e.metaKey || e.ctrlKey : !e.ctrlKey || e.metaKey) return false;
-  if (e.altKey || e.shiftKey || !$('#v-alarm').hidden) return false;
+  if (e.altKey || e.shiftKey) return false;
   // (not under a sheet, nor in single-task mode: what they cover isn't to be changed from there)
   if ($('#sheet') || focusLocked() || zen) return false;
   const k = e.key.toLowerCase(),
@@ -105,7 +105,7 @@ function deskLists() {
   const sels = [];
   if (view === 'search') sels.push('#sres button.srow, #sres .srow a');
   if (view === 'projects' || splitOn()) sels.push('#v-projects .project-open');
-  if (view === 'today') sels.push('#v-today .row .open, #v-today .secrow .open, #v-today .t3row .open');
+  if (view === 'today') sels.push('#v-today .row .open');
   if (view === 'inbox') sels.push('#v-inbox .ititle');
   return sels.map(s => [...document.querySelectorAll(s)].filter(deskShown)).filter(l => l.length);
 }
@@ -174,13 +174,13 @@ function deskTick() {
   return true;
 }
 
-/* a mouse: right-click a project, a task or a step for its actions (the same list as its ⋯, with
-   Rename); double-click the name on its page to rename it. Not for a finger: a long press on a
+/* a mouse: right-click a project, a task or a step for its actions (the same list as its ⋯);
+   double-click the name on its page to rename it. Not for a finger: a long press on a
    phone is the browser's. */
 document.addEventListener('contextmenu', e => {
   if (!window.appReady || !e.target.closest) return;
   if (e.pointerType ? e.pointerType !== 'mouse' : !mouseMQ.matches) return;
-  if ($('#sheet') || !$('#v-alarm').hidden || zen) return;
+  if ($('#sheet') || zen) return;
   // (a field, a link and selected words keep the browser's own menu: paste, copy, open in a tab)
   if (e.target.closest('input, textarea, select, a[href], [contenteditable]')) return;
   if (String(window.getSelection ? getSelection() : '').trim()) return;
@@ -190,13 +190,9 @@ document.addEventListener('contextmenu', e => {
   openTaskMenu(el.dataset.qid);
 });
 function openTaskMenu(id) {
-  const r = find(id);
-  if (!r) return;
-  const acts = questActions(id, true),
-    del = acts.findIndex(a => a.cls === 'del');
-  acts.splice(del < 0 ? acts.length : del, 0, { label: 'Rename', attrs: `data-rename="${id}"` });
-  actionSheet(r.n.text, acts);
+  openQuestActions(id, true);
 }
+// Rename (in every task's actions; on its page, a double click on its name too).
 function renameTask(id) {
   const r = find(id) || find(id, S.later);
   if (!r) return;
@@ -221,8 +217,7 @@ document.addEventListener('dblclick', e => {
 /* a wide window: a project's page with the board beside it, so another project is one click
    away. The board is the same one as on Projects, drawn narrow (its cards as a list); each side
    is drawn again whenever the other is, so a tick on either shows on both. */
-const splitOn = () =>
-  splitMQ.matches && view === 'today' && path.length > 0 && !workListMode && !!find(path[0]);
+const splitOn = () => splitMQ.matches && view === 'today' && path.length > 0 && !!find(path[0]);
 const splitOpenId = () => (splitOn() ? path[0] : '');
 function syncSplit() {
   const on = splitOn();

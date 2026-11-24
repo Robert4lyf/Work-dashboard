@@ -20,8 +20,6 @@ const LISTS = {
   log: ['log', x => x.id + '|' + x.d],
   session: ['sessions', x => (x.tid || x.t) + '|' + (x.q || '')],
   interrupt: ['interrupts', x => x.id],
-  alarm: ['alarms', x => x.id],
-  device: ['devices', x => x.id],
   kbcat: ['kbcats', x => x.id],
   kb: ['kb', x => x.id],
   flow: ['flows', x => x.id],
@@ -64,12 +62,6 @@ function toRecords(s) {
   // Only once there are notes: a device that never had any mustn't send an empty copy that
   // could win over real notes from another device. (Clearing them deletes the record.)
   if (s.notes) m.set('meta:notes', { text: s.notes });
-  // Today's top 3, its own record (not in prefs: choosing it mustn't fight a prefs change made
-  // elsewhere). Only while there is one; clearing it deletes the record.
-  // (Release F: its set-aside choices in a record of their own, which a copy of the app from
-  // before them leaves alone rather than writing back without them)
-  if (s.top3) m.set('meta:top3', { day: s.top3.day, ids: s.top3.ids });
-  if (s.top3 && s.top3.held) m.set('meta:top3held', { day: s.top3.day, held: s.top3.held });
   // Capacity per weekday (Release C): its own record, only once set.
   if (s.cap) m.set('meta:cap', { days: s.cap });
   // Quick-launch pins (Release C): their own record, only once there are any.
@@ -118,12 +110,6 @@ function toRecords(s) {
 }
 // Rebuild a state from records. Items missing from the saved order (added elsewhere) go at the
 // end, except inbox items, which go first like new captures.
-// The top 3 and its set-aside choices, from their two records (the held ones only for its day).
-function withHeld(t, h) {
-  if (!h || !h.day) return t || null;
-  if (t && t.day !== h.day) return t;
-  return { day: h.day, ids: (t && t.ids) || [], held: h.held };
-}
 function fromRecords(m, day) {
   const by = {};
   m.forEach((v, k) => (by[k.slice(0, k.indexOf(':'))] = by[k.slice(0, k.indexOf(':'))] || []).push(v));
@@ -154,8 +140,6 @@ function fromRecords(m, day) {
     log: (by.log || []).sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0)),
     sessions: (by.session || []).sort((a, b) => a.t - b.t),
     interrupts: (by.interrupt || []).sort((a, b) => a.t - b.t),
-    alarms: by.alarm || [],
-    devices: by.device || [],
     kbcats: by.kbcat || [],
     // Pictures of their own. Older copies kept them in the article: those count only until the
     // account has any pictures of their own (after that, an older device still sending them
@@ -177,7 +161,6 @@ function fromRecords(m, day) {
     rules: by.rule || [],
     rlog: (by.rlog || []).sort((a, b) => a.t - b.t),
     notes: (m.get('meta:notes') || {}).text || '',
-    top3: withHeld(m.get('meta:top3'), m.get('meta:top3held')),
     cap: (m.get('meta:cap') || {}).days || null,
     pins: (m.get('meta:pins') || {}).pins || [],
     ...(m.get('meta:prefs') || {}),
@@ -252,8 +235,6 @@ const META_KEYS = [
   'timer',
   'score',
   'legacy',
-  'top3',
-  'top3held',
   'track',
   'cap',
   'pins',

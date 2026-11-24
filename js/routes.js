@@ -117,7 +117,6 @@ function followRoute(r, first) {
     case 'today':
     case 'work':
     case 'projects':
-      workListMode = false;
       path = [];
       go('projects');
       return;

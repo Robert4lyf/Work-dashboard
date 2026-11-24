@@ -60,7 +60,6 @@ async function verifyPush() {
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
-  registerDevice();
   renderAccount();
 }
 async function enablePush() {
@@ -88,7 +87,6 @@ async function enablePush() {
     pushEndpoint = j.endpoint;
     pushTest = null;
     localStorage.setItem(PUSH_KEY, pushEndpoint);
-    registerDevice(); // alarms for this device are sent here
     toast('Notifications on for this device');
   } catch (e) {
     console.warn(e);
@@ -109,7 +107,6 @@ async function disablePush() {
   try {
     localStorage.removeItem(PUSH_KEY);
   } catch (e) {}
-  registerDevice();
   renderAccount();
 }
 // "Send a test" checks each link in the chain and says which one is broken:
@@ -255,7 +252,7 @@ function wantedNotices(now = Date.now()) {
         body: [...trail, n.text].join(' / ') + (w.who ? ' (' + w.who + ')' : ''), // (the task, and its step)
       });
   });
-  return out.concat(alarmNotices(now));
+  return out;
 }
 // Keep the server's queue matching wantedNotices(); only talks to the server when it changed.
 const NOTICE_HASH = 'dashboard-notices-hash';
@@ -271,7 +268,7 @@ async function syncNotices() {
   // A notice already due when the last change here was made is left for the server to send
   // (the minute job may not have run yet: the timer just ended, 9am just passed). One cancelled
   // before it was due (a session paused a second before its end) goes, even if this runs later.
-  // An alarm's repeats always go once it's dismissed.
+  // (an alarm's repeats, left queued from before alarms were removed, always go)
   const now = Math.max(S.editedAt || 0, sync2.serverAt || 0) || Date.now(),
     keep = new Set(want.map(n => n.key)),
     stale = data
@@ -279,17 +276,10 @@ async function syncNotices() {
       .filter(r => r.key.startsWith('alarm:') || Date.parse(r.at) > now)
       .map(r => r.key);
   if (want.length) {
-    // (every row with the same keys: the API rejects a batch whose rows differ)
-    const put = rows =>
-      sb.from('cockpit_notices').upsert(
-        rows.map(n => ({ ...n, at: new Date(n.at).toISOString(), device: n.device || null })),
-        { onConflict: 'user_id,key' },
-      );
-    let { error: e2 } = await put(want);
-    // Before the device column was added (supabase-setup.sql not re-run), alarms for one device
-    // go to every device rather than stopping all notices.
-    if (e2 && /device/.test(e2.message || '') && want.some(n => 'device' in n))
-      ({ error: e2 } = await put(want.map(({ device, ...n }) => n)));
+    const { error: e2 } = await sb.from('cockpit_notices').upsert(
+      want.map(n => ({ ...n, at: new Date(n.at).toISOString() })),
+      { onConflict: 'user_id,key' },
+    );
     if (e2) return;
   }
   if (stale.length) {
@@ -315,7 +305,7 @@ function renderNotifySettings() {
       <div class="caprow"><span>VAPID_PRIVATE_KEY</span><code>${esc(newPrivateKey)}</code><button class="linkbtn" data-copy="vpriv">Copy</button></div>
       <p class="hint">Then turn notifications on again on each device.</p></div>`;
   h += pushEndpoint
-    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines and chase dates (9am on the day), Upcoming items returning, alarms, and alerts from scripts.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
+    ? '<p class="hint" style="margin:0 0 8px">On for this device: focus timer ends, deadlines and chase dates (9am on the day), Upcoming items returning, and alerts from scripts.</p><div class="acts" style="margin-top:0"><button class="btn" id="pushtest">Send a test</button><button class="btn" id="pushoff">Turn off here</button></div>' +
       renderPushTest()
     : '<p class="hint" style="margin:0 0 8px">Off for this device.</p><button class="btn green" id="pushon">Turn on for this device</button>';
   if (!newPrivateKey)
