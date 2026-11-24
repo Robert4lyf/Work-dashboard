@@ -665,8 +665,7 @@ async function wrunProbe() {
 // afresh each time: a migration just run counts at once.)
 async function wrunHealth(add) {
   const name = 'Process run checks',
-    fix =
-      'Run supabase/release-g-runs.sql, then supabase/release-h.sql, in the SQL Editor (docs/ux/release-h-sync.md > Deploying).',
+    fix = 'Run supabase/release-g-runs.sql, then supabase/release-h.sql, in the SQL Editor (see the README).',
     p = await wrunProbe();
   if (p.fn === null) return add(name, null, 'Unknown');
   if (p.h && p.fn && !p.guard)

@@ -58,7 +58,6 @@ function renderHeader() {
   const b = $('#inboxBadge');
   b.hidden = !S.inbox.length;
   b.textContent = S.inbox.length;
-  $('#waitBadge').hidden = true; // (the chase count is Today's chip now)
   $('#reviewDot').hidden = !reviewDue();
   renderSyncBadge();
 }
