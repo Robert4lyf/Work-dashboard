@@ -612,3 +612,38 @@ test('the Active Task surfaces the next actionable step and nearest follow-up', 
   await expect(active.locator('.project-step').first()).toContainText('Next · Send report');
   await expect(active.locator('.project-step').nth(1)).toContainText('Waiting on Colleague 2');
 });
+
+test('the active task stands out from the cards on the board, on a phone and a wide window', async ({
+  app,
+  page,
+}) => {
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    await page.setViewportSize(size);
+    await start(app, page);
+    const active = page.getByRole('region', { name: 'Active Task' });
+    const look = card =>
+      card.evaluate(el => {
+        const c = getComputedStyle(el);
+        return [c.backgroundColor, c.borderTopWidth, c.boxShadow];
+      });
+    const plain = await look(page.getByRole('article', { name: 'Read the circular' }));
+    // (nothing active: the heading is not marked)
+    const heading = active.getByRole('heading', { name: 'Active Task' });
+    const headingFill = () => heading.evaluate(el => getComputedStyle(el).backgroundColor);
+    const unmarked = await headingFill();
+    await page.getByRole('button', { name: 'Make Weekly reporting active' }).click();
+    const card = await look(active.getByRole('article'));
+    expect(card[0]).not.toBe(plain[0]);
+    expect(card[1]).toBe('3px');
+    expect(card[2]).not.toBe('none');
+    expect(plain[2]).toBe('none');
+    expect(await headingFill()).toBe('rgb(255, 214, 10)');
+    expect(unmarked).not.toBe('rgb(255, 214, 10)');
+    // (its yellow edge doesn't push the page sideways)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await active.getByRole('button', { name: 'Make Weekly reporting active' }).click();
+  }
+});
