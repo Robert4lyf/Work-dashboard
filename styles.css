@@ -4730,3 +4730,305 @@ summary,
   outline: 2px solid var(--accent-ink);
   outline-offset: 2px;
 }
+
+/* ---------------------------------------------------------------------------------------------
+   A computer (see js/desk.js): the sidebar's extra places, dialogs in the middle of the window,
+   pages of reading width, something under the pointer, the list of keyboard shortcuts, and a
+   project's page beside the board. Nothing here changes a phone.
+   --------------------------------------------------------------------------------------------- */
+.sidemore {
+  display: none;
+}
+kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 1px 6px;
+  border: 1px solid var(--edge);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+.keys {
+  margin: 10px 0 0;
+}
+.keys > div {
+  display: grid;
+  grid-template-columns: minmax(7.5em, auto) 1fr;
+  gap: 4px 14px;
+  align-items: baseline;
+  padding: 7px 0;
+  border-top: 1px solid var(--line);
+}
+.keys > div:first-child {
+  border-top: 0;
+}
+.keys dt,
+.keys dd {
+  margin: 0;
+}
+.keys dd {
+  font-size: var(--fs-sm);
+}
+/* Search: the result the arrow keys are on (Enter opens it) */
+#sres .sel {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+/* (the keyboard on a result itself, by Tab or J: that one shows, not two rings) */
+#sres:focus-within .sel:not(:focus-visible) {
+  outline: 0;
+}
+#sres .srow {
+  scroll-margin-block: 80px;
+}
+/* (moving about with J and K: what's selected lands clear of the window's edges) */
+.project-open,
+.row .open,
+.ititle {
+  scroll-margin-block: 72px;
+}
+@media (min-width: 1000px) {
+  nav {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .tabs {
+    flex: none;
+    margin: 0;
+    overflow: visible;
+  }
+  .sidemore {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  nav .sidemore button {
+    font-weight: 500;
+  }
+  nav button[data-side]::before {
+    content: '';
+    flex: none;
+    width: 22px;
+    height: 22px;
+    background: currentColor;
+    -webkit-mask: var(--sign) center / contain no-repeat;
+    mask: var(--sign) center / contain no-repeat;
+  }
+  nav [data-side='ops'] {
+    --sign: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.6%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4 4h6.5v7H4zM13.5 4H20v4h-6.5zM13.5 11.5H20V20h-6.5zM4 14.5h6.5V20H4z%22/%3E%3C/svg%3E');
+  }
+  nav [data-side='waiting'] {
+    --sign: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.6%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%228.5%22/%3E%3Cpath d=%22M12 7.5V12l3 2%22/%3E%3C/svg%3E');
+  }
+  nav [data-side='focus'] {
+    --sign: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.6%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%228.5%22/%3E%3Ccircle cx=%2212%22 cy=%2212%22 r=%222.8%22/%3E%3C/svg%3E');
+  }
+  nav [data-side='notes'] {
+    --sign: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.6%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 3.5h8.5L19 8v12.5H6zM9.5 12h6M9.5 16h6%22/%3E%3C/svg%3E');
+  }
+  nav [data-side='log'] {
+    --sign: url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222.6%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4.5 12a7.5 7.5 0 1 0 2.4-5.5M4 4.5v4h4M12 8v4.5l3 1.5%22/%3E%3C/svg%3E');
+  }
+  nav .sidemore .sidekeys {
+    margin-top: auto;
+    justify-content: space-between;
+    font-size: var(--fs-sm);
+    color: var(--muted);
+  }
+  nav .sidekeys::before {
+    display: none;
+  }
+  /* a dialog sits in the middle of the page, not along the foot of a tall window */
+  #sheet .sheetbox {
+    left: 232px;
+    right: 0;
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    width: min(520px, calc(100vw - 232px - 48px));
+    max-width: none;
+    max-height: calc(100vh - 48px);
+    max-height: calc(100dvh - 48px);
+    box-shadow: var(--shadow-2);
+  }
+  body.zen #sheet .sheetbox {
+    left: 0;
+    width: min(520px, calc(100vw - 48px));
+  }
+  /* pages that are one column keep to a width that reads (the board and Today use the room) */
+  #v-inbox,
+  #v-review,
+  #v-log,
+  #v-focus,
+  #v-knowledge,
+  #v-notes,
+  #v-search,
+  #v-account,
+  #v-waiting,
+  #v-ops,
+  #v-project-record {
+    max-width: 860px;
+  }
+  /* (a task's page: what's under the bar held at its foot fades out, rather than being cut
+     through the middle of a line) */
+  .qfoot::before {
+    content: '';
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    bottom: calc(100% + 3px);
+    height: 18px; /* (its own margin: nothing is faded when the bar is in its place at the end) */
+    background: linear-gradient(to bottom, transparent, var(--bg));
+    pointer-events: none;
+  }
+}
+/* something under the pointer says so */
+@media (hover: hover) {
+  nav button:not([aria-current='page']):hover,
+  .hsearch:hover,
+  .syncbtn:hover,
+  .project-grip:hover,
+  .qmore:hover,
+  .crumbs button:hover,
+  .timer-link:hover {
+    background: color-mix(in srgb, currentColor 9%, transparent);
+    color: var(--ink);
+  }
+  .project-open:hover > span,
+  .ititle:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+  }
+  .project-open:hover svg {
+    color: var(--ink);
+    transform: translateX(2px);
+  }
+  .list .row:hover,
+  button.soonrow:hover,
+  .qact:not([disabled]):hover,
+  .attlist > :hover,
+  .project-section-toggle:hover,
+  details > summary:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+  }
+  .chip:not([aria-pressed='true'], .del, .warn, .due, .ops):hover,
+  .day:not([aria-pressed='true']):hover {
+    background: var(--panel-2);
+  }
+  .linkbtn:hover,
+  .dellink:hover {
+    text-decoration-thickness: 5px;
+  }
+  /* (a tick not yet made: its mark shows faintly, so it's plain what a click does) */
+  .check:not([aria-pressed='true']):hover {
+    box-shadow: inset 0 0 0 2px var(--edge-strong);
+  }
+  .check:not([aria-pressed='true']):hover svg {
+    visibility: visible;
+    color: var(--ink);
+    opacity: 0.3;
+  }
+  .node.facts > h1 {
+    cursor: text; /* (a double click renames it) */
+  }
+}
+/* a wide window: a project's page with the board beside it (see splitOn in js/desk.js). The
+   board keeps its own scroll at the left; the page scrolls as ever. */
+@media (min-width: 1240px) {
+  body.split:not(.zen) .wrap:has(> #v-today:not([hidden]) .node) {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 760px);
+    grid-template-rows: auto 1fr;
+    column-gap: 32px;
+    justify-content: center;
+    align-items: start;
+    max-width: 1320px;
+  }
+  body.split .wrap > header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  body.split .wrap > #v-projects {
+    grid-column: 1;
+    grid-row: 2;
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* (room at the foot: until the page is scrolled the board starts under the header, so its
+       last cards would otherwise end below the window with no way to bring them up) */
+    padding: 2px 8px 120px 2px;
+    scrollbar-width: thin;
+  }
+  body.split .wrap:has(> #v-today:not([hidden]) .node) > #v-today {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+  }
+  /* (the board drawn narrow: each card its name and where it stands, as a list) */
+  body.split #v-projects .project-card {
+    block-size: auto;
+    padding-block: 2px;
+  }
+  body.split #v-projects .project-preview {
+    overflow: visible;
+  }
+  body.split #v-projects .project-steps,
+  body.split #v-projects .project-actions,
+  body.split #v-projects .project-add,
+  body.split #v-projects .active-project > .hint {
+    display: none;
+  }
+  body.split #v-projects .project-meta {
+    margin-bottom: 6px;
+  }
+  body.split #v-projects .project-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  body.split #v-projects .project-board-section,
+  body.split #v-projects .active-project {
+    margin-bottom: 14px;
+  }
+  body.split #v-projects .project-current {
+    background: var(--sec-yellow);
+    color: #111111;
+    border-color: #111111;
+  }
+  body.split
+    #v-projects
+    .project-current
+    :is(.project-open svg, .project-grip, .project-meta, .linkbtn, .project-step-clock) {
+    color: #111111;
+  }
+  body.split #v-projects .project-current .linkbtn {
+    text-decoration-color: #111111;
+  }
+  /* (no active task: its heading alone says nothing in a list this narrow) */
+  body.split #v-projects .active-project:has(> .hint) {
+    display: none;
+  }
+  body.split #v-projects .project-current :focus-visible {
+    outline-color: #0a0a0a;
+  }
+}
+/* (single-task mode covers the page whatever it was showing: a task's page from 1000px used to
+   stay on screen above it, pushing the one task below the fold) */
+body.zen .wrap:has(> #v-today:not([hidden]) .node) {
+  display: none;
+}

@@ -788,6 +788,9 @@ function undo() {
   dropUndo();
   if (!snap) return;
   norm(JSON.parse(snap));
+  // (a picture brought back: another tab may have cleared its data from the store meanwhile, so
+  // every picture is saved with its data again, and put back there)
+  picStored.clear();
   save();
   renderAll();
   toast('Undone');

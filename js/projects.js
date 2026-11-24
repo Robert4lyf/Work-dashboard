@@ -134,7 +134,8 @@ function projectCard(q, canReorder, isActive = false) {
     })
     .join('');
   const remaining = kids.filter(step => !preview.includes(step)).length;
-  return `<article class="project-card" data-qid="${q.id}" aria-labelledby="project-title-${q.id}">
+  const current = splitOpenId() === q.id; // (its page is open beside the board: desk.js)
+  return `<article class="project-card${current ? ' project-current' : ''}" data-qid="${q.id}" aria-labelledby="project-title-${q.id}"${current ? ' aria-current="true"' : ''}>
     <div class="project-preview">
       <div class="project-card-heading">
         ${!kids.length && mayTick ? projectCheck(q, done ? 'Mark not done' : 'Mark done') : ''}
@@ -200,7 +201,10 @@ function renderProjects() {
     const expanded = !foldedProjectSections.has(id);
     const count = active.length + upcoming.length + done.length;
     const completedId = uncategorised ? 'projects-done' : 'projects-done-' + id;
-    const completedOpen = uncategorised ? projectsDoneOpen : openProjectCompleted.has(id);
+    // (the project whose page is open beside the board shows on it, finished or not)
+    const completedOpen =
+      (uncategorised ? projectsDoneOpen : openProjectCompleted.has(id)) ||
+      done.some(q => q.id === splitOpenId());
     const upcomingId = 'projects-upcoming-' + id;
     return `<section class="project-board-section" id="project-section-${id}" data-project-section="${id}"${accent ? ` data-colour="${colour}" style="--section-accent:${accent[1]};--section-ink:${accent[2] || '#111'}"` : ''} aria-labelledby="project-section-name-${id}">
       <div class="project-section-head">
@@ -227,6 +231,7 @@ function renderProjects() {
       ${pinned ? `<div class="project-grid">${projectCard(pinned, false, true)}</div>` : '<p class="hint">Choose Make active on a project.</p>'}
     </section>${sections.join('')}`,
   );
+  splitMirror(renderToday); // (a wide window: beside a project's page, drawn again with it)
 }
 
 function projectClick(d, button) {
@@ -501,7 +506,8 @@ function scrollProjectDrag() {
   const edge = 90;
   const y = drag.y;
   if (y < edge || y > innerHeight - edge) {
-    window.scrollBy(0, y < edge ? -10 : 10);
+    // (beside a project's page, on a wide window, the board scrolls by itself: desk.js)
+    (splitOn() ? projectView : window).scrollBy(0, y < edge ? -10 : 10);
     markProjectDrop();
   }
   drag.frame = requestAnimationFrame(scrollProjectDrag);
@@ -744,7 +750,9 @@ function reopenArchivedProject(id) {
 }
 function openProjectRecord(id, kind, button) {
   const from = placeHere(button);
-  returnTo = null;
+  // (looked at from the board beside a project's page, on a wide window: back returns to that
+  // page, and from there to Projects where it was, as before the look)
+  if (!splitOn()) returnTo = null;
   path = [];
   projectRecord = { id, kind };
   go('project-record');

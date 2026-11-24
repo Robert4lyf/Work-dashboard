@@ -90,6 +90,8 @@ function go(v) {
     'account',
     'ops',
   ].forEach(k => ($('#v-' + k).hidden = k !== v && !(v === 'review' && k === reviewSub)));
+  syncSplit(); // (a wide window: the board stays beside a project's page, see desk.js)
+  markSide();
   renderView(v); // (drawn now: while hidden it wasn't kept up to date)
   restoreDrafts();
   // Keep the current tab visible when the tab bar is scrolled sideways.
@@ -102,6 +104,7 @@ function go(v) {
   }
   fadeTabs();
   window.scrollTo(0, 0);
+  splitReveal();
 }
 /* Release G: where a task's page was opened from, so back (and its ‹ crumb) returns there:
    another view (Waiting, Forecast, Search, the Command Centre) with its scroll position, or
@@ -281,10 +284,12 @@ function openPath(p) {
     if (p.length) returnTo.depth = p.length;
     else returnTo = null;
   }
+  syncSplit();
   renderToday();
   renderHeader(); // (its action is quieter on a task's page: see header.js)
   restoreDrafts();
   window.scrollTo(0, p.length ? 0 : listY);
+  splitReveal();
   // (back on the list: the task's row where it was on the screen, whatever the rows above it
   // measure now that they're drawn afresh)
   let row = null;
@@ -329,6 +334,9 @@ document.querySelectorAll('nav button[data-v]').forEach(
         path = [];
         workListMode = false;
       }
+      // (a computer: History has its own place in the sidebar, so Review's tab opens Review
+      // itself, not the History last looked at)
+      if (b.dataset.v === 'review' && deskMQ.matches && reviewSub === 'log') reviewSub = 'week';
       go(b.dataset.v);
     }),
 );
@@ -652,12 +660,31 @@ document.addEventListener('click', e => {
         path.length >= returnTo.depth &&
         p.length > path.length &&
         path.every((id, i) => p[i] === id);
-      const keep = deeper ? returnTo : null;
+      // (another project picked from the board beside this one's page, on a wide window: back
+      // still returns to Projects, with the keyboard on the card last opened)
+      // (or from that card's actions, by right-click: the sheet's button is off the page by now)
+      const beside =
+        view === 'today' &&
+        splitOn() &&
+        (!!b.closest('#v-projects') || (!b.isConnected && p.length === 1 && p[0] !== path[0]));
+      const keep = deeper
+        ? returnTo
+        : beside
+          ? {
+              ...placeHere(b),
+              view: 'projects',
+              path: [],
+              y: returnTo && returnTo.view === 'projects' ? returnTo.y : 0,
+              depth: p.length,
+              name: '',
+            }
+          : null;
       openPath(p);
       if (view !== 'today') go('today');
       // (opened from Today itself: back is to Today's list, whatever came before)
       returnTo = from || keep;
-      if (from) {
+      // (drawn again now that the way back is known: its ‹ names where it leads)
+      if (from || beside) {
         renderToday();
         restoreDrafts();
       }
@@ -1179,11 +1206,11 @@ function closeImgs() {
   renderNoteImgs();
   renderKnowledge();
 }
-/* keyboard shortcuts (desktop) */
-const KEYS =
-  'i or n capture (n on a task: step) · / search · t today · o command centre · l history · s settings · z single-task · p pause · Esc back';
+/* keyboard shortcuts (desktop): listed by openKeys (desk.js), where moving about a list and the
+   Ctrl keys are too */
 document.addEventListener('keydown', e => {
   if (!window.appReady) return;
+  if ((e.ctrlKey || e.metaKey) && deskChord(e)) return e.preventDefault();
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
   const el = e.target;
@@ -1198,6 +1225,9 @@ document.addEventListener('keydown', e => {
     }
     return;
   }
+  // Search's box: the arrow keys choose a result, Enter opens it, Escape clears the words, then
+  // goes back (search.js).
+  if (el.id === 'sq' && !$('#sheet') && searchKey(e)) return e.preventDefault();
   // (Release H: the keyboard's search key on Find or Search puts the keyboard away, to see what
   // was found)
   if (e.key === 'Enter' && (el.id === 'tfind' || el.id === 'sq')) {
@@ -1214,7 +1244,9 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ($('#sheet') && e.key !== 'Escape') return; // a sheet is up: its buttons only
-  const k = e.key;
+  // (a letter is the same key with Caps Lock on; with Shift it's left alone, as before)
+  const caps = !e.shiftKey && e.getModifierState && e.getModifierState('CapsLock'),
+    k = caps && /^[A-Z]$/.test(e.key) ? e.key.toLowerCase() : e.key;
   // During a running session only pause and help work (see focusLocked).
   if (focusLocked() && k !== 'p' && k !== '?') return;
   // Single-task mode covers the page: only its own keys.
@@ -1226,7 +1258,10 @@ document.addEventListener('keydown', e => {
     f.focus();
     return true;
   };
-  if (k === 'n' && view === 'today' && path.length && $('#sin')) field('#sin');
+  if (['j', 'k', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(k)) {
+    if (deskMove(k)) e.preventDefault();
+  } else if (k === 'x') deskTick();
+  else if (k === 'n' && view === 'today' && path.length && $('#sin')) field('#sin');
   else if (k === 'n' || k === 'i') {
     triage = null; // (the capture box, not a walk under way)
     go('inbox');
@@ -1242,16 +1277,14 @@ document.addEventListener('keydown', e => {
   else if (k === 'p' && S.timer) {
     const b = $('[data-pause]');
     if (b) b.click();
-  } else if (k === '?') toast(KEYS, false, 5000);
+  } else if (k === '?') openKeys();
   else if (k === 's') go('account');
   else if (k === 'o') go('ops');
   else if (k === 'z') setZen(!zen);
+  // (a step back within the page, as the back gesture is on a phone; never off to another tab)
   else if (k === 'Escape') {
     if ($('#sheet')) sheetBack();
-    else if (imgShown || kbImgShown) closeImgs();
-    else if (zen) setZen(false);
-    else if (atReturn()) returnBack();
-    else if (view === 'today' && path.length) openPath(path.slice(0, -1));
+    else appBack(true);
   }
 });
 
@@ -1361,19 +1394,26 @@ document.addEventListener('visibilitychange', () => {
       wd = a && a.type === 'date' && a.closest('#waitd[data-waitid]');
     if (wd) saveWaitPanel(wd.dataset.waitid, true);
   }
+  // (another tab saved while this one was away and it hasn't been taken in yet: that first, so
+  // the day's reset or a session's end isn't worked out, and saved, from the older copy)
   if (!document.hidden) {
-    const started = rolloverLocal(); // (a sync, when signed in)
-    // A session another device already stopped mustn't be finished here too: hear from the
-    // server first when possible.
-    if (timerDue() && started) {
-      const held = holdDue();
-      syncDone().finally(() => releaseHeld(held));
-    } else if (timerDue() && !holdTimer) finishTimer(true);
-    else inBackground(renderAll); // (keeps anything being typed)
-    if (!started) sync();
-    verifyPush();
+    if (tabStale()) takeSavedSoon().finally(cameBack);
+    else cameBack();
   }
 });
+function cameBack() {
+  if (document.hidden) return;
+  const started = rolloverLocal(); // (a sync, when signed in)
+  // A session another device already stopped mustn't be finished here too: hear from the
+  // server first when possible.
+  if (timerDue() && started) {
+    const held = holdDue();
+    syncDone().finally(() => releaseHeld(held));
+  } else if (timerDue() && !holdTimer) finishTimer(true);
+  else inBackground(renderAll); // (keeps anything being typed)
+  if (!started) sync();
+  verifyPush();
+}
 window.addEventListener('online', () => window.appReady && sync());
 window.addEventListener('offline', () => {
   if (session) setSync('offline');
@@ -1407,6 +1447,7 @@ function start(pics, kv) {
       sync2 = Object.assign({ cursor: 0, synced: {}, dirty: {}, snapAt: 0 }, JSON.parse(kv.sync));
     } catch (e) {}
   else moving = !!picDb;
+  tabStart(kv.stamp); // (what the store held when this tab read it: see js/tabs.js)
   load(pics, kv.state);
   if (kv.state === null) moving = !!picDb;
   if (moving) {
@@ -1449,6 +1490,7 @@ function start(pics, kv) {
   // (the app's data, pictures included, isn't cleared by the phone when space runs low)
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
   window.appReady = true;
+  tabReady(); // (another tab saved while this one was starting: that copy is taken in now)
 }
 openPics().then(async db => {
   picDb = db;
@@ -1459,7 +1501,9 @@ openPics().then(async db => {
 // Android's back gesture: one history entry stands for "in the app". Going back runs the app's
 // own back step (close a picture, leave an article or a task's page, back to Today...) and
 // puts the entry back; only from Projects does it leave the app.
-function appBack() {
+// `nested` (the Escape key): only a step back within a page (a sheet, a task's page, an article,
+// Search back to where it was opened), never from one tab to another.
+function appBack(nested) {
   if (!$('#v-alarm').hidden) return true; // (an alarm is ringing: its buttons only)
   if (imgShown || kbImgShown) return (closeImgs(), true);
   if (zen && !focusLocked()) return (setZen(false), true);
@@ -1503,8 +1547,11 @@ function appBack() {
   if (atReturn()) return (returnBack(), true);
   if (view === 'today' && path.length) return (openPath(path.slice(0, -1)), true);
   if (view === 'inbox' && triage) return (exitTriage(), true);
-  if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view === 'account' && setSub) return (openSettings(null), true); // (a group: back to the index)
+  // Search, with nothing newer to go back to: where it was opened from (search.js).
+  if (view === 'search' && searchFrom) return (backFromSearch(), true);
+  if (nested && view !== 'search') return false;
+  if (view === 'notes') return (go('knowledge'), true); // (where its ‹ link goes)
   if (view !== 'today' && path.length) return (go('today'), true);
   if (view !== 'projects') {
     path = [];

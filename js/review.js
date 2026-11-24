@@ -12,6 +12,7 @@ function renderReview() {
   if (reviewSub === 'insights') h += renderInsights();
   if (reviewSub === 'completed') h += renderCompletedProjects();
   setHTML($('#v-review'), h);
+  markSide(); // (the sidebar's History, on a computer: desk.js)
 }
 // This calendar week, Monday to Sunday: its first day.
 function weekStart() {

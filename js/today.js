@@ -308,7 +308,11 @@ function renderToday() {
   $('#v-today')
     .querySelectorAll('.blane')
     .forEach(l => (laneX[l.dataset.lane] = l.querySelector('.lanetiles').scrollLeft));
-  drawToday();
+  // (a wide window, the board beside this page: a change made on the board draws the page as a
+  // change from elsewhere is drawn, so a step half typed here isn't lost to a tick over there)
+  if (splitBeside()) inBackground(drawToday);
+  else drawToday();
+  syncSplit(); // (the task whose page this was may have gone: see desk.js)
   // (an open Top 3 picker shows what Top 3 is now, after a sync or a change elsewhere: a tap on it
   // then means what it shows)
   if (document.querySelector('#sheet .t3pick'))
@@ -317,6 +321,7 @@ function renderToday() {
     const l = $(`#v-today .blane[data-lane="${k}"] .lanetiles`);
     if (l) l.scrollLeft = laneX[k];
   }
+  splitBoard(); // (a wide window: the board beside a project's page, see desk.js)
 }
 // The page's title above the header: on Today's list only (a task's page has its own).
 function todayTitle() {
@@ -583,7 +588,8 @@ function scheduleNow(kind, id, date) {
     if (!r || r.parents.length) return;
     r.arr.splice(r.arr.indexOf(r.n), 1);
     n = r.n;
-    path = [];
+    // (its own page closes; another project's, open beside the board it was put off from, stays)
+    if (path[0] === id) path = [];
   } else {
     const i = S.inbox.findIndex(x => x.id === id);
     if (i < 0) return;

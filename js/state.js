@@ -511,15 +511,19 @@ function load(pics = new Map(), json = null) {
   norm(s);
 }
 let localSaved = true; // whether the last local save worked (see saveSyncState)
-function persistLocal() {
+// `guarded`: a save the app makes by itself, which gives way to a newer copy saved by another
+// tab (see writeKV).
+function persistLocal(guarded) {
   schedulePics(); // (whatever happens below: pictures move out of this copy, making room)
   if (picDb) {
     // (with the sync bookkeeping, in one go: after a reload the two must still agree)
-    writeKV({ state: stateJSON(), sync: JSON.stringify(sync2) });
+    writeKV({ state: stateJSON(), sync: JSON.stringify(sync2) }, guarded);
     return (localSaved = true); // (a failure shows up later: see writeKV)
   }
   try {
+    if (guarded && typeof tabYield === 'function' && tabYield()) return (localSaved = true);
     localStorage.setItem(KEY, stateJSON());
+    if (typeof tabSavedLocal === 'function') tabSavedLocal();
     return (localSaved = true);
   } catch (e) {
     return (localSaved = false); // no room (or storage blocked)
@@ -626,7 +630,7 @@ function rollover() {
   stampSince();
   // Cleared copies older than the look-back are of no further use.
   for (const k in sync2.gone || {}) if (k.slice(-10) < shift(today(), -31)) delete sync2.gone[k];
-  persistLocal();
+  persistLocal(true);
   // As of midnight: any real edit made today on another device wins over this tidy-up.
   markDirty(new Date(new Date().setHours(0, 0, 0, 0)).getTime());
 }

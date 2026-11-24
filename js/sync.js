@@ -179,7 +179,7 @@ function applyRows(rows, firstSync, keep, holdCursor) {
     });
     // The task on screen went (in the rows, not through the day's reset or a chosen replace).
     const open = !firstSync && path.length && !find(path[path.length - 1]);
-    if (!persistLocal()) toast("Couldn't save: this device is out of storage", false, 4000);
+    if (!persistLocal(true)) toast("Couldn't save: this device is out of storage", false, 4000);
     rollover();
     markDirty(); // tidying on load (defaults, rollover) becomes an ordinary change
     inBackground(renderAll);
@@ -740,60 +740,75 @@ async function sync() {
   tally = { down: 0, up: 0, got: 0, sent: 0 };
   setSync('syncing');
   try {
-    if (sync2.user !== session.user.id) {
-      // Another account was signed in here before: its data mustn't move into this one.
-      if (sync2.user) {
-        // (dirty marks from the day's reset alone aren't the user's edits)
-        if (Object.values(sync2.dirty).some(d => d.at > new Date().setHours(0, 0, 0, 0)))
-          toast(
-            "This device's unsent changes belonged to the other account and were left behind",
-            false,
-            5000,
-          );
-        dropUndo();
-        norm(null);
-        persistLocal();
-        // (nothing of the other account's left open: an article being written, a search...)
-        kbEdit = kbArt = kbMoving = kbImgShown = imgShown = triage = kbRun = wfOpen = wfEdit = wfView = null;
-        execToken = '';
-        try {
-          localStorage.removeItem(EXEC_KEY);
-        } catch (e) {}
-        kbReturn = false;
-        resQuery = '';
-        notesDirty = false;
-        notesBase = null;
-        clearKbDraft();
-        searchQ = kbQuery = '';
-        syncStats = [];
+    // (one tab at a time, each from the newest saved copy: see tabTurn in js/tabs.js)
+    await tabTurn(async () => {
+      if (sync2.user !== session.user.id) {
+        // Another account was signed in here before: its data mustn't move into this one.
+        if (sync2.user) {
+          // (dirty marks from the day's reset alone aren't the user's edits)
+          if (Object.values(sync2.dirty).some(d => d.at > new Date().setHours(0, 0, 0, 0)))
+            toast(
+              "This device's unsent changes belonged to the other account and were left behind",
+              false,
+              5000,
+            );
+          dropUndo();
+          norm(null);
+          persistLocal();
+          // (nothing of the other account's left open: an article being written, a search...)
+          kbEdit =
+            kbArt =
+            kbMoving =
+            kbImgShown =
+            imgShown =
+            triage =
+            kbRun =
+            wfOpen =
+            wfEdit =
+            wfView =
+              null;
+          execToken = '';
+          try {
+            localStorage.removeItem(EXEC_KEY);
+          } catch (e) {}
+          kbReturn = false;
+          resQuery = '';
+          notesDirty = false;
+          notesBase = null;
+          clearKbDraft();
+          searchQ = kbQuery = '';
+          syncStats = [];
+          inBackground(renderAll);
+        }
+        // New device, or a different account: start from the server's copy.
+        // The account is noted once that's done: if it fails part-way, it starts over next time.
+        sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0 };
+        await firstSync();
+        sync2.user = session.user.id;
+        sync2.kbimg = 1; // (a first sync reads every row)
+        saveSyncState();
+      } else await pullChanges();
+      // (whether the server checks run changes, asked once a session, for what a run's page says)
+      if (wrunCas.on === null && S.wruns.length) await wrunProbe();
+      // The day's reset, now that the server's copy is in (applyRows ran it if anything came).
+      if (S.day !== today()) {
+        rollover();
         inBackground(renderAll);
       }
-      // New device, or a different account: start from the server's copy.
-      // The account is noted once that's done: if it fails part-way, it starts over next time.
-      sync2 = { cursor: 0, synced: {}, dirty: {}, snapAt: 0 };
-      await firstSync();
-      sync2.user = session.user.id;
-      sync2.kbimg = 1; // (a first sync reads every row)
-      saveSyncState();
-    } else await pullChanges();
-    // (whether the server checks run changes, asked once a session, for what a run's page says)
-    if (wrunCas.on === null && S.wruns.length) await wrunProbe();
-    // The day's reset, now that the server's copy is in (applyRows ran it if anything came).
-    if (S.day !== today()) {
-      rollover();
-      inBackground(renderAll);
-    }
-    await pushDirty();
-    await saveSnapshot();
-    await syncNotices();
-    await pullExecEvents();
-    lastSync = Date.now();
-    syncStats = [...syncStats, { ...tally, ms: Math.round(performance.now() - t0), at: lastSync }].slice(-10);
-    retryRoute(); // (a deep link whose target wasn't here before this sync)
-    askMerge = false; // (only the sync straight after a sign-in may ask)
-    setSync('ok');
-    // After the first sync, so a new device never writes before it has the server's copy.
-    registerDevice();
+      await pushDirty();
+      await saveSnapshot();
+      await syncNotices();
+      await pullExecEvents();
+      lastSync = Date.now();
+      syncStats = [...syncStats, { ...tally, ms: Math.round(performance.now() - t0), at: lastSync }].slice(
+        -10,
+      );
+      retryRoute(); // (a deep link whose target wasn't here before this sync)
+      askMerge = false; // (only the sync straight after a sign-in may ask)
+      setSync('ok');
+      // After the first sync, so a new device never writes before it has the server's copy.
+      registerDevice();
+    });
   } catch (e) {
     console.warn('sync failed', e);
     setSync(navigator.onLine ? 'error' : 'offline');
