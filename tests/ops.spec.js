@@ -133,7 +133,7 @@ const seed = () => {
 const rows = (page, i) =>
   page.locator('#v-ops .opsec').nth(i).locator('.oprow .open > span, .attrow .open > span').allTextContents();
 
-test('the five lists come from the records; every row opens its thing; nothing runs on its own', async ({
+test('the lists come from the records; every row opens its thing; nothing runs on its own', async ({
   app,
   page,
 }) => {
@@ -141,10 +141,16 @@ test('the five lists come from the records; every row opens its thing; nothing r
   await page.evaluate(seed);
   const before = await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })));
   const weekend = [5, 6, 0].includes(new Date().getDay());
-  // Today's summary counts the same items the Command Centre lists.
-  await expect(page.locator('#attsum')).toContainText('Needs attention ' + (weekend ? 7 : 6));
-  await page.click('#v-today .attcc');
+  await app.go('ops');
   await expect(page.getByRole('heading', { name: 'Command Centre', level: 1 })).toBeVisible();
+  // Its sections, each with its count; Needs attention counts the items it lists.
+  await expect(page.locator('#v-ops .opsec h2')).toHaveText([
+    'Needs attention ' + (weekend ? 7 : 6),
+    'In progress 4',
+    'Quick launch',
+    'Recent results 1',
+    'Checklists',
+  ]);
   await expect(page.locator('.opsync')).toContainText("Not syncing this device's records only.");
   expect(await rows(page, 0)).toEqual(
     [
@@ -162,10 +168,6 @@ test('the five lists come from the records; every row opens its thing; nothing r
   await expect(page.locator('.pins .pin.gone')).toHaveText('Removed');
   // Recent results: what's finished (failures still needing attention are above, not repeated).
   expect(await rows(page, 3)).toEqual(['Weekly report']);
-  const coming = await rows(page, 4);
-  expect(coming.length).toBeGreaterThan(0);
-  expect(coming.length).toBeLessThanOrEqual(3); // (briefly: the Forecast has the rest)
-  await expect(page.locator('#v-ops .opsec').nth(4)).toContainText('processes: Weekly report');
   // Drawing it changed nothing.
   expect(await page.evaluate(() => JSON.stringify(canon({ ...S, editedAt: 0 })))).toBe(before);
   // Rows open their things.
@@ -262,13 +264,11 @@ test('routines are lists of buttons; the day summary copies; the status line is 
   await page.click('[data-routine="start"]');
   await expect(page.locator('#sheettitle')).toHaveText('Morning checklist');
   const items = await page.locator('#sheet .qact').allTextContents();
+  expect(items).toHaveLength(4);
   expect(items[0]).toContain('Needs attention: ');
-  expect(items[1]).toBe('Pick your Top 3');
-  expect(items[2]).toContain('Sort the Inbox');
-  expect(items[3]).toMatch(/^Today: \d+h \d+m planned of /);
-  expect(items[4]).toBe('Start on: Tomorrow'); // (a place saved just now comes first: see recommend)
-  await page.click('#sheet [data-top3pick]');
-  await expect(page.locator('#sheettitle')).toContainText('Top 3');
+  expect(items[1]).toContain('Sort the Inbox');
+  expect(items[2]).toMatch(/^Today: \d+h \d+m planned of /);
+  expect(items[3]).toBe('Start on: Tomorrow'); // (a place saved just now comes first: see recommend)
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   await page.click('[data-routine="finish"]');
   await expect(page.locator('#sheettitle')).toHaveText('End-of-day checklist');

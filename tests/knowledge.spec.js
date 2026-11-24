@@ -110,20 +110,21 @@ test('flows: a button per flow opens its Run URL; only Run URLs are accepted', a
   await page.fill('#flowname', 'Archive emails');
   await page.fill('#flowurl', url + '4');
   await page.click('#flowform .btn');
-  // A button each here, above managing them, and on Today, as quick actions.
-  await expect(v.locator('.flows a')).toHaveText(['▶ Archive emails', '▶ Weekly report']);
-  const flows = page.locator('#v-today .flows a');
-  await app.go('today');
+  // A button each here, above managing them, as quick actions.
+  const flows = v.locator('.flows a');
   await expect(flows).toHaveText(['▶ Archive emails', '▶ Weekly report']);
   await expect(flows.filter({ hasText: 'Weekly report' })).toHaveAttribute('href', url);
+  // (still there on coming back to Knowledge from elsewhere)
+  await app.go('projects');
   await app.go('knowledge');
+  await expect(flows).toHaveText(['▶ Archive emails', '▶ Weekly report']);
 
   // Renamed in place; deleted after a second tap.
   await v.locator('[data-flowname]').first().fill('Archive inbox');
   await v.locator('[data-flowname]').first().press('Tab');
-  await app.go('today');
-  await expect(flows).toHaveText(['▶ Archive inbox', '▶ Weekly report']);
+  await app.go('projects');
   await app.go('knowledge');
+  await expect(flows).toHaveText(['▶ Archive inbox', '▶ Weekly report']);
   await v.locator('[data-delflow]').first().click();
   await v.locator('[data-delflow]').first().click();
   expect((await app.state()).flows.map(f => f.name)).toEqual(['Weekly report']);
@@ -272,15 +273,16 @@ test('a flow remembers when its button was last used', async ({ app, page }) => 
     save();
     renderAll();
   });
-  await app.go('today');
-  await expect(page.locator('#v-today a[data-flow]')).toHaveAttribute('title', 'Not used yet');
+  await app.processes();
+  const chip = page.locator('#v-knowledge .flows a[data-flow]');
+  await expect(chip).toHaveAttribute('title', 'Not used yet');
   // (the link itself can't open here: just the tap is checked)
   await page.evaluate(() => {
-    const a = document.querySelector('a[data-flow]');
+    const a = document.querySelector('#v-knowledge .flows a[data-flow]');
     a.addEventListener('click', e => e.preventDefault());
     a.click();
   });
-  await expect(page.locator('#v-today a[data-flow]')).toHaveAttribute('title', /Last used Today/);
+  await expect(chip).toHaveAttribute('title', /Last used Today/);
   expect((await app.state()).flows[0].last).toBeGreaterThan(0);
 });
 
@@ -299,10 +301,11 @@ test('bug fixes: editor keeps typed text through redraws; limits; links; overlay
   await page.click('[data-kbnew]');
   await page.fill('#kbt', 'Draft title');
   await page.fill('#kbb', 'Draft body');
-  // A redraw after a tap elsewhere (here: ticking a step; Release D's header is compact away
-  // from Today, so the tick goes through Today's own button, by the same click handler) keeps
+  // A redraw after a tap elsewhere (here: ticking a project; its tick is on the Projects board,
+  // behind Knowledge, so it goes through the board's own button, by the same click handler) keeps
   // the draft.
-  await page.evaluate(() => document.querySelector('#v-today [data-toggle]').click());
+  await page.evaluate(() => document.querySelector('#v-projects [data-toggle="q"]').click());
+  expect((await app.state()).quests[0].done).toBe(true);
   await expect(page.locator('#kbt')).toHaveValue('Draft title');
   await expect(page.locator('#kbb')).toHaveValue('Draft body');
   await expect(page.locator('#kbb')).toHaveAttribute('maxlength', '50000');

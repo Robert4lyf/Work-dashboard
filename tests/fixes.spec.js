@@ -69,26 +69,8 @@ test('a crafted backup can’t put markup into ids or tag colours', async ({ pag
   expect(s.color).toBe('#C2C3C7');
 });
 
-test('a ringing alarm takes the keyboard: Dismiss is focused, shortcuts and the page behind are off', async ({
-  page,
-}) => {
-  await page.evaluate(() => {
-    S.alarms = [{ id: 'r1', time: '23:59', label: '', device: '', day: today(), done: '', snooze: 0 }];
-    save();
-    renderAll();
-  });
-  await page.clock.fastForward('01:30');
-  await expect(page.locator('#v-alarm')).toBeVisible();
-  expect(await page.evaluate(() => document.activeElement.dataset.adismiss)).toBe('r1');
-  expect(await page.evaluate(() => document.querySelector('.wrap').inert)).toBe(true);
-  await page.keyboard.press('s');
-  expect(await page.evaluate(() => view)).toBe('today');
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#v-alarm')).toBeHidden();
-  expect(await page.evaluate(() => document.querySelector('.wrap').inert)).toBe(false);
-});
-
-test('the header keeps keyboard focus through its minute refresh; Delete arms on the first tap after a row menu', async ({
+test('the header keeps keyboard focus through its minute refresh; Delete arms on the first tap after a task’s menu', async ({
+  app,
   page,
 }) => {
   await page.focus('#searchBtn');
@@ -98,12 +80,14 @@ test('the header keeps keyboard focus through its minute refresh; Delete arms on
   await page.evaluate(() => {
     S.quests = [fix({ id: 'q1', text: 'Row' })];
     S.later = [fix({ id: 'L1', text: 'Later one', start: '2026-10-01' })];
-    panels.upd = true;
     save();
     renderAll();
   });
-  await page.click('[data-qact="q1"]');
+  await app.openQuest('Row');
+  await page.click('#v-today .qfoot [data-qact="q1"]');
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
+  // (the Upcoming list, as the Waiting page and Search open it)
+  await page.evaluate(() => showUpcoming('L1'));
   await page.click('[data-dellater="L1"]');
   await expect(page.locator('[data-dellater="L1"]')).toHaveText('Delete?');
 });
@@ -194,6 +178,7 @@ test('round 3: Upcoming rows on Waiting open the Upcoming list; the chase date i
 });
 
 test('round 4: a due session waits for the server while held; the waiting panel is not remembered open from a waiting task', async ({
+  app,
   page,
 }) => {
   // Held (as while the first sync after opening is under way): the tick doesn't finish it.
@@ -224,10 +209,11 @@ test('round 4: a due session waits for the server while held; the waiting panel 
     save();
     renderAll();
   });
-  await page.click('#v-today .open >> text="Waiting one"');
+  await app.openQuest('Waiting one');
   await expect(page.locator('#waitd')).toHaveAttribute('open', '');
   await page.evaluate(() => openPath([]));
-  await page.click('#v-today .open >> text="Plain"');
+  await app.openQuest('Plain');
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Plain');
   expect(await page.locator('#waitd').getAttribute('open')).toBeNull();
 });
 
@@ -244,12 +230,14 @@ test('round 5: the keyboard stays in the view after an action; Restore backup is
     save();
     renderAll();
   });
-  await page.focus('#v-today [aria-label="Mark done: Keyboard one"]');
+  await page.focus('#v-projects [aria-label="Mark done: Keyboard one"]');
   await page.keyboard.press('Space');
-  // (the task folded into "Done today": the keyboard stays in the view)
-  expect(await page.evaluate(() => document.activeElement.closest('#v-today') !== null)).toBe(true);
-  // A row's actions sheet: closing it gives the keyboard back to the ⋯ that opened it.
-  await page.focus('[data-qact="k3"]');
+  // (the project folded into "Completed today": the keyboard stays in the view)
+  await expect(page.locator('#projects-done')).toContainText('Keyboard one');
+  expect(await page.evaluate(() => document.activeElement.closest('#v-projects') !== null)).toBe(true);
+  // A task's actions sheet: closing it gives the keyboard back to the ⋯ that opened it.
+  await app.openQuest('Keyboard three');
+  await page.focus('#v-today .qfoot [data-qact="k3"]');
   await page.keyboard.press('Enter');
   await expect(page.locator('#sheet .sheetbox')).toBeVisible();
   await page.keyboard.press('Escape');
@@ -350,6 +338,7 @@ test('round 6: a step’s ⋯ offers its own actions; adding a step after closin
     'Focus on this',
     'Save my place',
     'Mark done',
+    'Rename',
     'DeleteWith Undo',
   ]);
   await page.keyboard.press('Escape');
