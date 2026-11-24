@@ -8,24 +8,25 @@ test.beforeEach(async ({ app }) => {
   await app.addSub('Organise visits');
 });
 
-test('the summary is optional, typed under the name, and shows under it on Today', async ({ app, page }) => {
+test('the summary is optional, typed under the name, and kept on its page', async ({ app, page }) => {
   await expect(page.locator('#fsum')).toHaveValue('');
+  await expect(page.locator('#fsum')).toHaveAttribute('rows', '1');
   expect((await app.state()).quests[0]).not.toHaveProperty('summary'); // (none: nothing stored)
-  await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .qsum')).toHaveCount(0);
 
-  await app.openQuest('Walsingham');
   await page.fill('#fsum', 'Offer accepted.\nVisits next week.');
   expect((await app.state()).quests[0].summary).toBe('Offer accepted.\nVisits next week.');
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .qsum')).toHaveText('Offer accepted.\nVisits next week.');
-  // The name is still the row's name (the summary isn't taken for it).
+  // The name is still the card's name (the summary isn't taken for it).
   expect(await app.order()).toEqual(['Walsingham']);
   await page.reload();
-  await expect(page.locator('#v-today .qsum')).toHaveText('Offer accepted.\nVisits next week.');
+  expect(await app.order()).toEqual(['Walsingham']);
+  // Its page has it, whole (three lines to read it in), under the name.
+  await app.openQuest('Walsingham');
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Walsingham');
+  await expect(page.locator('#v-today .node.facts #fsum')).toHaveValue('Offer accepted.\nVisits next week.');
+  await expect(page.locator('#fsum')).toHaveAttribute('rows', '3');
 
   // Cleared: gone again.
-  await app.openQuest('Walsingham');
   await page.fill('#fsum', '  ');
   expect((await app.state()).quests[0]).not.toHaveProperty('summary');
 

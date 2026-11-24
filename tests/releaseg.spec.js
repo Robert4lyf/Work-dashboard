@@ -1,5 +1,6 @@
-// Release G: the excellence release. Checkpoint 1: Today on a busy day (Scenario A).
-const { test, expect, unfold } = require('./fixtures');
+// Release G: the excellence release, on a busy day (Scenario A). The old Today list (its filters
+// and Find, its Needs attention line, Top 3) has gone: these go through the Projects board.
+const { test, expect } = require('./fixtures');
 const { gDay } = require('./releasegdata');
 
 async function day(app, page, at = new Date(2026, 10, 4, 11, 0)) {
@@ -8,163 +9,33 @@ async function day(app, page, at = new Date(2026, 10, 4, 11, 0)) {
   await app.setState(gDay);
   await page.reload();
 }
-// (the rows shown: Find hides the others where they are)
-const names = page =>
-  page.$$eval('#v-today .list .row:not([hidden]) .open > span', x => x.map(e => e.textContent));
-const ids = page => page.$$eval('#v-today .list .row', x => x.map(e => e.dataset.qid));
+const card = id => `#v-projects .project-card[data-qid="${id}"]`;
+const openProject = (page, id) => page.click(`${card(id)} h2 .project-open`);
 
 test.describe('Checkpoint 1: a busy day', () => {
-  test('rows: the steps as a count and a thin line, no taller than the row; Top 3 marked in place', async ({
+  test('a project says how far its steps have got, on its card and on its page; a step is a row', async ({
     app,
     page,
   }) => {
     await day(app, page);
+    // Every task is a card: the 30 on the board, and the one put off under Upcoming.
+    expect(await page.locator('#v-projects .project-card').count()).toBe(31);
+    expect(await app.order()).toHaveLength(31);
+    const w = page.locator(card('q0'));
+    await expect(w.locator('h2 .project-open > span')).toHaveText('Walsingham sale');
+    await expect(w.locator('.project-meta')).toHaveText('1 of 3 steps');
+    await expect(w.locator('.project-step')).toHaveCount(3);
+    await expect(w.locator('.project-step.project-step-done')).toHaveCount(1);
+    // Its page: the count and the bar, and its steps a row each, no taller than before.
+    await openProject(page, 'q0');
+    await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Walsingham sale');
+    await expect(page.locator('#v-today .node .prog + .hint')).toHaveText('1 / 3 complete');
+    expect(await page.$eval('#v-today .node .prog > div', e => e.style.width)).toBe('33%');
     const rows = page.locator('#v-today .list .row');
-    expect(await rows.count()).toBe(25);
-    // (87px a row on average before; the segmented bar under the name took its own line)
+    expect(await rows.count()).toBe(3);
+    // (87px a row on average before Release G)
     const hs = await rows.evaluateAll(r => r.map(e => e.offsetHeight));
     expect(hs.reduce((a, h) => a + h, 0) / hs.length).toBeLessThan(80);
-    const w = page.locator('#v-today .list .row:has-text("Walsingham sale")');
-    await expect(w.locator('.sfrac')).toHaveText('1/3');
-    // The bar is still there, with its meaning, along the row's foot.
-    await expect(w.locator('.stepbar')).toHaveAttribute('aria-label', '1 of 3 steps done');
-    expect(await w.locator('.stepbar').evaluate(e => getComputedStyle(e).position)).toBe('absolute');
-    // Top 3: the same three, in order, marked with their number; the name is the name.
-    const t3 = await page.evaluate(() => top3Ids());
-    for (const [i, id] of t3.entries()) {
-      const s = page.locator(`#v-today .list .row[data-qid="${id}"] .open > span`);
-      await expect(s).toHaveAttribute('data-rank', String(i + 1));
-      expect(await s.textContent()).toBe(await page.evaluate(id => S.quests.find(q => q.id === id).text, id));
-    }
-  });
-
-  test('Due and Started narrow the list in its own order and change nothing; the choice is kept', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    const all = await ids(page),
-      before = await page.evaluate(() => JSON.stringify(S.quests));
-    const due = await page.evaluate(() =>
-      todayWork(S.quests)
-        .filter(isDueNow)
-        .map(q => q.id),
-    );
-    expect(due.length).toBeGreaterThan(2);
-    await expect(page.locator('[data-tfilter="due"] small')).toHaveText(String(due.length));
-    await page.click('[data-tfilter="due"]');
-    const shown = await ids(page);
-    expect(shown).toEqual(all.filter(id => due.includes(id)));
-    await page.click('[data-tfilter="started"]');
-    for (const id of await ids(page))
-      expect(await page.evaluate(id => isStarted(S.quests.find(q => q.id === id)), id)).toBe(true);
-    expect(await page.evaluate(() => JSON.stringify(S.quests))).toBe(before);
-    // Kept on this device; Reorder always lists everything (and has no filter).
-    await page.reload();
-    await expect(page.locator('[data-tfilter="started"]')).toHaveAttribute('aria-pressed', 'true');
-    await page.click('#reorder');
-    await expect(page.locator('#v-today .tfilter')).toHaveCount(0);
-    expect(await ids(page)).toEqual(await page.evaluate(() => todayWork(S.quests).map(q => q.id)));
-    await page.click('#reorder');
-    // The board shows what the list shows.
-    await page.click('[data-tview="board"]');
-    const tiles = await page.$$eval('#v-today .qtile', x => x.map(e => e.dataset.qid));
-    await page.click('[data-tview="list"]');
-    expect([...tiles].sort()).toEqual([...(await ids(page))].sort());
-    await page.click('[data-tfilter="all"]');
-    expect(await ids(page)).toEqual(all);
-  });
-
-  test('Find: words in a name or a step; the box keeps its words and the keyboard through redraws', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    await page.click('[data-tfindopen]');
-    await expect(page.locator('#tfind')).toBeFocused();
-    await page.keyboard.type('harpenden bound');
-    await expect.poll(() => names(page)).toEqual(['Reply to Harpenden about the boundary query']);
-    await expect(page.locator('#tfind')).toBeFocused();
-    expect(await page.$eval('#tfind', e => [e.value, e.selectionStart])).toEqual(['harpenden bound', 15]);
-    // A step's words find its task.
-    await page.fill('#tfind', 'gather figures');
-    await expect.poll(() => names(page)).toEqual(['Quarterly safeguarding return']);
-    // A sync redraw while typing keeps the words, the match and the keyboard.
-    await page.evaluate(() => inBackground(renderAll));
-    await expect(page.locator('#tfind')).toHaveValue('gather figures');
-    await expect(page.locator('#tfind')).toBeFocused();
-    expect(await names(page)).toEqual(['Quarterly safeguarding return']);
-    // Nothing matches: says so, and Show all clears it.
-    await page.fill('#tfind', 'zzzz');
-    await expect(page.locator('#v-today .tnomatch')).toBeVisible();
-    await page.click('#v-today .tnomatch [data-tfindclear]');
-    await expect.poll(async () => (await names(page)).length).toBe(25);
-    // (the box stays open for other words) The button closes it, and clears it.
-    await page.fill('#tfind', 'rota');
-    await page.click('[data-tfindopen]');
-    await expect(page.locator('#tfind')).toHaveCount(0);
-    await expect.poll(async () => (await names(page)).length).toBe(25);
-  });
-
-  test('Needs attention: the count, the one that matters most, the rest a tap away; kept open or folded', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    const n = await page.evaluate(() => attentionItems().length);
-    await expect(page.locator('#attsum')).toContainText('Needs attention ' + n);
-    await expect(page.locator('.attfirst .attrow')).toHaveCount(1);
-    await expect(page.locator('.attfirst')).toContainText('Month-end report'); // (a failure first)
-    await expect(page.locator('#attd > summary')).toHaveText(`${n - 1} more`);
-    await expect(page.locator('#attd .attrow').first()).toBeHidden();
-    await page.click('#attd > summary');
-    await expect(page.locator('#attd .attrow')).toHaveCount(n - 1);
-    // Remembered on this device.
-    await page.reload();
-    await expect(page.locator('#attd')).toHaveAttribute('open', '');
-    await page.click('#attd > summary');
-    await page.reload();
-    await expect(page.locator('#attd')).not.toHaveAttribute('open', '');
-    // The same items, in the same order, as the Command Centre.
-    const today = await page.$$eval('#v-today .attn .attrow .open > span', x => x.map(e => e.textContent));
-    await page.evaluate(() => go('ops'));
-    const ops = await page.$$eval('#v-ops .opsec:first-of-type .attrow .open > span', x =>
-      x.map(e => e.textContent),
-    );
-    expect(today).toEqual(ops);
-    // No taller than before (231px with these two failures shown in full), and with more
-    // failures it stays the same height: only the first is shown.
-    await page.evaluate(() => go('today'));
-    const h1 = await page.locator('#v-today .attn').evaluate(e => e.offsetHeight);
-    expect(h1).toBeLessThan(225);
-    await page.evaluate(() => {
-      for (let i = 0; i < 3; i++) S.wruns.push({ ...S.wruns.find(r => r.status === 'failed'), id: 'rx' + i });
-      renderAll();
-    });
-    expect(await page.locator('#v-today .attn').evaluate(e => e.offsetHeight)).toBe(h1);
-  });
-
-  test('resolving the first item brings up the next; with one left there is no "more"', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    await page.evaluate(() => {
-      S.wruns.forEach(r => (r.ack = 1));
-      S.execs.forEach(x => (x.ack = 1));
-      save();
-      renderAll();
-    });
-    const first = await page.evaluate(() => [...attentionItems()].sort((a, b) => a.sev - b.sev)[0].text);
-    await expect(page.locator('.attfirst .open > span')).toHaveText(first);
-    await page.evaluate(() => {
-      S.quests = S.quests.map(q => ({ ...q, due: '' }));
-      S.quests.forEach(q => q.children.forEach(c => delete c.wait));
-      save();
-      renderAll();
-    });
-    const left = await page.evaluate(() => attentionItems().length);
-    if (left <= 1) await expect(page.locator('#attd')).toHaveCount(0);
   });
 });
 
@@ -180,10 +51,10 @@ test.describe('Checkpoint 3: touch and recovery', () => {
       await page.setViewportSize({ width: w, height: h });
       await day(app, page);
       const screens = {
-        today: () => go('today'),
+        projects: () => go('projects'),
         task: () => {
-          go('today');
-          openPath([S.quests[0].id]);
+          go('projects');
+          document.querySelector('#v-projects .project-card h2 .project-open').click();
         },
         inbox: () => go('inbox'),
         knowledge: () => go('knowledge'),
@@ -194,6 +65,9 @@ test.describe('Checkpoint 3: touch and recovery', () => {
       };
       for (const [k, fn] of Object.entries(screens)) {
         await page.evaluate(`(${fn})()`);
+        // (the screen meant is the one showing)
+        expect(await page.evaluate(() => view), k).toBe({ task: 'today' }[k] || k);
+        await expect(page.locator('#v-' + (k === 'task' ? 'today' : k))).toBeVisible();
         const out = await page.evaluate(() => {
           const small = [],
             covered = [];
@@ -227,29 +101,20 @@ test.describe('Checkpoint 3: touch and recovery', () => {
     }
   });
 
-  test('easily-made moves can be undone: to the Inbox, to another day, Top 3, a schedule', async ({
-    app,
-    page,
-  }) => {
+  test('easily-made moves can be undone: to the Inbox, to another day, a schedule', async ({ app, page }) => {
     await day(app, page);
     const snap = () =>
       page.evaluate(() =>
-        JSON.stringify([
-          S.quests.map(q => [q.id, q.scheduled]),
-          S.later.map(q => q.id),
-          S.inbox.length,
-          S.top3,
-        ]),
+        JSON.stringify([S.quests.map(q => [q.id, q.scheduled]), S.later.map(q => q.id), S.inbox.length]),
       );
     const undo = async () => {
       await expect(page.locator('#toast #undo')).toBeVisible();
       await page.click('#toast #undo');
     };
-    const id = await page.evaluate(() => S.quests.find(q => canAct(q) && !inTop3(q.id)).id);
+    const id = await page.evaluate(() => S.quests.find(q => canAct(q)).id);
     for (const act of [
       id => moveToInbox(id),
       id => schedule('q', id, shift(today(), 1)),
-      () => toggleTop3(top3Ids()[0]),
       id => setSchedule(id, today(), '15:00'),
     ]) {
       const before = await snap();
@@ -257,6 +122,24 @@ test.describe('Checkpoint 3: touch and recovery', () => {
       expect(await snap()).not.toBe(before);
       await undo();
       expect(await snap()).toBe(before);
+    }
+    // The same from the task's own actions, on its page: each a tap, each undone from its toast.
+    const name = await page.evaluate(id => find(id).n.text, id);
+    for (const [pick, went] of [
+      ['#sheet button:has-text("Move to Inbox")', 'Moved to the Inbox'],
+      ['#sheet [data-sched] >> text="Do tomorrow"', 'On Upcoming until'],
+      ['#sheet [data-sched] >> text="Do next week"', 'On Upcoming until'],
+    ]) {
+      const before = await snap();
+      await openProject(page, id);
+      await page.click('#v-today .qfoot .qmore[data-qact]');
+      await page.click(pick);
+      await expect(page.locator('#toast')).toContainText(went);
+      expect(await snap()).not.toBe(before);
+      await expect(page.locator(`${card(id)} h2 .project-open[data-open]`)).toHaveCount(0); // (off the board)
+      await undo();
+      expect(await snap()).toBe(before);
+      await expect(page.locator(`${card(id)} h2 .project-open[data-open] > span`)).toHaveText(name);
     }
     // A sync arriving meanwhile ends the chance to undo (it wouldn't put back the other device's change).
     await page.evaluate(id => moveToInbox(id), id);
@@ -272,9 +155,10 @@ test.describe('Checkpoint 4: accessibility', () => {
   }) => {
     await day(app, page);
     const screens = {
-      today: [
-        () => go('today'),
-        ['All work', 'Needs attention', 'Top 3', 'Scheduled', 'Waiting', 'Project tasks'],
+      projects: [() => go('projects'), ['Projects', 'Active Task', 'Uncategorised', 'Walsingham sale']],
+      task: [
+        () => document.querySelector('#v-projects .project-card h2 .project-open').click(),
+        ['Walsingham sale', 'Steps'],
       ],
       knowledge: [() => go('knowledge'), ['Knowledge']],
       review: [() => go('review'), ['Review']],
@@ -283,6 +167,9 @@ test.describe('Checkpoint 4: accessibility', () => {
     };
     for (const [k, [fn, want]] of Object.entries(screens)) {
       await page.evaluate(`(${fn})()`);
+      expect(await page.evaluate(() => view), k).toBe({ task: 'today' }[k] || k);
+      // (one page title, and it's the first heading)
+      await expect(page.locator('h1').filter({ visible: true })).toHaveText([want[0]]);
       const r = await page.evaluate(() => {
         const vis = e => e.getClientRects().length && !e.closest('[hidden]');
         return {
@@ -297,12 +184,15 @@ test.describe('Checkpoint 4: accessibility', () => {
                   e.getAttribute('aria-label') ||
                   e.textContent ||
                   e.getAttribute('placeholder') ||
+                  // (a field named by its <label>, as a task's deadline and notes are)
+                  [...(e.labels || [])].map(l => l.textContent).join('') ||
                   ''
                 ).trim(),
             )
             .map(e => e.outerHTML.slice(0, 60)),
         };
       });
+      expect(r.heads[0], k).toBe(want[0]);
       for (const w of want)
         expect(
           r.heads.some(h => h.startsWith(w)),
@@ -316,7 +206,7 @@ test.describe('Checkpoint 4: accessibility', () => {
 });
 
 test.describe('Checkpoint 3: review fixes', () => {
-  test('back from a task opened elsewhere returns there, where it was; Today keeps its scroll', async ({
+  test('back from a task opened elsewhere returns there, where it was; the board keeps its scroll', async ({
     app,
     page,
   }) => {
@@ -344,17 +234,21 @@ test.describe('Checkpoint 3: review fixes', () => {
       expect(await page.evaluate(() => reviewSub)).toBe('forecast');
       expect(Math.abs((await page.evaluate(() => window.scrollY)) - y)).toBeLessThan(5);
     }
-    // Today's list: open the 16th task far down, back: the list is where it was.
-    await page.evaluate(() => go('today'));
-    const row = page.locator('#v-today .list .row').nth(15);
-    await row.scrollIntoViewIfNeeded();
-    const top0 = await row.evaluate(e => e.getBoundingClientRect().top);
-    await row.locator('.open').click();
+    // The board: open the 16th project far down, back: the board is where it was.
+    await page.evaluate(() => go('projects'));
+    const title = page.locator('#v-projects .project-card h2 .project-open').nth(15);
+    await title.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(1000);
+    const top0 = await title.evaluate(e => e.getBoundingClientRect().top);
+    const id = await title.getAttribute('data-open');
+    await title.click();
+    expect(await page.evaluate(() => [view, path.join('/')])).toEqual(['today', id]);
+    await expect(page.locator('#v-today .crumbs button').first()).toHaveText('‹ Projects');
     await page.evaluate(() => history.back());
-    // (the row just left is where it was on the screen)
-    const id = await page.evaluate(() => listAt === null);
-    expect(id).toBe(true);
-    const back = page.locator('#v-today .list .row').nth(15);
+    await expect(page.locator('#v-projects')).toBeVisible();
+    // (the card just left is where it was on the screen)
+    const back = page.locator('#v-projects .project-card h2 .project-open').nth(15);
+    await expect(back).toHaveAttribute('data-open', id);
     expect(Math.abs((await back.evaluate(e => e.getBoundingClientRect().top)) - top0)).toBeLessThan(5);
   });
 
@@ -388,42 +282,74 @@ test.describe('Checkpoint 3: review fixes', () => {
     ).toBe(1);
   });
 
-  test('typed words wait for you: the Inbox box and a step box, per task; a password never', async ({
-    app,
-    page,
-  }) => {
+  test('typed words wait for you: the Inbox box and a step box, per task', async ({ app, page }) => {
     await day(app, page);
     await app.go('inbox');
     await page.fill('#iin', 'Call the bank');
-    await app.go('today');
+    await app.go('projects');
     await app.go('inbox');
     await expect(page.locator('#iin')).toHaveValue('Call the bank');
-    await app.go('today');
+    await app.go('projects');
     const [a, b] = await page.evaluate(() =>
       S.quests
         .filter(q => q.children.length)
         .map(q => q.id)
         .slice(0, 2),
     );
-    await page.evaluate(id => openPath([id]), a);
+    await openProject(page, a);
     await page.fill('#sin', 'Ring Jo');
+    // To another task's page by the board (its ‹ Projects, then the other's card): not its words.
+    await page.click('#v-today [data-crumb="-1"]');
+    await openProject(page, b);
+    await expect(page.locator('#v-today .node.facts > h1')).toHaveText(
+      await page.evaluate(id => find(id).n.text, b),
+    );
+    await expect(page.locator('#sin')).toHaveValue('');
+    // (and straight from one page to the next, as the board beside a page does it)
+    await page.evaluate(id => openPath([id]), a);
+    await expect(page.locator('#sin')).toHaveValue('Ring Jo');
     await page.evaluate(id => openPath([id]), b);
     await expect(page.locator('#sin')).toHaveValue('');
-    await page.evaluate(id => openPath([id]), a);
+    // Back (Android's gesture) to the board, and the first task again: its words.
+    await page.evaluate(() => history.back());
+    await expect(page.locator('#v-projects')).toBeVisible();
+    await openProject(page, a);
     await expect(page.locator('#sin')).toHaveValue('Ring Jo');
   });
 
-  test('why a task is Due shows on its row; a step is named with its task in Needs attention', async ({
+  test('why a task is due shows on its card; a step is named with its task in Needs attention', async ({
     app,
     page,
   }) => {
     await day(app, page);
-    await page.click('[data-tfilter="due"]');
-    for (const r of await page.locator('#v-today .list .row').all())
-      await expect(r.locator('.tag.late, .tag.now')).not.toHaveCount(0);
+    // (due: its own deadline today or gone by, or a step's)
+    const due = await page.evaluate(() =>
+      S.quests
+        .filter(
+          q =>
+            !isDone(q) &&
+            ((q.due && q.due <= today()) || q.children.some(c => !isDone(c) && c.due && c.due <= today())),
+        )
+        .map(q => q.id),
+    );
+    expect(due.length).toBeGreaterThan(2);
+    for (const id of due)
+      await expect(page.locator(`${card(id)} .project-meta`).locator('.tag.late, .tag.now')).not.toHaveCount(
+        0,
+      );
+    // (and no other card says so)
+    expect(
+      await page.$$eval('#v-projects .project-card', cs =>
+        cs
+          .filter(c => c.querySelector('.project-meta .tag.late, .project-meta .tag.now'))
+          .map(c => c.dataset.qid),
+      ),
+    ).toEqual(due);
+    await expect(page.locator(`${card('q6')} .project-meta .tag.late`)).toHaveText('Step overdue');
     const att = await page.evaluate(() => attentionItems().map(i => i.text));
     expect(att).toContain('Client onboarding: Review');
-    await page.click('[data-tfilter="all"]');
+    await page.evaluate(() => go('ops'));
+    await expect(page.locator('#v-ops .attlist')).toContainText('Client onboarding: Review');
   });
 
   test('search finds a guide by its steps; a sheet puts the page behind out of reach', async ({
@@ -448,12 +374,14 @@ test.describe('Checkpoint 3: review fixes', () => {
     });
     await page.fill('#searchin, #v-search input', 'bank statements');
     await expect(page.locator('#v-search')).toContainText('Month end');
-    await page.evaluate(() => go('today'));
-    await page.click('[data-top3pick]');
+    await page.evaluate(() => go('projects'));
+    await page.click('#v-projects [data-project-new]');
+    await expect(page.locator('#sheettitle')).toHaveText('New project');
     expect(
       await page.evaluate(() => [document.querySelector('.wrap').inert, document.querySelector('nav').inert]),
     ).toEqual([true, true]);
     await page.keyboard.press('Escape');
+    await expect(page.locator('#sheet')).toHaveCount(0);
     expect(
       await page.evaluate(() => [document.querySelector('.wrap').inert, document.querySelector('nav').inert]),
     ).toEqual([false, false]);
@@ -461,57 +389,7 @@ test.describe('Checkpoint 3: review fixes', () => {
 });
 
 test.describe('Checkpoint 5: adversarial review fixes', () => {
-  test('a filter or words left from a fuller day are not applied once their controls are gone', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    await page.click('[data-tfilter="due"]');
-    await page.evaluate(() => {
-      todayFind = 'harpenden';
-      // (down to three tasks to work on: no chips, no Find)
-      S.quests = S.quests.filter(q => !canAct(q) || ['g3', 'g5', 'g1'].includes(q.id));
-      save();
-      renderAll();
-    });
-    await expect(page.locator('#v-today .tfilter')).toHaveCount(0);
-    expect((await names(page)).length).toBe(
-      await page.evaluate(() => todayWork(S.quests).filter(q => !isDone(q)).length),
-    );
-  });
-
-  test("Find keeps its box while typing, so an Android keyboard's composing isn't broken; quick on 300 tasks", async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    await page.click('[data-tfindopen]');
-    const box = await page.$('#tfind');
-    const cdp = await page.context().newCDPSession(page);
-    for (const t of ['h', 'ha', 'har'])
-      await cdp.send('Input.imeSetComposition', {
-        text: t,
-        selectionStart: t.length,
-        selectionEnd: t.length,
-      });
-    await cdp.send('Input.insertText', { text: 'har' });
-    await expect(page.locator('#tfind')).toHaveValue('har');
-    expect(await page.evaluate(b => b === document.getElementById('tfind'), box)).toBe(true);
-    await expect.poll(() => names(page)).toContain('Reply to Harpenden about the boundary query');
-    // 300 tasks: applying the words is well under a frame's budget twice over.
-    const { datasets } = require('./perf/data');
-    await app.setState(datasets.heavy);
-    await page.reload();
-    const ms = await page.evaluate(() => {
-      todayFind = 'report';
-      const a = performance.now();
-      applyFind();
-      return performance.now() - a;
-    });
-    expect(ms).toBeLessThan(60);
-  });
-
-  test('drafts: kept when going back to Search; the Inbox box regardless of the task open on Today', async ({
+  test('drafts: kept when going back to Search; the Inbox box regardless of the task open', async ({
     app,
     page,
   }) => {
@@ -530,16 +408,18 @@ test.describe('Checkpoint 5: adversarial review fixes', () => {
     await expect(page.locator('#v-search')).toBeVisible();
     await page.click(`#v-search [data-open="${id}"]`);
     await expect(page.locator('#sin')).toHaveValue('Ring Jo');
-    // The Inbox box: the task open on Today doesn't matter.
+    // The Inbox box: the task whose page is open doesn't matter.
     await app.go('inbox');
     await page.fill('#iin', 'Call the bank');
     await app.go('today');
+    expect(await page.evaluate(() => [view, path.join('/')])).toEqual(['today', id]);
     await page.evaluate(() => openPath([]));
+    expect(await page.evaluate(() => view)).toBe('projects');
     await app.go('inbox');
     await expect(page.locator('#iin')).toHaveValue('Call the bank');
   });
 
-  test('a task opened from Search then removed: back from the next task is to Today, not Search', async ({
+  test('a task opened from Search then removed: back from the next task is to Projects, not Search', async ({
     app,
     page,
   }) => {
@@ -558,30 +438,28 @@ test.describe('Checkpoint 5: adversarial review fixes', () => {
       renderSearch();
     }, a);
     await page.click(`#v-search [data-open="${a}"]`);
+    await expect(page.locator('#v-today .crumbs button').first()).toHaveText('‹ Search');
     await page.evaluate(id => {
       S.quests = S.quests.filter(q => q.id !== id);
       inBackground(renderAll);
     }, a);
-    await page.click(`#v-today .list [data-open="${b}"]`);
-    await expect(page.locator('#v-today .crumbs button').first()).toHaveText('‹ Today');
+    // (its page has gone from under it: the board)
+    await expect(page.locator('#v-projects')).toBeVisible();
+    await expect(page.locator(card(a))).toHaveCount(0);
+    await openProject(page, b);
+    await expect(page.locator('#v-today .crumbs button').first()).toHaveText('‹ Projects');
     await page.evaluate(() => history.back());
-    await expect(page.locator('#v-today .list')).toBeVisible();
+    await expect(page.locator('#v-projects')).toBeVisible();
+    expect(await page.evaluate(() => view)).toBe('projects');
+    await expect(page.locator('#v-search')).toBeHidden();
   });
 
-  test('Clear in the Top 3 picker closes it, so its Undo is in sight; a summary left keeps its lines', async ({
-    app,
-    page,
-  }) => {
+  test('a summary written in the one-line box keeps its lines once left', async ({ app, page }) => {
     await day(app, page);
-    await page.click('[data-top3pick]');
-    await page.click('#sheet [data-t3none]');
-    await expect(page.locator('#sheet')).toHaveCount(0);
-    await expect(page.locator('#toast #undo')).toBeVisible();
-    await page.click('#toast #undo');
-    expect(await page.evaluate(() => top3Ids().length)).toBe(3);
     // A summary written in the one-line box: three lines once left.
     const id = await page.evaluate(() => S.quests.find(q => !q.summary).id);
-    await page.evaluate(id => openPath([id]), id);
+    await openProject(page, id);
+    expect(await page.$eval('#fsum', e => e.rows)).toBe(1);
     await page.fill('#fsum', 'Waiting on the planning team\nthen the board signs it off');
     await page.locator('#fsum').blur();
     expect(await page.$eval('#fsum', e => e.rows)).toBe(3);

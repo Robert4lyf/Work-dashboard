@@ -1,4 +1,6 @@
-// Release H: the final mile. Checkpoint 1: Today on a phone, a busy day (Scenario A).
+// Release H: the final mile, on a busy day (Scenario A). The old Today list (its jump line, its
+// Scheduled and Waiting sections, its Find) has gone: what's drawn again in place is the Projects
+// board and a task's page.
 const { test, expect } = require('./fixtures');
 const { gDay } = require('./releasegdata');
 
@@ -8,191 +10,86 @@ async function day(app, page, at = new Date(2026, 10, 4, 11, 0)) {
   await app.setState(gDay);
   await page.reload();
 }
-// (more scheduled for today, so there's something to fold: two later meetings)
-const moreMeetings = page =>
-  page.evaluate(() => {
-    ['15:30', '16:30'].forEach((time, i) =>
-      S.quests.push({
-        id: 'mx' + i,
-        text: 'Meeting ' + (i + 1),
-        done: false,
-        children: [],
-        scheduled: { date: today(), time },
-      }),
-    );
-    norm(S);
-    save();
-    renderAll();
-  });
-const shownRows = (page, sec) =>
-  page.$$eval(`#v-today .${sec} .secrow`, rs =>
-    rs.filter(r => r.checkVisibility()).map(r => r.querySelector('.open > span').textContent),
-  );
+const card = id => `#v-projects .project-card[data-qid="${id}"]`;
+const openProject = (page, id) => page.click(`${card(id)} h2 .project-open`);
 
-test.describe('Checkpoint 1: Today on a phone', () => {
+test.describe('Checkpoint 1: Projects on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test('a line at the top says what is further down; a tap goes to the section, the keyboard with it', async ({
-    app,
-    page,
-  }) => {
+  test('the projects start on the first screen', async ({ app, page }) => {
     await day(app, page);
-    const jump = page.locator('#v-today > .tjump');
-    await expect(jump).toBeVisible();
-    await expect(jump.locator('[data-jump]')).toHaveText(['Scheduled 3↓', 'Waiting 4↓', 'Tasks 25↓']);
-    // On the first screen, above the tab bar.
-    const box = await jump.boundingBox();
-    expect(box.y + box.height).toBeLessThan(844 - 64);
-    for (const [k, id] of [
-      ['Tasks', 'taskshead'],
-      ['Waiting', 'waithead'],
-      ['Scheduled', 'schedhead'],
-    ]) {
-      await page.evaluate(() => scrollTo(0, 0));
-      await jump.locator(`[data-jump="${id}"]`).click();
-      await expect(page.locator('#' + id)).toBeFocused();
-      const top = await page.$eval('#' + id, h => h.closest('.sechead').getBoundingClientRect().top);
-      expect(Math.abs(top - 8), k).toBeLessThan(3);
-    }
-    // Nothing changed, nothing saved: only where the page is.
-    expect(app.errors).toEqual([]);
-  });
-
-  test('Waiting: the most urgent shown, the rest a tap away with how many are due a chase; kept open or folded', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    expect(await shownRows(page, 'waitsec2')).toEqual(['Hear back on figures']);
-    const more = page.locator('#waitmore');
-    await expect(more.locator('> summary')).toHaveText('3 more 2 to chase');
-    await expect(page.locator('#v-today .wrow')).toHaveCount(4); // (all there, three folded)
-    await more.locator('> summary').click();
-    expect((await shownRows(page, 'waitsec2')).length).toBe(4);
-    // Open stays open through a redraw, a sync's redraw and a reload.
-    await page.evaluate(() => renderAll());
-    await page.evaluate(() => inBackground(renderAll));
-    await expect(more).toHaveAttribute('open', '');
-    await page.reload();
-    await expect(page.locator('#waitmore')).toHaveAttribute('open', '');
-    await page.locator('#waitmore > summary').click();
-    await page.reload();
-    await expect(page.locator('#waitmore')).not.toHaveAttribute('open', '');
-    // Native toggle dispatch is queued. Leaving immediately still persists the DOM state.
-    const saved = await more.evaluate(details => {
-      details.open = true;
-      window.dispatchEvent(new PageTransitionEvent('pagehide'));
-      return localStorage.getItem('dashboard-wait-open');
-    });
-    expect(saved).toBe('1');
-    expect(app.errors).toEqual([]);
-  });
-
-  test('Scheduled: any whose time went by unrecorded, then the next; the rest a tap away with their times', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    // Three: one past, the next, one at any time. One left over isn't folded (it would take
-    // nearly the room of its row).
-    expect(await shownRows(page, 'schedsec')).toHaveLength(3);
-    await expect(page.locator('#schedmore')).toHaveCount(0);
-    await moreMeetings(page);
-    const shown = await shownRows(page, 'schedsec');
-    expect(shown).toHaveLength(2);
-    await expect(page.locator('#v-today .schedsec .secrow').first()).toContainText('Time passed');
-    await expect(page.locator('#v-today .schedsec .secrow').nth(1)).toContainText('14:00');
-    await expect(page.locator('#schedmore > summary')).toHaveText('3 more 15:30, 16:30, Any time');
-    // At 14:05 the 14:00 one waits to be recorded, and 15:30 is next.
-    await page.clock.setFixedTime(new Date(2026, 10, 4, 14, 5));
-    await page.evaluate(() => renderAll());
-    await expect(page.locator('#schedmore > summary')).toHaveText('2 more 16:30, Any time');
-    expect(app.errors).toEqual([]);
-  });
-
-  test('two columns show the whole of Scheduled and Waiting, with no jump line', async ({ app, page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await day(app, page);
-    await moreMeetings(page);
-    await expect(page.locator('#v-today .tjump')).toHaveCount(0);
-    await expect(page.locator('#schedmore, #waitmore')).toHaveCount(0);
-    expect(await shownRows(page, 'waitsec2')).toHaveLength(4);
-    expect(await shownRows(page, 'schedsec')).toHaveLength(5);
-  });
-
-  test('Find reaches a finished task: Done today opens for it, and closes again after', async ({
-    app,
-    page,
-  }) => {
-    await day(app, page);
-    await page.evaluate(() => {
-      S.quests.find(q => q.text === 'Book room for team away day').done = true;
-      save();
-      renderAll();
-    });
-    await expect(page.locator('#donesec')).not.toHaveAttribute('open', '');
-    await page.click('[data-tfindopen]');
-    await page.keyboard.type('book room');
-    await expect(page.locator('#donesec')).toHaveAttribute('open', '');
-    await expect(page.locator('#donesec .row .open > span')).toHaveText('Book room for team away day');
-    await expect(page.locator('#v-today .tnomatch')).toBeHidden();
-    await page.fill('#tfind', '');
-    await expect(page.locator('#donesec')).not.toHaveAttribute('open', '');
-    // (and that wasn't remembered as opened)
-    await page.evaluate(() => renderAll());
-    await expect(page.locator('#donesec')).not.toHaveAttribute('open', '');
-  });
-
-  test("Today's tasks start well up the page", async ({ app, page }) => {
-    await day(app, page);
-    // (Release G: 1,701px on this day at 390 × 844)
-    const y = await page.$eval('#v-today .list', e => e.getBoundingClientRect().top + scrollY);
-    expect(y).toBeLessThan(1500);
+    // (Today's list started 1,500px down this day, under its sections: the board has none above it)
+    const first = page.locator('#v-projects .project-card h2 .project-open').first();
+    await expect(first).toBeVisible();
+    const box = await first.boundingBox();
+    expect(box.y + box.height).toBeLessThan(844 - 64); // (above the tab bar)
+    expect(await page.evaluate(() => scrollY)).toBe(0);
   });
 });
 
-test.describe('Checkpoint 2: Today drawn again in place', () => {
+test.describe("Checkpoint 2: the board and a task's page drawn again in place", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  // (each row element tagged, to tell a row left alone from one drawn again)
-  const tag = page =>
-    page.evaluate(() =>
-      document.querySelectorAll('#v-today .row[data-qid]').forEach(r => (r._seen = r.dataset.qid)),
-    );
-  const redrawn = page =>
-    page.$$eval('#v-today .row[data-qid]', rs =>
-      rs.filter(r => r._seen !== r.dataset.qid).map(r => r.dataset.qid),
-    );
+  // (each card or row element tagged, to tell one left alone from one drawn again)
+  const CARDS = '#v-projects .project-card[data-qid]',
+    ROWS = '#v-today .row[data-qid]';
+  const tag = (page, sel) =>
+    page.evaluate(sel => document.querySelectorAll(sel).forEach(r => (r._seen = r.dataset.qid)), sel);
+  const redrawn = (page, sel) =>
+    page.$$eval(sel, rs => rs.filter(r => r._seen !== r.dataset.qid).map(r => r.dataset.qid));
+  // (a view as drawn, without the patch's own marks)
+  const html = (page, v) => page.$eval('#' + v, e => e.innerHTML.replace(/ data-(h|page)="[^"]*"/g, ''));
+  // (the same view drawn from scratch)
+  const scratch = (page, v) =>
+    page.evaluate(v => {
+      document.getElementById(v).removeAttribute('data-page');
+      renderAll();
+    }, v);
 
-  test('a sync that changes nothing leaves every row alone; one that renames a task redraws only its row', async ({
+  test('a sync that changes nothing leaves every card and row alone; one that renames a step redraws only its row', async ({
     app,
     page,
   }) => {
     await day(app, page);
-    await tag(page);
+    // The board: every card is the one that was there, and a renamed project reads so on its own.
+    expect(await page.locator(CARDS).count()).toBe(31);
+    await tag(page, CARDS);
     await page.evaluate(() => inBackground(renderAll));
-    expect(await redrawn(page)).toEqual([]);
+    expect(await redrawn(page, CARDS)).toEqual([]);
     const id = await page.evaluate(() => {
       const q = S.quests.find(x => x.text === 'Team rota');
       q.text = 'Team rota (v2)';
       inBackground(renderAll);
       return q.id;
     });
-    expect(await redrawn(page)).toEqual([id]);
-    await expect(page.locator(`#v-today .row[data-qid="${id}"] .open > span`)).toHaveText('Team rota (v2)');
+    expect((await redrawn(page, CARDS)).filter(x => x !== id)).toEqual([]);
+    await expect(page.locator(`${card(id)} h2 .project-open > span`)).toHaveText('Team rota (v2)');
+    // A task's page: its steps' rows.
+    await openProject(page, 'g2');
+    expect(await page.locator(ROWS).count()).toBe(3);
+    await tag(page, ROWS);
+    await page.evaluate(() => inBackground(renderAll));
+    expect(await redrawn(page, ROWS)).toEqual([]);
+    await page.evaluate(() => {
+      find('g2s1').n.text = 'Draft (v2)';
+      inBackground(renderAll);
+    });
+    expect(await redrawn(page, ROWS)).toEqual(['g2s1']);
+    await expect(page.locator('#v-today .row[data-qid="g2s1"] .open > span')).toHaveText('Draft (v2)');
     expect(app.errors).toEqual([]);
   });
 
-  test('ticking a task redraws its row and what depends on it, not the rest; the order is the order underneath', async ({
+  test('ticking redraws what was ticked and what depends on it, not the rest; the order is the order underneath', async ({
     app,
     page,
   }) => {
     await day(app, page);
-    await tag(page);
+    // The board: a project without steps, ticked on its card, goes under Completed today.
+    await tag(page, CARDS);
     const id = await page.evaluate(() => S.quests.find(q => q.text === 'Renew parking permit').id);
-    await page.click(`#v-today .row[data-qid="${id}"] [data-toggle]`);
-    await expect(page.locator(`#donesec .row[data-qid="${id}"]`)).toHaveCount(1);
-    expect(await redrawn(page)).toEqual([id]);
-    // The rows in the DOM are in the order of S.quests, whatever was moved.
+    await page.click(`${card(id)} [data-toggle]`);
+    await expect(page.locator(`#projects-done ${card(id).replace('#v-projects ', '')}`)).toHaveCount(1);
+    expect(await redrawn(page, CARDS)).toEqual([id]);
+    // The cards are in the order of S.quests, whatever was moved (and moved, they're kept).
     await page.evaluate(() => {
       const [a, b] = [
         S.quests.findIndex(q => q.text === 'Team rota'),
@@ -201,14 +98,32 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
       [S.quests[a], S.quests[b]] = [S.quests[b], S.quests[a]];
       renderAll();
     });
-    const dom = await page.$$eval('#v-today .list.box > .row', rs => rs.map(r => r.dataset.qid));
-    const want = await page.evaluate(() => {
-      const shown = new Set(
-        [...document.querySelectorAll('#v-today .list.box > .row')].map(r => r.dataset.qid),
-      );
-      return S.quests.filter(q => shown.has(q.id)).map(q => q.id);
+    expect(
+      await page.$$eval('#active-project-grid > .project-card', cs => cs.map(c => c.dataset.qid)),
+    ).toEqual(await page.evaluate(() => S.quests.filter(q => !isDone(q)).map(q => q.id)));
+    expect(await redrawn(page, CARDS)).toEqual([id]);
+    // A task's page: a step ticked redraws its row alone.
+    await openProject(page, 'g2');
+    await tag(page, ROWS);
+    await page.click('#v-today .row[data-qid="g2s0"] [data-toggle]');
+    await expect(page.locator('#v-today .row.done[data-qid="g2s0"]')).toHaveCount(1);
+    expect(await redrawn(page, ROWS)).toEqual(['g2s0']);
+    // The rows in the DOM are in the order of the task's steps, whatever was moved.
+    await page.evaluate(() => {
+      const kids = find('g2').n.children,
+        [a, b] = [kids.findIndex(c => c.id === 'g2s1'), kids.findIndex(c => c.id === 'g2s2')];
+      [kids[a], kids[b]] = [kids[b], kids[a]];
+      renderAll();
     });
-    // (waiting ones go below the rest, as before: compare within each part)
+    const dom = await page.$$eval('#v-today .list.box > .row', rs => rs.map(r => r.dataset.qid));
+    expect(dom).toHaveLength(3);
+    const want = await page.evaluate(() =>
+      find('g2')
+        .n.children.filter(c => document.querySelector(`#v-today .list.box > .row[data-qid="${c.id}"]`))
+        .map(c => c.id),
+    );
+    expect(want.slice(0, 2)).toEqual(['g2s2', 'g2s1']);
+    // (finished ones go below the rest, as before: compare within each part)
     const rank = await page.evaluate(ids => ids.map(id => listRank(find(id).n)), dom);
     expect(rank).toEqual([...rank].sort((x, y) => x - y));
     for (const k of new Set(rank))
@@ -222,7 +137,7 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
   }) => {
     await day(app, page);
     const id = await page.evaluate(() => S.quests.find(q => q.children.length > 1).id);
-    await page.evaluate(id => openPath([id]), id);
+    await openProject(page, id);
     await page.click('#sin');
     await page.keyboard.type('Ring the supplier');
     await page.evaluate(() => {
@@ -236,8 +151,40 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
       r.children.find(c => !c.done).done = true;
       inBackground(renderAll);
     });
+    await expect(page.locator('#v-today .row.done')).toHaveCount(2); // (it was drawn)
     expect(
       await page.$eval('#sin', i => [
+        i._mine,
+        i.value,
+        i.selectionStart,
+        i.selectionEnd,
+        document.activeElement === i,
+      ]),
+    ).toEqual([1, 'Ring the supplier', 5, 8, true]);
+    expect(app.errors).toEqual([]);
+  });
+
+  test("a word being typed into a card's step box on the board is left as it is by a sync's redraw", async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await page.click(`${card('g2')} [data-project-add]`);
+    await expect(page.locator('#project-step-g2')).toBeFocused();
+    await page.keyboard.type('Ring the supplier');
+    await page.evaluate(() => {
+      const i = document.getElementById('project-step-g2');
+      i._mine = 1;
+      i.setSelectionRange(5, 8);
+    });
+    // Another device ticks a step of this project: its card changes around the box.
+    await page.evaluate(() => {
+      find('g2s0').n.done = true;
+      inBackground(renderAll);
+    });
+    await expect(page.locator(`${card('g2')} .project-meta`)).toContainText('1 of 3 steps');
+    expect(
+      await page.$eval('#project-step-g2', i => [
         i._mine,
         i.value,
         i.selectionStart,
@@ -253,32 +200,45 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
     page,
   }) => {
     await day(app, page);
-    await page.click('#attd > summary');
-    await page.click('#waitmore > summary');
+    // The board: Completed today, once there is one, opened.
+    await page.click(`${card('g3')} [data-toggle]`);
+    await expect(page.locator('#projects-done')).not.toHaveAttribute('open', '');
+    await page.click('#projects-done > summary');
     await page.evaluate(() => {
       renderAll();
       inBackground(renderAll);
     });
-    await expect(page.locator('#attd')).toHaveAttribute('open', '');
-    await expect(page.locator('#waitmore')).toHaveAttribute('open', '');
+    await expect(page.locator('#projects-done')).toHaveAttribute('open', '');
+    await expect(page.locator(`#projects-done ${card('g3').replace('#v-projects ', '')}`)).toBeVisible();
+    // A task's page: its tag and More.
     const [a, b] = await page.evaluate(() =>
       S.quests
         .filter(q => q.children.length)
         .slice(0, 2)
         .map(q => q.id),
     );
-    await page.evaluate(id => openPath([id]), a);
+    await openProject(page, a);
+    await page.click('#tagd > summary');
+    await page.click('#mored > summary');
+    await page.evaluate(() => {
+      renderAll();
+      inBackground(renderAll);
+    });
+    await expect(page.locator('#tagd')).toHaveAttribute('open', '');
+    await expect(page.locator('#mored')).toHaveAttribute('open', '');
     await page.evaluate(() => (document.querySelector('#v-today h1')._mine = 1));
+    await page.evaluate(() => renderAll());
+    expect(await page.$eval('#v-today h1', h => h._mine)).toBe(1); // (the same page: kept)
     await page.evaluate(id => openPath([id]), b);
     expect(await page.$eval('#v-today h1', h => h._mine)).toBeUndefined();
     expect(app.errors).toEqual([]);
   });
-  test('after many changes in a row, drawn in place or in the background, the page is what drawing it from scratch gives', async ({
+
+  test('after many changes in a row, drawn in place or in the background, the board is what drawing it from scratch gives', async ({
     app,
     page,
   }) => {
     await day(app, page);
-    const html = () => page.$eval('#v-today', e => e.innerHTML.replace(/ data-(h|keep|page)="[^"]*"/g, ''));
     for (let i = 0; i < 12; i++) {
       await page.evaluate(i => {
         const qs = S.quests.filter(q => !q.done),
@@ -291,14 +251,41 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
         save();
         i % 2 ? inBackground(renderAll) : renderAll();
       }, i);
-      const patched = await html();
-      await page.evaluate(() => {
-        document.getElementById('v-today').removeAttribute('data-page');
-        renderAll();
-      });
-      expect(patched, 'after change ' + i).toBe(await html());
+      const patched = await html(page, 'v-projects');
+      expect(patched).toContain('project-card'); // (the board is what's showing)
+      await scratch(page, 'v-projects');
+      expect(patched, 'after change ' + i).toBe(await html(page, 'v-projects'));
     }
-    await expect(page.locator('#v-today [data-keep]')).toHaveCount(0);
+    await expect(page.locator('#v-projects [data-pkeep]')).toHaveCount(0);
+    expect(app.errors).toEqual([]);
+  });
+
+  test("after many changes in a row to a task's steps, its page is what drawing it from scratch gives", async ({
+    app,
+    page,
+  }) => {
+    await day(app, page);
+    await openProject(page, 'q3');
+    for (let i = 0; i < 12; i++) {
+      await page.evaluate(i => {
+        const q = find('q3').n,
+          open = q.children.filter(c => !c.done),
+          c = open[i % open.length];
+        if (i % 4 === 0) c.text += ' x';
+        else if (i % 4 === 1) q.children.push(q.children.splice(q.children.indexOf(c), 1)[0]);
+        else if (i % 4 === 2)
+          q.children.push({ id: 'new' + i, text: 'New step ' + i, done: false, children: [] });
+        else if (open.length > 1) c.done = true;
+        norm(S);
+        save();
+        i % 2 ? inBackground(renderAll) : renderAll();
+      }, i);
+      const patched = await html(page, 'v-today');
+      expect(patched).toContain('Megan finance queries'); // (its page is what's showing)
+      await scratch(page, 'v-today');
+      expect(patched, 'after change ' + i).toBe(await html(page, 'v-today'));
+    }
+    await expect(page.locator('#v-today [data-pkeep]')).toHaveCount(0);
     expect(app.errors).toEqual([]);
   });
 
@@ -307,7 +294,10 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
     page,
   }) => {
     await day(app, page);
+    // (a task with four steps: the third, moved up, is neither first nor last before or after)
+    await openProject(page, 'q8');
     await page.click('#reorder');
+    await expect(page.locator('#v-today .list .row')).toHaveCount(4);
     const id = await page.$eval('#v-today .list .row:nth-child(3)', r => r.dataset.qid);
     await page.locator('#v-today .list .row:nth-child(3)').evaluate(r => (r._mine = 1));
     await page.click(`[data-up="${id}"]`);
@@ -316,8 +306,15 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
       1,
     ]);
     await expect(page.locator(`[data-up="${id}"]`)).toBeFocused();
+    expect(await page.evaluate(() => find('q8').n.children.map(c => c.id))).toEqual([
+      'q8a',
+      id,
+      'q8b',
+      'q8w',
+    ]);
   });
-  test("Carried over: keeping one leaves the others' Keep buttons as they are (the patch's own marks are its own)", async ({
+
+  test("Carried over, in the weekly review: keeping one leaves the others' Keep buttons as they are", async ({
     app,
     page,
   }) => {
@@ -330,40 +327,55 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
       save();
     });
     await page.reload();
-    await page.click('#carrd > summary');
-    await expect(page.locator('#carrd button[data-keep]')).toHaveCount(3);
-    await page.locator('#carrd button[data-keep]').first().click();
-    await expect(page.locator('#carrd button[data-keep]')).toHaveCount(2);
-    await expect(page.locator('#carrd')).not.toContainText('undefined');
-    const html = () => page.$eval('#v-today', e => e.innerHTML.replace(/ data-(h|page)="[^"]*"/g, ''));
-    const patched = await html();
+    // (the weekly review, a step at a time: Carried over is its second)
     await page.evaluate(() => {
-      document.getElementById('v-today').removeAttribute('data-page');
-      renderAll();
+      reviewSub = 'week';
+      go('review');
     });
-    expect(patched).toBe(await html());
+    await page.click('#v-review [data-rstep="1"]');
+    await expect(page.locator('#v-review .wstep h2')).toContainText('Carried over');
+    const keep = page.locator('#v-review button[data-keep]');
+    await expect(keep).toHaveCount(3);
+    await keep.first().click();
+    await expect(keep).toHaveCount(2);
+    await expect(page.locator('#v-review')).not.toContainText('undefined');
+    expect(await page.evaluate(() => S.quests.filter(q => q.kept === today()).length)).toBe(1);
   });
 
-  test('Find opening Done today, then a sync redraw: it closes when the words are cleared, and stays unremembered', async ({
+  test("a box marked to keep its words, on a page drawn in place: the patch's own marks are its own", async ({
     app,
     page,
   }) => {
     await day(app, page);
-    await page.evaluate(() => {
-      S.quests.find(q => q.text === 'Book room for team away day').done = true;
-      save();
-      renderAll();
-    });
-    await page.click('[data-tfindopen]');
-    await page.keyboard.type('book room');
-    await expect(page.locator('#donesec')).toHaveAttribute('open', '');
-    await page.evaluate(() => inBackground(renderAll));
-    await expect(page.locator('#donesec')).toHaveAttribute('open', '');
-    await page.fill('#tfind', '');
-    await expect(page.locator('#donesec')).not.toHaveAttribute('open', '');
-    await page.evaluate(() => renderAll());
-    await expect(page.locator('#donesec')).not.toHaveAttribute('open', '');
-    expect(await page.evaluate(() => panels.donesec)).not.toBe(true);
+    // An Upcoming project's page: its step box is marked data-keep (the patch's marks are data-pkeep).
+    await page.click('#v-projects .project-open[data-upcoming-project="m4"]');
+    await expect(page.locator('#v-project-record #upcoming-step[data-keep]')).toHaveCount(1);
+    const addStep = (id, text) =>
+      page.evaluate(
+        ([id, text]) => {
+          S.later.find(q => q.id === 'm4').children.push({ id, text, done: false, children: [] });
+          norm(S);
+          save();
+          inBackground(renderAll);
+        },
+        [id, text],
+      );
+    await page.locator('#upcoming-step').evaluate(i => (i._mine = 1));
+    await addStep('m4a', 'Read the pack');
+    await expect(page.locator('#v-project-record')).toContainText('Read the pack');
+    await expect(page.locator('#v-project-record')).not.toContainText('undefined');
+    expect(await page.$eval('#upcoming-step', i => i._mine)).toBe(1); // (drawn in place: the same box)
+    const patched = await html(page, 'v-project-record');
+    await scratch(page, 'v-project-record');
+    expect(patched).toBe(await html(page, 'v-project-record'));
+    await expect(page.locator('#v-project-record [data-pkeep]')).toHaveCount(0);
+    // Words typed into it stay through a sync's redraw.
+    await page.fill('#upcoming-step', 'Print the papers');
+    await addStep('m4b', 'Book the room');
+    await expect(page.locator('#v-project-record')).toContainText('Book the room');
+    await expect(page.locator('#upcoming-step')).toHaveValue('Print the papers');
+    await expect(page.locator('#v-project-record #upcoming-step[data-keep]')).toHaveCount(1);
+    await expect(page.locator('#v-project-record [data-pkeep]')).toHaveCount(0);
   });
 
   test("a fold's summary keeps the keyboard through a sync's redraw of its section", async ({
@@ -371,13 +383,26 @@ test.describe('Checkpoint 2: Today drawn again in place', () => {
     page,
   }) => {
     await day(app, page);
-    await page.focus('#waitmore > summary');
+    // The board: Completed today.
+    await page.click(`${card('g3')} [data-toggle]`);
+    await page.focus('#projects-done > summary');
     await page.keyboard.press('Enter');
-    await expect(page.locator('#waitmore')).toHaveAttribute('open', '');
+    await expect(page.locator('#projects-done')).toHaveAttribute('open', '');
     await page.evaluate(() => inBackground(renderAll));
-    await expect(page.locator('#waitmore > summary')).toBeFocused();
+    await expect(page.locator('#projects-done > summary')).toBeFocused();
     await page.evaluate(() => renderAll());
-    await expect(page.locator('#waitmore > summary')).toBeFocused();
+    await expect(page.locator('#projects-done > summary')).toBeFocused();
+    await expect(page.locator('#projects-done')).toHaveAttribute('open', '');
+    // A task's page: More.
+    await openProject(page, 'g2');
+    await page.focus('#mored > summary');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#mored')).toHaveAttribute('open', '');
+    await page.evaluate(() => inBackground(renderAll));
+    await expect(page.locator('#mored > summary')).toBeFocused();
+    await page.evaluate(() => renderAll());
+    await expect(page.locator('#mored > summary')).toBeFocused();
+    await expect(page.locator('#mored')).toHaveAttribute('open', '');
   });
 });
 
@@ -390,7 +415,7 @@ test.describe('Checkpoint 5: review fixes', () => {
   }) => {
     await day(app, page);
     const id = await page.evaluate(() => S.quests.find(q => q.children.length > 1).id);
-    await page.evaluate(id => openPath([id]), id);
+    await openProject(page, id);
     const n0 = await page.evaluate(id => find(id).n.children.length, id);
     await page.click('#sin');
     await page.keyboard.type('Gather figures');
@@ -442,22 +467,18 @@ test.describe('Checkpoint 5: review fixes', () => {
     await expect(page.locator('#sq')).toHaveValue('Hel');
   });
 
-  test('the jump line keeps to one line with Larger text at 360px; the Follow up sheet fits at 320px', async ({
-    app,
-    page,
-  }) => {
-    await page.setViewportSize({ width: 360, height: 800 });
+  test('the Follow up sheet fits at 320px with Larger text', async ({ app, page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
     await day(app, page);
     await page.evaluate(() => {
       document.documentElement.dataset.font = 'large';
-      renderAll();
+      go('waiting');
     });
-    const tops = await page.$$eval('#v-today .tjump [data-jump]', bs =>
-      bs.map(b => Math.round(b.getBoundingClientRect().top)),
-    );
-    expect(new Set(tops).size).toBe(1);
-    await page.setViewportSize({ width: 320, height: 800 });
-    await page.locator('#v-today .wrow [data-chase]').first().click();
+    // (a waiting item's actions, then Follow up)
+    await page.locator('#v-waiting .row [data-wact]').first().click();
+    await page.click('#sheet [data-chase]');
+    await expect(page.locator('#sheettitle')).toHaveText('Follow up');
+    await expect(page.locator('#sheet .fld').first()).toBeVisible();
     const over = await page.$eval('#sheet', s =>
       [...s.querySelectorAll('.fld')].some(
         f => f.getBoundingClientRect().right > s.getBoundingClientRect().right + 0.5,
@@ -466,18 +487,24 @@ test.describe('Checkpoint 5: review fixes', () => {
     expect(over).toBe(false);
   });
 
-  test('back to the list after the phone turned: the row opened is on the screen', async ({ app, page }) => {
+  test('back to the board after the phone turned: the project opened is on the screen', async ({
+    app,
+    page,
+  }) => {
     await day(app, page);
-    const id = await page.$eval('#v-today .list .row:nth-child(6)', r => r.dataset.qid);
+    const id = await page.$eval('#active-project-grid > .project-card:nth-child(6)', r => r.dataset.qid);
     await page.evaluate(id => {
-      const r = document.querySelector(`#v-today .row[data-qid="${id}"]`);
-      scrollBy(0, r.getBoundingClientRect().top - 600);
+      const r = document.querySelector(`#v-projects .project-card[data-qid="${id}"]`);
+      scrollBy(0, r.getBoundingClientRect().top - 500);
     }, id);
-    await page.click(`#v-today .row[data-qid="${id}"] .open`);
+    await openProject(page, id);
+    // (turned: the board is laid out afresh, so where it was scrolled to is no longer where the card is)
     await page.setViewportSize({ width: 844, height: 390 });
     await page.evaluate(() => history.back());
-    await expect(page.locator(`#v-today .row[data-qid="${id}"]`)).toBeVisible();
-    const b = await page.$eval(`#v-today .row[data-qid="${id}"]`, r => r.getBoundingClientRect().bottom);
+    const title = page.locator(`${card(id)} h2 .project-open`);
+    await expect(title).toBeVisible();
+    await expect(title).toBeInViewport({ ratio: 1 });
+    const b = await title.evaluate(r => r.getBoundingClientRect().bottom);
     expect(b).toBeLessThanOrEqual(390);
   });
 });

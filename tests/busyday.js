@@ -1,5 +1,5 @@
 // A realistic busy day (Phase 1 usability scenarios), built in the page as saved data: 20 tasks,
-// a Top 3, deadlines (two overdue), two waiting commitments to chase, a workflow that failed on its
+// deadlines (two overdue), two waiting commitments to chase, a workflow that failed on its
 // flow stage (one incident: the run and its flow execution), a flow that failed on its own, an
 // automation under way, a saved place, and an Inbox. Run through app.setState, so `s` is the data.
 // Dates are relative to the page's today().
@@ -47,7 +47,6 @@ function busyDay(s) {
   s.quests[3].children.push(k('q3w', 'Hear back on figures', false, { wait: w('Emily', shift(t, -1)) }));
   s.quests[8].children.push(k('q8w', 'Floor plan sign-off', false, { wait: w('Laura', t) }));
   s.quests[4].resume = { note: 'Totals checked to row 40; next the notes', at: now - 3600e3, step: 'q4b' };
-  s.top3 = { day: t, ids: ['q5', 'q4', 'q9'] };
   s.inbox = ['Call landlord', 'Book train', 'Reply to Sam', 'Check invoice', 'Order toner'].map(
     (text, i) => ({
       id: 'i' + i,

@@ -17,7 +17,7 @@ const tapper = page => {
   };
 };
 
-test('Journey A: capture a task, process it, move it to Today, add a step, finish it: still quick, no process interface in the way', async ({
+test('Journey A: capture a task, process it, move it to Projects, add a step, finish it: still quick, no process interface in the way', async ({
   app,
   page,
 }) => {
@@ -31,12 +31,12 @@ test('Journey A: capture a task, process it, move it to Today, add a step, finis
   await t.click('[data-triagestart]');
   await t.click('[data-tdo="today"]');
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Call the landlord']);
-  await t.click('nav [data-v=today]');
-  await t.click('#v-today .open');
+  await t.click('nav [data-v=projects]');
+  await t.click('#v-projects .project-card .project-open');
   await page.fill('#sin', 'Find the number');
   await t.enter();
   expect((await app.state()).quests[0].children.map(c => c.text)).toEqual(['Find the number']);
-  await t.click('[data-toggle]');
+  await t.click('#v-today .row [data-toggle]');
   await t.click('#sheet [data-sheetans="finish"]');
   const s = await app.state();
   expect(s.quests[0].done).toBe(true);

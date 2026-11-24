@@ -7,16 +7,26 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 23, 9, 0, 30));
 });
 
-test('tasks carried over for 3+ days ask for a decision each morning', async ({ app, page }) => {
+// The weekly review's Carried over step (Review > Week, its second step).
+const carriedStep = async (app, page) => {
+  await app.go('review');
+  const step = page.locator('#v-review .wstep', { has: page.locator('h2', { hasText: 'Carried over' }) });
+  await expect(page.locator('#v-review .wstepno')).toBeVisible();
+  if (!(await step.count())) await page.click('#v-review [data-rstep="1"]');
+  await expect(page.locator('#v-review .wstepno')).toHaveText('Step 2 of 5');
+  return step;
+};
+
+test('tasks carried over for 3+ days ask for a decision in the weekly review', async ({ app, page }) => {
   for (const t of ['Old report', 'Old email', 'Old call', 'Old idea', 'Fresh']) await app.addQuest(t);
   expect((await app.state()).quests.every(q => q.since === '2026-09-23')).toBe(true);
   await app.setState(s => s.quests.slice(0, 4).forEach(q => (q.since = '2026-09-19')));
   await page.reload();
-  // One folded line (the rows don't carry an age badge); open it to decide.
-  const card = page.locator('#v-today .carried');
-  await expect(card.locator('summary')).toContainText('4 tasks carried over');
-  await expect(page.locator('#v-today .row .tag.old')).toHaveCount(0);
-  await card.locator('summary').click();
+  // The cards on the board don't carry an age badge; the review's step counts them, a row each.
+  await expect(page.locator('#v-projects .project-card')).toHaveCount(5);
+  await expect(page.locator('#v-projects .tag.old')).toHaveCount(0);
+  let card = await carriedStep(app, page);
+  await expect(card.locator('h2 small')).toHaveText('4');
   await expect(card.locator('.crow')).toHaveCount(4);
   await expect(card).toContainText('Old report 4 days');
 
@@ -30,7 +40,8 @@ test('tasks carried over for 3+ days ask for a decision each morning', async ({ 
   expect((await app.state()).quests.some(q => q.text === 'Old idea')).toBe(true);
   await card.locator('[data-drop]').first().click();
   await expect(page.locator('#toast')).toContainText('Deleted Old idea');
-  await expect(card).toHaveCount(0);
+  await expect(card.locator('.crow')).toHaveCount(0);
+  await expect(card).toContainText('All clear.');
   let s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Old report', 'Fresh']);
   expect(s.quests[0].kept).toBe('2026-09-23');
@@ -38,16 +49,17 @@ test('tasks carried over for 3+ days ask for a decision each morning', async ({ 
   expect(s.later[0].since).toBeUndefined();
   expect(s.inbox[0].text).toBe('Old call');
 
-  // Back on Today, a moved task starts counting again; a kept one asks again tomorrow.
+  // Back on Projects, a moved task starts counting again; a kept one asks again tomorrow.
   await page.clock.setSystemTime(new Date(2026, 8, 24, 9));
   await page.reload();
   s = await app.state();
   expect(s.quests.find(q => q.text === 'Old email').since).toBe('2026-09-24');
+  card = await carriedStep(app, page);
   await expect(card.locator('.crow')).toHaveCount(1);
   await expect(card).toContainText('Old report 5 days');
 });
 
-test('waiting is on a step: set from the task, shown on Today and the Waiting tab, not Next up', async ({
+test('waiting is on a step: set from the task, shown on its card and the Waiting page, not Next up', async ({
   app,
   page,
 }) => {
@@ -105,17 +117,24 @@ test('waiting is on a step: set from the task, shown on Today and the Waiting ta
   await page.fill('#wnote', '');
   await page.press('#wnote', 'Tab');
   await page.click('[data-crumb="-1"]');
-  // (Release E: its only step waits, so the task is under Waiting, with who and its chase date)
-  await expect(page.locator('#v-today .row')).toHaveCount(1);
-  await expect(page.locator('#v-today .wrow')).toContainText('on Sam');
-  await expect(page.locator('#v-today .wrow')).toContainText('Budget review');
+  // (its only step waits, so its card says Waiting, with who and its chase date on the step)
+  await expect(page.locator('#v-projects')).toBeVisible();
+  const card = page.locator('#v-projects .project-card', { hasText: 'Budget review' });
+  await expect(page.locator('#v-projects .project-wait')).toHaveCount(1);
+  await expect(card.locator('.project-meta')).toContainText('Waiting');
+  await expect(card.locator('.project-step', { hasText: 'Q3 figures' }).locator('.project-wait')).toHaveText(
+    'Waiting on Sam · Chase today',
+  );
   // It's blocked, so Next up moves on to the next task.
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('Write report');
-  await expect(page.locator('#attsum')).toContainText('1 today');
-  await expect(page.locator('#v-today .attn [data-wgo]')).toContainText('Chase Sam today');
+  // The Command Centre's attention list has it, for today, and leads to the Waiting page.
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist .attrow')).toHaveCount(1);
+  await expect(page.locator('#v-ops .attlist [data-wgo]')).toContainText('Chase Sam today');
+  await page.click('#v-ops .attlist [data-wgo]');
 
-  await app.go('waiting');
   const v = page.locator('#v-waiting');
+  await expect(v).toBeVisible();
   await expect(v.locator('.row')).toHaveCount(1);
   await expect(v.locator('.row')).toContainText('Q3 figures');
   await expect(v.locator('.row')).toContainText('from Sam · in Budget review');
@@ -132,7 +151,7 @@ test('waiting is on a step: set from the task, shown on Today and the Waiting ta
   expect(s.inbox[0]).toMatchObject({ text: 'Signed contract', wait: { who: 'Legal', due: '' } });
   await expect(v.locator('.row')).toHaveCount(2);
   await expect(v.locator('.row', { hasText: 'Signed contract' })).toContainText('from Legal · in Inbox');
-  // Moving it to Today keeps it waiting, through a step of its own.
+  // Moving it to Projects keeps it waiting, through a step of its own.
   await app.go('inbox');
   await expect(page.locator('#v-inbox .tag.wait')).toHaveText('Waiting on Legal');
   await page.click('#v-inbox [data-promote]');
@@ -169,7 +188,7 @@ test('an inbox item can be marked waiting from its details', async ({ app, page 
   expect((await app.state()).inbox[0].wait).toBeUndefined();
 });
 
-test('a task set waiting before this waits through a step; it gets a chase notification, and skips the carried-over card', async ({
+test('a task set waiting before this waits through a step; it gets a chase notification, and skips the carried-over step', async ({
   app,
   page,
 }) => {
@@ -184,7 +203,10 @@ test('a task set waiting before this waits through a step; it gets a chase notif
   expect(s.quests[0].children).toMatchObject([
     { id: s.quests[0].id + '-w', text: 'Hear back', wait: { who: 'Sam', due: '2026-09-25' } },
   ]);
-  await expect(page.locator('#v-today .carried')).toHaveCount(0);
+  // (on Projects since the 10th, but only waiting: nothing to decide in the weekly review)
+  const card = await carriedStep(app, page);
+  await expect(card.locator('.crow')).toHaveCount(0);
+  await expect(card).toContainText('All clear.');
   const want = await page.evaluate(() => wantedNotices(new Date(2026, 8, 23, 9).getTime()));
   expect(want.find(n => n.key.startsWith('chase:'))).toMatchObject({
     title: 'Time to chase',
@@ -240,18 +262,32 @@ test('a task with a step waiting on someone shows as waiting too', async ({ app,
     s => (s.quests[0].children[0].wait = { who: 'Sam', note: '', due: '', since: '2026-09-23' }),
   );
   await page.reload();
-  const row = page.locator('#v-today .row', { hasText: 'Budget' });
-  await expect(row).toHaveClass(/waiting/);
-  await expect(row.locator('.tag.wait')).toHaveText('Waiting on Sam');
+  // Its card says so on the step, and its page among its facts.
+  const card = page.locator('#v-projects .project-card', { hasText: 'Budget' });
+  await expect(card.locator('.project-step', { hasText: 'Get figures' }).locator('.project-wait')).toHaveText(
+    'Waiting on Sam',
+  );
+  await expect(card.locator('.project-step-clock')).toHaveCount(1);
+  await app.openQuest('Budget');
+  await expect(page.locator('#v-today .factsrow .tag.wait')).toHaveText('Waiting on Sam');
+  await expect(page.locator('#v-today .row', { hasText: 'Get figures' })).toHaveClass(/waiting/);
   // The rest of the task carries on: Next up skips the waiting step.
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('Write summary');
   // Once the step is back, the task isn't waiting.
   await app.setState(s => delete s.quests[0].children[0].wait);
   await page.reload();
-  await expect(row).not.toHaveClass(/waiting/);
+  await expect(card).toBeVisible();
+  await expect(card.locator('.project-wait')).toHaveCount(0);
+  await expect(card.locator('.project-step-clock')).toHaveCount(0);
+  await app.openQuest('Budget');
+  await expect(page.locator('#v-today .factsrow .tag.wait')).toHaveCount(0);
+  await expect(page.locator('#v-today .row', { hasText: 'Get figures' })).not.toHaveClass(/waiting/);
 });
 
-test('waiting tasks sit under Waiting on Today, and return to their place', async ({ app, page }) => {
+test('a waiting project keeps its place on the board, marked Waiting, through a reorder', async ({
+  app,
+  page,
+}) => {
   for (const t of ['Budget', 'Report', 'Email']) await app.addQuest(t);
   await app.setState(
     s =>
@@ -260,24 +296,27 @@ test('waiting tasks sit under Waiting on Today, and return to their place', asyn
       ]),
   );
   await page.reload();
-  const rows = page.locator('#v-today .list .row .open > span');
-  // (Release E: with nothing else to do, it's under Waiting rather than at the bottom of the list)
-  await expect(rows).toHaveText(['Report', 'Email']);
-  await expect(page.locator('#v-today .wrow')).toContainText('Budget');
-  expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Report', 'Email']); // real order kept
-  // Reorder lists the same tasks (Release F: the waiting one stays under Waiting, not twice), and
-  // a move keeps it where it was in the real order.
-  await page.click('#reorder');
-  await expect(rows).toHaveText(['Report', 'Email']);
-  await expect(page.locator('#v-today .wrow')).toContainText('Budget');
-  await page.click('#v-today .row:has-text("Report") [data-down]');
+  // (the board keeps the real order: a waiting project isn't moved below the rest, it says Waiting)
+  expect(await app.order()).toEqual(['Budget', 'Report', 'Email']);
+  const card = t => page.locator('#v-projects .project-card', { hasText: t });
+  await expect(card('Budget').locator('.project-meta')).toContainText('Waiting');
+  await expect(card('Budget').locator('.project-wait')).toHaveText('Waiting on Sam');
+  await expect(card('Report').locator('.project-meta')).toHaveCount(0);
+  // A move among the others keeps it where it was.
+  const move = async (t, how) => {
+    await card(t).locator('[data-project-reorder]').click();
+    await page.locator('#sheet .qact', { hasText: how }).click();
+  };
+  await move('Report', 'Move later');
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Email', 'Report']);
-  await page.click('#v-today .row:has-text("Report") [data-up]');
+  expect(await app.order()).toEqual(['Budget', 'Email', 'Report']);
+  await move('Report', 'Move earlier');
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Budget', 'Report', 'Email']);
-  await page.click('#reorder');
   await app.setState(s => delete s.quests[0].children[0].wait);
   await page.reload();
-  await expect(rows).toHaveText(['Budget', 'Report', 'Email']);
+  expect(await app.order()).toEqual(['Budget', 'Report', 'Email']);
+  await expect(card('Budget').locator('.project-wait')).toHaveCount(0);
+  await expect(card('Budget').locator('.project-meta')).not.toContainText('Waiting');
 });
 
 test("a task's steps keep their order on its page, a waiting one too; only finished ones go last", async ({
@@ -303,5 +342,4 @@ test("a task's steps keep their order on its page, a waiting one too; only finis
   await expect(rows).toHaveText(['Final proposal', 'Respond to Megan', 'Kickoff']);
   await page.click('#reorder');
   await expect(rows).toHaveText(['Final proposal', 'Respond to Megan', 'Kickoff']);
-  // (Today's list still puts the waiting task below the rest: see above.)
 });

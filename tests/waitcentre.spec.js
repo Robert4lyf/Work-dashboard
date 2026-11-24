@@ -1,5 +1,5 @@
 // Release B: the Waiting Centre: follow-up history, grouping, chase actions, the review.
-const { test, expect, unfold } = require('./fixtures');
+const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ app, page }) => {
   await page.clock.install({ time: new Date(2026, 10, 5, 9) }); // Thursday 5 Nov 2026
@@ -132,7 +132,6 @@ test('record a follow-up: history, next chase date, promised reply; the copied m
   // The step's page shows the history; Got it resolves (history kept), Set waiting reopens.
   // (the row itself, not its buttons: "Reply received" is one of them)
   await page.locator('#v-waiting .row', { hasText: 'Budget approval' }).locator('.open').click();
-  await app.go('today');
   await app.openQuest('Q3 report');
   await page.click('#v-today .open >> text="Budget approval"');
   await expect(page.locator('#waitd .flist li').first()).toContainText('Reply promised: by 8 Nov');
@@ -219,7 +218,7 @@ test('bad follow-up records are dropped; old ones are pruned; a resolved item’
   expect(s.quests[0].children[0].wait).toEqual({ who: '', note: '', due: '', since: '2026-11-01' }); // (unsound values emptied, keys kept)
 });
 
-test('review fixes: an Inbox item’s waiting details are checked; history follows the item to Today and back', async ({
+test('review fixes: an Inbox item’s waiting details are checked; history follows the item to Projects and back', async ({
   app,
   page,
 }) => {
@@ -251,7 +250,7 @@ test('review fixes: an Inbox item’s waiting details are checked; history follo
   await expect(page.locator('#funote')).toBeVisible();
   expect(await page.evaluate(() => window.__x)).toBeUndefined();
   await page.keyboard.press('Escape');
-  // The history of an item added waiting in the Centre goes with it to Today (a step of its own).
+  // The history of an item added waiting in the Centre goes with it to Projects (a step of its own).
   await page.click('#v-waiting [data-wact="i2"]');
   await page.click('#sheet [data-chase]');
   await page.fill('#funote', 'Pinged Sam');
@@ -264,11 +263,15 @@ test('review fixes: an Inbox item’s waiting details are checked; history follo
   expect(s.follows.filter(f => f.n === step.id).map(f => f.k)).toEqual(['chase']);
   expect(s.follows.some(f => f.n === 'i2')).toBe(false);
   // And back to the Inbox: the step's history stays with the step (the wait is the step's).
-  // (Release E: with only a waiting step, the task is under Waiting; its actions are on its page)
-  await app.go('today');
-  await unfold(page, 'waitmore');
-  await page.click(`#v-today .wrow [data-wact="${step.id}"]`);
+  // (with only a waiting step, its card says who it waits on: that opens the waiting step's
+  // actions, the task's own are on its page)
+  await app.go('projects');
+  const plain = page.locator('#v-projects .project-card', { hasText: 'Plain' });
+  await expect(plain.locator('.project-wait')).toHaveText('Waiting on Sam · Chase 7 Nov'); // (the follow-up's next chase date)
+  await plain.locator(`.project-wait[data-wact="${step.id}"]`).click();
+  await expect(page.locator('#sheet .qahint')).toContainText('Waiting on Sam');
   await page.click(`#sheet [data-open="${s.quests.find(q => q.text === 'Plain').id}"]`);
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Plain');
   await page.click('.qfoot .qmore');
   await page.click('#sheet [data-toinbox]');
   s = await app.state();
@@ -287,7 +290,6 @@ test('review fixes: an Inbox item’s waiting details are checked; history follo
   expect(await iwait('Dana')).toEqual(['resolve', 'reopen']);
   expect(await iwait('')).toEqual(['resolve', 'reopen', 'resolve']);
   // No empty expect key is written (it would only be stripped elsewhere and sent back).
-  await app.go('today');
   await app.openQuest('Q3 report');
   await page.click('#v-today .open >> text="Budget approval"');
   await page.evaluate(() => (document.querySelector('#waitd').open = true));

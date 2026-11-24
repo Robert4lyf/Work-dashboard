@@ -101,9 +101,7 @@ function go(v) {
 /* Release G: where a task's page was opened from, so back (and its ‹ crumb) returns there:
    another view (Waiting, Forecast, Search, the Command Centre) with its scroll position, or
    Today's list where it was scrolled to. */
-let returnTo = null, // { depth, name, ...placeHere() }: the view a task's page was opened from
-  listY = 0, // (where Today's list was scrolled to when a task was opened from it)
-  listAt = null; // ({ id, top }: the task opened, and where its row was on the screen)
+let returnTo = null; // { depth, name, ...placeHere() }: the view a task's page was opened from
 const RETURN_NAME = {
   projects: 'Projects',
   waiting: 'Waiting',
@@ -191,6 +189,14 @@ function goPlace(r) {
   if (r.view === 'account' && r.set) openSettings(r.set);
   window.scrollTo(0, r.y);
   refocus(r.opener);
+  // (where the page was scrolled to may no longer be where that control is: the window was
+  // resized, or the phone turned, meanwhile. It's brought onto the screen.)
+  const f = r.opener && document.activeElement,
+    v = $('#v-' + view);
+  if (f && f !== document.body && v && v.contains(f)) {
+    const b = f.getBoundingClientRect();
+    if (b.top < 0 || b.bottom > innerHeight) f.scrollIntoView({ block: 'center' });
+  }
 }
 function backFrom() {
   const f = viewFrom;
@@ -199,7 +205,7 @@ function backFrom() {
   goPlace(f);
 }
 // The keyboard back on the control that was opened (Release H), without moving the page: the one
-// on the screen, if it's shown twice (a task in Top 3 and on the list, say).
+// on the screen, if it's shown twice (a task on the board and on its page beside it, say).
 function refocus(sel, scope = $('#v-' + view)) {
   if (!sel || !scope) return;
   let all;
@@ -261,11 +267,6 @@ function restoreDrafts() {
   });
 }
 function openPath(p) {
-  if (!path.length && p.length && view === 'today') {
-    listY = window.scrollY;
-    const row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(p[0])}"]`);
-    listAt = row ? { id: p[0], top: row.getBoundingClientRect().top } : null;
-  }
   keepDrafts();
   // (up a level: the keyboard goes back to the step, or the task, that was open)
   const left = p.length < path.length && p.every((id, i) => path[i] === id) ? path[p.length] : '';
@@ -280,27 +281,9 @@ function openPath(p) {
   renderToday();
   renderHeader(); // (its action is quieter on a task's page: see header.js)
   restoreDrafts();
-  window.scrollTo(0, p.length ? 0 : listY);
+  if (p.length) window.scrollTo(0, 0);
   splitReveal();
-  // (back on the list: the task's row where it was on the screen, whatever the rows above it
-  // measure now that they're drawn afresh)
-  let row = null;
-  if (!p.length && listAt) {
-    row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(listAt.id)}"]`);
-    // (kept on the screen, should it be shorter now: the phone turned meanwhile, say)
-    if (row)
-      window.scrollBy(
-        0,
-        row.getBoundingClientRect().top -
-          Math.max(0, Math.min(listAt.top, innerHeight - row.offsetHeight - 72)),
-      );
-    listAt = null;
-  }
-  if (left && view === 'today') {
-    const f = row && row.querySelector(`[data-open="${CSS.escape(left)}"]`);
-    if (f) f.focus({ preventScroll: true });
-    else refocus(`[data-open="${CSS.escape(left)}"]`, $('#v-today'));
-  }
+  if (left && view === 'today') refocus(`[data-open="${CSS.escape(left)}"]`, $('#v-today'));
 }
 // Back from a task's page opened from another view: to that view, where it was.
 function returnBack() {
@@ -315,6 +298,8 @@ document.querySelectorAll('nav button[data-v]').forEach(
     (b.onclick = () => {
       if (!window.appReady) return; // (not started yet)
       returnTo = viewFrom = null; // (a tab is a fresh start: back no longer leads to where a task came from)
+      // (a step half typed on a task's page is kept under that page before it's left)
+      keepDrafts();
       if (b.dataset.v === 'projects') path = [];
       // (a computer: History has its own place in the sidebar, so Review's tab opens Review
       // itself, not the History last looked at)
@@ -708,8 +693,7 @@ document.addEventListener('click', e => {
     r.n.done = false;
     settle(bf);
   }
-  // (past the next one shown: Today's list leaves out scheduled and waiting tasks, which keep
-  // their places in the order underneath; see moveAmong)
+  // (Reorder on a task's page: a step up, down or to the top)
   if (
     (d.up || d.down || d.top) &&
     moveAmong(d.up || d.down || d.top, d.up ? 'up' : d.down ? 'down' : 'top')

@@ -174,7 +174,11 @@ test('failure recovery: the error and the retry warning lead, Try again is the o
     renderAll();
   });
   expect(await page.evaluate(() => wrunById('failed').ack)).toBeUndefined();
-  expect(await page.evaluate(() => renderAttention())).toContain('Report failed');
+  // (it leads the Command Centre's attention list, with the new error)
+  await app.go('ops');
+  const att = page.locator('#v-ops .attlist [data-wfopen="failed"]');
+  await expect(att).toContainText('Report failed');
+  await expect(att).toContainText('Process failed: Automation failed: again');
   expect(app.errors).toEqual([]);
 });
 
@@ -533,7 +537,7 @@ test('Settings is an index of groups; each opens as a page, back returns to the 
   await page.click('#v-knowledge [data-gosec="execsec"]');
   await expect(page.locator('#v-account .kbtitle')).toHaveText('Automations and integrations');
   // Preferences are untouched by the regrouping.
-  await page.evaluate(() => go('today'));
+  await page.evaluate(() => go('projects'));
   await app.settings('look');
   await page.click('[data-look="theme"][data-val="dark"]');
   await page.click('[data-setback]');
@@ -950,7 +954,7 @@ test('UI pass fixes: a process row’s Fix opens its failed run; the paused cloc
   });
   // (each label whole, and each tab, once current, fully on screen: whether all five fit at once
   // depends on the device's font, so the strip may scroll instead)
-  for (const v of ['today', 'inbox', 'knowledge', 'review', 'account']) {
+  for (const v of ['projects', 'inbox', 'knowledge', 'review', 'account']) {
     const b = page.locator(`nav [data-v=${v}]`);
     await b.click();
     const r = await b.boundingBox();

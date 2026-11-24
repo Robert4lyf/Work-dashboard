@@ -53,7 +53,8 @@ test("a step's page has no steps of its own; a task's tag and do-later are folde
   await app.openQuest('Report');
   await expect(page.locator('#tagd')).not.toHaveAttribute('open', '');
   await expect(page.locator('#tagd summary')).toContainText('Tag: none');
-  await expect(page.locator('[data-sched]').first()).toBeHidden(); // (under More)
+  await expect(page.locator('#mored [data-schedpick]')).toHaveCount(1); // (do later: under More)
+  await expect(page.locator('#mored [data-schedpick]')).toBeHidden();
   await expect(page.locator('#sopt')).toHaveCount(0);
   await app.setTag('Design');
   await expect(page.locator('#tagd summary')).toContainText('Design');
@@ -61,26 +62,6 @@ test("a step's page has no steps of its own; a task's tag and do-later are folde
   await page.click('#v-today .open >> text="Draft"');
   await expect(page.locator('#sform')).toHaveCount(0);
   await expect(page.locator('#tagd')).toHaveCount(0);
-});
-
-test('the header alarm opens the folded alarm list', async ({ app, page }) => {
-  await app.setState(s => {
-    s.alarms = [
-      {
-        id: 'al1',
-        time: '09:00',
-        label: 'Stand-up',
-        device: '',
-        day: today(),
-        done: '',
-        snooze: Date.now() + 3600e3,
-      },
-    ];
-  });
-  await page.reload();
-  await expect(page.locator('#alarmd')).not.toHaveAttribute('open', '');
-  await app.go('alarms');
-  await expect(page.locator('#alarmd')).toHaveAttribute('open', '');
 });
 
 test('flattening keeps what a grouping step meant: optional, finished, deadline, notes', async ({

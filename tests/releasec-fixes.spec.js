@@ -1,5 +1,5 @@
 // Release C: regression tests for the defects the adversarial passes found.
-const { test, expect, unfold } = require('./fixtures');
+const { test, expect } = require('./fixtures');
 
 const seed = () => {
   // (a definition with a flow stage, made in the page)
@@ -145,7 +145,7 @@ test('audit 2: the workflow editor keeps typed fields over a day toggle, a backg
   expect(app.errors).toEqual([]);
 });
 
-test('audit 3: opening a run from Today asks before discarding an article being written', async ({
+test('audit 3: opening a run from the Command Centre asks before discarding an article being written', async ({
   app,
   page,
 }) => {
@@ -158,9 +158,8 @@ test('audit 3: opening a run from Today asks before discarding an article being 
     kbEdit = { cat: '', title: 'Draft', body: 'keep' };
     go('knowledge');
   });
-  await app.go('today');
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-wfopen]');
+  await app.go('ops');
+  await page.click('#v-ops .attlist [data-wfopen]');
   await expect(page.locator('#sheettitle')).toHaveText('Leave this article?');
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   expect(await page.evaluate(() => kbEdit && kbEdit.title)).toBe('Draft');

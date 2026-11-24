@@ -647,3 +647,18 @@ test('the active task stands out from the cards on the board, on a phone and a w
     await active.getByRole('button', { name: 'Make Weekly reporting active' }).click();
   }
 });
+
+test('a step half typed on a project’s page is still there after leaving by the Projects tab', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  await page.getByRole('button', { name: 'Weekly reporting', exact: true }).click();
+  await page.fill('#sin', 'half a step');
+  await page.click('nav [data-v=projects]');
+  await page.getByRole('button', { name: 'Read the circular', exact: true }).click();
+  await expect(page.locator('#sin')).toHaveValue('');
+  await page.click('nav [data-v=projects]');
+  await page.getByRole('button', { name: 'Weekly reporting', exact: true }).click();
+  await expect(page.locator('#sin')).toHaveValue('half a step');
+});

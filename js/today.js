@@ -12,8 +12,6 @@ const dots =
 // A row's (or tile's) ⋯: its quick actions, in a sheet (see actions.js).
 const moreBtn = n =>
   `<button class="qmore" data-qact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button>`;
-// A task with a saved place (see resume.js): a quiet mark on its row.
-const placeMark = n => (n.resume && !isDone(n) ? '<span class="tag place">Saved place</span>' : '');
 function dueTag(n) {
   if (!n.due || isDone(n)) return '';
   const t = today(),
@@ -58,7 +56,6 @@ function row(n, i, len, sib) {
     dueTag(n) +
     stepDueTag(n) +
     schedTag(n) +
-    placeMark(n) +
     (nx
       ? 'Next: ' + esc(nx.text)
       : needsNext(n)

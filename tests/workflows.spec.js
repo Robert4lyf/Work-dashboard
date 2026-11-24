@@ -1,5 +1,5 @@
 // Release C: executable workflows (definitions, runs, the state machine, stages, recurrence).
-const { test, expect, unfold } = require('./fixtures');
+const { test, expect } = require('./fixtures');
 
 const seed = () => {
   S.track = true;
@@ -176,10 +176,10 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   expect(r.status).toBe('failed');
   expect(r.err).toBe('Automation failed: Timeout');
   await expect(page.locator('.werr')).toContainText('Timeout');
-  await app.go('today');
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Process failed');
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-wfopen]');
+  // (the Command Centre's attention list has it, and opens its failed step)
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Process failed');
+  await page.click('#v-ops .attlist [data-wfopen]');
   // Retry: asks first (the flow may have done its work), then a fresh attempt.
   await page.click('[data-wfact="retry"]');
   await expect(page.locator('#sheettitle')).toHaveText('Launch the automation again?');
@@ -221,7 +221,8 @@ test('failure: the error is shown, retry is a new attempt (the old execution kep
   // (Release G: the item is that failure's, with its step; the acknowledgement names the failure)
   expect(await page.evaluate(() => S.inbox[0].text)).toBe('Process failed: Thursday report · Check');
   expect((await run(page)).ack).toMatch(/^f/); // (Release G: a failure id unique to it)
-  expect(await page.evaluate(() => renderAttention())).not.toContain('Process failed');
+  // (acknowledged: off the attention list, the Command Centre's)
+  expect(await page.evaluate(() => attentionItems().map(i => i.text + ' · ' + i.sub))).toEqual([]);
   await page.click('[data-wfact="retry"]');
   expect((await run(page)).status).toBe('awaiting_user');
   await page.click('[data-wfact="cancel"]');
@@ -379,17 +380,18 @@ test('a recurring workflow gets one ready run per day, the same id on every devi
     rollover();
     renderAll();
   });
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Thursday report');
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-wfopen]');
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Thursday report');
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Process ready to start');
+  await page.click('#v-ops .attlist [data-wfopen]');
   await expect(page.locator('#v-knowledge .pstep h3')).toHaveText('Ready to start');
   await page.click('[data-wfact="begin"]');
   s = await app.state();
   expect(s.wruns[0].status).toBe('awaiting_user');
   // Starting it from the list resumes that run rather than making another.
-  // (back goes to Today, where it was opened from; the list is in Knowledge)
+  // (back goes to the Command Centre, where it was opened from; the list is in Knowledge)
   await page.click('[data-wfback]');
-  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('#v-ops')).toBeVisible();
   await page.evaluate(() => followRoute({ kind: 'workflows', id: '' }));
   await page.click('[data-wfstart="w1"]');
   expect((await app.state()).wruns).toHaveLength(1);

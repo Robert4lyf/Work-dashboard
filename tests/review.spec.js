@@ -1,4 +1,4 @@
-const { test, expect, unfold } = require('./fixtures');
+const { test, expect } = require('./fixtures');
 
 // Friday 25 Sep 2026, 9am.
 test.beforeEach(async ({ app, page }) => {
@@ -7,13 +7,9 @@ test.beforeEach(async ({ app, page }) => {
   await page.clock.pauseAt(new Date(2026, 8, 25, 9, 0, 30));
 });
 
-test('Projects and Today have tabs; History sits under Review; Focus opens from the header', async ({
-  app,
-  page,
-}) => {
+test('Projects has a tab; History sits under Review; Focus opens from the header', async ({ app, page }) => {
   await expect(page.locator('nav [data-v]')).toHaveText([
     'Projects',
-    'Today',
     /^Inbox/,
     'Knowledge',
     'Review',
@@ -50,10 +46,11 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
     s.inbox.push({ id: 'i1', text: 'Loose idea' });
   });
   await page.reload();
-  // It's Friday and the week hasn't been reviewed: the header says so.
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-rsub="week"]');
+  // It's Friday and the week hasn't been reviewed: the Review tab says so, and the Command
+  // Centre's attention list leads to it.
   await expect(page.locator('nav #reviewDot')).toBeVisible();
+  await app.go('ops');
+  await page.click('#v-ops .attlist [data-rsub="week"]');
   const v = page.locator('#v-review');
   await expect(v.locator('.wsum')).toContainText('1 done');
   // One step at a time, Next through them.
@@ -83,8 +80,9 @@ test('weekly review: steps, copyable summary, and the Friday prompt', async ({ a
   );
   await page.click('#reviewed');
   expect((await app.state()).reviewed).toBe('2026-09-25');
-  await app.go('today'); // (a tab is drawn when opened)
-  await expect(page.locator('#v-today .attn [data-rsub="week"]')).toHaveCount(0);
+  await app.go('ops'); // (a view is drawn when opened)
+  await expect(page.locator('#v-ops')).toBeVisible();
+  await expect(page.locator('#v-ops [data-rsub="week"]')).toHaveCount(0);
   await expect(page.locator('nav #reviewDot')).toBeHidden();
 });
 

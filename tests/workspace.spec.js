@@ -183,23 +183,31 @@ test('resources travel with the task to the Inbox, to Upcoming and back, and int
 }) => {
   await app.setState(s => (s.quests[0].links = [{ id: 'l1', kind: 'kb', ref: 'a1' }]));
   await page.reload();
+  // (the task's actions: the ⋯ at the foot of its page)
+  const actions = async () => {
+    await app.openQuest('Weekly reporting');
+    await page.click('#v-today .qfoot .qmore');
+  };
   // To the Inbox and back.
-  await page.click('[aria-label="Actions: Weekly reporting"]');
+  await actions();
   await page.click('#sheet [data-toinbox]');
   let s = await app.state();
   expect(s.inbox[0].node.links).toHaveLength(1);
   await app.go('inbox');
   await page.click('#v-inbox [data-promote] >> nth=0');
-  await app.go('today');
+  await app.go('projects');
   s = await app.state();
   expect(s.quests.find(q => q.text === 'Weekly reporting').links).toHaveLength(1);
-  // To Upcoming and back.
-  await page.click('[aria-label="Actions: Weekly reporting"]');
+  // To Upcoming and back (from its card under Upcoming: its record shows them, to use).
+  await actions();
   await page.click('#sheet [data-sched]:has-text("Do tomorrow")');
   s = await app.state();
   expect(s.later[0].links).toHaveLength(1);
-  await page.click('#upd > summary');
-  await page.click('#upd [data-now]');
+  await page.click('#v-projects [data-upcoming-project="q1"]');
+  await expect(page.locator('#v-project-record #resd .resrow')).toHaveCount(1);
+  await expect(page.locator('#v-project-record #resd .resrow')).toContainText('Weekly report procedure');
+  await page.click('#v-project-record [data-now="q1"]');
+  await expect(page.locator('#v-today #resd .resrow')).toHaveCount(1); // (its page again, back on Projects)
   s = await app.state();
   expect(s.quests.find(q => q.text === 'Weekly reporting').links).toHaveLength(1);
   // A repeat's fresh copy has them too (the procedure is needed every time).

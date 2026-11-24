@@ -1,5 +1,5 @@
 // Release C: the five scenarios, end to end on one device (the two-device halves are in sync.spec.js).
-const { test, expect, unfold } = require('./fixtures');
+const { test, expect } = require('./fixtures');
 
 const report = (page, exec, status, id, msg = '') =>
   page.evaluate(
@@ -58,11 +58,11 @@ test('Scenario A: Thursday SSRS reporting: a run made ready by the day, the flow
     save();
     renderAll();
   });
-  // The day made one run, ready; the Command Centre and Today both say so; nothing started.
+  // The day made one run, ready; the Command Centre's attention list says so; nothing started.
   let s = await app.state();
   expect(s.wruns.map(r => [r.id, r.status])).toEqual([['w1-2026-11-05', 'ready']]);
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Process ready to start');
-  await page.click('#v-today .attcc');
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Process ready to start');
   await expect(page.locator('#v-ops .opsec').first()).toContainText('Process ready to start');
   await page.click('#v-ops [data-wfopen="w1-2026-11-05"]');
   await page.click('[data-wfact="begin"]');
@@ -95,14 +95,14 @@ test('Scenario A: Thursday SSRS reporting: a run made ready by the day, the flow
     rollover();
   });
   expect((await app.state()).wruns).toHaveLength(1);
-  // Next Thursday is in Coming up; Insights count one run, one verified launch.
+  // The next day makes no run of its own (it's a Thursday's); Insights count one run, one verified
+  // launch.
   await page.clock.setSystemTime(new Date(2026, 10, 6, 9));
   await page.evaluate(() => {
     rollover();
     renderAll();
   });
-  await page.evaluate(() => go('ops'));
-  await expect(page.locator('#v-ops .opsec').nth(3)).toContainText('processes: Thursday SSRS reporting');
+  expect((await app.state()).wruns).toHaveLength(1);
   await page.evaluate(() => {
     reviewSub = 'insights';
     go('review');
@@ -164,9 +164,10 @@ test('Scenario B: month-end workload: estimates against capacity show the crunch
   await page.click('#sheetok');
   expect((await app.state()).later.length).toBe(2);
   await expect(page.locator('.rday.over')).toHaveCount(1); // (Friday eased; the 30th is still yours to decide)
-  // The Command Centre's Coming up shows the week's load.
+  // The Command Centre's Morning checklist shows the day's load, and leads back to the forecast.
   await page.evaluate(() => go('ops'));
-  await expect(page.locator('#v-ops .opsec', { hasText: 'Coming up' })).toContainText('planned of 4h 0m');
+  await page.click('#v-ops [data-routine="start"]');
+  await expect(page.locator('#sheet [data-rsub="forecast"]')).toContainText('Today: 4h 0m planned of 4h 0m');
   expect(app.errors).toEqual([]);
 });
 
@@ -203,13 +204,13 @@ test('Scenario C: an automation fails mid-run: the error, a retry as a new attem
   await report(page, x1, 'failed', 1, 'Share not reachable');
   await expect(page.locator('.werr')).toContainText('Automation failed: Share not reachable');
   await expect(page.locator('#v-knowledge .runprog')).toContainText('Failed');
-  await app.go('today');
+  await app.go('ops');
   // One incident, one item: the run's failed stage (the flow's failure is its detail).
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Process failed');
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Share not reachable');
-  await expect(page.locator('#v-today .attn [data-xdet]')).toHaveCount(0);
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-wfopen]');
+  await expect(page.locator('#v-ops .attlist .attrow')).toHaveCount(1);
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Process failed');
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Share not reachable');
+  await expect(page.locator('#v-ops .attlist [data-xdet]')).toHaveCount(0);
+  await page.click('#v-ops .attlist [data-wfopen]');
   await page.click('[data-wfact="retry"]');
   await expect(page.locator('#sheettitle')).toHaveText('Launch the automation again?');
   await page.click('#sheetok');
