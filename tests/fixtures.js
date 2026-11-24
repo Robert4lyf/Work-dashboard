@@ -2,20 +2,6 @@
 // (fonts and the Supabase library are blocked, so sync is off), plus helpers.
 const base = require('@playwright/test');
 
-// Older integration tests exercise shared task and scheduling controls through
-// the legacy work-list renderer. The real Projects tests use the shipped navigation.
-function legacyWorkControls() {
-  document.addEventListener('DOMContentLoaded', () => {
-    const tabs = document.getElementById('tabs');
-    if (!tabs) return;
-    const button = document.createElement('button');
-    button.dataset.v = 'today';
-    button.textContent = 'Today';
-    button.onclick = () => openTodayTab(true);
-    tabs.querySelector('[data-v="projects"]').after(button);
-  });
-}
-
 const test = base.test.extend({
   app: async ({ page }, use) => {
     const errors = [];
@@ -37,13 +23,10 @@ const test = base.test.extend({
         .waitForFunction(() => typeof sb === 'undefined' || !sb || authSeen, null, { timeout: 5000 })
         .catch(() => {});
     };
-    // Existing task-list tests use the legacy renderer. Projects tests open on Projects.
-    // A fresh reload sets the requested starting view. keepPlace retains actual app navigation.
-    let startView = 'work';
+    // A fresh reload starts on Projects. keepPlace keeps where the app was, as a real reload does.
     const reload = page.reload.bind(page);
     page.reload = async ({ keepPlace, ...o } = {}) => {
       await page.evaluate(() => (typeof storeDone === 'function' ? storeDone() : null)).catch(() => {});
-      const legacy = startView === 'work' && (!keepPlace || (await page.evaluate(() => workListMode)));
       if (!keepPlace)
         await page
           .evaluate(() => {
@@ -54,19 +37,13 @@ const test = base.test.extend({
           .catch(() => {});
       const r = await reload(o);
       await started();
-      if (legacy)
-        await page.evaluate(() => {
-          if (view === 'projects') openTodayTab(true);
-          else workListMode = true;
-        });
       return r;
     };
     const app = {
       page,
       errors,
-      open: async ({ home = 'work' } = {}) => {
-        startView = home;
-        if (home === 'work') await page.addInitScript(legacyWorkControls);
+      // (`home`: a deep link to open at, say 'inbox'; Projects otherwise)
+      open: async ({ home = 'projects' } = {}) => {
         // A flow's link (ms-powerautomate:) would hand the page to another app; headless
         // Chromium then swallows later clicks. The tap is still seen by the app's own handlers.
         await page.addInitScript(() =>
@@ -79,9 +56,8 @@ const test = base.test.extend({
             true,
           ),
         );
-        await page.goto(home === 'projects' ? '/' : '/#/' + home);
+        await page.goto(['projects', 'work'].includes(home) ? '/' : '/#/' + home);
         await started();
-        if (home === 'work') await page.evaluate(() => openTodayTab(true));
       },
       // A Settings group (Release D: Settings is an index of groups, each a page of its own).
       settings: async group => {
@@ -109,13 +85,13 @@ const test = base.test.extend({
           persistLocal();
           await storeDone();
         }, `(${fn})(s)`),
-      // New tasks come in through the Inbox, then move to Today.
+      // New projects come in through the Inbox, then move to Projects.
       addQuest: async text => {
         await page.click('nav [data-v=inbox]');
         await page.fill('#iin', text);
         await page.press('#iin', 'Enter');
         await page.click('#v-inbox [data-promote] >> nth=0');
-        await page.click('nav [data-v=today]');
+        await page.click('nav [data-v=projects]');
       },
       addSub: async text => {
         await page.fill('#sin', text);
@@ -132,21 +108,18 @@ const test = base.test.extend({
         page.evaluate(
           () => document.querySelector('#mored') && (document.querySelector('#mored').open = true),
         ),
-      // (a task only waiting, or scheduled, is under its own section: opened from its row there)
+      // A project's page, from its card on the board.
       openQuest: async text => {
-        const inList = page.locator(`#v-today .row .open >> text="${text}"`);
-        if (await inList.count()) return inList.first().click();
-        // (Release H: the rest of Scheduled and Waiting may be folded: opened, as a user would)
-        await page.evaluate(() =>
-          ['schedmore', 'waitmore'].forEach(
-            id => document.getElementById(id) && (document.getElementById(id).open = true),
-          ),
-        );
-        await page.click(`#v-today .secrow:has-text("${text}") .open`);
-        const r = await page.evaluate(() => (path.length ? find(path[path.length - 1]) : null));
-        if (r && r.parents.length) await page.click('[data-crumb="0"]'); // (a step: up to its task)
+        if (await page.evaluate(() => view !== 'projects')) await page.click('nav [data-v=projects]');
+        await page
+          .locator('#v-projects .project-card h2 .project-open')
+          .getByText(text, { exact: true })
+          .first()
+          .click();
       },
-      order: () => page.$$eval('#v-today .row .open > span', x => x.map(e => e.textContent)),
+      // The projects on the board, in order (the active one first, then each section's).
+      order: () =>
+        page.$$eval('#v-projects .project-card h2 .project-open > span', x => x.map(e => e.textContent)),
       // Views without a tab (Focus, and History under Review) are opened directly.
       go: async v => {
         const tab = page.locator(`nav [data-v=${v}]`);
@@ -167,4 +140,4 @@ const unfold = (page, ...ids) =>
     ids,
   );
 
-module.exports = { test, expect: base.expect, unfold, legacyWorkControls };
+module.exports = { test, expect: base.expect, unfold };
