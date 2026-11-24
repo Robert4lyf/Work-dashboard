@@ -50,10 +50,12 @@ test('pause and save my place from a running session: the timer pauses, the minu
   expect(s.sessions).toHaveLength(1);
   expect(s.daily['2026-09-23']['']).toBe(7);
   expect(s.quests[0].resume.note).toContain('supplier credits'); // (stopping keeps the place)
-  // It survives a reload: the task's row marks it, its page shows it, and search finds it.
+  // It survives a reload: the Command Centre lists it as work in progress, its page shows it, and
+  // search finds it.
   await page.reload();
-  await expect(page.locator('#v-today .row', { hasText: 'Reconciliation' }).locator('.tag.place')).toHaveText(
-    'Saved place',
+  await app.go('ops');
+  await expect(page.locator('#v-ops .oprow', { hasText: 'Reconciliation' })).toContainText(
+    'Saved place: Found a difference in March. Check supplier credits next.',
   );
   await app.openQuest('Reconciliation');
   const card = page.locator('#placecard');
@@ -69,7 +71,9 @@ test('a place can be saved without a timer, from a task’s actions or a step’
   app,
   page,
 }) => {
-  await page.click('[aria-label="Actions: Reconciliation"]');
+  await app.openQuest('Reconciliation');
+  await page.click('.qfoot [aria-label="More actions"]');
+  await expect(page.locator('#sheet [data-saveplace]')).toHaveText('Save my place');
   await page.click('#sheet [data-saveplace]');
   await page.fill('#sheetin', 'Start with the bank export');
   await page.press('#sheetin', 'Enter'); // (Enter in the note is a new line, not a save)
@@ -79,8 +83,7 @@ test('a place can be saved without a timer, from a task’s actions or a step’
   expect(s.quests[0].resume).toMatchObject({ note: 'Start with the bank export', step: 's1' });
   expect(s.timer).toBeNull();
   // From a step's ⋯ on the task's page: the place moves to that step, one place per task.
-  await app.openQuest('Reconciliation');
-  await page.click('[data-qact="s2"]');
+  await page.click('#v-today .row [data-qact="s2"]');
   await expect(page.locator('#sheet [data-saveplace]')).toHaveText('Update saved place');
   await page.click('#sheet [data-saveplace]');
   await expect(page.locator('#sheetin')).toHaveValue('Start with the bank export');
@@ -104,10 +107,10 @@ test('Resume work opens single-task mode on the saved step with the note; the pl
 }) => {
   await app.setState(s => (s.quests[0].resume = { note: 'Check credits', at: Date.now(), step: 's2' }));
   await page.reload();
-  // From the top 3 row and the task's page alike.
-  await page.evaluate(() => setTop3(['q1']));
-  await expect(page.locator('.t3row [data-resume]')).toHaveText('Continue');
-  await page.click('.t3row [data-resume]');
+  // From the task's page.
+  await app.openQuest('Reconciliation');
+  await expect(page.locator('.qfoot [data-resume]')).toHaveText('Continue work');
+  await page.click('.qfoot [data-resume]');
   await expect(page.locator('#v-zen')).toBeVisible();
   await expect(page.locator('#v-zen .zt')).toHaveText('April totals');
   await expect(page.locator('#v-zen .zplace')).toContainText('Check credits');
@@ -134,8 +137,7 @@ test('the interrupted step ticked, the task finished, moved or deleted: no stale
   await app.setState(s => (s.quests[0].resume = { note: 'Check credits', at: Date.now(), step: 's1' }));
   await page.reload();
   // The step it pointed at is ticked: the note stays, says so, and Resume goes to the next step.
-  await page.click('[aria-label="Actions: Reconciliation"]');
-  await page.click('#sheet [data-open]');
+  await app.openQuest('Reconciliation');
   await page.click('#v-today [aria-label="Mark done: March totals"]');
   await expect(page.locator('#placecard .placestep')).toHaveText('At: March totals (ticked since)');
   await page.click('.qfoot [data-resume]');
@@ -149,20 +151,24 @@ test('the interrupted step ticked, the task finished, moved or deleted: no stale
   });
   await expect(page.locator('#placecard .placestep')).toHaveText('At: a step since removed');
   // To the Inbox and back: the place travels with the task.
-  await page.click('[data-crumb="-1"]');
-  await page.click('[aria-label="Actions: Reconciliation"]');
+  await page.click('.qfoot [aria-label="More actions"]');
   await page.click('#sheet [data-toinbox]');
   expect((await app.state()).inbox[0].node.resume.note).toBe('Check credits');
   await app.go('inbox');
   await page.click('#v-inbox [data-promote] >> nth=0');
-  await app.go('today');
-  await expect(page.locator('#v-today .row .tag.place')).toHaveCount(1);
+  expect((await app.state()).quests.find(q => q.text === 'Reconciliation').resume.note).toBe('Check credits');
+  await app.go('ops');
+  await expect(page.locator('#v-ops .oprow', { hasText: 'Saved place' })).toHaveCount(1);
+  await expect(page.locator('#v-ops .oprow', { hasText: 'Saved place' })).toContainText('Reconciliation');
   // Finished: nothing to come back to.
   await app.openQuest('Reconciliation');
+  await expect(page.locator('#placecard .placenote')).toHaveText('Check credits');
   await page.click('#v-today [aria-label="Mark done: April totals"]');
   await page.click('#sheet [data-sheetans="finish"]');
   expect((await app.state()).quests.find(q => q.text === 'Reconciliation').resume).toBeUndefined();
-  await expect(page.locator('#v-today .tag.place')).toHaveCount(0);
+  await expect(page.locator('#placecard')).toHaveCount(0);
+  await app.go('ops');
+  await expect(page.locator('#v-ops .oprow', { hasText: 'Saved place' })).toHaveCount(0);
   // Deleted (with Undo) and back: still there.
   await app.setState(
     s =>
@@ -173,8 +179,10 @@ test('the interrupted step ticked, the task finished, moved or deleted: no stale
       }),
   );
   await page.reload();
-  await page.click('[aria-label="Actions: Call Sam"]');
+  await app.openQuest('Call Sam');
+  await page.click('.qfoot [aria-label="More actions"]');
   await page.click('#sheet [data-delnow]');
+  expect((await app.state()).quests.some(q => q.text === 'Call Sam')).toBe(false);
   await page.click('#undo');
   expect((await app.state()).quests.find(q => q.text === 'Call Sam').resume.note).toBe('Ask about Friday');
 });
@@ -220,7 +228,6 @@ test('Save my place on the Focus tab; resuming a paused session on the same task
   await page.click('#sheetok');
   expect((await app.state()).quests[1].resume).toMatchObject({ note: 'Left a voicemail', step: '' });
   // On the task's page: the session is paused, so the primary action is to resume it.
-  await app.go('today');
   await app.openQuest('Call Sam');
   await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Resume focus']);
   await page.click('.qfoot [data-pause]');
@@ -233,13 +240,14 @@ test('Save my place on the Focus tab; resuming a paused session on the same task
   await page.keyboard.press('Escape');
   await app.setState(s => (s.quests[0].resume = { note: 'x', at: Date.now(), step: 's1' }));
   await page.reload();
-  await page.click('[aria-label="Actions: Reconciliation"]');
+  await app.openQuest('Reconciliation');
+  await page.click('.qfoot [aria-label="More actions"]');
   await page.click('#sheet [data-resume]');
   await expect(page.locator('#toast')).toContainText('running session');
   await expect(page.locator('#v-zen')).toBeHidden();
 });
 
-test('review fixes: the row mark stays a small tag; editing the note keeps the step and time; an empty place is refused', async ({
+test('review fixes: editing the note keeps the step and time; an empty place is refused', async ({
   app,
   page,
 }) => {
@@ -247,9 +255,6 @@ test('review fixes: the row mark stays a small tag; editing the note keeps the s
     s => (s.quests[0].resume = { note: 'Check credits', at: Date.now() - 3600e3, step: 's2' }),
   );
   await page.reload();
-  const tag = page.locator('#v-today .row .tag.place');
-  const box = await tag.boundingBox();
-  expect(box.height).toBeLessThan(30); // (not styled as the card on the task's page)
   await app.openQuest('Reconciliation');
   await expect(page.locator('#placecard .placestep')).toHaveText('At: April totals');
   await page.click('#placecard [data-saveplace]');
@@ -264,8 +269,8 @@ test('review fixes: the row mark stays a small tag; editing the note keeps the s
   await page.click('#sheetok');
   expect((await app.state()).quests[0].resume.at).toBe(at);
   // A task without steps and no note: nothing to save.
-  await page.click('[data-crumb="-1"]');
-  await page.click('[aria-label="Actions: Call Sam"]');
+  await app.openQuest('Call Sam');
+  await page.click('.qfoot [aria-label="More actions"]');
   await page.click('#sheet [data-saveplace]');
   await page.click('#sheetok');
   await expect(page.locator('#toast')).toContainText('Write a note first');
