@@ -4363,8 +4363,20 @@ summary,
   margin: 0 0 8px;
   font-size: var(--fs-h);
 }
+/* The active task stands out from the board under it: its heading marked in yellow, its card
+   with a heavy outline and a yellow edge behind it (yellow is "what you're on" throughout). */
+.active-project:has(.project-card) > h2 {
+  display: inline-block;
+  padding: 3px 10px;
+  background: var(--sec-yellow);
+  color: #111111;
+}
 .active-project .project-card {
-  border-inline-start: 5px solid var(--accent-ink);
+  border: 3px solid var(--edge);
+  border-inline-start-width: 8px;
+  box-shadow: 6px 6px 0 var(--sec-yellow);
+  margin: 0 6px 6px 0; /* (room for the edge behind it) */
+  background: color-mix(in srgb, var(--sec-yellow) 14%, var(--panel));
 }
 .project-board-section {
   --section-accent: var(--edge);
@@ -5004,6 +5016,14 @@ kbd {
   body.split #v-projects .project-board-section,
   body.split #v-projects .active-project {
     margin-bottom: 14px;
+  }
+  body.split #v-projects .active-project .project-card {
+    box-shadow: 4px 4px 0 var(--sec-yellow);
+    margin: 0 4px 4px 0;
+  }
+  /* (the active task's own page open beside it: the card is yellow itself, so its edge is dark) */
+  body.split #v-projects .active-project .project-current {
+    box-shadow: 4px 4px 0 var(--edge);
   }
   body.split #v-projects .project-current {
     background: var(--sec-yellow);
