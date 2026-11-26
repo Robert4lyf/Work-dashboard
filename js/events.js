@@ -562,6 +562,7 @@ document.addEventListener('click', e => {
   if (d.saveplace) savePlace(d.saveplace);
   if (d.resume) resumeWork(d.resume);
   if (d.clearplace) clearPlace(d.clearplace);
+  if (d.projectAi) return openProjectAi(d.id, d.projectAi);
   linkClick(d);
   triageClick(d, b);
   waitClick(d);

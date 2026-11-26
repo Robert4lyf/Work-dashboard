@@ -224,9 +224,9 @@ function renderNode({ n, parents }) {
     h += `<p class="qnext"><small>Next</small><b>Nothing until you hear back</b></p>`;
   // Where you left off (the task's; on a step's page, when it's this step or no step).
   if (q.resume && !isDone(q) && placeFits(q, n)) h += placeCard(q);
-  // The project summary is written by the user.
   if (top)
     h += `<label class="f" for="fsum">Summary <small class="hint">(optional)</small></label><textarea class="fld fsum" id="fsum" data-field="summary" data-id="${n.id}" maxlength="${SUMMARY_MAX}" rows="${n.summary ? 3 : 1}" placeholder="Where it's at, in a line or two">${esc(n.summary || '')}</textarea>`;
+  if (top) h += projectAiButton(n.id, 'summary');
   // Its tag, folded to the one it has (tap to change).
   if (top)
     h += `<details id="tagd" class="tagd"${panels.tagd ? ' open' : ''}><summary>Tag: ${n.tag ? tagBadge(n.tag) : '<span class="hint">none</span>'}</summary>${tagPicker('q', n.id, n.tag)}</details>`;
@@ -242,6 +242,7 @@ function renderNode({ n, parents }) {
     h += listHead('Steps', n.children);
     h += list(n.children);
     h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a step" aria-label="New step" autocomplete="off"><button class="btn">Add</button></form>`;
+    h += projectAiButton(n.id, 'steps');
   }
   if (top)
     h += `<button class="linkbtn project-detail-history" aria-haspopup="dialog" data-project-history="${n.id}">History</button>`;
