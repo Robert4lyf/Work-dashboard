@@ -9,7 +9,7 @@ const chevron =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
 const dots =
   '<svg viewBox="0 0 24 6" aria-hidden="true"><circle cx="3" cy="3" r="2.4" fill="currentColor"/><circle cx="12" cy="3" r="2.4" fill="currentColor"/><circle cx="21" cy="3" r="2.4" fill="currentColor"/></svg>';
-// A row's (or tile's) ⋯: its quick actions, in a sheet (see actions.js).
+// A row's ⋯: its quick actions, in a sheet (see actions.js).
 const moreBtn = n =>
   `<button class="qmore" data-qact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button>`;
 function dueTag(n) {
@@ -18,8 +18,7 @@ function dueTag(n) {
     cls = n.due < t ? 'late' : n.due === t ? 'now' : 'due';
   return `<span class="tag ${cls}">${n.due < t ? 'Overdue' : n.due === t ? 'Due today' : 'Due ' + niceDate(n.due)}</span>`;
 }
-// A task's own deadline aside, a step overdue or due today says so on the task's row (it's why
-// the task is under Due).
+// A task's own deadline aside, a step overdue or due today says so on the task's card.
 function stepDueTag(n) {
   if (isDone(n) || (n.due && n.due <= today())) return '';
   const t = today(),
@@ -29,70 +28,22 @@ function stepDueTag(n) {
     ? '<span class="tag late">Step overdue</span>'
     : '<span class="tag now">Step due today</span>';
 }
+// A step's row on its task's page: its tick, its name (which opens the step's own page) and its
+// ⋯, or the move buttons while reordering. (A step has no steps of its own: see flatSteps.)
 function row(n, i, len, sib) {
   const d = isDone(n),
-    kids = n.children.length;
-  let left;
-  // A task with steps opens (its bar, below its name, shows how far it's got); one without is ticked.
-  if (kids)
-    left = `<button class="meter" data-open="${n.id}" aria-label="Open ${esc(n.text)}">${chevron}</button>`;
-  else {
-    left = `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
-  }
-  const nx = kids && !d ? nextLeaf(n) : null,
-    stepWait = !d && !n.wait ? stepWaitBadge(n) : '';
-  const rt = tplFor(n);
-  // (Release G: how far it's got as a count, the bar thin along the row's foot; see stepBar)
-  const req = kids ? n.children.filter(c => !c.opt) : [],
-    set = req.length ? req : n.children,
-    frac = kids && !d ? `<span class="sfrac">${set.filter(isDone).length}/${set.length}</span>` : '';
-  const meta =
-    frac +
-    tagBadge(n.tag) +
-    waitBadge(n) +
-    stepWait +
-    (n.opt ? '<span class="tag opt">Optional</span>' : '') +
-    (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
-    dueTag(n) +
-    stepDueTag(n) +
-    schedTag(n) +
-    (nx
-      ? 'Next: ' + esc(nx.text)
-      : needsNext(n)
-        ? '<span class="tag asknext">All ticked: what\'s next?</span>'
-        : '');
+    meta =
+      tagBadge(n.tag) + waitBadge(n) + (n.opt ? '<span class="tag opt">Optional</span>' : '') + dueTag(n);
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
   return withHash(
-    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`,
+    `<div class="row${d ? ' done' : n.wait ? ' waiting' : ''}" data-qid="${n.id}"${dragAttr('q:' + n.id)}><button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`,
   );
-}
-// A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
-// and any waiting marked. Every one ticked but the task not finished: a last block asks what's next.
-function stepBar(n) {
-  const req = n.children.filter(c => !c.opt),
-    set = req.length ? req : n.children,
-    nx = nextLeaf(n),
-    done = set.filter(isDone),
-    open = set.filter(c => !isDone(c)),
-    waiting = open.filter(c => c.wait).length,
-    ask = needsNext(n) && !nx; // (an optional step still to do shows as Next instead)
-  const blocks = [
-    ...done.map(() => 's-done'),
-    ...open.map(c => (c === nx ? 's-next' : c.wait ? 's-wait' : '')),
-  ];
-  if (ask) blocks.push('s-ask');
-  const label =
-    `${done.length} of ${set.length} steps done` +
-    (waiting ? `, ${waiting} waiting` : '') +
-    (ask ? ", what's next?" : '');
-  // (a <b>, not a <span>: the task's name is the row's span)
-  return `<b class="stepbar${blocks.length > 15 ? ' many' : ''}" role="img" aria-label="${label}">${blocks.map(b => `<i${b ? ` class="${b}"` : ''}></i>`).join('')}</b>`;
 }
 // A section title, with the Reorder switch beside it when the list has something to reorder.
 function listHead(title, ns) {
-  return `<div class="sechead"><h2 id="taskshead" tabindex="-1">${title}</h2>${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
+  return `<div class="sechead"><h2>${title}</h2>${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
 }
 // A task's steps, a row each, in the order they're done in; finished ones go last (not while
 // reordering: that shows the order as it is).

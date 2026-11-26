@@ -662,3 +662,77 @@ test('a step half typed on a project’s page is still there after leaving by th
   await page.getByRole('button', { name: 'Weekly reporting', exact: true }).click();
   await expect(page.locator('#sin')).toHaveValue('half a step');
 });
+
+test('on a phone a project is renamed from its ⋯ menu, and its page has no second place to do it', async ({
+  app,
+  page,
+}) => {
+  await start(app, page);
+  await page.getByRole('button', { name: 'Weekly reporting', exact: true }).click();
+  await page.fill('#sin', 'half a step');
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
+  const rename = page.getByRole('dialog', { name: 'Rename' });
+  await expect(rename.getByLabel('Name')).toHaveValue('Weekly reporting');
+  await rename.getByLabel('Name').fill('Weekly report');
+  await rename.getByRole('button', { name: 'Save' }).click();
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Weekly report');
+  await expect(page.locator('#sin')).toHaveValue('half a step');
+  // More keeps what the menu doesn't have: no Name, Move to Inbox or Delete there any more.
+  await app.openMore();
+  await page.evaluate(() => document.querySelectorAll('#mored details').forEach(d => (d.open = true)));
+  const more = page.locator('#mored');
+  await expect(more.locator('[data-field=text]')).toHaveCount(0);
+  await expect(more.locator('[data-toinbox], [data-del], [data-delnow], [data-sched]')).toHaveCount(0);
+  await expect(more.locator('[data-schedpick]')).toBeVisible();
+  await expect(more.locator('[data-field=due]')).toBeVisible();
+  // A step is renamed the same way, from its row.
+  await page
+    .locator('#v-today .row', { hasText: 'Export ledger' })
+    .getByRole('button', { name: /Actions/ })
+    .click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Rename', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Rename' }).getByLabel('Name').fill('Export the ledger');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#v-today .row', { hasText: 'Export the ledger' })).toHaveCount(1);
+  expect((await app.state()).quests[0].text).toBe('Weekly report');
+});
+
+test('the T key keeps a half-typed step, as leaving by the tab does', async ({ app, page }) => {
+  await start(app, page);
+  await page.getByRole('button', { name: 'Weekly reporting', exact: true }).click();
+  await page.fill('#sin', 'half a step');
+  await page.evaluate(() => document.activeElement.blur());
+  await page.keyboard.press('t');
+  await expect(page.locator('#v-projects')).toBeVisible();
+  await page.getByRole('button', { name: 'Weekly reporting', exact: true }).click();
+  await expect(page.locator('#sin')).toHaveValue('half a step');
+});
+
+test('back to the board leaves it exactly where it was when the card opened was only cut by the edge', async ({
+  app,
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await app.open();
+  await app.setState(s => {
+    s.quests = Array.from({ length: 14 }, (_, i) => ({
+      id: 'p' + i,
+      text: 'Project ' + i,
+      children: [{ id: 'p' + i + 'a', text: 'Step', children: [] }],
+    }));
+  });
+  await page.reload();
+  // (the sixth card's title half above the top of the screen)
+  await page.evaluate(() => {
+    const b = document.querySelector('.project-open[data-open="p5"]').getBoundingClientRect();
+    scrollBy(0, b.top + b.height / 2);
+  });
+  const y = await page.evaluate(() => scrollY);
+  expect(y).toBeGreaterThan(300);
+  await page.evaluate(() => document.querySelector('.project-open[data-open="p5"]').click());
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Project 5');
+  await page.goBack();
+  await expect(page.locator('#v-projects')).toBeVisible();
+  expect(await page.evaluate(() => scrollY)).toBe(y);
+});

@@ -274,7 +274,7 @@ function opsRow(r) {
                 ? `data-rsub="${r.rsub}"`
                 : '';
   const inner = `<span>${esc(r.text)}</span><small>${esc(r.sub)}</small>`;
-  return `<div class="row oprow ${r.k || ''}${r.over ? ' over' : ''}">${attrs ? `<button class="open" ${attrs}>${inner}</button>` : `<div class="open">${inner}</div>`}</div>`;
+  return `<div class="row oprow ${r.k || ''}">${attrs ? `<button class="open" ${attrs}>${inner}</button>` : `<div class="open">${inner}</div>`}</div>`;
 }
 function opsSection(title, rows, empty, extra = '') {
   return `<section class="opsec"><div class="sechead"><h2>${title}${rows.length ? ` <small>${rows.length}</small>` : ''}</h2>${extra}</div>${rows.length ? `<div class="list box">${rows.map(opsRow).join('')}</div>` : `<p class="hint">${empty}</p>`}</section>`;

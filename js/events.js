@@ -190,12 +190,13 @@ function goPlace(r) {
   window.scrollTo(0, r.y);
   refocus(r.opener);
   // (where the page was scrolled to may no longer be where that control is: the window was
-  // resized, or the phone turned, meanwhile. It's brought onto the screen.)
+  // resized, or the phone turned, meanwhile. Wholly off the screen, it's brought onto it; one
+  // only cut by an edge is where it was, and the page stays exactly as it was left.)
   const f = r.opener && document.activeElement,
     v = $('#v-' + view);
   if (f && f !== document.body && v && v.contains(f)) {
     const b = f.getBoundingClientRect();
-    if (b.top < 0 || b.bottom > innerHeight) f.scrollIntoView({ block: 'center' });
+    if (b.bottom <= 0 || b.top >= innerHeight) f.scrollIntoView({ block: 'center' });
   }
 }
 function backFrom() {
@@ -631,7 +632,7 @@ document.addEventListener('click', e => {
       }
     } else if (find(d.open, S.later)) showUpcoming(d.open); // (Release H: the forecast's Upcoming)
   }
-  if (d.v && b.closest('header, #v-waiting, #waitsec')) {
+  if (d.v && b.closest('header, #v-waiting')) {
     const from = !b.closest('header') && placeHere(b);
     if (d.v === 'projects') path = [];
     go(d.v);
@@ -951,7 +952,7 @@ document.addEventListener('click', e => {
   if (b.id === 'exp') exportData();
   if (b.id === 'doRestore') {
     // What's current across devices isn't taken from the backup: the notification keys (an old
-    // copy would break every device's notifications), the device list and any running session.
+    // copy would break every device's notifications), and any running session.
     // Nor the notes' pictures when it has none of its own (a previous version leaves them out).
     const keep = { pushKey: S.pushKey, timer: S.timer },
       hadCap = S.cap,
@@ -1171,6 +1172,7 @@ document.addEventListener('keydown', e => {
     go('inbox');
     field('#iin');
   } else if (k === 't') {
+    keepDrafts(); // (a step half typed on a task's page, kept under that page before it's left)
     path = [];
     go('projects');
   } else if (k === '/') {

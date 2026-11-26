@@ -818,84 +818,20 @@ nav button[aria-current='page'] {
   color: var(--accent-ink);
   border-color: var(--accent);
 }
-.board {
-  margin-bottom: 18px;
-}
 
 /* a quest's summary on Today, under its name (two lines at most) */
-:is(.open) .qsum {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-style: normal;
-  font-size: var(--fs-sm);
-  color: var(--ink);
-  margin-top: 2px;
-  white-space: pre-line;
-}
+
 .facts .fsum {
   min-height: 5.5em;
   resize: vertical;
 }
-/* a quest's steps on Today, a block each */
-.stepbar {
-  display: flex;
-  gap: 3px;
-  margin-top: 8px;
-}
-.stepbar i {
-  flex: 1;
-  min-width: 4px;
-  height: 6px;
-  border: 0;
-  background: var(--panel-2);
-  border-radius: 0;
-  box-shadow: inset 0 0 0 1px var(--edge);
-}
-.stepbar .s-done {
-  background: var(--ok);
-  box-shadow: none;
-}
-.stepbar .s-next {
-  background: var(--accent);
-  box-shadow: none;
-  opacity: 0.55;
-}
-.stepbar .s-wait {
-  background: repeating-linear-gradient(45deg, var(--wait) 0 3px, transparent 3px 6px);
-}
-.stepbar .s-ask {
-  box-shadow: inset 0 0 0 1px var(--warn);
-}
 /* (lots of steps: thinner lines, so each block still shows its colour) */
-.stepbar.many {
-  gap: 1px;
-}
-.stepbar.many i {
-  min-width: 2px;
-}
+
 .row.done .open > span {
   text-decoration: line-through;
   color: var(--muted);
 }
-.meter {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--edge);
-  display: grid;
-  place-items: center;
-  background: var(--panel);
-  color: var(--ink);
-  cursor: pointer;
-  padding: 0;
-  border-radius: var(--radius-sm);
-}
-.meter svg {
-  width: 14px;
-  height: 14px;
-}
+
 .tag {
   display: inline-block;
   white-space: nowrap;
@@ -928,10 +864,7 @@ nav button[aria-current='page'] {
 .row.waiting .open > span {
   color: var(--muted);
 }
-.tag.rep {
-  background: var(--ok);
-  color: var(--on-status);
-}
+
 .tag.due {
   background: var(--ink);
   color: var(--bg);
@@ -1138,12 +1071,7 @@ textarea.fld {
   opacity: 0.3;
   cursor: default;
 }
-.soon {
-  padding: 12px 14px;
-  margin-bottom: 22px;
-  border-color: var(--edge);
-  background: var(--panel);
-}
+
 .soonrow {
   display: flex;
   justify-content: space-between;
@@ -1204,18 +1132,7 @@ textarea.fld {
   font-weight: 600;
   border-color: var(--accent);
 }
-.rep {
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
-}
-.rep:first-of-type {
-  border-top: 0;
-}
-.rep > span {
-  display: block;
-  margin-bottom: 6px;
-  overflow-wrap: anywhere;
-}
+
 .days {
   display: flex;
   flex-wrap: wrap;
@@ -1490,22 +1407,7 @@ nav .badge[hidden] {
   display: none;
 }
 /* carried over */
-.carried {
-  padding: 10px 14px;
-  margin-bottom: 12px;
-}
-.carried > summary {
-  font-size: var(--fs);
-}
-.carried > summary small {
-  display: block;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  font-weight: 400;
-}
-.carried[open] > summary {
-  margin-bottom: 4px;
-}
+
 .crow + .crow {
   border-top: 1px solid var(--line);
 }
@@ -1642,11 +1544,6 @@ nav .badge[hidden] {
   resize: vertical;
   line-height: 1.5;
 }
-/* alarms (on Today) and the ringing card */
-.alarms {
-  margin: -4px 0 18px;
-}
-
 /* knowledge: flows, categories and articles */
 .flows {
   display: flex;
@@ -1837,11 +1734,6 @@ summary {
 }
 .notestile:first-of-type {
   border-top: 1px solid var(--edge);
-}
-
-#waitsec > summary small {
-  color: var(--muted);
-  font-weight: 400;
 }
 
 /* the quest page: facts card, steps, then the rest folded away; actions always to hand */
@@ -2151,12 +2043,7 @@ details.more > details {
   font-size: var(--fs-sm);
   color: var(--muted);
 }
-.tag.place {
-  background: var(--panel);
-  color: var(--ink);
-  border-style: dashed;
-  border-color: var(--edge-strong);
-}
+
 .tag.done {
   background: var(--ok);
   color: var(--on-status);
@@ -2315,23 +2202,19 @@ details.more > details {
     grid-template-columns: repeat(2, 1fr);
   }
   /* a waiting row's Got it and ⋯ go under its text, which keeps its width */
-  #v-waiting .row,
-  #waitsec .row {
+  #v-waiting .row {
     display: grid;
     grid-template-columns: auto 1fr auto;
     gap: 4px 10px;
   }
-  #v-waiting .row .open,
-  #waitsec .row .open {
+  #v-waiting .row .open {
     grid-column: 1 / -1;
   }
-  #v-waiting .row .btn.sm,
-  #waitsec .row .btn.sm {
+  #v-waiting .row .btn.sm {
     grid-column: 2;
     justify-self: start;
   }
-  #v-waiting .row .check,
-  #waitsec .row .check {
+  #v-waiting .row .check {
     grid-row: 2;
   }
 
@@ -2377,8 +2260,7 @@ details.more > details {
   outline-offset: -3px;
   border-radius: var(--radius-sm);
 }
-#v-waiting .row .qmore,
-#waitsec .row .qmore {
+#v-waiting .row .qmore {
   margin-left: -6px;
 }
 .flist {
@@ -2905,33 +2787,6 @@ nav button[aria-current='page'] {
 #v-today .list .row {
   position: relative;
 }
-#v-today .list .row .stepbar {
-  position: absolute;
-  left: 12px;
-  right: 6px;
-  bottom: 0;
-  gap: 1px;
-  margin: 0;
-}
-#v-today .list .row .stepbar i {
-  height: 3px;
-  min-width: 2px;
-  box-shadow: none;
-  background: var(--line);
-  opacity: 0.18;
-}
-#v-today .list .row .stepbar :is(.s-done, .s-next, .s-wait) {
-  opacity: 1;
-}
-#v-today .list .row .stepbar .s-next {
-  opacity: 0.55;
-}
-.sfrac {
-  margin-right: 6px;
-  font-weight: 800;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
 
 /* (Larger text: the arrow goes first, so the three keep to one line) */
 
@@ -2944,7 +2799,6 @@ nav button[aria-current='page'] {
    tall themselves. */
 :where(
   .qmore,
-  .meter,
   .row .check,
   .mv,
   .hsearch,
@@ -2965,7 +2819,6 @@ nav button[aria-current='page'] {
 }
 :where(
   .qmore,
-  .meter,
   .row .check,
   .mv,
   .hsearch,
@@ -3218,9 +3071,7 @@ summary,
 .oprow.late .open > span {
   color: var(--err);
 }
-.oprow.over .open > span {
-  color: var(--err);
-}
+
 .oprow.bad .open > small {
   color: var(--err);
 }

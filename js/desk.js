@@ -202,8 +202,10 @@ function renameTask(id) {
     now.n.text = v;
     const t = tplFor(now.n);
     if (t) t.text = v; // (a repeating task's later copies too)
+    keepDrafts(); // (a step half typed on its page stays through the redraw)
     save();
     renderAll();
+    restoreDrafts();
   });
 }
 document.addEventListener('dblclick', e => {
