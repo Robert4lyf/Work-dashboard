@@ -200,6 +200,12 @@ The link works with the app open, from a fresh launch, from the installed app, a
 
 `tests/db/run.sh` tests the files against a throwaway PostgreSQL (it needs PostgreSQL 16 installed; GitHub runs it on every push).
 
+## Claude actions on projects (optional)
+
+Sign in and open a project to use **Suggest steps (AI)** beside the step entry or **Summarise (AI)** beside the summary. Review Claude’s suggested steps or summary before saving them. The app explains what each action sends to Claude the first time you use it on a device.
+
+In the same Supabase project the app syncs to, deploy the [`suggest-steps` Edge Function](supabase/functions/suggest-steps/index.ts) and set `ANTHROPIC_API_KEY` under **Edge Functions → Secrets**. Update an older copy of the function if it predates summary support. Changing the secret alone takes effect without redeploying the function. If a request fails, check the function’s logs in Supabase.
+
 ## Features worth knowing
 
 - **One way in:** new work always starts in the Inbox (typed, spoken, shared or captured from anywhere). Projects only holds what you've chosen from it: tap **Projects** on an inbox item, or set its waiting details or a later date first. Steps are still added on a task's page.
