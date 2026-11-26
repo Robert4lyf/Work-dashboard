@@ -1,4 +1,4 @@
-// Bug hunt after the UX rework: the back gesture, Today's waiting section, keys under a sheet.
+// Bug hunt after the UX rework: the back gesture, the Waiting page's Inbox items, keys under a sheet.
 const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ app }) => {
@@ -27,16 +27,18 @@ test('the back gesture from an article keeps the app open for the next one', asy
   expect(await page.evaluate(() => history.state && history.state.app)).toBe('in');
 });
 
-test("an Inbox item under Today's waiting section opens the Inbox", async ({ app, page }) => {
+test('an Inbox item on the Waiting page opens the Inbox', async ({ app, page }) => {
   await app.setState(s => {
     s.inbox = [
       { id: 'i1', text: 'Budget figures', wait: { who: 'Sam', note: '', chase: '' }, at: Date.now() },
     ];
   });
-  await app.go('today');
-  await page.click('#waitsec > summary');
-  await page.click('#waitsec .open[data-v="inbox"]');
+  await app.go('waiting');
+  await expect(page.locator('#v-waiting .row')).toHaveCount(1);
+  await expect(page.locator('#v-waiting .row')).toContainText('Budget figures');
+  await page.click('#v-waiting .open[data-v="inbox"]');
   await expect(page.locator('#v-inbox')).toBeVisible();
+  await expect(page.locator('#v-inbox')).toContainText('Budget figures');
 });
 
 test('shortcut keys do nothing while a sheet is up', async ({ app, page }) => {
@@ -129,31 +131,7 @@ test('articles with no category left are still reachable when there are no categ
   await expect(page.locator('#v-knowledge .kbtitle')).toHaveText('Lost article');
 });
 
-test("the header's alarm button opens Today's list from a task page; back from Notes goes to Knowledge", async ({
-  app,
-  page,
-}) => {
-  await app.setState(s => {
-    s.quests = [{ id: 'q1', text: 'Beta', children: [] }];
-    s.alarms = [
-      {
-        id: 'al1',
-        time: '09:00',
-        label: 'Late',
-        device: '',
-        day: today(),
-        done: '',
-        snooze: Date.now() + 3600e3,
-      },
-    ];
-  });
-  await app.go('today');
-  await page.click('#v-today [data-open="q1"]');
-  await expect(page.locator('#v-today .facts h1')).toHaveText('Beta');
-  await app.go('alarms');
-  await expect(page.locator('#v-today .facts')).toHaveCount(0);
-  await expect(page.locator('#alarmd')).toBeVisible();
-
+test('back from Notes goes to Knowledge', async ({ app, page }) => {
   await app.go('knowledge');
   await page.click('#v-knowledge [data-goto="notes"]');
   await expect(page.locator('#v-notes')).toBeVisible();

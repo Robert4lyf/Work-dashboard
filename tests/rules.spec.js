@@ -172,8 +172,10 @@ test('a flow failure makes one waiting item on every device (same id), the day r
   expect(first[0][1]).toBe('ready');
   expect(first[0][2]).toBe(1);
   expect(await run()).toEqual(first);
-  await app.go('today');
-  await expect(page.locator('#v-today .attn [data-wfopen]')).toContainText('Month end');
+  // (ready to start: on the Command Centre's attention list)
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Month end');
+  await expect(page.locator('#v-ops .attlist [data-wfopen]')).toContainText('Process ready to start');
   // A rule's own cap, then the cap for all rules: logged as limited, not done.
   await page.evaluate(() => {
     S.rules = [
@@ -245,8 +247,8 @@ test('Settings: rules are added, previewed, switched off and deleted; the log sh
   // Off: nothing fires; the switch says so.
   await page.click('[data-ruleon="r1"]');
   await expect(page.locator('[data-ruleon="r1"]')).toHaveText('Off');
-  await app.go('today');
-  await page.click('[aria-label="Mark done: Weekly reporting"]');
+  await app.go('projects');
+  await page.click('#v-projects [aria-label="Mark done: Weekly reporting"]');
   expect((await app.state()).inbox).toHaveLength(0);
   await app.settings('rules');
   await page.click('[data-ruleon="r1"]');

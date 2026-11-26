@@ -35,7 +35,6 @@ function findWaitable(id) {
     find(id, S.inbox.map(i => i.node).filter(Boolean)) || { n: it, parents: [] }
   );
 }
-const chaseDue = () => waitingNodes().filter(x => x.n.wait.due && x.n.wait.due <= today()).length;
 function chaseTag(w) {
   const t = today();
   if (w.due) {

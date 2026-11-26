@@ -117,7 +117,7 @@ function followRoute(r, first) {
     case 'today':
     case 'work':
     case 'projects':
-      workListMode = false;
+      keepDrafts(); // (a step half typed on a task's page, kept under that page)
       path = [];
       go('projects');
       return;

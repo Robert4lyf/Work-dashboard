@@ -1,27 +1,37 @@
 const { test, expect } = require('./fixtures');
 
 test.beforeEach(async ({ app }) => app.open());
+// The steps on a project's page, in the order shown.
+const stepNames = page => page.$$eval('#v-today .row .open > span', x => x.map(e => e.textContent));
 
-test('completing a task logs it, sinks it and moves Next up', async ({ app, page }) => {
+test('completing a task logs it, puts it under Completed today and moves Next up', async ({ app, page }) => {
   for (const t of ['A', 'B', 'C']) await app.addQuest(t);
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('A');
-  await page.click('[aria-label="Mark done: A"]');
+  await page.click('#v-projects [aria-label="Mark done: A"]');
   expect(await app.order()).toEqual(['B', 'C', 'A']);
+  await expect(page.locator('#active-project-grid .project-card h2')).toHaveText(['B', 'C']);
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('B');
   expect((await app.state()).log.map(x => x.text)).toEqual(['A']);
-  // Finished tasks fold away under "Done today"; open it to un-tick one.
-  await page.click('#donesec > summary');
-  await page.click('[aria-label="Mark done: A"]');
+  // Finished projects fold away under "Completed today"; open it to un-tick one.
+  const done = page.locator('#projects-done');
+  await expect(done.locator('summary')).toHaveText('Completed today 1');
+  await expect(done.locator('.project-card h2')).toHaveText(['A']);
+  await expect(done.locator('.project-card')).toBeHidden();
+  await done.locator('summary').click();
+  await page.click('#projects-done [aria-label="Mark not done: A"]');
   expect((await app.state()).log).toEqual([]);
   expect(await app.order()).toEqual(['B', 'C', 'A']);
+  await expect(page.locator('#projects-done')).toHaveCount(0);
 });
 
-test('reorder: Top makes a task Next up; open items stay above done ones', async ({ app, page }) => {
-  for (const t of ['A', 'B', 'C']) await app.addQuest(t);
-  await page.click('[aria-label="Mark done: A"]');
+test('reorder: Top makes a step the next one; open steps stay above ticked ones', async ({ app, page }) => {
+  await app.addQuest('Report');
+  await app.openQuest('Report');
+  for (const t of ['A', 'B', 'C']) await app.addSub(t);
+  await page.locator('#v-today').getByRole('button', { name: 'Mark done: A' }).click();
   await page.click('#reorder');
   await page.click('[data-top]:not([disabled]) >> nth=0');
-  expect(await app.order()).toEqual(['C', 'B', 'A']);
+  expect(await stepNames(page)).toEqual(['C', 'B', 'A']);
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('C');
   const bDownDisabled = await page.evaluate(
     () =>
@@ -31,6 +41,10 @@ test('reorder: Top makes a task Next up; open items stay above done ones', async
   );
   expect(bDownDisabled).toBe(true);
   await expect(page.locator('.row.done [data-top]')).toHaveCount(0);
+  // The board's preview of the project follows the new order.
+  await page.click('#reorder');
+  await page.click('[data-crumb="-1"]');
+  await expect(page.locator('#v-projects .project-step-name')).toHaveText(['C', 'B', 'A']);
 });
 
 test('steps: next step and sinking', async ({ app, page }) => {
@@ -41,45 +55,52 @@ test('steps: next step and sinking', async ({ app, page }) => {
   expect(await page.evaluate(() => recommend()?.q.text)).toBe('Report');
   await page.locator('#v-today').getByRole('button', { name: 'Mark done: Draft' }).click();
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('Review');
-  expect(await app.order()).toEqual(['Review', 'Draft']);
+  expect(await stepNames(page)).toEqual(['Review', 'Draft']);
 });
 
-test('a row’s ⋯ offers Inbox or Delete among its actions; delete can be undone', async ({ app, page }) => {
+test('a task’s ⋯ offers Inbox or Delete among its actions; delete can be undone', async ({ app, page }) => {
   await app.addQuest('Email Bob');
   await app.addQuest('Plan trip');
-  const row = page.locator('#v-today .row', { hasText: 'Email Bob' });
+  await app.openQuest('Email Bob');
   // Cancelling (or the backdrop) closes the sheet without doing anything.
-  await row.locator('[aria-label="Actions: Email Bob"]').click();
+  await page.click('.qfoot [aria-label="More actions"]');
+  await expect(page.locator('#sheettitle')).toHaveText('Email Bob');
   await expect(page.locator('#sheet .qact[data-toinbox]')).toHaveText('Move to Inbox');
   await expect(page.locator('#sheet .qact[data-delnow]')).toContainText('Delete');
   await page.click('#sheet .sheetback', { position: { x: 10, y: 10 } });
   await expect(page.locator('#sheet')).toHaveCount(0);
   expect((await app.state()).quests).toHaveLength(2);
 
-  await row.locator('[aria-label="Actions: Email Bob"]').click();
+  await page.click('.qfoot [aria-label="More actions"]');
   await page.click('#sheet [data-delnow]');
   await expect(page.locator('#sheet')).toHaveCount(0);
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Plan trip']);
+  // (its page has gone with it: back on the board)
+  await expect(page.locator('#v-projects')).toBeVisible();
   await page.click('#undo');
   expect((await app.state()).quests).toHaveLength(2);
 
-  await page.locator('[aria-label="Actions: Plan trip"]').click();
+  await app.openQuest('Plan trip');
+  await page.click('.qfoot [aria-label="More actions"]');
   await page.locator('#sheet [data-toinbox]').click();
   const s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Email Bob']);
   expect(s.inbox[0].text).toBe('Plan trip');
+  expect(await app.order()).toEqual(['Email Bob']);
 });
 
-test('tags are set on the task and shown on its row', async ({ app, page }) => {
+test('tags are set on the task and shown on its page', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await app.setTag('Design');
   expect((await app.state()).quests[0].tag).toBe('Design');
+  // (the board's cards carry no tag: it's on the project's page, folded to the one it has)
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .row .tag')).toHaveText('Design');
+  await app.openQuest('Report');
+  await expect(page.locator('#tagd > summary .tag')).toHaveText('Design');
 });
 
-test('overdue count shows at the top of Today', async ({ app, page }) => {
+test('an overdue task says so on its card, and is counted in the Command Centre', async ({ app, page }) => {
   await app.addQuest('Report');
   await app.openQuest('Report');
   await page.click('#mored > summary');
@@ -87,7 +108,12 @@ test('overdue count shows at the top of Today', async ({ app, page }) => {
   await page.fill('#fdue', '2000-01-01');
   await page.dispatchEvent('#fdue', 'change');
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .attn')).toContainText('1 overdue');
+  await expect(page.locator('#v-projects .project-card .project-meta .tag.late')).toHaveText('Overdue');
+  await app.go('ops');
+  await expect(page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 1');
+  await expect(page.locator('#v-ops .attlist .attrow')).toHaveCount(1);
+  await expect(page.locator('#v-ops .attlist .attrow')).toContainText('Report');
+  await expect(page.locator('#v-ops .attlist .attrow')).toContainText('Overdue');
 });
 
 test('a background refresh keeps what you are typing', async ({ app, page }) => {
@@ -102,19 +128,21 @@ test('a background refresh keeps what you are typing', async ({ app, page }) => 
   await expect(page.locator('#iin')).toHaveValue('');
 });
 
-test('Today has no add box: new work comes in through the Inbox', async ({ app, page }) => {
-  await expect(page.locator('#v-today input')).toHaveCount(0);
-  await page.click('#v-today [data-goto="inbox"]');
+test('an empty board points to the Inbox, where new work comes in; n captures there', async ({
+  app,
+  page,
+}) => {
+  await expect(page.locator('#v-projects input')).toHaveCount(0);
+  await page.click('#v-projects [data-goto="inbox"]');
   await expect(page.locator('#iin')).toBeFocused();
   await page.fill('#iin', 'Plan offsite');
   await page.press('#iin', 'Enter');
   await page.click('#v-inbox [data-promote]');
   expect((await app.state()).quests.map(q => q.text)).toEqual(['Plan offsite']);
-  // On Today, n captures to the Inbox; on a task's page it adds a step.
-  await app.go('today');
+  // On Projects, n captures to the Inbox; on a task's page it adds a step.
+  await app.go('projects');
   await page.keyboard.press('n');
   await expect(page.locator('#iin')).toBeFocused();
-  await app.go('today');
   await app.openQuest('Plan offsite');
   await page.keyboard.press('n');
   await expect(page.locator('#sin')).toBeFocused();
@@ -151,7 +179,6 @@ test('deep hunt: typing survives background redraws, in fields with or without a
     S.quests = [fix({ id: 'q', text: 'Task one' })];
     save();
   });
-  await app.go('today');
   await app.openQuest('Task one');
   if (!(await page.locator('#wwho').isVisible())) await page.click('#waitd summary');
   await page.fill('#wwho', 'Pat');

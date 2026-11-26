@@ -2,7 +2,6 @@
 let path = [],
   reorder = false,
   pending = null;
-let workListMode = false;
 const panels = {}; // which <details> panels are expanded, so re-renders keep them open
 const tick =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -10,19 +9,16 @@ const chevron =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>';
 const dots =
   '<svg viewBox="0 0 24 6" aria-hidden="true"><circle cx="3" cy="3" r="2.4" fill="currentColor"/><circle cx="12" cy="3" r="2.4" fill="currentColor"/><circle cx="21" cy="3" r="2.4" fill="currentColor"/></svg>';
-// A row's (or tile's) ⋯: its quick actions, in a sheet (see actions.js).
+// A row's ⋯: its quick actions, in a sheet (see actions.js).
 const moreBtn = n =>
   `<button class="qmore" data-qact="${n.id}" aria-label="Actions: ${esc(n.text)}" aria-haspopup="dialog">${dots}</button>`;
-// A task with a saved place (see resume.js): a quiet mark on its row.
-const placeMark = n => (n.resume && !isDone(n) ? '<span class="tag place">Saved place</span>' : '');
 function dueTag(n) {
   if (!n.due || isDone(n)) return '';
   const t = today(),
     cls = n.due < t ? 'late' : n.due === t ? 'now' : 'due';
   return `<span class="tag ${cls}">${n.due < t ? 'Overdue' : n.due === t ? 'Due today' : 'Due ' + niceDate(n.due)}</span>`;
 }
-// A task's own deadline aside, a step overdue or due today says so on the task's row (it's why
-// the task is under Due).
+// A task's own deadline aside, a step overdue or due today says so on the task's card.
 function stepDueTag(n) {
   if (isDone(n) || (n.due && n.due <= today())) return '';
   const t = today(),
@@ -32,324 +28,57 @@ function stepDueTag(n) {
     ? '<span class="tag late">Step overdue</span>'
     : '<span class="tag now">Step due today</span>';
 }
+// A step's row on its task's page: its tick, its name (which opens the step's own page) and its
+// ⋯, or the move buttons while reordering. (A step has no steps of its own: see flatSteps.)
 function row(n, i, len, sib) {
   const d = isDone(n),
-    kids = n.children.length;
-  let left;
-  // A task with steps opens (its bar, below its name, shows how far it's got); one without is ticked.
-  if (kids)
-    left = `<button class="meter" data-open="${n.id}" aria-label="Open ${esc(n.text)}">${chevron}</button>`;
-  else {
-    left = `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`;
-  }
-  const nx = kids && !d ? nextLeaf(n) : null,
-    stepWait = !d && !n.wait ? stepWaitBadge(n) : '';
-  const rt = tplFor(n);
-  // (Release G: how far it's got as a count, the bar thin along the row's foot; see stepBar)
-  const req = kids ? n.children.filter(c => !c.opt) : [],
-    set = req.length ? req : n.children,
-    frac = kids && !d ? `<span class="sfrac">${set.filter(isDone).length}/${set.length}</span>` : '';
-  // A Top 3 priority keeps its place in the list, marked with its number.
-  const rank = rowRank.get(n.id);
-  const meta =
-    frac +
-    tagBadge(n.tag) +
-    waitBadge(n) +
-    stepWait +
-    (n.opt ? '<span class="tag opt">Optional</span>' : '') +
-    (repeats(rt) ? `<span class="tag rep">Repeats ${esc(repLabel(rt))}</span>` : '') +
-    dueTag(n) +
-    stepDueTag(n) +
-    schedTag(n) +
-    placeMark(n) +
-    (nx
-      ? 'Next: ' + esc(nx.text)
-      : needsNext(n)
-        ? '<span class="tag asknext">All ticked: what\'s next?</span>'
-        : '');
+    meta =
+      tagBadge(n.tag) + waitBadge(n) + (n.opt ? '<span class="tag opt">Optional</span>' : '') + dueTag(n);
   const right = reorder
     ? `${d ? '' : `<button class="mv" data-top="${n.id}" aria-label="Move to top: ${esc(n.text)}" ${i === 0 ? 'disabled' : ''}>Top</button>`}<button class="mv" data-up="${n.id}" aria-label="Move up: ${esc(n.text)}" ${i === 0 || (d && !isDone(sib[i - 1])) ? 'disabled' : ''}>&#9650;</button><button class="mv" data-down="${n.id}" aria-label="Move down: ${esc(n.text)}" ${i === len - 1 || (!d && isDone(sib[i + 1])) ? 'disabled' : ''}>&#9660;</button>`
     : moreBtn(n);
   return withHash(
-    `<div class="row${d ? ' done' : n.wait || stepWait ? ' waiting' : ''}" data-qid="${n.id}"${kids ? '' : ' data-leaf="1"'}${dragAttr('q:' + n.id)}>${left}<button class="open" data-open="${n.id}"><span${rank ? ` class="t3mark" data-rank="${rank}"` : ''}>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? '<small>' + meta + '</small>' : ''}${kids ? stepBar(n) : ''}</button>${right}</div>`,
+    `<div class="row${d ? ' done' : n.wait ? ' waiting' : ''}" data-qid="${n.id}"${dragAttr('q:' + n.id)}><button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button><button class="open" data-open="${n.id}"><span>${esc(n.text)}</span>${meta ? '<small>' + meta + '</small>' : ''}</button>${right}</div>`,
   );
 }
-// A task's steps as a bar, a block each: the ticked ones, then the rest in order, the next one
-// and any waiting marked. Every one ticked but the task not finished: a last block asks what's next.
-function stepBar(n) {
-  const req = n.children.filter(c => !c.opt),
-    set = req.length ? req : n.children,
-    nx = nextLeaf(n),
-    done = set.filter(isDone),
-    open = set.filter(c => !isDone(c)),
-    waiting = open.filter(c => c.wait).length,
-    ask = needsNext(n) && !nx; // (an optional step still to do shows as Next instead)
-  const blocks = [
-    ...done.map(() => 's-done'),
-    ...open.map(c => (c === nx ? 's-next' : c.wait ? 's-wait' : '')),
-  ];
-  if (ask) blocks.push('s-ask');
-  const label =
-    `${done.length} of ${set.length} steps done` +
-    (waiting ? `, ${waiting} waiting` : '') +
-    (ask ? ", what's next?" : '');
-  // (a <b>, not a <span>: the task's name is the row's span)
-  return `<b class="stepbar${blocks.length > 15 ? ' many' : ''}" role="img" aria-label="${label}">${blocks.map(b => `<i${b ? ` class="${b}"` : ''}></i>`).join('')}</b>`;
+// A section title, with the Reorder switch beside it when the list has something to reorder.
+function listHead(title, ns) {
+  return `<div class="sechead"><h2>${title}</h2>${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
 }
-// A section title, with the Reorder switch beside it when the list has something to reorder (and,
-// for Today's tasks, the List / Board switch).
-/* Today's list, narrowed (Release G): All, Due (overdue or due today, the task or a step) or
-   Started (a step done, or a saved place), and Find (by words, in the name or its steps). Only
-   what's shown changes: the order and the tasks themselves stay as they are. The choice is this
-   device's, kept; the words are for now. */
-const TFILTER = 'dashboard-today-filter';
-let todayFilter = (() => {
-    try {
-      const v = localStorage.getItem(TFILTER);
-      return ['due', 'started'].includes(v) ? v : 'all';
-    } catch (e) {
-      return 'all';
-    }
-  })(),
-  todayFind = '',
-  todayFindOpen = false,
-  rowRank = new Map(), // (Top 3 rank by task id, for the list's marks; set as Today is drawn)
-  // (Done today opened by Find for a finished task it found: not the user's choice, so neither
-  // remembered nor kept open once the words no longer find one)
-  findOpened = false;
-const isDueNow = q =>
-  !isDone(q) &&
-  ((q.due && q.due <= today()) || q.children.some(c => !isDone(c) && c.due && c.due <= today()));
-const isStarted = q => !isDone(q) && (q.children.some(isDone) || !!q.resume);
-const TFILTERS = [
-  ['all', 'All', () => true],
-  ['due', 'Due', isDueNow],
-  ['started', 'Started', isStarted],
-];
-const searchIcon =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>';
-const findWords = () => todayFind.toLowerCase().split(/\s+/).filter(Boolean);
-function findMatch(q, words = findWords()) {
-  if (!words.length) return true;
-  const hay = [q.text, q.summary || '', ...q.children.map(c => c.text)].join(' ').toLowerCase();
-  return words.every(w => hay.includes(w));
-}
-function setTodayFilter(v) {
-  todayFilter = TFILTERS.some(([k]) => k === v) ? v : 'all';
-  try {
-    localStorage.setItem(TFILTER, todayFilter);
-  } catch (e) {}
-  renderToday();
-}
-// The chips and Find, under the list's title (not while reordering: that's the whole list).
-// (shown, and so applied, only while there's enough to narrow: a filter or words left over from a
-// fuller day never hide tasks with nothing on screen to show them again)
-const filterOn = work => !reorder && work.filter(q => !isDone(q)).length >= 4;
-const findOn = work => !reorder && work.length >= 8;
-function listFilter(work) {
-  if (!filterOn(work)) return '';
-  const chips = TFILTERS.map(([k, label, fn]) => {
-    const n = work.filter(q => !isDone(q) && fn(q)).length;
-    return `<button class="chip" data-tfilter="${k}" aria-pressed="${todayFilter === k}">${label} <small>${n}</small></button>`;
-  }).join('');
-  // (Find: a button, opening the box on a line of its own; open while there are words in it)
-  const many = findOn(work),
-    open = many && (todayFindOpen || !!todayFind),
-    btn = many
-      ? `<button class="chip tfindbtn" data-tfindopen="1" aria-expanded="${open}" aria-label="Find a task">${searchIcon}</button>`
-      : '',
-    find = open
-      ? `<input class="fld tfind" id="tfind" type="search" placeholder="Find a task" aria-label="Find a task on Today" value="${esc(todayFind)}" autocomplete="off" enterkeyhint="search">`
-      : '';
-  return `<div class="tfilter"><span class="chips" role="group" aria-label="Show">${chips}</span>${btn}${find}</div>`;
-}
-// The tasks shown by the filter and Find (finished ones only under All, in Done today).
-// (Find's words are applied in place, by applyFind, so the box isn't drawn again as they're typed)
-function filteredWork(work) {
-  if (!filterOn(work) || todayFilter === 'all') return work;
-  const fn = (TFILTERS.find(([k]) => k === todayFilter) || TFILTERS[0])[2];
-  return work.filter(fn);
-}
-// Find: the rows (and tiles) not matching the words hidden where they are; "No tasks match" when
-// none is left. Nothing is drawn again, so typing (an Android keyboard's composing too) isn't
-// interrupted, and it's quick with hundreds of tasks.
-function applyFind() {
-  const v = document.getElementById('v-today');
-  if (!v || path.length) return;
-  const on = findOn(todayWork(S.quests)),
-    words = on ? findWords() : [],
-    byId = new Map(S.quests.map(q => [q.id, q]));
-  let left = 0;
-  v.querySelectorAll('.list .row[data-qid], .qtile[data-qid]').forEach(el => {
-    const q = byId.get(el.dataset.qid),
-      show = !q || findMatch(q, words);
-    el.hidden = !show;
-    if (show && !el.closest('#donesec')) left++;
-  });
-  // (a finished task found: "Done today" opens to show it while the words are there, and closes
-  // again after; not remembered as opened)
-  const done = v.querySelector('#donesec');
-  let hit = false;
-  if (done) {
-    hit = words.length > 0 && [...done.querySelectorAll('.row[data-qid]')].some(r => !r.hidden);
-    if (hit && !done.open) {
-      findOpened = true;
-      done.open = true;
-    } else if (!hit && findOpened) {
-      findOpened = false;
-      done.open = panels.donesec === true;
-    }
-  }
-  const none = v.querySelector('.tnomatch');
-  if (none) none.hidden = !words.length || left > 0 || hit;
-}
-function listHead(title, ns, views) {
-  const sw = views
-    ? `<span class="viewsw" role="group" aria-label="Show as">${['list', 'board'].map(v => `<button class="chip" data-tview="${v}" aria-pressed="${todayView === v}">${v === 'list' ? 'List' : 'Board'}</button>`).join('')}</span>`
+// A task's steps, a row each, in the order they're done in; finished ones go last (not while
+// reordering: that shows the order as it is).
+const listRank = n => (isDone(n) ? 2 : 0);
+function list(ns) {
+  const shown = reorder ? ns : [...ns].sort((a, b) => listRank(a) - listRank(b));
+  return shown.length
+    ? `<div class="list box">${shown.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
     : '';
-  return `<div class="sechead"><h2 id="taskshead" tabindex="-1">${title}</h2>${sw}${ns.length > 1 ? `<button class="linkbtn" id="reorder">${reorder ? 'Done' : 'Reorder'}</button>` : ''}</div>`;
 }
-/* Today as a board: a lane per stage, a tile per task. The choice is this device's own. */
-const TVIEW = 'dashboard-today-view';
-let todayView = (() => {
-  try {
-    return localStorage.getItem(TVIEW) === 'board' ? 'board' : 'list';
-  } catch (e) {
-    return 'list';
-  }
-})();
-function setTodayView(v) {
-  todayView = v === 'board' ? 'board' : 'list';
-  reorder = false; // (the board has no Reorder: its lanes keep the list's order)
-  try {
-    localStorage.setItem(TVIEW, todayView);
-  } catch (e) {}
-  renderToday();
-}
-// (scheduled tasks and ones only waiting are in their own sections, above and below the board,
-// as they are around the list: the board holds the same tasks as the list)
-const LANES = [
-  ['doing', 'In progress'],
-  ['ask', "What's next?"],
-  ['todo', 'Not started'],
-  ['done', 'Done today'],
-];
-function laneOf(n) {
-  if (isDone(n)) return 'done';
-  if (n.children.length && needsNext(n) && !nextLeaf(n)) return 'ask';
-  return n.children.some(isDone) ? 'doing' : 'todo';
-}
-function tile(n) {
-  const kids = n.children.length,
-    d = isDone(n),
-    nx = kids && !d ? nextLeaf(n) : null,
-    meta =
-      tagBadge(n.tag) +
-      (!d && !n.wait ? stepWaitBadge(n) : '') +
-      waitBadge(n) +
-      dueTag(n) +
-      placeMark(n) +
-      (nx ? `<span class="qtnext">Next: ${esc(nx.text)}</span>` : '');
-  return `<div class="qtile${d ? ' done' : ''}" data-qid="${n.id}">${kids ? '' : `<button class="check" data-toggle="${n.id}" aria-pressed="${d}" aria-label="Mark done: ${esc(n.text)}">${tick}</button>`}<button class="qtopen" data-open="${n.id}"><span>${esc(n.text)}</span>${n.summary ? `<em class="qsum">${esc(n.summary)}</em>` : ''}${meta ? `<small>${meta}</small>` : ''}${kids ? stepBar(n) : ''}</button>${moreBtn(n)}</div>`;
-}
-function board(ns) {
-  const by = {};
-  ns.forEach(n => (by[laneOf(n)] = by[laneOf(n)] || []).push(n));
-  return `<div class="board">${LANES.filter(([k]) => by[k])
-    .map(
-      ([k, name]) =>
-        `<section class="blane" data-lane="${k}" aria-label="${name}"><h3>${name} <small>${by[k].length}</small></h3><div class="lanetiles">${by[k].map(tile).join('')}</div></section>`,
-    )
-    .join('')}</div>`;
-}
-// One card, one row per task. Waiting ones show below the rest (above finished ones); their
-// place in the real order is kept, so they move back up when the wait is over.
-// (A task's steps keep their order, waiting or not: it's the order they're done in. Only
-// finished ones go last.)
-const listRank = (n, steps) => (isDone(n) ? 2 : !steps && showsWaiting(n) ? 1 : 0);
-function list(ns, doneApart, steps) {
-  const rank = new Map(ns.map(n => [n, listRank(n, steps)])),
-    shown = reorder ? ns : [...ns].sort((a, b) => rank.get(a) - rank.get(b)),
-    open = doneApart && !reorder ? shown.filter(n => !isDone(n)) : shown,
-    done = doneApart && !reorder ? shown.filter(isDone) : [];
-  let h = open.length
-    ? `<div class="list box">${open.map((c, i) => row(c, i, ns.length, ns)).join('')}</div>`
-    : '';
-  // Finished ones, folded away (open it to un-tick a mistake).
-  if (done.length)
-    h += `<details id="donesec"${panels.donesec ? ' open' : ''}><summary>Done today <small>${done.length}</small></summary><div class="list box">${done.map((c, i) => row(c, i, ns.length, ns)).join('')}</div></details>`;
-  return h;
-}
-// Today's list: what can be worked on, and what's finished today (not what's scheduled or only
-// waiting: those are in their own sections).
-const todayWork = qs => qs.filter(q => ['actionable', 'ask', 'done'].includes(taskState(q)));
-/* Reordering a list that shows only some of the tasks under it (Today's, without the scheduled
-   and waiting ones). There is one order, S.quests; the list is the tasks it shows, in that order.
-   Up and down move a task past its neighbour in the list (to just before it, or just after it),
-   and Top to just before the list's first: the hidden tasks stay where they are among the rest,
-   none is dropped or copied, and the same moves give the same order on every device. Elsewhere
-   (a task's steps, all shown) it's an ordinary swap. */
+// Up, down or to the top among its siblings.
 function moveAmong(id, how) {
   const r = find(id);
   if (!r) return false;
   const arr = r.arr,
-    shown = arr === S.quests ? todayWork(arr) : arr,
-    k = shown.indexOf(r.n);
-  if (k < 0) return false;
-  const to = how === 'top' ? shown[0] : how === 'up' ? shown[k - 1] : shown[k + 1];
+    k = arr.indexOf(r.n),
+    to = how === 'top' ? arr[0] : how === 'up' ? arr[k - 1] : arr[k + 1];
   if (!to || to === r.n) return false;
   arr.splice(arr.indexOf(r.n), 1);
   arr.splice(arr.indexOf(to) + (how === 'down' ? 1 : 0), 0, r.n);
   return true;
 }
 function renderToday() {
-  // (each lane of the board keeps where it was scrolled to across a redraw)
-  const laneX = {};
-  $('#v-today')
-    .querySelectorAll('.blane')
-    .forEach(l => (laneX[l.dataset.lane] = l.querySelector('.lanetiles').scrollLeft));
   // (a wide window, the board beside this page: a change made on the board draws the page as a
   // change from elsewhere is drawn, so a step half typed here isn't lost to a tick over there)
   if (splitBeside()) inBackground(drawToday);
   else drawToday();
   syncSplit(); // (the task whose page this was may have gone: see desk.js)
-  // (an open Top 3 picker shows what Top 3 is now, after a sync or a change elsewhere: a tap on it
-  // then means what it shows)
-  if (document.querySelector('#sheet .t3pick'))
-    renderTop3Picker((document.querySelector('#sheet .qahint') || {}).textContent);
-  for (const k in laneX) {
-    const l = $(`#v-today .blane[data-lane="${k}"] .lanetiles`);
-    if (l) l.scrollLeft = laneX[k];
-  }
   splitBoard(); // (a wide window: the board beside a project's page, see desk.js)
 }
-// The page's title above the header: on Today's list only (a task's page has its own).
-function todayTitle() {
-  const el = $('#ptitle'),
-    d = new Date();
-  if (!el) return;
-  el.hidden = view !== 'today' || path.length > 0 || !workListMode;
-  setIfChanged(
-    el,
-    `<b>${workListMode ? 'All work' : 'Today'}</b><span>${WD[d.getDay()]}, ${d.getDate()} ${MON[d.getMonth()]}</span>`,
-  );
-}
-const colsMQ = matchMedia('(min-width: 1240px)');
-// (not while typing in it: the old arrangement still reads as one column until the next redraw)
-colsMQ.addEventListener('change', () => {
-  const a = document.activeElement;
-  if (view === 'today' && !path.length && !(a && a.matches('input, textarea') && $('#v-today').contains(a)))
-    drawToday();
-});
 function drawToday() {
   $('#v-today')
     .querySelectorAll('details[id]')
     // (the waiting panel is held open on a waiting quest: that isn't a choice to remember)
-    .forEach(d =>
-      (d.id !== 'waitd' || !d.dataset.held) && !(d.id === 'donesec' && findOpened)
-        ? (panels[d.id] = d.open)
-        : 0,
-    );
+    .forEach(d => (d.id !== 'waitd' || !d.dataset.held ? (panels[d.id] = d.open) : 0));
   // Down the path as far as it still leads (a level moved or removed elsewhere cuts it there).
   const ok = [];
   let arr = S.quests;
@@ -362,174 +91,26 @@ function drawToday() {
   // (a task gone from under its page: where it was opened from no longer applies)
   if (ok.length < path.length && typeof returnTo !== 'undefined') returnTo = null;
   path = ok;
-  if (path.length) {
-    todayTitle();
-    return renderNode(find(path[path.length - 1]));
-  }
-  if (!workListMode) {
-    todayTitle();
-    if (projectUtility === 'upcoming') {
-      setHTML(
-        $('#v-today'),
-        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div>${renderUpcoming()}`,
-      );
-    } else if (projectUtility === 'alarms') {
-      setHTML(
-        $('#v-today'),
-        `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div>${renderAlarms()}`,
-      );
-    } else if (view === 'today') go('projects');
-    return;
-  }
-  const work = todayWork(S.quests);
-  todayTitle();
-  const tasks = renderWorkList(work);
-  // The rest, folded: deadlines on steps coming up, what's waited on elsewhere, later work,
-  // repeats, flows and alarms. (Overdue and due-today work is in Needs attention.)
-  const soon = dueSoon().filter(s => s.t.length > 1 && s.n.due > today());
-  let more = '';
-  if (soon.length)
-    more += `<details id="soond"${panels.soond ? ' open' : ''}><summary>Steps due soon <small>${soon.length}</small></summary><div class="soon">${soon
-      .map(
-        ({ n, t }) =>
-          `<button class="soonrow" data-open="${n.id}"><span>${esc(t.join(' / '))}</span>${dueTag(n)}</button>`,
-      )
-      .join('')}</div></details>`;
-  more += renderWaitingSection() + renderUpcoming();
-  const reps = S.templates.filter(repeats);
-  if (reps.length) {
-    more += `<details id="repd"${panels.repd ? ' open' : ''}><summary>Repeating tasks <small>${reps.length}</small></summary>`;
-    reps.forEach(t => {
-      more += `<div class="rep"><span>${esc(t.text)}${t.monthDay ? ` <small class="hint">(also monthly on the ${ord(t.monthDay)})</small>` : ''}</span><div class="days">`;
-      WEEK.forEach(
-        i =>
-          (more += `<button class="day" data-rep="${t.id}" data-wd="${i}" aria-pressed="${t.days.includes(i)}" aria-label="${WD[i]}">${WD[i].slice(0, 2)}</button>`),
-      );
-      more += '</div></div>';
-    });
-    more += '</details>';
-  }
-  more += quickActions() + renderAlarms();
-  // The same sections either way, composed for the screen. On a phone, down the page: what needs
-  // attention, the Top 3, what's carried over, what's scheduled, what it's waiting on (above the
-  // list, so a long day doesn't bury it), Today's tasks, then the rest folded. On a wide screen, two
-  // columns: what you work through on the left under the header (Top 3, the list); what needs
-  // you, what's at a time and what you're waiting on down the right.
-  // (Release H: each a part of its own, kept as it is on the page while it reads the same)
-  const hash = x => (x ? withHash(x) : ''),
-    att = hash(renderAttention()),
-    top3 = renderTop3() + hash(renderCarried()),
-    sched = hash(renderScheduledToday()),
-    wait = hash(renderWaitingToday()),
-    rest = hash(more ? `<section class="todaymore" aria-label="More on Today">${more}</section>` : '');
-  const h = colsMQ.matches
-    ? `<div class="tmain">${top3 + tasks + rest}</div><div class="tside">${att + sched + wait}</div>`
-    : todayJump(work, sched, wait) + att + top3 + sched + wait + tasks + rest;
-  setHTML($('#v-today'), h);
-  if (workListMode) applyFind();
-}
-function renderWorkList(work) {
-  rowRank = new Map(top3Ids().map((id, i) => [id, i + 1]));
-  const asBoard = todayView === 'board' && work.length;
-  const shown = filteredWork(work);
-  const tasks =
-    listHead('Project tasks', asBoard ? [] : work, S.quests.length > 0) +
-    listFilter(work) +
-    (asBoard ? board(shown) : list(shown, true));
-  if (!S.quests.length)
-    return (
-      tasks +
-      '<div class="slot">No tasks. <button class="linkbtn" data-goto="inbox">Capture in the Inbox</button>, then move items here.</div>'
+  if (path.length) return renderNode(find(path[path.length - 1]));
+  // No task's page: the Upcoming page, or back to Projects (a task gone from under its page).
+  if (projectUtility === 'upcoming')
+    setHTML(
+      $('#v-today'),
+      `<div class="crumbs"><button data-goto="projects">&lsaquo; Projects</button></div>${renderUpcoming()}`,
     );
-  if (!work.length) return tasks + '<p class="hint nowork">Nothing to act on now.</p>';
-  if (!shown.length)
-    return (
-      tasks +
-      '<p class="hint nowork">No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>'
-    );
-  if (findOn(work))
-    return (
-      tasks +
-      '<p class="hint nowork tnomatch" hidden>No tasks match. <button class="linkbtn" data-tfilter="all" data-tfindclear="1">Show all</button></p>'
-    );
-  return tasks;
+  else if (view === 'today') go('projects');
 }
-// (Release H) On one column: a line at the top of Today saying what's on it further down, each a
-// tap to its section, so Today's tasks are one tap from the first screen however busy the day.
-// The sections themselves are unchanged. (Two columns show everything at once: not there.)
-function todayJump(work, sched, wait) {
-  const left = work.filter(q => !isDone(q)).length,
-    parts = [
-      sched && ['schedhead', 'Scheduled', S.quests.filter(isScheduled).length],
-      wait && ['waithead', 'Waiting', todayWaiting().length],
-      work.length && ['taskshead', 'Tasks', left],
-    ].filter(Boolean);
-  if (parts.length < 2) return '';
-  return `<div class="tjump chips" role="navigation" aria-label="On Today">${parts.map(([id, label, k]) => `<button class="chip" data-jump="${id}" aria-label="Go to ${label}: ${k}">${label} <small>${k}</small><span class="jarrow" aria-hidden="true">↓</span></button>`).join('')}</div>`;
-}
-document.addEventListener('click', e => {
-  const b = e.target.closest('[data-jump]'),
-    h = b && document.getElementById(b.dataset.jump);
-  if (!h) return;
-  // (to the section's bar, the keyboard and a screen reader with it; no animation)
-  h.closest('.sechead').scrollIntoView({ block: 'start' });
-  if (!h.hasAttribute('tabindex')) h.tabIndex = -1;
-  h.focus({ preventScroll: true });
-});
-// Flows (Power Automate Desktop) as a strip of chips: things you do, so they live on Today.
-// (`bare`: the buttons alone, for a page whose section already says what they are)
-function quickActions(bare = false) {
+// Flows (Power Automate Desktop) as a strip of chips, for Knowledge's Processes.
+function quickActions() {
   if (!S.flows.length) return '';
-  const flows = [...S.flows].sort((a, b) => byName(a.name, b.name)),
-    chips = `<div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div>`;
-  if (bare) return chips;
-  return `<details id="flowsd"${panels.flowsd ? ' open' : ''}><summary>Desktop automations <small>${flows.length}</small></summary>${chips}</details>`;
+  const flows = [...S.flows].sort((a, b) => byName(a.name, b.name));
+  return `<div class="flows chips">${flows.map(f => `<a class="chip" href="${esc(f.url)}" data-flow="${f.id}" title="${f.last ? 'Last used ' + esc(whenLabel(f.last)) : 'Not used yet'}">&#9654; ${esc(f.name)}${flowStatus(f)}</a>`).join('')}</div>`;
 }
-// Things being waited on that aren't on Today's list (in the Inbox, or on Upcoming), folded away
-// under it; tasks on the list already say so themselves. The chip at the top opens the full view.
-function renderWaitingSection() {
-  const all = waitingSorted().filter(x => x.inbox || x.start);
-  if (!all.length) return '';
-  return `<details id="waitsec"${panels.waitsec ? ' open' : ''}><summary>Also waiting on others <small>${all.length}</small></summary>${waitingRows(all)}<button class="linkbtn" data-goto="waiting">Open Waiting</button></details>`;
-}
-
-// What needs attention: one line at the top of Today, saying how many and of what kind, that
-// opens to the items themselves (the same list as the Command Centre's, so the counts agree).
-// Failures needing intervention are shown under it straight away (one tap to the failed stage);
-// the rest are folded in it. Beside it, the way to the Command Centre. Opening it acknowledges
-// nothing.
-function renderAttention() {
-  const items = attentionItems(),
-    cc = '<button class="linkbtn attcc" data-goto="ops">Command Centre &rsaquo;</button>';
-  if (!items.length) return `<div class="attn attnone"><span>Nothing needs attention</span>${cc}</div>`;
-  // (Release G: compact. The count and what kind, the one that matters most with its action,
-  // then the rest a tap away: failures first, then overdue, chases due, due today, the rest; the
-  // same order as the Command Centre's. Open or folded is remembered on this device.)
-  const order = [...items].sort((a, b) => a.sev - b.sev),
-    [first, ...rest] = order;
-  // (a heading, as Top 3, Scheduled and Waiting are: the first thing a screen reader's heading list
-  // finds on Today)
-  const sum = `<b role="heading" aria-level="2">Needs attention <span class="attn-n">${items.length}</span></b><small>${attentionCounts(items)}</small>`;
-  return `<div class="attn"><div class="attsum sev${first.sev}" id="attsum"><div class="attsumline">${sum}</div></div><div class="attlist box attfail attfirst">${attentionRow(first)}</div>${
-    rest.length
-      ? `<details id="attd" class="attmore"${attnOpen() ? ' open' : ''}><summary>${rest.length} more</summary><div class="attlist box">${rest.map(attentionRow).join('')}</div></details>`
-      : ''
-  }${cc}</div>`;
-}
-const attnOpen = () => foldOpen('attd');
 // (a summary just written in a one-line box: three lines once left, so none of it is cut off)
 document.addEventListener('focusout', e => {
   if (e.target.id === 'fsum' && e.target.value.trim()) e.target.rows = 3;
 });
-let findTimer = 0;
-document.addEventListener('input', e => {
-  if (e.target.id !== 'tfind') return;
-  todayFind = e.target.value.slice(0, 80);
-  clearTimeout(findTimer);
-  findTimer = setTimeout(applyFind, 80);
-});
-
-/* carried over: tasks on Today for STALE days or more get a decision each morning */
+/* carried over: tasks on Projects for STALE days or more get a decision in the weekly review */
 const STALE = 3;
 const ageOf = n => (n.since ? daysBetween(n.since, today()) : 0);
 // (Not one only waiting on others: every step left is waiting.)
@@ -539,14 +120,7 @@ const carried = () =>
   S.quests.filter(
     q => !isDone(q) && !q.wait && !q.scheduled && !onlyWaiting(q) && ageOf(q) >= STALE && q.kept !== today(),
   );
-function renderCarried() {
-  // One line, folded: open it to decide on each (the weekly review asks too).
-  const qs = carried();
-  return qs.length
-    ? `<details id="carrd" class="carried box"${panels.carrd ? ' open' : ''}><summary>${plural(qs.length, 'task')} carried over <small>for a while: keep, move or delete</small></summary>${carriedRows(qs)}</details>`
-    : '';
-}
-// A carried-over task with its decisions (also used by the weekly review).
+// A carried-over task with its decisions.
 function carriedRows(qs) {
   const b = (attrs, label) => `<button class="chip" ${attrs}>${label}</button>`;
   return qs
@@ -559,10 +133,11 @@ function carriedRows(qs) {
 
 /* upcoming: top-level tasks scheduled for a later day (S.later, each with a start date) */
 const nextMonday = () => shift(today(), (8 - new Date().getDay()) % 7 || 7);
-function laterPicker(kind, id) {
+// `dateOnly`: on a task's page, where tomorrow and next week are in its actions (its ⋯).
+function laterPicker(kind, id, dateOnly) {
   const b = (when, label) =>
     `<button class="chip" data-sched="${id}" data-kind="${kind}" data-when="${when}">${label}</button>`;
-  return `<div class="later"><span>Do later:</span>${b(shift(today(), 1), 'Tomorrow')}${b(nextMonday(), 'Next Mon')}<input type="date" class="fld" data-schedpick="${id}" data-kind="${kind}" min="${shift(today(), 1)}" aria-label="Do on a later date"></div>`;
+  return `<div class="later"><span>${dateOnly ? 'Do later, from:' : 'Do later:'}</span>${dateOnly ? '' : b(shift(today(), 1), 'Tomorrow') + b(nextMonday(), 'Next Mon')}<input type="date" class="fld" data-schedpick="${id}" data-kind="${kind}" min="${shift(today(), 1)}" aria-label="Do on a later date"></div>`;
 }
 function renderUpcoming() {
   if (!S.later.length) return '';
@@ -612,11 +187,7 @@ function renderNode({ n, parents }) {
     q = parents[0] || n; // (the quest: a step's page shares its resources and saved place)
   // (opened from another view: the way back names it)
   const from =
-    typeof atReturn === 'function' && atReturn()
-      ? returnTo.name || RETURN_NAME[returnTo.view]
-      : workListMode
-        ? 'Today'
-        : 'Projects';
+    typeof atReturn === 'function' && atReturn() ? returnTo.name || RETURN_NAME[returnTo.view] : 'Projects';
   let h = `<div class="crumbs" role="navigation" aria-label="Breadcrumb"><button data-crumb="-1">&lsaquo; ${from}</button>`;
   parents.forEach((p, i) => (h += `<span>/</span><button data-crumb="${i}">${esc(p.text)}</button>`));
   // The facts: what's set on this task, each a tap to change. First what you're here for: how
@@ -669,16 +240,17 @@ function renderNode({ n, parents }) {
   // The steps come first: they're what you work through. (A task has steps; a step doesn't.)
   if (top) {
     h += listHead('Steps', n.children);
-    h += list(n.children, false, true);
+    h += list(n.children);
     h += `<form class="addrow" id="sform" data-parent="${n.id}"><input id="sin" maxlength="120" placeholder="Add a step" aria-label="New step" autocomplete="off"><button class="btn">Add</button></form>`;
   }
   if (top)
     h += `<button class="linkbtn project-detail-history" aria-haspopup="dialog" data-project-history="${n.id}">History</button>`;
   // Everything else, folded away.
-  h += `<details id="mored" class="more"${panels.mored ? ' open' : ''}><summary>More: notes, deadline, ${top ? 'do later, repeat, ' : ''}move…</summary>`;
-  if (top) h += laterPicker('q', n.id);
+  // (renaming, moving to the Inbox and deleting are in its actions, the ⋯ at the foot)
+  h += `<details id="mored" class="more"${panels.mored ? ' open' : ''}><summary>More: notes, deadline${top ? ', do later, repeat' : ''}</summary>`;
+  if (top) h += laterPicker('q', n.id, true);
   h += `<details id="fdet"${(panels.fdet ?? !!n.notes) ? ' open' : ''}><summary>Notes and deadline</summary>
-    ${projectEditorFields(n, ['fname', 'fdue', 'fnotes'])}
+    ${projectEditorFields(n, ['', 'fdue', 'fnotes'])}
     ${top ? '' : `<label class="optbox"><input type="checkbox" data-field="opt" data-id="${n.id}" ${n.opt ? 'checked' : ''}>Optional</label>`}
     </details>`;
   if (top) {
@@ -694,7 +266,6 @@ function renderNode({ n, parents }) {
       <label class="f" for="fmonth">Also monthly, on day</label><select class="fld" id="fmonth" data-field="month" data-id="${n.id}"><option value="0">Not monthly</option>${Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${md === i + 1 ? ' selected' : ''}>${ord(i + 1)}${i + 1 > 28 ? ' (or last day)' : ''}</option>`).join('')}</select>
       </details>`;
   }
-  h += `<div class="links"><button class="linkbtn" data-toinbox="${n.id}">Move to Inbox</button><button class="dellink" data-del="${n.id}">Delete this task</button></div>`;
   h += '</details>';
   // Always to hand: the one thing to do next (see primaryAction), a tick for a step or a task
   // without steps, and the rest of its actions.

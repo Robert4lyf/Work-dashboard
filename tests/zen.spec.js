@@ -56,8 +56,10 @@ test('task actions can focus a task other than the selection on Focus', async ({
   // An older pick on the Focus tab doesn't override an explicit task action.
   await app.setState(s => (s.focusQ = s.quests[1].id));
   await page.reload();
-  await page.getByRole('button', { name: 'Actions: Report' }).click();
-  await page.getByRole('button', { name: 'Focus on this' }).click();
+  await app.openQuest('Report');
+  await page.getByRole('button', { name: 'More actions' }).click();
+  await page.locator('#sheet').getByRole('button', { name: 'Focus on this' }).click();
+  await expect(page.locator('#v-zen')).toBeVisible();
   await expect(page.locator('.zt')).toHaveText('Report');
 });
 
@@ -68,11 +70,11 @@ test('Focus on another task while a session is paused asks first: back to it, or
   await app.addQuest('Report');
   await app.addQuest('Email');
   const email = (await app.state()).quests.find(q => q.text === 'Email').id;
-  await page.evaluate(id => {
-    S.top3 = { day: today(), ids: [S.quests[0].id, id] };
-    save();
-    renderAll();
-  }, email);
+  // (Focus on Email: the button always to hand on its page)
+  const focusEmail = async () => {
+    await app.openQuest('Email');
+    await page.click(`#v-today .qfoot [data-zen][data-q="${email}"]`);
+  };
   await page.keyboard.press('Escape');
   await page.keyboard.press('z');
   await expect(page.locator('.zt')).toHaveText('Report');
@@ -81,7 +83,7 @@ test('Focus on another task while a session is paused asks first: back to it, or
   await page.click('#v-zen [data-pause]');
   await page.click('#zenexit');
   // Focus on Email: not Report's session, quietly.
-  await page.click(`.top3 [data-zen][data-q="${email}"]`);
+  await focusEmail();
   await expect(page.locator('#sheettitle')).toHaveText('Switch focus?');
   await expect(page.locator('#sheet')).toContainText('Report has a paused session (3 min)');
   await page.click('#sheet [data-sheetans="back"]');
@@ -89,12 +91,13 @@ test('Focus on another task while a session is paused asks first: back to it, or
   await expect(page.locator('#zclock')).toHaveText('22:00');
   await page.click('#zenexit');
   // Cancel: nothing changes.
-  await page.click(`.top3 [data-zen][data-q="${email}"]`);
+  await focusEmail();
+  await expect(page.locator('#sheettitle')).toHaveText('Switch focus?');
   await page.click('#sheet [data-sheetclose]:not(.sheetback)');
   await expect(page.locator('#v-zen')).toBeHidden();
   expect((await app.state()).timer).not.toBeNull();
   // Save and switch: Report's 3 minutes are kept, Email is in front.
-  await page.click(`.top3 [data-zen][data-q="${email}"]`);
+  await focusEmail();
   await page.click('#sheetok');
   await expect(page.locator('.zt')).toHaveText('Email');
   const s = await app.state();

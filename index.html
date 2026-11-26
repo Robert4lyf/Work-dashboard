@@ -24,7 +24,6 @@
   </head>
   <body>
     <div class="wrap">
-      <div class="ptitle" id="ptitle" role="heading" aria-level="1" hidden></div>
       <header class="page-header">
         <h1 id="page-title">Projects</h1>
         <div class="header-timer" id="headerTimer"></div>
@@ -53,7 +52,7 @@
       <div class="tabs" id="tabs">
         <button data-v="projects" aria-current="page">Projects</button>
         <button data-v="inbox">Inbox<span class="badge" id="inboxBadge" hidden></span></button>
-        <button data-v="knowledge">Knowledge<span class="badge" id="waitBadge" hidden></span></button>
+        <button data-v="knowledge">Knowledge</button>
         <button data-v="review">
           Review<span class="dot" id="reviewDot" hidden role="img" aria-label="weekly review due"></span>
         </button>
@@ -70,7 +69,6 @@
       </div>
     </nav>
     <section id="v-zen" hidden aria-label="Single-task mode"></section>
-    <section id="v-alarm" hidden aria-label="Alarm" role="alertdialog" aria-modal="true"></section>
     <div class="toast" id="toast" role="status"></div>
     <script src="config.js"></script>
     <script
@@ -100,10 +98,8 @@
     <script src="js/notes.js"></script>
     <script src="js/knowledge.js"></script>
     <script src="js/search.js"></script>
-    <script src="js/alarms.js"></script>
     <script src="js/actions.js"></script>
     <script src="js/resume.js"></script>
-    <script src="js/top3.js"></script>
     <script src="js/links.js"></script>
     <script src="js/triage.js"></script>
     <script src="js/routes.js"></script>

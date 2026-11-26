@@ -66,7 +66,6 @@ function opsSyncLine() {
    workflow run launched is part of that run (its failure is the run's failed stage, its details
    a tap away there), found by the run's own reference to it, never by matching names. Opening the
    list acknowledges nothing: an item goes when it's resolved, or acknowledged where it's dealt with. */
-const ATT_SEV = ['Failed', 'Overdue', 'Today', 'Reminder'];
 // The workflow run an execution belongs to (it launched it), if any.
 function execRun(x) {
   return S.wruns.find(
@@ -165,15 +164,6 @@ function attentionItems() {
 }
 // (the name the routines and the day's summary use)
 const opsAttention = attentionItems;
-// A line saying what the items are: "1 failed · 2 overdue · 1 today".
-function attentionCounts(items) {
-  const n = [0, 0, 0, 0];
-  items.forEach(i => n[i.sev]++);
-  return ['failed', 'overdue', 'today', n[3] === 1 ? 'reminder' : 'reminders']
-    .map((w, i) => (n[i] ? `${n[i]} ${w}` : ''))
-    .filter(Boolean)
-    .join(' · ');
-}
 // One item as a row: what it is, why, and (on the right) what tapping it does.
 function attentionRow(i) {
   // (not a .row in a .list: those are Today's tasks)
@@ -215,46 +205,6 @@ function opsProgress() {
     .filter(q => q.resume && canAct(q))
     .sort((a, b) => b.resume.at - a.resume.at)
     .forEach(q => rows.push({ text: q.text, sub: 'Saved place: ' + q.resume.note, open: q.id }));
-  return rows;
-}
-function opsComing() {
-  const f = allocate(7),
-    rows = [];
-  f.days.slice(1).forEach(day => {
-    const due = [];
-    (function w(ns) {
-      ns.forEach(n => {
-        if (!isDone(n) && n.due === day.d) due.push(n.text);
-        w(n.children);
-      });
-    })(S.quests);
-    S.later.forEach(n => n.start === day.d && due.push(n.text + ' (starts)'));
-    const wfs = S.workflows.filter(w => {
-      if (w.archived) return false;
-      const [y, m, dd] = day.d.split('-').map(Number),
-        wd = new Date(y, m - 1, dd).getDay(),
-        end = new Date(y, m, 0).getDate();
-      return w.days.includes(wd) || (w.monthDay && (w.monthDay === dd || (w.monthDay > end && dd === end)));
-    });
-    const chase = waitingNodes()
-      .filter(x => x.n.wait.due === day.d)
-      .map(x => x.n.text);
-    if (!day.load && !due.length && !wfs.length && !chase.length) return;
-    rows.push({
-      text: dayLabel(day.d),
-      sub: [
-        day.cap || day.load
-          ? `${hm(day.load)} planned of ${hm(day.cap)}${day.load > day.cap ? ' (over)' : ''}`
-          : '',
-        due.length ? 'due: ' + due.join(', ') : '',
-        wfs.length ? 'processes: ' + wfs.map(w => w.name).join(', ') : '',
-        chase.length ? 'chase: ' + chase.join(', ') : '',
-      ]
-        .filter(Boolean)
-        .join(' · '),
-      over: day.load > day.cap,
-    });
-  });
   return rows;
 }
 function opsOutcomes() {
@@ -324,7 +274,7 @@ function opsRow(r) {
                 ? `data-rsub="${r.rsub}"`
                 : '';
   const inner = `<span>${esc(r.text)}</span><small>${esc(r.sub)}</small>`;
-  return `<div class="row oprow ${r.k || ''}${r.over ? ' over' : ''}">${attrs ? `<button class="open" ${attrs}>${inner}</button>` : `<div class="open">${inner}</div>`}</div>`;
+  return `<div class="row oprow ${r.k || ''}">${attrs ? `<button class="open" ${attrs}>${inner}</button>` : `<div class="open">${inner}</div>`}</div>`;
 }
 function opsSection(title, rows, empty, extra = '') {
   return `<section class="opsec"><div class="sechead"><h2>${title}${rows.length ? ` <small>${rows.length}</small>` : ''}</h2>${extra}</div>${rows.length ? `<div class="list box">${rows.map(opsRow).join('')}</div>` : `<p class="hint">${empty}</p>`}</section>`;
@@ -362,7 +312,6 @@ function renderOps() {
   if (!$('#v-ops')) return;
   const att = attentionItems(),
     prog = opsProgress(),
-    coming = opsComing(),
     out = opsOutcomes();
   let h = `<button class="linkbtn" data-goto="projects">&lsaquo; Projects</button><p class="hint opsync">${opsSyncLine()}</p>`;
   // Operations first (what needs you, then what's under way); with neither, one quiet line.
@@ -379,14 +328,6 @@ function renderOps() {
       '',
       `<button class="linkbtn" data-rsub="insights">Insights</button>`,
     );
-  // What's coming, briefly: the Forecast has the rest.
-  if (coming.length)
-    h += opsSection(
-      'Coming up',
-      coming.slice(0, 3),
-      '',
-      `<button class="linkbtn" data-rsub="forecast">${coming.length > 3 ? `All ${coming.length} days in Forecast` : 'Forecast'}</button>`,
-    );
   // The two checklists: lists of things to open, one tap each (nothing runs on its own).
   h += `<section class="opsec"><div class="sechead"><h2>Checklists</h2></div><div class="acts opsroutines"><button class="btn sm" data-routine="start">Morning checklist</button><button class="btn sm" data-routine="finish">End-of-day checklist</button></div></section>`;
   setHTML($('#v-ops'), h);
@@ -395,8 +336,7 @@ function routineSheet(kind) {
   const t = today(),
     f = allocate(7),
     att = opsAttention(),
-    nx = recommend(),
-    ids = typeof top3Ids === 'function' ? top3Ids() : [];
+    nx = recommend();
   let items;
   if (kind === 'start')
     items = [
@@ -404,7 +344,6 @@ function routineSheet(kind) {
         ? ['Sync now', 'data-opssync="1"', navigator.onLine ? '' : 'offline']
         : null,
       [`Needs attention: ${att.length ? plural(att.length, 'item') : 'nothing'}`, 'data-goto="ops"', ''],
-      [ids.length ? 'Top 3 chosen' : 'Pick your Top 3', 'data-top3pick="1"', ''],
       [
         `Sort the Inbox${S.inbox.length ? ` (${S.inbox.length})` : ''}`,
         'data-goto="inbox"',

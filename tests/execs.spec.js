@@ -1,5 +1,5 @@
 // Release B: automation execution tracking: launches, reports folded in, the states shown.
-const { test, expect, unfold } = require('./fixtures');
+const { test, expect } = require('./fixtures');
 
 const seed = () => {
   S.flows = [
@@ -11,6 +11,8 @@ const seed = () => {
   save();
   renderAll();
 };
+// A flow's button, among the automations in Knowledge > Processes.
+const chip = id => `#v-knowledge .flows a[data-flow="${id}"]`;
 // A report as the server would store it.
 const ev = (id, flow, status, extra = {}) => ({
   id,
@@ -34,18 +36,15 @@ test('a tap records a launch (never a result); without tracking it is only remem
   app,
   page,
 }) => {
-  await unfold(page, 'flowsd');
-  await page.click('#v-today a[data-flow="f1"]');
+  await app.processes();
+  await page.click(chip('f1'));
   await page.clock.runFor(10); // (the chips redraw once the link has been followed)
   let s = await app.state();
   expect(s.execs).toHaveLength(1);
   expect(s.execs[0]).toMatchObject({ flow: 'f1', q: '', status: 'requested', ev: [] });
   expect(s.flows[0].last).toBeGreaterThan(0);
-  await expect(page.locator('#v-today a[data-flow="f1"] .xst')).toHaveText('…');
-  await expect(page.locator('#v-today a[data-flow="f1"] .xst')).toHaveAttribute(
-    'title',
-    /Launched, no word yet/,
-  );
+  await expect(page.locator(chip('f1') + ' .xst')).toHaveText('…');
+  await expect(page.locator(chip('f1') + ' .xst')).toHaveAttribute('title', /Launched, no word yet/);
   // From a task's resources: the launch belongs to the task.
   await app.openQuest('Reporting');
   await page.click('#resd a[data-flow="f1"]');
@@ -72,8 +71,8 @@ test('reports fold in: running then a result; duplicates and out-of-order report
   app,
   page,
 }) => {
-  await unfold(page, 'flowsd');
-  await page.click('#v-today a[data-flow="f1"]');
+  await app.processes();
+  await page.click(chip('f1'));
   await page.clock.runFor(10);
   const x = (await app.state()).execs[0].id;
   const fold = evs => page.evaluate(evs => evs.map(e => foldExecEvent(e)), evs);
@@ -98,8 +97,10 @@ test('reports fold in: running then a result; duplicates and out-of-order report
   s = await app.state();
   expect(s.execs[0]).toMatchObject({ status: 'failed', msg: 'Step 4 failed' });
   await page.evaluate(() => renderAll());
-  await expect(page.locator('#v-today .attn [data-xdet]')).toContainText('Automation failed');
-  await expect(page.locator('#v-today a[data-flow="f1"] .xst')).toHaveText('✗');
+  await expect(page.locator(chip('f1') + ' .xst')).toHaveText('✗');
+  // (the failure itself is in the Command Centre's Needs attention)
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist [data-xdet]')).toContainText('Automation failed');
   // A report with no execution of its own: an execution made for it, marked as not launched here.
   await fold([ev(5, 'f2', 'succeeded')]);
   s = await app.state();
@@ -118,8 +119,8 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
   app,
   page,
 }) => {
-  await unfold(page, 'flowsd');
-  await page.click('#v-today a[data-flow="f1"]');
+  await app.processes();
+  await page.click(chip('f1'));
   await page.clock.runFor(10);
   const x = (await app.state()).execs[0].id;
   await page.evaluate(
@@ -135,8 +136,8 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
       ev(2, 'f1', 'failed', { execution: x, message: 'File not found' }),
     ],
   );
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-xdet]');
+  await app.go('ops');
+  await page.click('#v-ops .attlist [data-xdet]');
   const sheet = page.locator('#sheet .sheetbox');
   await expect(sheet.locator('#sheettitle')).toHaveText('Weekly report');
   await expect(sheet.locator('.xhead')).toContainText('Failed');
@@ -147,17 +148,18 @@ test('a failure is actionable: details, run again, add to the Inbox, copy, ackno
     'ms-powerautomate:/console/flow/run?x=1',
   );
   await page.click('#sheet [data-xcopy]');
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-xdet]');
+  await page.click('#v-ops .attlist [data-xdet]');
   await page.click('#sheet [data-xinbox]');
   let s = await app.state();
   expect(s.inbox[0].text).toBe('Automation failed: Weekly report');
   expect(s.inbox[0].node.notes).toContain('File not found');
   expect(s.execs[0].ack).toBe(1);
-  await expect(page.locator('#v-today [data-xdet]')).toHaveCount(0); // (acknowledged by that)
-  // Run again from the details: a new launch, requested, the old record kept.
+  await expect(page.locator('#v-ops .attlist [data-xdet]')).toHaveCount(0); // (acknowledged by that)
+  // Run again from the details (now under Recent results): a new launch, requested, the old record kept.
+  await page.click('#v-ops .oprow [data-xdet]');
+  await expect(sheet.locator('.xhead')).toContainText('Failed');
   await page.evaluate(() => {
-    document.querySelector('#v-today a[data-flow="f1"]').click();
+    document.querySelector('#sheet a[data-flow="f1"]').click();
   });
   await page.clock.runFor(10);
   s = await app.state();

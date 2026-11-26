@@ -1,5 +1,5 @@
-// Phase 1 (simplify daily use): Today's hierarchy, one attention list shared with the Command
-// Centre, one rule for what to work on next, and a quieter Command Centre.
+// Phase 1 (simplify daily use): one attention list (the Command Centre's), what a busy day's
+// cards say on Projects, one rule for what to work on next, and a quieter Command Centre.
 const { test, expect } = require('./fixtures');
 const { busyDay } = require('./busyday');
 
@@ -11,49 +11,56 @@ const busy = async (app, page) => {
   await app.setState(busyDay);
   await page.reload();
 };
-const attRows = (page, root) =>
+const attRows = (page, root = '#v-ops .attlist') =>
   page.$$eval(`${root} .attrow`, rs =>
     rs.map(r => [
       r.querySelector('.open > span').textContent,
       r.querySelector('.attgo').textContent.replace(' ›', ''),
     ]),
   );
+const card = (page, id) => page.locator(`#v-projects .project-card[data-qid="${id}"]`);
 
-test('an empty day: one quiet attention line, the Command Centre one tap away, no secondary clutter', async ({
-  page,
-}) => {
-  await expect(page.locator('#v-today .attn')).toHaveText(/Nothing needs attention/);
-  // (only the alarms, folded, are below the list)
-  await expect(page.locator('#v-today .todaymore details')).toHaveCount(1);
-  await page.click('#v-today .attcc');
+test('an empty day: the Command Centre is one quiet line, no secondary clutter', async ({ app, page }) => {
+  await expect(page.locator('#v-projects .project-card')).toHaveCount(0);
+  await app.go('ops');
   await expect(page.locator('#v-ops .opsquiet')).toHaveText(
     'All clear: nothing needs you and nothing is running.',
   );
+  await expect(page.locator('#v-ops .attlist')).toHaveCount(0);
   // Empty operational sections aren't drawn; Quick launch and the checklists are.
   await expect(page.getByRole('heading', { name: 'Command Centre', level: 1 })).toBeVisible();
   await expect(page.locator('#v-ops h2')).toHaveText(['Quick launch', 'Checklists']);
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today')).toBeVisible();
+  await expect(page.locator('#v-projects')).toBeVisible();
 });
 
-test('busy day: one attention summary, ordered by urgency; a workflow and its own flow failure are one item', async ({
+test('busy day: one attention list, ordered by urgency; a workflow and its own flow failure are one item', async ({
   app,
   page,
 }) => {
   await busy(app, page);
-  const sum = page.locator('#attsum');
-  await expect(sum).toContainText('Needs attention 7');
-  await expect(sum).toContainText('2 failed · 3 overdue · 2 today');
-  await expect(sum).toHaveClass(/sev0/);
-  // (Release G: compact) The one that matters most is shown straight away, with its action; the
-  // rest are folded under "6 more" until opened. Every item says what tapping it does.
-  await expect(page.locator('.attfirst .attrow')).toHaveCount(1);
-  await expect(page.locator('.attfirst .attrow')).toBeVisible();
-  await expect(page.locator('#attd > summary')).toHaveText('6 more');
-  await expect(page.locator('#attd .attrow').first()).toBeHidden();
-  await page.click('#attd > summary');
-  expect(await attRows(page, '.attfirst')).toEqual([['Month-end report', 'Open the failed step']]);
-  expect(await attRows(page, '#attd')).toEqual([
+  // On Projects, each card says what's pressing on it.
+  await expect(card(page, 'q1').locator('.project-meta .tag.late')).toHaveText('Overdue');
+  await expect(card(page, 'q2').locator('.project-meta .tag.now')).toHaveText('Due today');
+  await expect(card(page, 'q6').locator('.project-meta .tag.late')).toHaveText('Step overdue');
+  await expect(card(page, 'q3').locator('.project-wait')).toHaveText('Waiting on Emily · Chase now');
+  // (a card previews three steps: Office move's waiting one is its fourth, shown once it's the
+  // active project, where what's being waited on comes straight after the next step)
+  await expect(card(page, 'q8').locator('.project-wait')).toHaveCount(0);
+  await expect(card(page, 'q8').locator('.project-actions [data-open]')).toHaveText('1 more step');
+  await card(page, 'q8').locator('[data-project-activate]').click();
+  await expect(page.locator('.active-project .project-card')).toHaveAttribute('data-qid', 'q8');
+  await expect(card(page, 'q8').locator('.project-step-name > span')).toHaveText([
+    'Next · Draft',
+    'Floor plan sign-off',
+    'Review',
+  ]);
+  await expect(card(page, 'q8').locator('.project-wait')).toHaveText('Waiting on Laura · Chase today');
+  // The Command Centre lists them all, the most urgent first. Every item says what tapping it does.
+  await app.go('ops');
+  await expect(page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 7');
+  expect(await attRows(page)).toEqual([
+    ['Month-end report', 'Open the failed step'],
     ['Tidy downloads', 'Open automation details'],
     ['Fletcher Way', 'Open task'],
     ['Client onboarding: Review', 'Open task'], // (Release G: a step named with its task)
@@ -61,14 +68,15 @@ test('busy day: one attention summary, ordered by urgency; a workflow and its ow
     ['Filbert Close', 'Open task'],
     ['Floor plan sign-off', 'Open in Waiting'],
   ]);
+  // (2 failed · 3 overdue · 2 today)
+  await expect(page.locator('#v-ops .attlist .attrow.sev0')).toHaveCount(2);
+  await expect(page.locator('#v-ops .attlist .attrow.sev1')).toHaveCount(3);
+  await expect(page.locator('#v-ops .attlist .attrow.sev2')).toHaveCount(2);
+  await expect(page.locator('#v-ops .attlist .attrow').first()).toBeVisible();
   // (Export report's failure is the Month-end run's failed stage: not a second emergency.)
-  await expect(page.locator('#v-today .attn')).not.toContainText('Export report');
-  // The Command Centre shows the same items: the same count.
-  await page.click('#v-today .attcc');
-  expect(await attRows(page, '#v-ops')).toEqual(
-    await page.evaluate(() => attentionItems().map(i => [i.text, i.act])),
-  );
-  await expect(page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 7');
+  await expect(page.locator('#v-ops .attlist')).not.toContainText('Export report');
+  // The list is the app's one attention list: the same items, the same count.
+  expect(await attRows(page)).toEqual(await page.evaluate(() => attentionItems().map(i => [i.text, i.act])));
   // Recent results don't repeat what still needs attention.
   await expect(page.locator('#v-ops')).not.toContainText('Recent results');
   // Opening the list acknowledged nothing.
@@ -77,21 +85,21 @@ test('busy day: one attention summary, ordered by urgency; a workflow and its ow
   expect(s.execs.find(x => x.id === 'x2').ack).toBeUndefined();
 });
 
-test('acting on items: the failed stage opens; acknowledging or resolving updates both counts; a sync redraw keeps the list open', async ({
+test('acting on items: the failed stage opens; acknowledging or resolving updates the count, on a sync redraw too', async ({
   app,
   page,
 }) => {
   await busy(app, page);
-  await page.click('#attd > summary');
-  await page.click('.attfirst [data-wfopen="r1"]');
+  await app.go('ops');
+  await page.click('#v-ops .attlist [data-wfopen="r1"]');
   await expect(page.locator('.werr')).toContainText('Timed out logging in');
-  // Back returns to Today (where it was opened from), not to the workflow list.
-  await expect(page.locator('[data-wfback]')).toHaveText('‹ Today');
+  // Back returns to the Command Centre (where it was opened from), not to the workflow list.
+  await expect(page.locator('[data-wfback]')).toHaveText('‹ Command Centre');
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today')).toBeVisible();
-  await expect(page.locator('#attd')).toHaveAttribute('open', '');
+  await expect(page.locator('#v-ops')).toBeVisible();
+  await expect(page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 7');
   // Changes from another device arrive as a background redraw: acknowledged run, flow and an
-  // overdue task finished. The panel stays open and the counts agree everywhere.
+  // overdue task finished. The list and its count follow, here and on Projects.
   await page.evaluate(() => {
     S.wruns.find(r => r.id === 'r1').ack = 1;
     S.execs.find(x => x.id === 'x2').ack = 1;
@@ -99,14 +107,20 @@ test('acting on items: the failed stage opens; acknowledging or resolving update
     S.quests[1].children.forEach(c => (c.done = true));
     inBackground(renderAll);
   });
-  await expect(page.locator('#attd')).toHaveAttribute('open', '');
-  await expect(page.locator('#attsum')).toContainText('Needs attention 4');
-  await expect(page.locator('#attsum')).not.toHaveClass(/sev0/);
-  await page.evaluate(() => go('ops'));
   await expect(page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 4');
+  await expect(page.locator('#v-ops .attlist .attrow.sev0')).toHaveCount(0);
+  expect(await attRows(page)).toEqual([
+    ['Client onboarding: Review', 'Open task'],
+    ['Hear back on figures', 'Open in Waiting'],
+    ['Filbert Close', 'Open task'],
+    ['Floor plan sign-off', 'Open in Waiting'],
+  ]);
   // Acknowledged failures are results now.
   await expect(page.locator('#v-ops')).toContainText('Recent results');
   await expect(page.locator('#v-ops')).toContainText('Process failed');
+  await app.go('projects');
+  await expect(page.locator('#projects-done .project-card h2')).toHaveText(['Fletcher Way']);
+  await expect(card(page, 'q1').locator('.tag.late')).toHaveCount(0);
 });
 
 test('a flow failure of its own stays its own item; a stale launch inside a run is the run', async ({
@@ -147,49 +161,63 @@ test('a flow failure of its own stays its own item; a stale launch inside a run 
     ];
   });
   await page.reload();
-  expect(await attRows(page, '.attfirst')).toEqual([['Export report', 'Open automation details']]);
-  expect(await attRows(page, '#attd')).toEqual([['Report run', 'Open process']]);
+  await app.go('ops');
+  expect(await attRows(page)).toEqual([
+    ['Export report', 'Open automation details'],
+    ['Report run', 'Open process'],
+  ]);
 });
 
-test('the focus recommendation follows one rule: saved place today, else Top 3, else list order; nothing reordered', async ({
+test('the focus recommendation follows one rule: saved place today, else list order; nothing reordered', async ({
   app,
   page,
 }) => {
   await busy(app, page);
+  const order = await app.order(),
+    ids = (await app.state()).quests.map(q => q.id);
   // A place saved an hour ago comes first.
   expect(await page.evaluate(() => recommend()?.why)).toBe('place');
   expect(await page.evaluate(() => recommend()?.q.text)).toBe('Q4 budget report');
-  // An older saved place doesn't take over: Top 3's first task with a step to do does.
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Review'); // (the step it was saved on)
+  // An older saved place doesn't take over: the first task in list order with a step to do does.
   await page.evaluate(() => {
     S.quests[4].resume.at = Date.now() - 3 * 864e5;
     renderAll();
   });
-  expect(await page.evaluate(() => recommend()?.rank)).toBe(1);
-  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Draft');
-  // Focus starts on the same thing.
-  expect(await page.evaluate(() => focusTarget())).toBe('q5a');
-  // #1 waiting on someone, or done: the next priority.
-  await page.evaluate(() => {
-    S.quests[5].wait = { who: 'Sam', note: '', due: '', since: today() };
-    renderAll();
-  });
-  // (Release E: numbered as the Top 3 card shows them, where the waiting one is set aside)
-  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Q4 budget report');
-  await page.evaluate(() => {
-    S.top3.ids = ['q9'];
-    S.quests[9].children.forEach(c => (c.done = true));
-    S.quests[9].done = true;
-    renderAll();
-  });
-  // No Top 3 task with a step left: list order, as before.
+  expect(await page.evaluate(() => recommend()?.why)).toBe('list');
   expect(await page.evaluate(() => recommend()?.q.text)).toBe('Walsingham sale');
-  const order = await app.order();
+  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Review'); // (its Draft is ticked)
+  // Focus starts on the same thing.
+  expect(await page.evaluate(() => focusTarget())).toBe('q0b');
+  // The first waiting on someone, or scheduled: the next in the list.
+  await page.evaluate(() => {
+    S.quests[0].wait = { who: 'Sam', note: '', due: '', since: today() };
+    renderAll();
+  });
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Fletcher Way');
+  expect(await page.evaluate(() => focusTarget())).toBe('q1a');
+  await page.evaluate(() => {
+    S.quests[1].scheduled = { date: today(), time: '15:00' };
+    renderAll();
+  });
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Filbert Close');
+  // One with a step waiting on someone comes after the rest (Megan finance queries is passed over).
+  await page.evaluate(() => {
+    S.quests[2].wait = { who: 'Sam', note: '', due: '', since: today() };
+    renderAll();
+  });
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Q4 budget report');
+  expect(await page.evaluate(() => recommend()?.why)).toBe('list');
+  // None of this moved anything, on the board or in the saved order.
+  expect(await app.order()).toEqual(order);
   expect(order[0]).toBe('Walsingham sale');
-  // The Top 3 itself is untouched by any of this.
-  expect((await app.state()).top3.ids).toEqual(['q9']);
+  expect((await app.state()).quests.map(q => q.id)).toEqual(ids);
 });
 
-test('a running session wins; changing the Top 3 meanwhile leaves it alone', async ({ app, page }) => {
+test('a running session wins; a place saved on another task meanwhile leaves it alone', async ({
+  app,
+  page,
+}) => {
   await busy(app, page);
   await page.evaluate(() => {
     delete S.quests[4].resume;
@@ -197,53 +225,19 @@ test('a running session wins; changing the Top 3 meanwhile leaves it alone', asy
   });
   await page.keyboard.press('z');
   await page.click('#v-zen [data-zstart]');
-  expect((await app.state()).timer.q).toBe('q5a');
+  expect((await app.state()).timer.q).toBe('q0b');
   // (the header carries the clock, not a recommendation)
   await expect(page.locator('header #hclock')).toHaveCount(1);
-  await page.evaluate(() => setTop3(['q9', 'q5']));
+  await page.evaluate(() => {
+    S.quests[4].resume = { note: 'Totals checked', at: Date.now(), step: 'q4b' };
+    save();
+    renderAll();
+  });
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Q4 budget report');
   await expect(page.locator('header #hclock')).toHaveCount(1);
-  expect((await app.state()).timer.q).toBe('q5a');
-});
-
-test("Today's order: attention, Top 3, what it's waiting on, the work; the rest folded at the end", async ({
-  app,
-  page,
-}) => {
-  await busy(app, page);
-  // (Release H: the line that jumps to each section first)
-  const blocks = await page.$$eval('#v-today > *', els =>
-    els.map(e => e.className.split(' ')[0] || e.tagName.toLowerCase()),
-  );
-  expect(blocks.shift()).toBe('tjump');
-  // (Release F: Waiting above the list on a phone, so a long day doesn't bury it)
-  // (Release G: the list's filter between its title and the list)
-  expect(blocks.slice(0, 6)).toEqual(['attn', 'top3', 'todaysec', 'sechead', 'tfilter', 'list']);
-  await expect(page.locator('#v-today > .todaysec')).toHaveClass(/waitsec2/);
-  expect(blocks[blocks.length - 1]).toBe('todaymore');
-  // Flows, steps due soon and the rest are folded there, still a tap away.
-  const more = page.locator('#v-today .todaymore');
-  await expect(more.locator('#flowsd .flows a')).toHaveCount(3);
-  await expect(more.locator('#flowsd .flows a').first()).toBeHidden();
-  await more.locator('#flowsd > summary').click();
-  await expect(more.locator('#flowsd .flows a').first()).toBeVisible();
-  await expect(more.locator('#soond > summary')).toContainText('Steps due soon');
-  // Overdue and due-today work is in Needs attention, not repeated in Steps due soon.
-  await more.locator('#soond > summary').click();
-  await expect(more.locator('#soond')).not.toContainText('Overdue');
-  // Top 3 and Waiting start on the first screen of a phone (above the tab bar).
-  for (const s of ['#v-today > .top3', '#v-today > .waitsec2']) {
-    const top = await page.locator(s).evaluate(e => e.getBoundingClientRect().top);
-    expect(top).toBeLessThan(844 - 80);
-  }
-});
-
-test('board mode keeps the same summary and Top 3 above it', async ({ app, page }) => {
-  await busy(app, page);
-  await page.click('[data-tview="board"]');
-  await expect(page.locator('#attsum')).toContainText('Needs attention 7');
-  await expect(page.locator('#v-today .top3')).toBeVisible();
-  await expect(page.locator('#v-today .blane')).not.toHaveCount(0);
-  await page.click('[data-tview="list"]');
+  expect((await app.state()).timer.q).toBe('q0b');
+  await expect(page.locator('#v-zen .zt')).toHaveText('Review');
+  expect(await page.evaluate(() => zenTarget().parents[0].id)).toBe('q0');
 });
 
 test('the checklists say what they are; the Command Centre deep link and Android back work', async ({
@@ -265,18 +259,26 @@ test('the checklists say what they are; the Command Centre deep link and Android
 });
 
 for (const width of [320, 360, 390])
-  test(`busy day at ${width}px: nothing scrolls sideways, the summary and its link don't overlap`, async ({
+  test(`busy day at ${width}px: nothing scrolls sideways on Projects, a task's page or the Command Centre`, async ({
     app,
     page,
   }) => {
     await page.setViewportSize({ width, height: 760 });
     await busy(app, page);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    const [a, b] = await Promise.all([
-      page.locator('#attsum b').boundingBox(),
-      page.locator('#v-today .attcc').boundingBox(),
+    const fits = () => page.evaluate(() => document.documentElement.scrollWidth);
+    await expect(page.locator('#v-projects .project-card')).toHaveCount(20);
+    expect(await fits()).toBeLessThanOrEqual(width);
+    // (a card's waiting line and its name don't run off the card)
+    const [c, w] = await Promise.all([
+      card(page, 'q3').boundingBox(),
+      card(page, 'q3').locator('.project-wait').boundingBox(),
     ]);
-    expect(a.x + a.width).toBeLessThanOrEqual(b.x);
+    expect(w.x).toBeGreaterThanOrEqual(c.x);
+    expect(w.x + w.width).toBeLessThanOrEqual(c.x + c.width);
+    await app.openQuest('Megan finance queries');
+    await expect(page.locator('#v-today .row')).toHaveCount(4);
+    expect(await fits()).toBeLessThanOrEqual(width);
     await page.evaluate(() => go('ops'));
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await expect(page.locator('#v-ops .attlist .attrow')).toHaveCount(7);
+    expect(await fits()).toBeLessThanOrEqual(width);
   });

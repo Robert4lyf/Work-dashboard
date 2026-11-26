@@ -1,4 +1,4 @@
-// Release E: scheduled work and waiting on Today, and one rule for what can be acted on now.
+// Release E: scheduled work and waiting on Projects, and one rule for what can be acted on now.
 const { test, expect } = require('./fixtures');
 const { eDay } = require('./releaseedata');
 
@@ -7,68 +7,73 @@ async function day(app, page, at = new Date(2026, 10, 4, 10, 0)) {
   await page.clock.install({ time: at });
   await app.open();
   await app.setState(eDay);
-  // (Release H folds the rest of Scheduled and Waiting on a phone; these tests are about their
-  // rows, so the folds are as a user who has opened them left them: open)
-  await page.evaluate(() => ['sched', 'wait'].forEach(k => localStorage.setItem(`dashboard-${k}-open`, '1')));
   await page.reload();
 }
-const sched = page => page.locator('#v-today .schedrow');
-const waitRows = page => page.locator('#v-today .wrow');
-const listNames = page => page.$$eval('#v-today .list .row .open > span', x => x.map(e => e.textContent));
+const card = (page, id) => page.locator(`#v-projects .project-card[data-qid="${id}"]`);
+// A scheduled project's tag on its card ("Scheduled 14:00").
+const when = (page, id) => card(page, id).locator('.project-meta .tag.sched');
+// The cards of work that isn't finished or put off, scheduled ones among them.
+const openCards = page => page.locator('#active-project-grid .project-card');
+// Where each scheduled task stands (later today, its time gone, today with no time...).
+const stands = (page, ...ids) => page.evaluate(ids => ids.map(id => schedStatus(find(id).n).k), ids);
+const moreActions = page => page.click('.qfoot [aria-label="More actions"]');
 
-test('1–2: a 14:00 meeting is under Scheduled, never the next task; after 14:00 it waits for you to record it', async ({
+test('1–2: a 14:00 meeting says when on its card, and is never the next task; after 14:00 it waits for you to record it', async ({
   app,
   page,
 }) => {
   await day(app, page);
-  await expect(page.locator('#schedhead')).toHaveText('Scheduled 3');
-  await expect(sched(page).locator('.stime')).toHaveText(['10:30', '14:00', 'Any time']);
-  await expect(sched(page).nth(0)).toContainText('Later today');
-  await expect(sched(page).nth(1)).toContainText('Later today');
-  await expect(sched(page).nth(2)).toContainText('Today');
-  // Not in Today's tasks, not recommended, not in the Focus picker, not offered for Top 3.
-  expect(await listNames(page)).not.toContain('Supplier review call');
+  await expect(openCards(page).locator('.tag.sched')).toHaveCount(3);
+  await expect(when(page, 'm1')).toHaveText('Scheduled 10:30');
+  await expect(when(page, 'm2')).toHaveText('Scheduled 14:00');
+  await expect(when(page, 'm3')).toHaveText('Scheduled today');
+  // Later today: nothing to tick on its card yet. A day with no time can be ticked any time.
+  expect(await stands(page, 'm1', 'm2', 'm3')).toEqual(['soon', 'soon', 'today']);
+  await expect(card(page, 'm1').locator('.check')).toHaveCount(0);
+  await expect(card(page, 'm2').locator('.check')).toHaveCount(0);
+  await expect(card(page, 'm3').locator('.check')).toHaveCount(1);
+  // Not recommended, and not in the Focus picker.
   const rec = await page.evaluate(() => recommend().q.text);
   expect(['Team meeting', 'Supplier review call', 'First-aid training']).not.toContain(rec);
   await page.evaluate(() => go('focus'));
   expect(await page.$$eval('#fq option', o => o.map(x => x.textContent).join('|'))).not.toContain(
     'Supplier review call',
   );
-  await page.evaluate(() => go('today'));
-  await page.click('[data-top3pick]');
-  await expect(page.locator('#sheet [data-t3tog="m2"]')).toHaveCount(0);
-  await expect(page.locator('#sheet .t3held')).toContainText('Supplier review call (scheduled)');
-  await page.keyboard.press('Escape');
-  // Its row's actions: done, reschedule, back to ordinary work; no Focus.
-  await page.click('#v-today .schedrow[data-qid="m2"] .qmore');
+  // Its actions: done, reschedule, back to ordinary work; no Focus.
+  await app.openQuest('Supplier review call');
+  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Mark done']);
+  await moreActions(page);
   await expect(page.locator('#sheet .qact')).toHaveText([
-    'Open',
     /^Mark done/,
     /^Reschedule/,
     'Unschedule',
+    'Rename',
     /^Delete/,
   ]);
   await page.keyboard.press('Escape');
+  await page.click('[data-crumb="-1"]');
   // 14:05: still there, unfinished, asking for the outcome. Nothing completes it on its own.
   await page.clock.setFixedTime(new Date(2026, 10, 4, 14, 5));
   await page.evaluate(() => renderAll());
-  await expect(sched(page).nth(0)).toContainText('Time passed');
-  await expect(sched(page).nth(1)).toContainText('Time passed');
+  expect(await stands(page, 'm1', 'm2', 'm3')).toEqual(['passed', 'passed', 'today']);
+  await expect(card(page, 'm1').locator('.check')).toHaveCount(1);
   expect((await app.state()).quests.find(q => q.id === 'm2').done).toBe(false);
-  await page.click('#v-today .schedrow[data-qid="m2"] [data-toggle]');
+  await card(page, 'm2').locator('.check[data-toggle]').click();
   const s = await app.state();
   expect(s.quests.find(q => q.id === 'm2').done).toBe(true);
   expect(s.quests.find(q => q.id === 'm2').scheduled).toEqual({ date: '2026-11-04', time: '14:00' });
-  await expect(sched(page)).toHaveCount(2);
+  await expect(openCards(page).locator('.tag.sched')).toHaveCount(2);
+  await expect(page.locator('#projects-done .project-card[data-qid="m2"]')).toHaveCount(1);
   expect(app.errors).toEqual([]);
 });
 
-test('3–4: scheduled for tomorrow from the task’s actions: on Upcoming with its time, under Scheduled the next morning; rescheduled, then done', async ({
+test('3–4: scheduled for tomorrow from the task’s actions: on Upcoming with its time, among the day’s work the next morning; then rescheduled', async ({
   app,
   page,
 }) => {
   await day(app, page);
-  await page.click('#v-today .row[data-qid="q8"] .qmore'); // Office move
+  await app.openQuest('Office move'); // (q8)
+  await moreActions(page);
   await page.click('#sheet [data-schedset="q8"]');
   await expect(page.locator('#scheddate')).toHaveValue('2026-11-04');
   await page.fill('#scheddate', '2026-11-05');
@@ -80,11 +85,22 @@ test('3–4: scheduled for tomorrow from the task’s actions: on Upcoming with 
   expect(moved.due).toBeFalsy(); // (an appointment isn't a deadline)
   expect(s.quests.some(q => q.id === 'q8')).toBe(false);
   expect(moved.children.map(c => c.id)).toEqual(['q8a', 'q8b', 'q8c', 'q8w']); // (steps, waiting one too, kept)
-  await page.click('#upd > summary');
-  await expect(page.locator('#upd .uprow', { hasText: 'Office move' })).toContainText(
+  // (its page closed with the move: back on the board, where it's under Upcoming)
+  const upcoming = page.locator('#v-projects .project-group', {
+    has: page.getByRole('heading', { name: 'Upcoming' }),
+  });
+  await expect(upcoming.locator('.project-card[data-qid="q8"] .tag.sched')).toHaveText(
     'Scheduled 5 Nov 16:30',
   );
-  // The next morning: back on Today, schedule and all, under Scheduled.
+  await expect(openCards(page).filter({ hasText: 'Office move' })).toHaveCount(0);
+  // Its record says when, and offers to reschedule.
+  await upcoming.locator('.project-card[data-qid="q8"] .project-open').click();
+  await expect(page.locator('#v-project-record .project-record > .hint').first()).toHaveText(
+    'Starts 5 Nov · 16:30',
+  );
+  await expect(page.locator('#v-project-record [data-schedset="q8"]')).toHaveText('Reschedule');
+  await page.click('[data-project-record-back]');
+  // The next morning: back among the day's work, schedule and all.
   await page.clock.setFixedTime(new Date(2026, 10, 5, 8, 0));
   await page.evaluate(() => {
     rollover();
@@ -93,71 +109,112 @@ test('3–4: scheduled for tomorrow from the task’s actions: on Upcoming with 
   s = await app.state();
   expect(s.quests.find(q => q.id === 'q8').scheduled).toEqual({ date: '2026-11-05', time: '16:30' });
   expect(s.quests.find(q => q.id === 'q8').start).toBeUndefined();
-  await expect(page.locator('#v-today .schedrow[data-qid="q8"] .stime')).toHaveText('16:30');
-  await expect(page.locator('#v-today .schedrow[data-qid="m4"] .stime')).toHaveText('09:15');
-  // Rescheduled to later today, then done.
-  await page.click('#v-today .schedrow[data-qid="q8"] .qmore');
+  await expect(openCards(page).filter({ hasText: 'Office move' })).toHaveCount(1);
+  await expect(when(page, 'q8')).toHaveText('Scheduled 16:30');
+  await expect(when(page, 'm4')).toHaveText('Scheduled 09:15');
+  // Rescheduled to later today, from its page.
+  await app.openQuest('Office move');
+  await moreActions(page);
+  await expect(page.locator('#sheet [data-schedset="q8"]')).toContainText('Reschedule');
   await page.click('#sheet [data-schedset="q8"]');
   await page.fill('#schedtime', '17:45');
   await page.click('#sheetok');
-  await expect(page.locator('#v-today .schedrow[data-qid="q8"] .stime')).toHaveText('17:45');
-  await page.evaluate(() => openPath(['q8']));
+  await expect(page.locator('.facts .tag.sched')).toHaveText('Scheduled 17:45');
   await expect(page.locator('.qfoot .btn:not(.qmore)').first()).toHaveText('Reschedule');
+  await page.click('[data-crumb="-1"]');
+  await expect(when(page, 'q8')).toHaveText('Scheduled 17:45');
   expect(app.errors).toEqual([]);
 });
 
-test('5–8: a task only waiting is under Waiting and out of the list, its place kept; one with work left stays; the reply brings it back', async ({
+test('5–8: a task only waiting says so on its card, its place kept; one with work left doesn’t; the reply brings it back', async ({
   app,
   page,
 }) => {
   await day(app, page);
-  const order0 = (await app.state()).quests.map(q => q.id);
-  // Fully waiting: under Waiting, not in Today's tasks.
-  expect(await listNames(page)).not.toContain('Finance system access');
-  const it = waitRows(page).filter({ hasText: 'IT to grant access' });
-  await expect(it).toContainText('Finance system access');
-  await expect(it).toContainText('on IT');
-  await expect(it).toContainText('Chase today');
-  await expect(it.locator('[data-chase]')).toHaveText('Follow up'); // (one action: a follow-up is due)
-  // Partly waiting: still in the list (work left), and its waiting step under Waiting, with its task.
-  expect(await listNames(page)).toContain('Megan finance queries');
-  await expect(waitRows(page).filter({ hasText: 'Hear back on figures' })).toContainText(
-    'Megan finance queries',
+  const order0 = (await app.state()).quests.map(q => q.id),
+    board0 = await app.order();
+  const state = id => page.evaluate(id => taskState(S.quests.find(q => q.id === id)), id);
+  // Fully waiting: its card says so, with who and when to chase; there is nothing to tick.
+  const b1 = card(page, 'b1'); // Finance system access
+  expect(await state('b1')).toBe('waiting');
+  await expect(b1.locator('.project-meta > span').first()).toHaveText('Waiting');
+  await expect(b1.locator('.project-step[data-qid="b1a"]')).toContainText('IT to grant access');
+  await expect(b1.locator('.project-step[data-qid="b1a"] .project-wait')).toHaveText(
+    'Waiting on IT · Chase today',
   );
-  expect(await page.evaluate(() => taskState(S.quests.find(q => q.id === 'q3')))).toBe('actionable');
-  // The reply: the step is resolved (not the task finished), and the task is back in the list.
-  await page.click('#v-today .wrow[data-wid="b1a"] .qmore');
+  await expect(b1.locator('.check')).toHaveCount(0);
+  // (one action on its page: a follow-up is due)
+  await app.openQuest('Finance system access');
+  await expect(page.locator('.qnext')).toContainText('Nothing until you hear back');
+  await expect(page.locator('.qfoot .btn:not(.qmore)')).toHaveText(['Follow up: IT to grant access']);
+  // The Waiting page has it, with its task.
+  await app.go('waiting');
+  const it = page.locator('#v-waiting .row[data-wid="b1a"]');
+  await expect(it).toContainText('IT to grant access');
+  await expect(it).toContainText('in Finance system access');
+  await expect(it).toContainText('from IT');
+  await expect(it).toContainText('Chase today');
+  // Partly waiting: ordinary work (there are steps to do), its waiting step shown with its task.
+  await expect(page.locator('#v-waiting .row[data-wid="q3w"]')).toContainText('in Megan finance queries');
+  await app.go('projects');
+  expect(await state('q3')).toBe('actionable');
+  await expect(card(page, 'q3').locator('.project-meta')).not.toContainText('Waiting');
+  await expect(card(page, 'q3').locator('.project-step[data-qid="q3w"] .project-wait')).toHaveText(
+    'Waiting on Emily · Chase now',
+  );
+  await expect(card(page, 'q3').locator('.check')).toHaveCount(2); // (its two steps to do)
+  // The reply: the step is resolved (not the task finished), and the task is ordinary work again.
+  await b1.locator('.project-wait[data-wact="b1a"]').click();
   await page.click('#sheet [data-waitclear="b1a"]');
   const s = await app.state();
-  const b1 = s.quests.find(q => q.id === 'b1');
-  expect(b1.done).toBe(false);
-  expect(b1.children[0].wait).toBeUndefined();
+  const q = s.quests.find(q => q.id === 'b1');
+  expect(q.done).toBe(false);
+  expect(q.children[0].wait).toBeUndefined();
   expect(s.follows.filter(f => f.n === 'b1a').map(f => f.k)).toContain('resolve');
-  expect(await listNames(page)).toContain('Finance system access');
+  expect(await state('b1')).toBe('actionable');
+  await expect(b1.locator('.project-meta')).not.toContainText('Waiting');
+  await expect(b1.locator('.project-wait')).toHaveCount(0);
+  await expect(b1.locator('.project-step[data-qid="b1a"] .check')).toHaveAttribute(
+    'aria-label',
+    'Mark done: IT to grant access',
+  );
   expect(s.quests.map(q => q.id)).toEqual(order0); // (its place in the order never moved)
+  expect(await app.order()).toEqual(board0);
+  await app.go('waiting');
+  await expect(page.locator('#v-waiting .row[data-wid="q3w"]')).toHaveCount(1);
+  await expect(page.locator('#v-waiting .row[data-wid="b1a"]')).toHaveCount(0);
   expect(app.errors).toEqual([]);
 });
 
-test('9: Top 3 and Focus skip scheduled and waiting work; a chosen one that becomes scheduled is set aside, not replaced', async ({
+test('9: Focus skips scheduled and waiting work; with nothing else left there is nothing to recommend', async ({
   app,
   page,
 }) => {
   await day(app, page);
   await page.evaluate(() => {
-    S.top3 = { day: today(), ids: ['m2', 'b1', 'q4'] };
-    S.quests.forEach(q => delete q.resume); // (no saved place: Top 3 leads)
+    S.quests.forEach(q => delete q.resume); // (no saved place: the list's order leads)
     save();
     renderAll();
   });
-  await expect(page.locator('.top3 .t3row')).toHaveCount(1);
-  await expect(page.locator('.top3 .t3row')).toContainText('Q4 budget report');
-  await expect(page.locator('.top3 .t3out')).toContainText(
-    'Set aside (scheduled or waiting): Supplier review call, Finance system access',
-  );
-  expect((await app.state()).top3.ids).toEqual(['m2', 'b1', 'q4']); // (still chosen)
-  expect(await page.evaluate(() => recommend()?.rank)).toBe(1);
-  expect(await page.evaluate(() => recommend()?.n.text)).toBe('Draft');
-  expect(await page.evaluate(() => focusTarget())).toBe('q4a');
+  expect(await page.evaluate(() => recommend()?.why)).toBe('list');
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Walsingham sale');
+  expect(await page.evaluate(() => focusTarget())).toBe('q0b');
+  // A task chosen for Focus that is scheduled, or a step that is waiting: not the one focused on.
+  for (const id of ['m2', 'b1', 'b1a', 'q3w']) {
+    await page.evaluate(id => {
+      S.focusQ = id;
+      save();
+    }, id);
+    expect(await page.evaluate(() => focusTarget())).toBe('q0b');
+  }
+  // A saved place on a scheduled task doesn't lead either.
+  await page.evaluate(() => {
+    S.focusQ = '';
+    S.quests.find(q => q.id === 'm2').resume = { note: 'Agenda half read', at: Date.now(), step: '' };
+    save();
+    renderAll();
+  });
+  expect(await page.evaluate(() => recommend()?.q.text)).toBe('Walsingham sale');
   // Everything left is scheduled or waiting.
   await page.evaluate(() => {
     S.quests.forEach(q => {
@@ -170,7 +227,11 @@ test('9: Top 3 and Focus skip scheduled and waiting work; a chosen one that beco
     renderAll();
   });
   expect(await page.evaluate(() => recommend())).toBeNull();
-  await expect(page.locator('#v-today .nowork')).toBeHidden(); // (Done today still has rows)
+  expect(await page.evaluate(() => focusTarget())).toBeNull();
+  expect(
+    await openCards(page).evaluateAll(cs => cs.map(c => c.dataset.qid)),
+    'the scheduled and the waiting are all that is left on the board',
+  ).toEqual(['m1', 'm2', 'm3', 'b1']);
   expect(app.errors).toEqual([]);
 });
 
@@ -223,21 +284,26 @@ test('11–12: a schedule is checked, kept through reload, backup and restore, a
   await page.click('#doRestore');
   s = await app.state();
   expect(s.later.find(n => n.id === 'q5').scheduled).toEqual({ date: '2026-10-25', time: '01:30' });
-  // Past midnight into the 25th: the meeting is on Today, at 01:30, never shifted an hour.
+  // Past midnight into the 25th: the meeting is among the day's work, at 01:30 and still to come,
+  // never shifted an hour.
   await page.clock.setFixedTime(new Date(2026, 9, 25, 0, 30));
   await page.evaluate(() => {
     rollover();
     renderAll();
   });
-  await expect(page.locator('#v-today .schedrow[data-qid="q5"] .stime')).toHaveText('01:30');
-  await expect(page.locator('#v-today .schedrow[data-qid="q5"]')).toContainText('Later today');
+  await app.go('projects');
+  await expect(openCards(page).filter({ hasText: 'Team rota' })).toHaveCount(1);
+  await expect(when(page, 'q5')).toHaveText('Scheduled 01:30');
+  expect(await stands(page, 'q5')).toEqual(['soon']);
+  await expect(card(page, 'q5').locator('.check')).toHaveCount(0); // (later today: not to tick yet)
   // On the 31st's eve, the next day is the 31st, not the 1st.
   await page.clock.setFixedTime(new Date(2026, 9, 31, 7, 0));
   await page.evaluate(() => {
     rollover();
     renderAll();
   });
-  await expect(page.locator('#v-today .schedrow[data-qid="q6"] .stime')).toHaveText('09:00');
+  await expect(openCards(page).filter({ hasText: 'Client onboarding' })).toHaveCount(1);
+  await expect(when(page, 'q6')).toHaveText('Scheduled 09:00');
   expect(app.errors).toEqual([]);
 });
 
@@ -267,32 +333,32 @@ test('13–14: a scheduled copy of a repeating task isn’t swept away, and the 
   expect(s.quests.filter(q => q.tpl === 'tp').map(q => q.id)).toEqual(['tp-2026-11-04', 'tp-2026-11-05']);
   await page.evaluate(() => rollover());
   expect((await app.state()).quests.filter(q => q.tpl === 'tp')).toHaveLength(2);
-  const past = page.locator('#v-today .schedrow[data-qid="tp-2026-11-04"]');
-  await expect(past).toContainText('Yesterday: not marked done');
+  const past = card(page, 'tp-2026-11-04');
+  await expect(past.locator('.tag.sched')).toHaveText('Scheduled 4 Nov 15:00');
+  expect(await stands(page, 'tp-2026-11-04')).toEqual(['past']);
+  await expect(past.locator('.check')).toHaveCount(1); // (there to be recorded)
   await expect(past).not.toContainText('Overdue');
   const att = await page.evaluate(() => attentionItems().filter(i => i.text === 'Weekly sync'));
   expect(att.map(i => [i.sev, i.sub])).toEqual([[3, 'Scheduled yesterday: not marked done']]);
+  await app.go('ops');
+  const item = page.locator('#v-ops .attlist .attrow', { hasText: 'Weekly sync' });
+  await expect(item).toHaveCount(1);
+  await expect(item).toContainText('Scheduled yesterday: not marked done · Open task');
+  await expect(item).not.toContainText('Overdue');
   // Nor is it a carried-over task to keep, move or drop.
   expect(await page.evaluate(() => carried().map(q => q.id))).not.toContain('tp-2026-11-04');
-  // Back to ordinary work: on Today's list again.
-  await past.locator('.qmore').click();
+  // Back to ordinary work: no longer scheduled, and one to focus on.
+  await item.locator('[data-open="tp-2026-11-04"]').click();
+  await expect(page.locator('.facts .tag.sched')).toHaveText('Scheduled 4 Nov 15:00');
+  await moreActions(page);
   await page.click('#sheet [data-schedclear="tp-2026-11-04"]');
-  expect(await listNames(page)).toContain('Weekly sync');
-  expect(app.errors).toEqual([]);
-});
-
-test('15: the board holds the same tasks as the list; Scheduled and Waiting are beside it in both', async ({
-  app,
-  page,
-}) => {
-  await day(app, page);
-  const listed = (await listNames(page)).filter(Boolean);
-  await page.click('[data-tview="board"]');
-  const tiles = await page.$$eval('#v-today .qtopen > span', x => x.map(e => e.textContent));
-  expect([...tiles].sort()).toEqual([...listed].sort());
-  await expect(sched(page)).toHaveCount(3);
-  await expect(waitRows(page)).toHaveCount(3);
-  await expect(page.locator('#v-today .blane[data-lane="wait"]')).toHaveCount(0);
+  expect((await app.state()).quests.find(q => q.id === 'tp-2026-11-04').scheduled).toBeUndefined();
+  expect(await page.evaluate(() => taskState(find('tp-2026-11-04').n))).toBe('actionable');
+  await expect(page.locator('.facts .tag.sched')).toHaveCount(0);
+  await expect(page.locator('.qfoot [data-zen]')).toHaveText('Focus on this');
+  expect(await page.evaluate(() => attentionItems().filter(i => i.text === 'Weekly sync'))).toEqual([]);
+  await app.go('projects');
+  await expect(past.locator('.tag.sched')).toHaveCount(0);
   expect(app.errors).toEqual([]);
 });
 
@@ -301,7 +367,8 @@ test('race: a schedule sheet confirmed after the task was finished elsewhere, or
   page,
 }) => {
   await day(app, page);
-  await page.click('#v-today .row[data-qid="q5"] .qmore');
+  await app.openQuest('Team rota'); // (q5)
+  await moreActions(page);
   await page.click('#sheet [data-schedset="q5"]');
   await page.evaluate(() => {
     const q = S.quests.find(x => x.id === 'q5');
@@ -361,7 +428,7 @@ test('sync: a task in both Today and Upcoming after a move raced an edit is kept
   expect(app.errors).toEqual([]);
 });
 
-test('audit fixes: review, Focus, Resume, Top 3, Continue and Forecast use the same rule; the Inbox drops a schedule', async ({
+test('audit fixes: review, Focus, Resume, Continue and Forecast use the same rule; the Inbox drops a schedule', async ({
   app,
   page,
 }) => {
@@ -371,7 +438,6 @@ test('audit fixes: review, Focus, Resume, Top 3, Continue and Forecast use the s
       b1 = S.quests.find(q => q.id === 'b1');
     m2.since = shift(today(), -5); // (on Today for days, but scheduled: not carried over)
     b1.resume = { note: 'Asked IT', at: Date.now(), step: 'b1a' };
-    S.top3 = null;
     save();
     go('focus');
     const focusOpts = [...document.querySelectorAll('#fq option')].map(o => o.value);
@@ -414,7 +480,6 @@ test('audit fixes: review, Focus, Resume, Top 3, Continue and Forecast use the s
   expect(r.focusOpts).not.toContain('b1');
   expect(r.focusOpts).not.toContain('b1a');
   expect(r.acts).not.toContain('Resume work');
-  expect(r.acts).not.toContain('Add to Top 3');
   expect(r.cont).not.toBe('b1');
   expect(r.msAct).toBe('Finish task');
   expect(r.cov[0]).toBeGreaterThanOrEqual(1); // (the estimated meeting counts as estimated)
@@ -422,30 +487,34 @@ test('audit fixes: review, Focus, Resume, Top 3, Continue and Forecast use the s
   expect(app.errors).toEqual([]);
 });
 
-test('UI fixes: a scheduled task’s page says when; dates sit above times; a Waiting row opens its task and back returns to Today', async ({
+test('UI fixes: a scheduled task’s page says when; an earlier day’s card shows its date; a waiting line opens its task and back returns to Projects', async ({
   app,
   page,
 }) => {
   await day(app, page);
-  await page.click('#v-today .schedrow[data-qid="m2"] .open');
+  await app.openQuest('Supplier review call');
   await expect(page.locator('.facts .tag.sched')).toHaveText('Scheduled 14:00');
   await page.click('.facts [data-schedset="m2"]');
   await expect(page.locator('#schedtime')).toHaveValue('14:00');
   await page.keyboard.press('Escape');
   await page.evaluate(() => history.back());
-  // A Waiting row: its task's page, and back to Today in one step.
-  await page.click('#v-today .wrow[data-wid="b1a"] .open');
+  await expect(page.locator('#v-projects')).toBeVisible();
+  // A waiting line on a card: its task's page, and back to Projects in one step.
+  await card(page, 'b1').locator('.project-wait[data-wact="b1a"]').click();
+  await page.click('#sheet [data-open="b1"]');
   expect(await page.evaluate(() => path)).toEqual(['b1']);
+  await expect(page.locator('.node.facts > h1')).toHaveText('Finance system access');
   await page.evaluate(() => history.back());
-  await expect(page.locator('#v-today .schedsec')).toBeVisible();
-  // Next day: an earlier day's row shows its date above its time.
+  await expect(page.locator('#v-projects')).toBeVisible();
+  await expect(page.locator('#v-today')).toBeHidden();
+  // Next day: an earlier day's card shows its date with its time.
   await page.clock.setFixedTime(new Date(2026, 10, 5, 9, 0));
   await page.evaluate(() => {
     rollover();
     renderAll();
   });
-  await expect(page.locator('#v-today .schedrow[data-qid="m1"] .stime small')).toHaveText('4 Nov');
-  await expect(page.locator('#v-today .schedrow[data-qid="m4"] .stime')).toHaveText('09:15');
+  await expect(when(page, 'm1')).toHaveText('Scheduled 4 Nov 10:30');
+  await expect(when(page, 'm4')).toHaveText('Scheduled 09:15');
   // Schedule isn't offered during a focus session on the task.
   await page.evaluate(() => {
     S.timer = { id: 't', end: Date.now() + 6e5, left: 6e5, tag: '', mins: 25, q: 'q6a' };

@@ -1,5 +1,4 @@
 const { test, expect } = require('@playwright/test');
-const { unfold, legacyWorkControls } = require('./fixtures');
 
 // A stand-in for Supabase, shared by several "devices" (browser contexts): the cockpit_items rows
 // live in the test, and each page reaches them through exposed functions. Supports the calls the
@@ -251,19 +250,6 @@ async function device(browser, srv, seed, opts = {}) {
     }, opts.clockBehind);
   if (seed) await page.addInitScript(s => localStorage.setItem('work-cockpit-v1', s), JSON.stringify(seed));
   await page.addInitScript(fakeSupabase);
-  await page.addInitScript(legacyWorkControls);
-  await page.addInitScript(() => {
-    document.addEventListener(
-      'click',
-      e => {
-        if (e.target.closest?.('nav [data-v="today"]') && window.appReady) {
-          e.stopImmediatePropagation();
-          openTodayTab(true);
-        }
-      },
-      true,
-    );
-  });
   // (a reload waits for writes to the store, then for the app to have started)
   const reload = page.reload.bind(page);
   page.reload = async (...a) => {
@@ -273,9 +259,8 @@ async function device(browser, srv, seed, opts = {}) {
     await page.waitForFunction(() => window.appReady === true);
     return r;
   };
-  await page.goto('/#/work');
+  await page.goto('/');
   await expect(page.locator('#syncBtn')).toHaveText('Synced');
-  await page.evaluate(() => openTodayTab(true));
   const d = {
     page,
     ctx,
@@ -292,7 +277,21 @@ async function device(browser, srv, seed, opts = {}) {
       await page.fill('#iin', text);
       await page.press('#iin', 'Enter');
       await page.click('#v-inbox [data-promote] >> nth=0');
-      await page.click('nav [data-v=today]');
+      await page.click('nav [data-v=projects]');
+    },
+    // Knowledge's Processes view, where the desktop automations' buttons are.
+    processes: async () => {
+      await page.click('nav [data-v=knowledge]');
+      await page.click('[data-kbview="proc"]');
+    },
+    // A project's page, from its card on the board.
+    open: async text => {
+      if (await page.evaluate(() => view !== 'projects')) await page.click('nav [data-v=projects]');
+      await page
+        .locator('#v-projects .project-card h2 .project-open')
+        .getByText(text, { exact: true })
+        .first()
+        .click();
     },
   };
   srv.devices.push(d);
@@ -349,7 +348,7 @@ test('offline edits to different items on two devices are all kept', async ({ br
   await b.ctx.setOffline(true);
   await a.add('From A');
   await b.add('From B');
-  await b.page.locator('#v-today').getByRole('button', { name: 'Mark done: Shared' }).click();
+  await b.page.locator('#v-projects').getByRole('button', { name: 'Mark done: Shared' }).click();
   await a.ctx.setOffline(false);
   await b.ctx.setOffline(false);
   await settle(a, b);
@@ -390,7 +389,8 @@ test('deletions reach other devices', async ({ browser }) => {
   await a.add('Remove me');
   await a.sync();
   const b = await device(browser, srv);
-  await a.page.click('[aria-label="Actions: Remove me"]');
+  await a.open('Remove me');
+  await a.page.click('#v-today .qfoot [aria-label="More actions"]');
   await a.page.click('#sheet [data-delnow]');
   await settle(a, b);
   expect(texts(await b.state())).toEqual(['Keep']);
@@ -434,7 +434,7 @@ test('daily repeats created on two devices are not doubled', async ({ browser })
   const srv = server();
   const a = await device(browser, srv);
   await a.add('Standup');
-  await a.page.click('.open >> text=Standup');
+  await a.open('Standup');
   await a.page.click('#mored > summary');
   await a.page.click('#rptd summary');
   await a.page.click('[data-rpreset="daily"]');
@@ -594,7 +594,6 @@ test('a sync downloads only what it hasn’t got: not its own writes, nor rows r
   await b.sync();
   expect(srv.dataRead).toBeGreaterThan(0);
   expect((await b.state()).kb[0].imgs.map(p => p.id)).toEqual(['p1', 'p2']);
-  await settle(a, b); // (B's first sync also registers it as a device, which A then reads)
   srv.readKeys = [];
   await settle(a, b);
   expect(srv.readKeys).toEqual([]);
@@ -1104,84 +1103,7 @@ test('round 5: a repeat’s copy deleted just before the day’s reset stays del
   expect(a.errors).toEqual([]);
 });
 
-/* Release A: the top 3, saved places and resources across devices */
-test('the top 3 syncs as one record: chosen on one device, shown on the other; the newer choice wins', async ({
-  browser,
-}) => {
-  const srv = server();
-  const a = await device(browser, srv);
-  await a.add('Alpha');
-  await a.add('Beta');
-  await a.add('Gamma');
-  await a.sync();
-  const b = await device(browser, srv);
-  const ids = (await a.state()).quests.map(q => q.id);
-  await a.page.evaluate(ids => setTop3([ids[0], ids[1]]), ids);
-  await a.sync();
-  await expect
-    .poll(async () => (await b.state()).top3 && (await b.state()).top3.ids)
-    .toEqual([ids[0], ids[1]]);
-  expect(srv.rows.has('meta:top3')).toBe(true);
-  await expect(b.page.locator('#v-today .top3 .t3row')).toHaveCount(2);
-  // Both choose while offline: the newer choice wins on both, and nothing else is touched.
-  await a.ctx.setOffline(true);
-  await b.ctx.setOffline(true);
-  await a.page.evaluate(ids => setTop3([ids[2]]), ids);
-  await a.page.waitForTimeout(20);
-  await b.page.evaluate(ids => setTop3([ids[1], ids[2], ids[0]]), ids);
-  await b.page.evaluate(() => {
-    S.mins = 45;
-    save();
-  });
-  await b.ctx.setOffline(false);
-  await b.sync();
-  await a.ctx.setOffline(false);
-  await settle(a, b);
-  for (const d of [a, b]) {
-    const s = await d.state();
-    expect(s.top3.ids).toEqual([ids[1], ids[2], ids[0]]);
-    expect(s.mins).toBe(45);
-    expect(texts(s)).toEqual(['Alpha', 'Beta', 'Gamma']);
-  }
-  // Cleared on one device: the record is deleted, and the other device shows none.
-  await a.page.evaluate(() => setTop3([]));
-  await settle(a, b);
-  expect(srv.rows.get('meta:top3').deleted).toBe(true);
-  expect((await b.state()).top3).toBeNull();
-  for (const d of [a, b]) expect(d.errors).toEqual([]);
-});
-
-test('a new day: one device’s reset clears yesterday’s top 3, a choice made today elsewhere still wins', async ({
-  browser,
-}) => {
-  const srv = server();
-  const a = await device(browser, srv);
-  await a.add('Alpha');
-  await a.add('Beta');
-  await a.sync();
-  const ids = (await a.state()).quests.map(q => q.id);
-  const b = await device(browser, srv);
-  // Yesterday's choice, made yesterday.
-  await a.page.evaluate(ids => setTop3([ids[0]]), ids);
-  await settle(a, b);
-  srv.rows.forEach(r => (r.edited_at = Number(r.edited_at) - 86400e3));
-  for (const d of [a, b])
-    await d.page.evaluate(() => {
-      S.day = shift(today(), -1);
-      S.top3.day = shift(today(), -1);
-      persistLocal();
-    });
-  // B chooses for today before A's reset runs; A's reset (as of midnight) mustn't undo it.
-  await b.page.evaluate(() => {
-    S.day = today();
-    setTop3(S.quests.map(q => q.id).slice(1, 2));
-  });
-  await b.sync();
-  await a.page.evaluate(() => rollover());
-  await settle(a, b);
-  for (const d of [a, b]) expect((await d.state()).top3.ids).toEqual([ids[1]]);
-});
-
+/* Release A: saved places and resources across devices */
 test('a saved place and resources travel with the task’s row; the newer edit of either wins', async ({
   browser,
 }) => {
@@ -1190,20 +1112,25 @@ test('a saved place and resources travel with the task’s row; the newer edit o
   await a.add('Reconcile');
   await a.sync();
   const b = await device(browser, srv);
-  await a.page.click('[aria-label="Actions: Reconcile"]');
+  await b.page.evaluate(() => go('ops'));
+  await a.open('Reconcile');
+  await a.page.click('#v-today .qfoot [aria-label="More actions"]');
   await a.page.click('#sheet [data-saveplace]');
   await a.page.fill('#sheetin', 'Check the credits');
   await a.page.click('#sheetok');
   await a.sync();
   await expect.poll(async () => ((await b.state()).quests[0].resume || {}).note).toBe('Check the credits');
-  await expect(b.page.locator('#v-today .row .tag.place')).toHaveText('Saved place');
+  // (B, on the Command Centre meanwhile, shows it under In progress)
+  await expect(b.page.locator('#v-ops .oprow [data-open]')).toHaveText(
+    'ReconcileSaved place: Check the credits',
+  );
   // B links an article it just wrote; both arrive on A, and A's place is kept.
   await b.page.evaluate(() => {
     S.kbcats = [{ id: 'c1', name: 'Docs', parent: '' }];
     S.kb = [{ id: 'a1', cat: 'c1', title: 'Credits how-to', body: '', edited: 1, imgs: [] }];
     save();
   });
-  await b.page.click('.open >> text=Reconcile');
+  await b.open('Reconcile');
   await b.page.evaluate(() => (document.querySelector('#resd').open = true));
   await b.page.click('[data-resadd="kb"]');
   await b.page.click('#sheet [data-linkkb="a1"]');
@@ -1211,7 +1138,6 @@ test('a saved place and resources travel with the task’s row; the newer edit o
   const sa = await a.state();
   expect(sa.quests[0].links).toEqual([{ id: expect.any(String), kind: 'kb', ref: 'a1' }]);
   expect(sa.quests[0].resume.note).toBe('Check the credits');
-  await a.page.click('.open >> text=Reconcile');
   await expect(a.page.locator('#resd .resrow')).toContainText('Credits how-to');
   // Cleared on A while B updates it offline: B's newer note wins everywhere.
   await b.ctx.setOffline(true);
@@ -1241,7 +1167,7 @@ test('triage on one device while the other device moves the item: the walk goes 
   const b = await device(browser, srv);
   await a.page.click('[data-triagestart]');
   await expect(a.page.locator('#v-inbox .tcard .ttitle')).toHaveText('Three');
-  // B promotes "Three" to Today: A's card moves on to the next, and its count counts it.
+  // B promotes "Three" to Projects: A's card moves on to the next, and its count counts it.
   await b.page.click('nav [data-v=inbox]');
   await b.page.click('#v-inbox [data-promote] >> nth=0');
   await settle(a, b);
@@ -1280,9 +1206,8 @@ test('a launch on one device, reports from a script: both devices show the same 
   await a.page.evaluate(
     () => (addEventListener('click', e => e.target.closest('a[data-flow]') && e.preventDefault()), 0),
   );
-  await a.page.click('nav [data-v=today]');
-  await unfold(a.page, 'flowsd');
-  await a.page.click('#v-today a[data-flow="f1"]');
+  await a.processes();
+  await a.page.click('#v-knowledge .flows a[data-flow="f1"]');
   await a.page.waitForTimeout(20);
   await settle(a, b);
   const x = (await a.state()).execs[0].id;
@@ -1293,12 +1218,13 @@ test('a launch on one device, reports from a script: both devices show the same 
   r = await report(b, { token, flow: 'f1', status: 'succeeded', message: 'Sent 3 files' });
   expect(r.data.execution).toBe(x);
   await settle(a, b);
+  await b.processes();
   for (const d of [a, b]) {
     const s = await d.state();
     expect(s.execs).toHaveLength(1);
     expect(s.execs[0]).toMatchObject({ id: x, status: 'succeeded', msg: 'Sent 3 files' });
     expect(s.execs[0].ev.map(e => e.s)).toEqual(['running', 'succeeded']);
-    await expect(d.page.locator('#v-today a[data-flow="f1"] .xst')).toHaveText('✓');
+    await expect(d.page.locator('#v-knowledge .flows a[data-flow="f1"] .xst')).toHaveText('✓');
   }
   // Both folded the same reports into the same record: nothing left to send back and forth.
   const h = await Promise.all(
@@ -1314,24 +1240,23 @@ test('a launch on one device, reports from a script: both devices show the same 
   );
   expect((await report(b, { token, flow: 'f1', status: 'done' })).error.message).toContain('status');
   // A failure: both devices flag it; acknowledging on one clears it on the other.
-  await a.page.click('nav [data-v=today]');
-  await unfold(a.page, 'flowsd');
-  await a.page.click('#v-today a[data-flow="f1"]');
+  await a.processes();
+  await a.page.click('#v-knowledge .flows a[data-flow="f1"]');
   await a.page.waitForTimeout(20);
   await settle(a, b);
   await report(a, { token, flow: 'f1', status: 'failed', message: 'Step 4: file not found' });
   await settle(a, b);
-  // Both devices count the same failure, once.
-  for (const d of [a, b]) await expect(d.page.locator('#attsum')).toContainText('Needs attention 1');
+  // Both devices count the same failure, once (in the Command Centre's Needs attention).
+  for (const d of [a, b]) await d.page.evaluate(() => go('ops'));
   for (const d of [a, b])
-    await expect(d.page.locator('#v-today .attn [data-xdet]')).toContainText('Automation failed');
-  await unfold(b.page, 'attd');
-  await b.page.click('#v-today .attn [data-xdet]');
+    await expect(d.page.locator('#v-ops .opsec h2').first()).toHaveText('Needs attention 1');
+  for (const d of [a, b])
+    await expect(d.page.locator('#v-ops .attlist [data-xdet]')).toContainText('Automation failed');
+  await b.page.click('#v-ops .attlist [data-xdet]');
   await b.page.click('#sheet [data-xack]');
   await settle(a, b);
-  for (const d of [a, b]) await expect(d.page.locator('#v-today [data-xdet]')).toHaveCount(0);
-  for (const d of [a, b])
-    await expect(d.page.locator('#v-today .attn')).toContainText('Nothing needs attention');
+  for (const d of [a, b]) await expect(d.page.locator('#v-ops .attlist')).toHaveCount(0);
+  for (const d of [a, b]) await expect(d.page.locator('#v-ops .opsquiet')).toContainText('nothing needs you');
   // Revoked: reports stop; the records stay.
   await a.page.click('nav [data-v=account]');
   await a.page.click('[data-setgo="auto"]');
@@ -1366,9 +1291,8 @@ test('a report before the launch has synced, or with no launch at all, becomes a
   await a.page.evaluate(
     () => (addEventListener('click', e => e.target.closest('a[data-flow]') && e.preventDefault()), 0),
   );
-  await a.page.click('nav [data-v=today]');
-  await unfold(a.page, 'flowsd');
-  await a.page.click('#v-today a[data-flow="f1"]');
+  await a.processes();
+  await a.page.click('#v-knowledge .flows a[data-flow="f1"]');
   await a.page.waitForTimeout(20);
   const r = await report(b, { token, flow: 'f1', status: 'succeeded', message: 'ok', run_ref: 'r1' });
   expect(r.data.execution).toBe('');

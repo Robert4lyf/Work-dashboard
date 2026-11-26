@@ -89,7 +89,7 @@ test('a picture whose data is missing on this device is fetched again, not delet
   expect(r).toEqual({ pics: 0, synced: false, tomb: false, catchUp: true });
 });
 
-test('Android back: steps back through the app and returns to Projects from Today’s list', async ({
+test('Android back: steps back through the app and returns to Projects from a project’s page', async ({
   app,
   page,
 }) => {
@@ -103,10 +103,16 @@ test('Android back: steps back through the app and returns to Projects from Toda
   await page.goBack();
   await expect(page.locator('#v-today')).toBeVisible();
   await expect(page.locator('#v-today .crumbs, #v-today [data-crumb]').first()).toBeVisible();
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Task');
+  // From a step's page: up to the project's page, then out to the board.
+  await page.click('#v-today .row .open >> text="Step"');
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Step');
   await page.goBack();
-  await expect(page.locator('#v-today .open >> text="Task"')).toBeVisible();
+  await expect(page.locator('#v-today .node.facts > h1')).toHaveText('Task');
   await page.goBack();
   await expect(page.locator('#v-projects .project-open >> text="Task"')).toBeVisible();
+  await expect(page.locator('#v-today')).toBeHidden();
+  expect(await page.evaluate(() => view)).toBe('projects');
   // A picture shown full size closes first.
   await page.evaluate(() => {
     S.noteImgs = [{ id: 'm', src: 'data:image/png;base64,iVBORw0KGgo=', at: 1 }];
@@ -206,19 +212,11 @@ test('round 6: many pictures at once still save (they move to IndexedDB first), 
   expect(await savedLen(page)).toBeLessThan(100000);
 });
 
-test('round 6: back while an alarm rings stays in the app; reloads don’t pile up history entries', async ({
-  app,
-  page,
-}) => {
+test('round 6: reloads don’t pile up history entries', async ({ page }) => {
   const before = await page.evaluate(() => history.length);
   await page.reload();
   await page.reload();
   expect(await page.evaluate(() => history.length)).toBe(before);
-  await page.evaluate(() => {
-    document.querySelector('#v-alarm').hidden = false;
-  });
-  await page.goBack();
-  await expect(page.locator('#v-alarm')).toBeVisible();
   expect(page.url()).toContain('localhost');
 });
 

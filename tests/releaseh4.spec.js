@@ -96,7 +96,7 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
       await back(page);
       expect((await where(page)).view, q).toBe('search');
       await expect(page.locator('#sq')).toHaveValue(q);
-      await page.click('nav [data-v=today]');
+      await page.click('nav [data-v=projects]');
     };
     const art = await page.evaluate(() => S.kb[0]);
     await trip(art.title, `[data-sart="${art.id}"]`, { view: 'knowledge', kbArt: art.id });
@@ -133,22 +133,23 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
       r.st.m2 = { o: 'done', at: Date.now() };
       delete r.live.run;
     });
-    // From Today, scrolled down.
+    // From Projects, scrolled down.
     await page.evaluate(() => scrollTo(0, 900));
+    expect(await page.evaluate(() => Math.round(scrollY))).toBe(900);
     await page.evaluate(() => openWorkflowRun('r3'));
-    // "For: <task>", then back: the run, then back: Today where it was.
+    // "For: <task>", then back: the run, then back: Projects where it was.
     await page.click('#v-knowledge .kbtrail [data-open]');
     await expect(page.locator('#v-today [data-crumb="-1"]')).toHaveText('‹ Process');
     await back(page);
     expect(await where(page)).toMatchObject({ view: 'knowledge', wfOpen: 'r3' });
-    // Settings: Automations, then back: the run again (not the Settings index, then Today).
+    // Settings: Automations, then back: the run again (not the Settings index, then Projects).
     await page.click('#v-knowledge [data-gosec="execsec"]');
     expect(await where(page)).toMatchObject({ view: 'account', setSub: 'auto' });
     await back(page);
     expect(await where(page)).toMatchObject({ view: 'knowledge', wfOpen: 'r3' });
     await back(page);
     const w = await where(page);
-    expect(w).toMatchObject({ view: 'today', wfOpen: null });
+    expect(w).toMatchObject({ view: 'projects', wfOpen: null });
     expect(Math.abs(w.y - 900)).toBeLessThan(5);
 
     // The Command Centre, scrolled: the run's ‹ comes back to where it was, the keyboard on the
@@ -189,24 +190,29 @@ test.describe('Checkpoint 4: back, scroll, focus, sheets', () => {
     expect((await where(page)).view).toBe('waiting');
   });
 
-  test('back to the list puts the keyboard on the task that was open, without moving the page', async ({
+  test('back to the board puts the keyboard on the project that was open, without moving the page', async ({
     app,
     page,
   }) => {
     await day(app, page);
-    const open = page.locator('#v-today .list .row[data-qid="g5"] .open');
+    const open = page.locator('#v-projects .project-card h2 .project-open[data-open="g5"]');
     await open.scrollIntoViewIfNeeded();
     const y = await page.evaluate(() => Math.round(scrollY));
+    expect(y).toBeGreaterThan(100); // (well down the board)
     await open.click();
+    expect(await where(page)).toMatchObject({ view: 'today', path: ['g5'] });
     await back(page);
     const w = await where(page);
+    expect(w.view).toBe('projects');
     expect(w.focus).toMatchObject({ open: 'g5' });
     expect(Math.abs(w.y - y)).toBeLessThan(5);
     await expect(open).toBeFocused();
     // From a step's page up to its task's: the step's row.
-    await page.click('#v-today .list .row[data-qid="g2"] .open');
+    await page.click('#v-projects .project-card h2 .project-open[data-open="g2"]');
     await page.click('#v-today [data-open="g2s1"]');
+    expect((await where(page)).path).toEqual(['g2', 'g2s1']);
     await back(page);
+    expect((await where(page)).path).toEqual(['g2']);
     await expect(page.locator('#v-today [data-open="g2s1"]').first()).toBeFocused();
   });
 

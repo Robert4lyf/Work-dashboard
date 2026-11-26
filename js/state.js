@@ -25,8 +25,6 @@ const PROJECT_SECTION_COLOURS = {
 const UNCATEGORISED = 'uncategorised';
 const RESUME_MAX = 400; // a saved place's note
 const LINKS_MAX = 20; // resources linked to a task
-const TOP3_MAX = 3;
-const TOP3_HELD = 20; // (set-aside choices kept for the day: see top3.js)
 const TAGS = [
   ['Design', 'var(--pink)'],
   ['Meetings', 'var(--blue)'],
@@ -215,21 +213,6 @@ function fix(n) {
   else delete n.resume;
   return n;
 }
-// Today's top 3: up to three of Today's tasks, by id, for one calendar day. (Its own synced
-// record: see toRecords. Shown only on its day; the tasks themselves aren't changed.)
-// (held: chosen ones set aside, scheduled or only waiting, which don't hold one of the three
-// places; see top3.js. Never one of the three as well.)
-function cleanTop3(t) {
-  if (!t || typeof t !== 'object') return null;
-  const day = cleanDay(t.day),
-    uniq = a => (Array.isArray(a) ? a : []).filter(okRef).filter((x, i, l) => l.indexOf(x) === i),
-    ids = uniq(t.ids).slice(0, TOP3_MAX),
-    held = uniq(t.held)
-      .filter(x => !ids.includes(x))
-      .slice(0, TOP3_HELD);
-  if (!day || (!ids.length && !held.length)) return null;
-  return held.length ? { day, ids, held } : { day, ids };
-}
 function norm(s) {
   S = Object.assign(
     {
@@ -257,8 +240,6 @@ function norm(s) {
       todayPicks: [],
       pdaily: {},
       interrupts: [],
-      alarms: [],
-      devices: [],
       notes: '',
       kbcats: [],
       kb: [],
@@ -278,14 +259,8 @@ function norm(s) {
     s || {},
   );
   delete S.streak;
-  // Alarms and devices come from sync and go into the page as-is: keep only well-formed ones.
+  // (records come from sync and go into the page as-is: only well-formed ids)
   const okId = x => x && typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id);
-  S.alarms = S.alarms.filter(okId).map(a => ({
-    ...a,
-    time: /^\d\d:\d\d$/.test(a.time) ? a.time : '09:00',
-    device: okId({ id: a.device }) ? a.device : '',
-  }));
-  S.devices = S.devices.filter(okId);
   const updates = new Map();
   for (const u of Array.isArray(S.projectUpdates) ? S.projectUpdates : []) {
     if (!okId(u) || !okRef(u.q) || typeof u.t !== 'number' || !Number.isFinite(new Date(u.t).getTime()))
@@ -361,7 +336,6 @@ function norm(s) {
   // Preferences go into the page too (and a bad value would crash Today): only sound ones.
   S.dayEnd = /^\d\d:\d\d$/.test(S.dayEnd) ? S.dayEnd : '';
   S.mins = [15, 25, 45].includes(S.mins) ? S.mins : 25;
-  S.top3 = cleanTop3(S.top3);
   S.cap = cleanCap(S.cap);
   S.pins = cleanPins(S.pins);
   S.quests = S.quests.map(fix);
@@ -543,7 +517,6 @@ function save() {
   pruneRuns2();
   pruneRlog();
   stampSince();
-  if (typeof settleTop3 === 'function') settleTop3();
   S.editedAt = Date.now();
   dropUndo();
   // Not saved here: not marked as synced either, or after a reload the old copy would look
@@ -558,8 +531,6 @@ function save() {
 }
 // The daily reset. Every device runs it and makes the same changes (repeat copies get
 // date-based ids), so whichever device syncs first, nothing is doubled.
-// (Alarms need no reset here: one on for a past day simply isn't on any more; see alarmOn.
-// Writing a reset could overwrite a newer switch-on synced from another device.)
 // Where the day's changes are worked out. Signed in and online, the server's copy comes first
 // (see sync): yesterday's edits from another device mustn't be undone by a reset run on stale
 // data. Otherwise (or if the sync fails) it runs here.
@@ -589,9 +560,6 @@ function rollover() {
   );
   S.day = today();
   S.todayPicks = S.todayPicks.filter(pick => pick.day >= S.day);
-  // Yesterday's top 3 is over: today's is chosen afresh. (Back-dated to midnight like the rest
-  // of the reset, so a choice already made today on another device wins over this.)
-  if (S.top3 && S.top3.day !== today()) S.top3 = null;
   // Today's copies of repeating tasks. (Days the app wasn't opened aren't caught up: their
   // day has gone.)
   {

@@ -33,5 +33,3 @@ function keyId(s) {
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0).toString(36) + s.length.toString(36);
 }
-// Minutes as "1h 30m" / "45m" (as hm, but 0 reads as none).
-const hmOr = (m, none = '') => (m > 0 ? hm(m) : none);

@@ -8,7 +8,6 @@ function renderAll() {
   renderHeader();
   renderView();
   renderOpenProjectHistory();
-  syncRinging();
   renderZen();
 }
 function renderView(v = view) {
@@ -42,13 +41,7 @@ $('#tabs').addEventListener('scroll', fadeTabs, { passive: true });
 window.addEventListener('resize', fadeTabs);
 // History lives under the Review tab; Focus has no tab (the header opens it).
 function go(v) {
-  if (v === 'alarms') {
-    path = [];
-    projectUtility = 'alarms';
-    alarmsOpen = true;
-    v = 'today';
-  }
-  if (v === 'today' && !path.length && !projectUtility && !workListMode) v = 'projects';
+  if (v === 'today' && !path.length && !projectUtility) v = 'projects';
   if (v !== 'today') projectUtility = '';
   if (v === 'log') {
     reviewSub = v;
@@ -60,7 +53,6 @@ function go(v) {
   if (v === 'account') setSub = null; // (the Settings tab opens its index; openSettings goes on to a group)
   keepDrafts();
   view = v;
-  if (v !== 'today') $('#ptitle').hidden = true;
   if (imgShown || kbImgShown) closeImgs();
   renderHeader();
   const tabView =
@@ -109,9 +101,7 @@ function go(v) {
 /* Release G: where a task's page was opened from, so back (and its ‹ crumb) returns there:
    another view (Waiting, Forecast, Search, the Command Centre) with its scroll position, or
    Today's list where it was scrolled to. */
-let returnTo = null, // { depth, name, ...placeHere() }: the view a task's page was opened from
-  listY = 0, // (where Today's list was scrolled to when a task was opened from it)
-  listAt = null; // ({ id, top }: the task opened, and where its row was on the screen)
+let returnTo = null; // { depth, name, ...placeHere() }: the view a task's page was opened from
 const RETURN_NAME = {
   projects: 'Projects',
   waiting: 'Waiting',
@@ -199,6 +189,15 @@ function goPlace(r) {
   if (r.view === 'account' && r.set) openSettings(r.set);
   window.scrollTo(0, r.y);
   refocus(r.opener);
+  // (where the page was scrolled to may no longer be where that control is: the window was
+  // resized, or the phone turned, meanwhile. Wholly off the screen, it's brought onto it; one
+  // only cut by an edge is where it was, and the page stays exactly as it was left.)
+  const f = r.opener && document.activeElement,
+    v = $('#v-' + view);
+  if (f && f !== document.body && v && v.contains(f)) {
+    const b = f.getBoundingClientRect();
+    if (b.bottom <= 0 || b.top >= innerHeight) f.scrollIntoView({ block: 'center' });
+  }
 }
 function backFrom() {
   const f = viewFrom;
@@ -207,7 +206,7 @@ function backFrom() {
   goPlace(f);
 }
 // The keyboard back on the control that was opened (Release H), without moving the page: the one
-// on the screen, if it's shown twice (a task in Top 3 and on the list, say).
+// on the screen, if it's shown twice (a task on the board and on its page beside it, say).
 function refocus(sel, scope = $('#v-' + view)) {
   if (!sel || !scope) return;
   let all;
@@ -269,11 +268,6 @@ function restoreDrafts() {
   });
 }
 function openPath(p) {
-  if (!path.length && p.length && view === 'today') {
-    listY = window.scrollY;
-    const row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(p[0])}"]`);
-    listAt = row ? { id: p[0], top: row.getBoundingClientRect().top } : null;
-  }
   keepDrafts();
   // (up a level: the keyboard goes back to the step, or the task, that was open)
   const left = p.length < path.length && p.every((id, i) => path[i] === id) ? path[p.length] : '';
@@ -288,27 +282,9 @@ function openPath(p) {
   renderToday();
   renderHeader(); // (its action is quieter on a task's page: see header.js)
   restoreDrafts();
-  window.scrollTo(0, p.length ? 0 : listY);
+  if (p.length) window.scrollTo(0, 0);
   splitReveal();
-  // (back on the list: the task's row where it was on the screen, whatever the rows above it
-  // measure now that they're drawn afresh)
-  let row = null;
-  if (!p.length && listAt) {
-    row = document.querySelector(`#v-today .list .row[data-qid="${CSS.escape(listAt.id)}"]`);
-    // (kept on the screen, should it be shorter now: the phone turned meanwhile, say)
-    if (row)
-      window.scrollBy(
-        0,
-        row.getBoundingClientRect().top -
-          Math.max(0, Math.min(listAt.top, innerHeight - row.offsetHeight - 72)),
-      );
-    listAt = null;
-  }
-  if (left && view === 'today') {
-    const f = row && row.querySelector(`[data-open="${CSS.escape(left)}"]`);
-    if (f) f.focus({ preventScroll: true });
-    else refocus(`[data-open="${CSS.escape(left)}"]`, $('#v-today'));
-  }
+  if (left && view === 'today') refocus(`[data-open="${CSS.escape(left)}"]`, $('#v-today'));
 }
 // Back from a task's page opened from another view: to that view, where it was.
 function returnBack() {
@@ -318,22 +294,14 @@ function returnBack() {
   goPlace(r);
 }
 const atReturn = () => returnTo && view === 'today' && path.length === returnTo.depth;
-function openTodayTab(allWork = false) {
-  returnTo = viewFrom = null;
-  projectUtility = '';
-  workListMode = allWork;
-  if (view === 'today' && path.length) openPath([]);
-  go('today');
-}
 document.querySelectorAll('nav button[data-v]').forEach(
   b =>
     (b.onclick = () => {
       if (!window.appReady) return; // (not started yet)
       returnTo = viewFrom = null; // (a tab is a fresh start: back no longer leads to where a task came from)
-      if (b.dataset.v === 'projects') {
-        path = [];
-        workListMode = false;
-      }
+      // (a step half typed on a task's page is kept under that page before it's left)
+      keepDrafts();
+      if (b.dataset.v === 'projects') path = [];
       // (a computer: History has its own place in the sidebar, so Review's tab opens Review
       // itself, not the History last looked at)
       if (b.dataset.v === 'review' && deskMQ.matches && reviewSub === 'log') reviewSub = 'week';
@@ -435,22 +403,11 @@ document.addEventListener('change', e => {
   // field still has the keyboard, or the picker just closed on it) is saved once it's left,
   // and until then a redraw keeps it as entered.
   if (waitd && waitd.dataset.waitid && el.type === 'date' && document.activeElement === el) return;
-  if (
-    el.dataset &&
-    !el.dataset.atime &&
-    (!waitd || waitd.dataset.waitid) &&
-    !el.closest('#kbform') &&
-    el.id !== 'kbmv'
-  )
+  if (el.dataset && (!waitd || waitd.dataset.waitid) && !el.closest('#kbform') && el.id !== 'kbmv')
     delete el.dataset.typed;
   if (waitd && waitd.dataset.waitid) {
     return saveWaitPanel(waitd.dataset.waitid, true);
   }
-  // Alarms: time, label and device; this device's name (Settings).
-  if (el.dataset.atime) return editAlarm(el.dataset.atime, 'time', el.value);
-  if (el.dataset.alabel) return editAlarm(el.dataset.alabel, 'label', el.value);
-  if (el.dataset.adev !== undefined) return editAlarm(el.dataset.adev, 'device', el.value);
-  if (el.id === 'devname') return renameDevice(el.value);
   if (el.dataset.flowname) {
     const f = S.flows.find(x => x.id === el.dataset.flowname),
       v = cleanText(el.value.trim().slice(0, 60));
@@ -596,8 +553,6 @@ document.addEventListener('input', e => {
 
 document.addEventListener('click', e => {
   if (!window.appReady) return e.preventDefault(); // (not started yet: nothing to act on)
-  const sum = e.target.closest && e.target.closest('#alarmd > summary');
-  if (sum) toggleAlarmsList(sum.parentElement);
   let b = e.target.closest('button');
   if (!b) return;
   const d = b.dataset;
@@ -607,19 +562,6 @@ document.addEventListener('click', e => {
   if (d.saveplace) savePlace(d.saveplace);
   if (d.resume) resumeWork(d.resume);
   if (d.clearplace) clearPlace(d.clearplace);
-  top3Click(d);
-  if (d.tfindopen) {
-    // (open: closes it, and clears its words; closed: opens it)
-    todayFindOpen = !(todayFindOpen || todayFind);
-    todayFind = '';
-    renderToday();
-    const f = document.getElementById('tfind');
-    if (f) f.focus();
-  }
-  if (d.tfilter) {
-    if (d.tfindclear) todayFind = '';
-    setTodayFilter(d.tfilter);
-  }
   linkClick(d);
   triageClick(d, b);
   waitClick(d);
@@ -690,7 +632,7 @@ document.addEventListener('click', e => {
       }
     } else if (find(d.open, S.later)) showUpcoming(d.open); // (Release H: the forecast's Upcoming)
   }
-  if (d.v && b.closest('header, #v-waiting, #waitsec')) {
+  if (d.v && b.closest('header, #v-waiting')) {
     const from = !b.closest('header') && placeHere(b);
     if (d.v === 'projects') path = [];
     go(d.v);
@@ -752,18 +694,7 @@ document.addEventListener('click', e => {
     r.n.done = false;
     settle(bf);
   }
-  if (d.del) {
-    const r = find(d.del);
-    if (!r) return;
-    if (!arm(b, r.n.children.length ? 'Delete all?' : 'Delete?')) return;
-    withUndo('Deleted ' + r.n.text, () => {
-      const bf = snapshot();
-      r.arr.splice(r.arr.indexOf(r.n), 1);
-      settle(bf);
-    });
-  }
-  // (past the next one shown: Today's list leaves out scheduled and waiting tasks, which keep
-  // their places in the order underneath; see moveAmong)
+  // (Reorder on a task's page: a step up, down or to the top)
   if (
     (d.up || d.down || d.top) &&
     moveAmong(d.up || d.down || d.top, d.up ? 'up' : d.down ? 'down' : 'top')
@@ -782,20 +713,6 @@ document.addEventListener('click', e => {
   if (b.id === 'reorder') {
     reorder = !reorder;
     renderToday();
-  }
-  if (d.rep) {
-    const t = S.templates.find(x => x.id === d.rep),
-      wd = +d.wd;
-    if (!t) return;
-    t.days = t.days.includes(wd) ? t.days.filter(x => x !== wd) : [...t.days, wd];
-    if (t.auto && !repeats(t)) {
-      S.templates = S.templates.filter(x => x !== t);
-      S.quests.forEach(q => {
-        if (q.tpl === t.id) delete q.tpl;
-      });
-    }
-    save();
-    renderAll();
   }
   if (d.rday) {
     const wd = +d.rday,
@@ -851,7 +768,6 @@ document.addEventListener('click', e => {
     });
   }
   if (d.promote) promoteInbox(d.promote);
-  if (d.tview) setTodayView(d.tview);
   if (d.rsub) {
     reviewSub = d.rsub;
     go(d.rsub === 'log' ? 'log' : 'review');
@@ -1036,9 +952,9 @@ document.addEventListener('click', e => {
   if (b.id === 'exp') exportData();
   if (b.id === 'doRestore') {
     // What's current across devices isn't taken from the backup: the notification keys (an old
-    // copy would break every device's notifications), the device list and any running session.
+    // copy would break every device's notifications), and any running session.
     // Nor the notes' pictures when it has none of its own (a previous version leaves them out).
-    const keep = { pushKey: S.pushKey, devices: S.devices, timer: S.timer },
+    const keep = { pushKey: S.pushKey, timer: S.timer },
       hadCap = S.cap,
       imgs = Array.isArray(pending.noteImgs) ? null : S.noteImgs,
       artImgs = new Map(S.kb.map(a => [a.id, a.imgs])),
@@ -1119,7 +1035,7 @@ document.addEventListener('click', e => {
   if (b.id === 'syncBtn') settingsFrom('sync');
   if (b.id === 'signup') signUp();
   if (b.id === 'signout') {
-    // Unsent edits go first. Then alarms and alerts stop coming here, and nothing of this
+    // Unsent edits go first. Then alerts stop coming here, and nothing of this
     // account is left for the next.
     syncSettled()
       .then(ok => {
@@ -1165,16 +1081,7 @@ document.addEventListener('click', e => {
   if (b.id === 'capnew') newCaptureToken();
   if (b.id === 'captest') testCapture();
   if (b.id === 'alerttest') testAlert();
-  if (b.id === 'alarmadd') addAlarm();
   if (b.id === 'notesload') loadNotes();
-  if (d.aon) {
-    const a = S.alarms.find(x => x.id === d.aon);
-    if (a) setAlarmOn(a, !alarmOn(a));
-  }
-  if (d.adel) deleteAlarm(d.adel);
-  if (d.forgetdev && arm(b, 'Forget?')) forgetDevice(d.forgetdev);
-  if (d.adismiss) dismissAlarm(d.adismiss);
-  if (d.asnooze) snoozeAlarm(d.asnooze);
   if (d.copy)
     copyText(
       {
@@ -1194,8 +1101,7 @@ document.addEventListener('click', e => {
 document.addEventListener(
   'toggle',
   e => {
-    if (e.target.id && !e.target.dataset.held && !(e.target.id === 'donesec' && findOpened))
-      panels[e.target.id] = e.target.open;
+    if (e.target.id && !e.target.dataset.held) panels[e.target.id] = e.target.open;
   },
   true,
 );
@@ -1212,7 +1118,6 @@ document.addEventListener('keydown', e => {
   if (!window.appReady) return;
   if ((e.ctrlKey || e.metaKey) && deskChord(e)) return e.preventDefault();
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (!$('#v-alarm').hidden) return; // an alarm is ringing: its buttons only
   const el = e.target;
   // A sheet is a dialog: Tab cycles through its own controls, not the page behind it.
   if (e.key === 'Tab' && $('#sheet')) {
@@ -1230,7 +1135,7 @@ document.addEventListener('keydown', e => {
   if (el.id === 'sq' && !$('#sheet') && searchKey(e)) return e.preventDefault();
   // (Release H: the keyboard's search key on Find or Search puts the keyboard away, to see what
   // was found)
-  if (e.key === 'Enter' && (el.id === 'tfind' || el.id === 'sq')) {
+  if (e.key === 'Enter' && el.id === 'sq') {
     e.preventDefault();
     return el.blur();
   }
@@ -1267,8 +1172,8 @@ document.addEventListener('keydown', e => {
     go('inbox');
     field('#iin');
   } else if (k === 't') {
+    keepDrafts(); // (a step half typed on a task's page, kept under that page before it's left)
     path = [];
-    workListMode = false;
     go('projects');
   } else if (k === '/') {
     e.preventDefault();
@@ -1430,7 +1335,7 @@ setInterval(() => {
   if (view === 'today' && !$('#v-today .armed')) inBackground(renderToday);
   if (view === 'projects' && S.quests.some(q => isScheduled(q) && q.scheduled.time))
     inBackground(renderProjects);
-  renderHeader(); // and the next alarm
+  renderHeader();
 }, 60000);
 
 // Start: the pictures kept in IndexedDB are read first (see js/pics.js), then the saved copy,
@@ -1470,7 +1375,6 @@ function start(pics, kv) {
   else {
     // (the view itself and the header are drawn once, by go() below, not here as well: Release
     // G, half of starting up on a heavy day)
-    syncRinging();
     renderZen();
   }
   heldAtStart = deferStart ? holdDue() : '';
@@ -1483,7 +1387,6 @@ function start(pics, kv) {
   receiveLaunch();
   takeRoute(); // (a deep link: followed now, or after the first sync if its target isn't here yet)
   setInterval(timerTick, 500);
-  setInterval(alarmTick, 1000);
   listenAuth();
   setInterval(prunePics, 60000); // (deleted pictures leave IndexedDB now and then)
   schedulePics(); // (pictures still in the saved copy, from before a reload or an older version)
@@ -1504,7 +1407,6 @@ openPics().then(async db => {
 // `nested` (the Escape key): only a step back within a page (a sheet, a task's page, an article,
 // Search back to where it was opened), never from one tab to another.
 function appBack(nested) {
-  if (!$('#v-alarm').hidden) return true; // (an alarm is ringing: its buttons only)
   if (imgShown || kbImgShown) return (closeImgs(), true);
   if (zen && !focusLocked()) return (setZen(false), true);
   if ($('#sheet')) return (sheetBack(), true); // (asking first if words were typed into it: tree.js)
@@ -1586,11 +1488,6 @@ window.addEventListener('popstate', () => {
 document.addEventListener('focusout', e => {
   const wd = e.target.type === 'date' && e.target.closest && e.target.closest('#waitd[data-waitid]');
   if (wd) return saveWaitPanel(wd.dataset.waitid, true);
-  if (e.target.dataset && e.target.dataset.atime) {
-    delete e.target.dataset.typed;
-    // Once focus has moved on (so the redraw keeps it where it went).
-    return setTimeout(leftAlarmTime, 0);
-  }
   if (e.target.id !== 'notesin') return;
   // Going to "Show those notes" (by Tab, say) mustn't save over the notes it's about to show.
   if (e.relatedTarget && e.relatedTarget.id === 'notesload') return clearTimeout(notesTimer);

@@ -1,5 +1,5 @@
 // Release B: the three journeys the features are for, end to end.
-const { test, expect, unfold } = require('./fixtures');
+const { test, expect } = require('./fixtures');
 
 test('Workflow A: recurring report: task → procedure → flow launched by hand → verified result → back to the task, still open', async ({
   app,
@@ -145,16 +145,22 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
     wait: { who: 'Sarah', due: '2026-11-04', expect: '2026-11-06' },
   });
   expect(s.follows.map(f => f.k)).toEqual(['start']);
-  // The task is blocked: Next up moves on; Today says 0 to chase yet.
+  // The task is blocked: Next up moves on; its card says who and when; nothing to chase yet.
   await page.click('[data-crumb="-1"]');
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('Other work');
-  await expect(page.locator('#v-today .attn')).toContainText('Nothing needs attention');
-  // 3-4. The chase date arrives: Today's chip, the Centre's "To chase", the 9am notice.
+  const wait = page.locator('#v-projects .project-card', { hasText: 'Q3 report' }).locator('.project-wait');
+  await expect(wait).toHaveText('Waiting on Sarah · Chase 4 Nov');
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist')).toHaveCount(0);
+  await expect(page.locator('#v-ops .opsquiet')).toContainText('All clear: nothing needs you');
+  // 3-4. The chase date arrives: the card, the Command Centre's attention list, the Waiting
+  // Centre's "To chase", the 9am notice.
   await page.clock.setSystemTime(new Date(2026, 10, 4, 9));
   await page.reload();
-  await expect(page.locator('#v-today .attn [data-wgo]')).toContainText('Chase Sarah today');
-  await unfold(page, 'attd');
-  await page.click('#v-today .attn [data-wgo]');
+  await expect(wait).toHaveText('Waiting on Sarah · Chase today');
+  await app.go('ops');
+  await expect(page.locator('#v-ops .attlist [data-wgo]')).toContainText('Chase Sarah today');
+  await page.click('#v-ops .attlist [data-wgo]');
   await expect(page.locator('#v-waiting .wgroup').first()).toContainText('To chase');
   expect(
     await page.evaluate(() =>
@@ -187,7 +193,8 @@ test('Workflow B: chasing an approval: waiting step → chase date → follow-up
   expect((await step()).wait).toBeUndefined();
   expect(s.follows.map(f => f.k)).toEqual(['start', 'chase', 'resolve']);
   await expect(page.locator('#v-waiting .empty')).toContainText('Nothing to chase');
-  await app.go('today');
+  await app.go('projects');
+  await expect(page.locator('#v-projects .project-wait')).toHaveCount(0);
   expect(await page.evaluate(() => recommend()?.n.text)).toBe('Budget approval');
   await app.openQuest('Q3 report');
   await page.click('#v-today .open >> text="Budget approval"');

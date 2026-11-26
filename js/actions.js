@@ -1,5 +1,5 @@
-/* quick actions: one pattern for the things you do with a task, offered from Today's rows (the
-   ⋯ on each), a task's page and the top 3. A sheet at the bottom of the screen lists only the
+/* quick actions: one pattern for the things you do with a task, offered from a step's row (the
+   ⋯ on each), a project's card (a right-click) and a task's page. A sheet at the bottom of the screen lists only the
    actions that fit the task as it is now; each acts through the usual click handler. */
 function actionSheet(title, items, hint) {
   popSheet(
@@ -28,7 +28,7 @@ function questActions(id, fromList) {
   if (!r) return [];
   const n = r.n,
     top = !r.parents.length,
-    q = r.parents[0] || n, // (a saved place and the top 3 are the task's, step or not)
+    q = r.parents[0] || n, // (a saved place is the task's, step or not)
     d = isDone(n),
     a = [],
     act = (label, attrs, cls, hint) => a.push({ label, attrs, cls, hint });
@@ -38,13 +38,13 @@ function questActions(id, fromList) {
     if (!n.children.length) act('Mark done', `data-toggle="${id}"`, 'go');
     act('Reschedule', `data-schedset="${id}"`, '', schedWhen(n));
     act('Unschedule', `data-schedclear="${id}"`);
-    // (chosen for Top 3 before it was scheduled: set aside there, and can be taken out)
-    if (S.quests.includes(n) && inTop3(id)) act('Remove from Top 3', `data-top3="${id}"`);
+    act('Rename', `data-rename="${id}"`);
     act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
     return a;
   }
   if (!d && q.scheduled) {
     if (!n.children.length) act('Mark done', `data-toggle="${id}"`);
+    act('Rename', `data-rename="${id}"`);
     act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
     return a;
   }
@@ -57,8 +57,6 @@ function questActions(id, fromList) {
       if (t) act(t === n ? 'Focus on this' : 'Focus: ' + t.text, `data-zen="1" data-q="${t.id}"`, 'go');
     }
   }
-  if (top && !d && S.quests.includes(n) && (inTop3(id) || canAct(n)))
-    act(inTop3(id) ? 'Remove from Top 3' : 'Add to Top 3', `data-top3="${id}"`);
   if (!d) act(q.resume ? 'Update saved place' : 'Save my place', `data-saveplace="${id}"`);
   if (q.resume && !isDone(q)) act('Clear saved place', `data-clearplace="${q.id}"`);
   if (!n.children.length) act(d ? 'Mark not done' : 'Mark done', `data-toggle="${id}"`);
@@ -72,6 +70,7 @@ function questActions(id, fromList) {
     act('Do next week', `data-sched="${id}" data-kind="q" data-when="${nextMonday()}"`);
     act('Move to Inbox', `data-toinbox="${id}"`);
   }
+  act('Rename', `data-rename="${id}"`);
   act('Delete', `data-delnow="${id}"`, 'del', 'With Undo');
   return a;
 }
@@ -80,8 +79,8 @@ function openQuestActions(id, fromList) {
   if (!r) return;
   actionSheet(r.n.text, questActions(id, fromList));
 }
-// The one thing to do next with a task, for the button always to hand on its page (and the
-// top 3): { label, attrs, cls }. The rest is a tap away, in its actions.
+// The one thing to do next with a task, for the button always to hand on its page:
+// { label, attrs, cls }. The rest is a tap away, in its actions.
 function primaryAction(n, parents = []) {
   const top = !parents.length,
     q = parents[0] || n,

@@ -1543,9 +1543,7 @@ function wfRunView(r) {
     ws = wsyncState(r);
   const backLabel =
     wfFrom === 'today' || wfFrom === 'projects'
-      ? workListMode
-        ? 'Today'
-        : 'Projects'
+      ? 'Projects'
       : wfFrom === 'ops'
         ? 'Command Centre'
         : wfFrom

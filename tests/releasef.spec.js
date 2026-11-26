@@ -6,77 +6,47 @@ async function day(app, page, at = new Date(2026, 10, 4, 11, 0)) {
   await page.clock.install({ time: at });
   await app.open();
   await app.setState(eDay);
-  // (Release H folds the rest of Scheduled and Waiting on a phone; these tests are about their
-  // rows, so the folds are as a user who has opened them left them: open)
-  await page.evaluate(() => ['sched', 'wait'].forEach(k => localStorage.setItem(`dashboard-${k}-open`, '1')));
   await page.reload();
 }
-const tops = page =>
-  page.evaluate(() => {
-    const y = s => {
-      const e = document.querySelector(s);
-      return e ? e.getBoundingClientRect().top + scrollY : null;
-    };
-    return {
-      attn: y('#v-today .attn'),
-      top3: y('#v-today .top3'),
-      sched: y('#v-today .schedsec'),
-      wait: y('#v-today .waitsec2'),
-      tasks: y('#v-today .list'),
-    };
-  });
+const sideways = page => page.evaluate(() => document.documentElement.scrollWidth > innerWidth);
 
-test.describe('Checkpoint 1: Today on a phone', () => {
+test.describe('Checkpoint 1: a busy day on a phone', () => {
+  // (Today's own order, attention, Top 3, Scheduled, Waiting, then the list, went with that page:
+  // the day is the Projects board now, with the Waiting page and the Command Centre beside it)
   for (const [w, h] of [
     [320, 800],
     [360, 800],
     [390, 844],
     [412, 915],
   ])
-    test(`${w}px: attention, Top 3, Scheduled, Waiting, then the list; nothing sideways`, async ({
-      app,
-      page,
-    }) => {
+    test(`${w}px: the board, Waiting and the Command Centre; nothing sideways`, async ({ app, page }) => {
       await page.setViewportSize({ width: w, height: h });
       await day(app, page);
-      const t = await tops(page);
-      expect(t.attn).toBeLessThan(t.top3);
-      expect(t.top3).toBeLessThan(t.sched);
-      expect(t.sched).toBeLessThan(t.wait);
-      // (Waiting above the list: a long day doesn't bury what you're chasing)
-      expect(t.wait).toBeLessThan(t.tasks);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await expect(page.locator('#v-projects .project-card[data-qid="m2"] .project-meta')).toContainText(
+        'Scheduled 14:00',
+      );
+      expect(await sideways(page)).toBe(false);
+      await app.go('waiting');
+      await expect(page.locator('#v-waiting .row[data-wid="b1a"]')).toHaveCount(1);
+      expect(await sideways(page)).toBe(false);
+      await app.go('ops');
+      await expect(page.locator('#v-ops .attlist .attrow').first()).toBeVisible();
+      expect(await sideways(page)).toBe(false);
     });
 
-  test('390 × 844: Top 3 starts on the first screen, Waiting within the second', async ({ app, page }) => {
-    await day(app, page);
-    const t = await tops(page);
-    // (measured before Release F: Top 3 at 527px, Waiting at 3036px, below the whole list)
-    expect(t.top3).toBeLessThan(844 - 66 - 200);
-    expect(t.wait).toBeLessThan(2 * 844 - 66);
-  });
-
-  test('a follow-up from Waiting in its new place still works; the list keeps its tasks', async ({
+  test("a follow-up from a card's waiting link still works; the board keeps its projects", async ({
     app,
     page,
   }) => {
     await day(app, page);
-    const names = await page.$$eval('#v-today .list .row .open > span', x => x.map(e => e.textContent));
-    await page.click('#v-today .waitsec2 [data-chase]');
-    await expect(page.locator('#sheet')).toHaveCount(1);
+    const names = await app.order();
+    await page.click('#v-projects .project-card[data-qid="b1"] .project-wait[data-wact="b1a"]');
+    await page.click('#sheet [data-chase="b1a"]');
+    await expect(page.locator('#sheet #fuform')).toHaveCount(1);
     await page.keyboard.press('Escape');
-    await page.evaluate(() => {
-      todayView = 'board';
-      renderAll();
-    });
-    await expect(page.locator('#v-today .waitsec2 + .sechead')).toHaveCount(1);
-    await page.evaluate(() => {
-      todayView = 'list';
-      renderAll();
-    });
-    expect(await page.$$eval('#v-today .list .row .open > span', x => x.map(e => e.textContent))).toEqual(
-      names,
-    );
+    await expect(page.locator('#sheet')).toHaveCount(0);
+    expect(names).toContain('Finance system access');
+    expect(await app.order()).toEqual(names);
   });
 
   test('a long name takes two lines in a list, and all of it on its page', async ({ app, page }) => {
@@ -84,10 +54,25 @@ test.describe('Checkpoint 1: Today on a phone', () => {
     const long =
       'Write up the quarterly supplier review notes and send them to everyone who was at the meeting';
     await app.addQuest(long);
+    // The project: all of its name on its card and on its page.
+    await expect(page.locator('#v-projects .project-card .project-open > span')).toHaveText(long);
+    await app.openQuest(long);
+    const h1 = page.locator('#v-today .node.facts > h1');
+    await expect(h1).toHaveText(long);
+    expect(await h1.evaluate(e => e.scrollHeight <= e.clientHeight && e.scrollWidth <= e.clientWidth)).toBe(
+      true,
+    );
+    // A step of that name: two lines in the list of steps, all of it on its own page.
+    await app.addSub(long);
     const span = page.locator('#v-today .list .row .open > span').first();
     const lh = parseFloat(await span.evaluate(e => getComputedStyle(e).lineHeight));
     expect((await span.boundingBox()).height).toBeLessThan(lh * 2.5);
     await expect(span).toHaveText(long);
+    await page.click('#v-today .list .row .open');
+    await expect(h1).toHaveText(long);
+    expect((await h1.boundingBox()).height).toBeGreaterThan(
+      parseFloat(await h1.evaluate(e => getComputedStyle(e).lineHeight)) * 2.5,
+    );
   });
 });
 
@@ -146,12 +131,22 @@ test.describe('Checkpoint 2: contrast in every appearance', () => {
                 out.push(`${sel}${pseudo || ''} ${r.toFixed(2)} "${e.textContent.trim().slice(0, 20)}"`);
             });
           check('header .hsearch, header .syncbtn, header .timer-link, header .btn');
+          // (the board: its section bars and their links, the cards' labels and buttons)
+          check('#v-projects h2, #v-projects h3, #v-projects summary, #v-projects .linkbtn');
+          check('#v-projects .tag');
+          check('#v-projects .btn');
+          // (a project's page: the Steps bar and its Reorder, its labels and buttons)
           check('#v-today .sechead h2, #v-today .sechead .linkbtn');
           check('#v-today .tag');
           check('#v-today .btn');
           check('nav button');
           return out;
         });
+      await expect(page.locator('#v-projects .tag.late').first()).toBeVisible();
+      expect(await audit()).toEqual([]);
+      await app.openQuest('Fletcher Way');
+      await expect(page.locator('#v-today .sechead #reorder')).toBeVisible();
+      await expect(page.locator('#v-today .tag.late').first()).toBeVisible();
       expect(await audit()).toEqual([]);
       // A field's typed text and its placeholder; a sheet's text and buttons.
       await app.go('inbox');
@@ -183,8 +178,13 @@ test.describe('Checkpoint 2: contrast in every appearance', () => {
         getComputedStyle(document.body).backgroundColor,
       ]);
       expect(await r2(...ring)).toBeGreaterThan(3);
-      await app.go('today');
-      await page.click('[data-top3pick]');
+      await app.openQuest('Fletcher Way');
+      await page.click('#v-today .qfoot .qmore');
+      await expect(page.locator('#sheet .sheetbox .qact').first()).toBeVisible();
+      // (as it rests: the sheet comes up under the pointer, and the action there, Delete, would be
+      // measured against its hover tint, a translucent colour this reads as a solid one)
+      await page.mouse.move(0, 0);
+      await expect(page.locator('#sheet .qact.del')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
       const sheet = await page.evaluate(() =>
         [
           ...document.querySelectorAll('#sheet .sheetbox h2, #sheet .sheetbox .btn, #sheet .sheetbox .qact'),
@@ -198,12 +198,22 @@ test.describe('Checkpoint 2: contrast in every appearance', () => {
     });
 });
 
-/* Checkpoint 3: Top 3 and Reorder. Five plain tasks a–e (and, for Reorder, a scheduled one and a
-   waiting one in between). Changes made "elsewhere" are made on the state and redrawn. */
+/* Checkpoint 3: Reorder. (Top 3, and Today's list that left scheduled and waiting tasks out, are
+   gone: Reorder is for a project's steps now.) One project with five steps a–e, Delta waiting on
+   Sam. Changes made "elsewhere" are made on the state and redrawn. */
 const five = s => {
   const k = (id, text, x = {}) => ({ id, text, done: false, children: [], ...x });
-  s.quests = [k('a', 'Alpha'), k('b', 'Bravo'), k('c', 'Charlie'), k('d', 'Delta'), k('e', 'Echo')];
-  s.top3 = { day: today(), ids: ['a', 'b', 'c'] };
+  s.quests = [
+    k('p', 'Project', {
+      children: [
+        k('a', 'Alpha'),
+        k('b', 'Bravo'),
+        k('c', 'Charlie'),
+        k('d', 'Delta', { wait: { who: 'Sam', note: '', since: today() } }),
+        k('e', 'Echo'),
+      ],
+    }),
+  ];
 };
 async function plain(app, page, fn = five) {
   await page.clock.install({ time: new Date(2026, 10, 4, 9, 0) });
@@ -211,266 +221,45 @@ async function plain(app, page, fn = five) {
   await app.setState(fn);
   await page.reload();
 }
-const t3names = page => page.$$eval('#v-today .top3 .t3row .open > span', x => x.map(e => e.textContent));
 const elsewhere = (page, fn) =>
   page.evaluate(src => {
     new Function(src)();
     save();
     inBackground(() => renderAll());
   }, `(${fn})()`);
-const t3 = page => page.evaluate(() => JSON.parse(JSON.stringify(S.top3)));
 
-test.describe('Checkpoint 3: Top 3 with set-aside choices', () => {
-  test('one becoming scheduled is set aside, frees its place, and another can be chosen', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page);
-    expect(await t3names(page)).toEqual(['Alpha', 'Bravo', 'Charlie']);
-    await elsewhere(page, () => (S.quests[1].scheduled = { date: today(), time: '15:00' }));
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie']);
-    await expect(page.locator('#v-today .t3out')).toContainText('Set aside (scheduled): Bravo');
-    await page.click('[data-top3pick]');
-    // Delta can be chosen: Bravo doesn't hold one of the three.
-    await expect(page.locator('#sheet [data-t3tog="d"]')).toBeEnabled();
-    await expect(page.locator('#sheet .t3kept')).toContainText('Bravo');
-    await page.click('#sheet [data-t3tog="d"]');
-    await page.keyboard.press('Escape');
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] });
-  });
-
-  test('one becoming waiting: the same; back again with a free place, it takes it by itself', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page);
-    await elsewhere(page, () => (S.quests[2].wait = { who: 'Sam', note: '', since: today() }));
-    expect(await t3names(page)).toEqual(['Alpha', 'Bravo']);
-    await expect(page.locator('#v-today .t3out')).toContainText('Set aside (waiting): Charlie');
-    // The reply comes: nothing took its place, so it's back where it was.
-    await elsewhere(page, () => delete S.quests[2].wait);
-    expect(await t3names(page)).toEqual(['Alpha', 'Bravo', 'Charlie']);
-    await expect(page.locator('#v-today .t3out, #v-today .t3back')).toHaveCount(0);
-  });
-
-  test('back again with the three places full: nothing is pushed out; bringing it back is a choice', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page);
-    await elsewhere(page, () => (S.quests[1].scheduled = { date: today() }));
-    await page.click('[data-top3pick]');
-    await page.click('#sheet [data-t3tog="d"]');
-    await page.keyboard.press('Escape');
-    await elsewhere(page, () => delete S.quests[1].scheduled);
-    // Alpha, Charlie, Delta stay; Bravo is offered back.
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
-    await expect(page.locator('#v-today .t3back')).toContainText('Bravo can be worked on again');
-    await page.click('#v-today [data-t3back="b"]');
-    await expect(page.locator('#sheet .qahint')).toHaveText(
-      'Top 3 is full. Take one out to bring back Bravo.',
-    );
-    await page.click('#sheet [data-t3tog="c"]');
-    await page.keyboard.press('Escape');
-    expect(await t3names(page)).toEqual(['Alpha', 'Delta', 'Bravo']);
-    // (it took the free place, and keeps it: written down as one of the three)
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd', 'b'] });
-    // Taken out, it's gone for good.
-    await page.click('[data-top3pick]');
-    await page.click('#sheet [data-t3tog="b"]');
-    await page.keyboard.press('Escape');
-    expect(await t3names(page)).toEqual(['Alpha', 'Delta']);
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd'] });
-  });
-
-  test('a set-aside one can be taken out; a finished one keeps its place; a deleted one goes', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page);
-    await elsewhere(page, () => (S.quests[1].scheduled = { date: today() }));
-    await page.click('[data-top3pick]');
-    await page.click('#sheet [data-t3drop="b"]');
-    await expect(page.locator('#sheet .t3kept')).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c'] });
-    // Alpha done: still one of the three, marked Done.
-    await page.click('#v-today .list [data-toggle="a"]');
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie']);
-    await expect(page.locator('#v-today .t3row.done')).toHaveCount(1);
-    // Charlie deleted elsewhere: its place is free.
-    await elsewhere(page, () => (S.quests = S.quests.filter(q => q.id !== 'c')));
-    expect(await t3names(page)).toEqual(['Alpha']);
-    await page.click('[data-top3pick]');
-    await expect(page.locator('#sheet [data-t3tog="d"]')).toBeEnabled();
-  });
-
-  test('a new day starts with none, held or not; the record syncs whole and is cleaned on load', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page, {
-      toString: () =>
-        `function (s) { (${five})(s); s.quests[1].scheduled = { date: today() }; s.top3 = { day: today(), ids: ['a', 'c', 'd'], held: ['b'] }; }`,
-    });
-    // Synced as two records: the three, and the set-aside ones (which a copy of the app from
-    // before Release F doesn't know, so leaves alone).
-    expect(
-      await page.evaluate(() => {
-        const m = toRecords(S);
-        return [m.get('meta:top3'), m.get('meta:top3held'), fromRecords(m).top3];
-      }),
-    ).toEqual([
-      { day: '2026-11-04', ids: ['a', 'c', 'd'] },
-      { day: '2026-11-04', held: ['b'] },
-      { day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] },
-    ]);
-    // An older copy rewrites meta:top3 (its own choice, without held): the held ones survive; a
-    // held record from another day is ignored.
-    expect(
-      await page.evaluate(() => {
-        const m = toRecords(S);
-        m.set('meta:top3', { day: today(), ids: ['a', 'e'] });
-        const one = fromRecords(m).top3;
-        m.set('meta:top3held', { day: '2026-11-03', held: ['b'] });
-        return [one, fromRecords(m).top3];
-      }),
-    ).toEqual([
-      { day: '2026-11-04', ids: ['a', 'e'], held: ['b'] },
-      { day: '2026-11-04', ids: ['a', 'e'] },
-    ]);
-    // Junk or merged records: no duplicates, at most three, none held twice.
-    expect(
-      await page.evaluate(() => [
-        cleanTop3({ day: today(), ids: ['a', 'a', 'b', 'c', 'd'], held: ['b', 'e', 'e', 7] }),
-        cleanTop3({ day: today(), ids: [], held: ['b'] }),
-        cleanTop3({ day: 'x', ids: ['a'] }),
-      ]),
-    ).toEqual([
-      { day: '2026-11-04', ids: ['a', 'b', 'c'], held: ['e'] },
-      { day: '2026-11-04', ids: [], held: ['b'] },
-      null,
-    ]);
-    // The next morning: nothing chosen.
-    await page.clock.setFixedTime(new Date(2026, 10, 5, 8, 0));
-    await page.reload();
-    expect(await t3(page)).toBeNull();
-    await expect(page.locator('#v-today .top3empty')).toHaveCount(1);
-  });
-
-  test('one that took a free place keeps it when the choice it stood in for comes back', async ({
-    app,
-    page,
-  }) => {
-    // Bravo chosen, Delta set aside earlier; both waiting.
-    await plain(app, page, {
-      toString: () =>
-        `function (s) { (${five})(s); s.top3 = { day: today(), ids: ['a', 'b', 'c'], held: ['d'] }; }`,
-    });
-    await elsewhere(page, () => {
-      S.quests[1].wait = { who: 'Sam', note: '', since: today() };
-      S.quests[3].wait = { who: 'Kim', note: '', since: today() };
-    });
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie']);
-    // Delta's reply: it takes the free place, and that's written down.
-    await elsewhere(page, () => delete S.quests[3].wait);
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c', 'd'], held: ['b'] });
-    // Bravo's reply: Delta stays; Bravo is offered back.
-    await elsewhere(page, () => delete S.quests[1].wait);
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
-    await expect(page.locator('#v-today .t3back')).toContainText('Bravo can be worked on again');
-    // (the same after a sync brings the change in rather than an edit here)
-    await page.reload();
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Delta']);
-  });
-
-  test('two devices: the newer choice wins whole, held included', async ({ app, page }) => {
-    await plain(app, page);
-    // Device B chose later: it set Bravo aside and chose Echo. Its record replaces this one.
-    const merged = await page.evaluate(() => {
-      const mine = toRecords(S),
-        theirs = new Map(mine);
-      theirs.set('meta:top3', { day: today(), ids: ['a', 'c', 'e'] });
-      theirs.set('meta:top3held', { day: today(), held: ['b'] });
-      return fromRecords(theirs).top3;
-    });
-    expect(merged).toEqual({ day: '2026-11-04', ids: ['a', 'c', 'e'], held: ['b'] });
-  });
-});
-
-test.describe('Checkpoint 3: Reorder with scheduled and waiting tasks hidden', () => {
-  // a (to do), b (scheduled), c (to do), d (waiting), e (to do)
-  const mixed = s => {
-    const k = (id, text, x = {}) => ({ id, text, done: false, children: [], ...x });
-    s.quests = [
-      k('a', 'Alpha'),
-      k('b', 'Bravo', { scheduled: { date: today(), time: '15:00' } }),
-      k('c', 'Charlie'),
-      k('d', 'Delta', { wait: { who: 'Sam', note: '', since: today() } }),
-      k('e', 'Echo'),
-    ];
-  };
-  const order = page => page.evaluate(() => S.quests.map(q => q.id).join(''));
+test.describe("Checkpoint 3: Reorder on a project's steps", () => {
+  const order = page => page.evaluate(() => S.quests[0].children.map(n => n.id).join(''));
   const listed = page => page.$$eval('#v-today .list .row', x => x.map(e => e.dataset.qid).join(''));
-  test('only the tasks to work on are listed; moves keep the hidden ones where they were', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page, mixed);
-    await page.click('#reorder');
-    expect(await listed(page)).toBe('ace');
-    // Bravo and Delta are still in their own sections, once each.
-    await expect(page.locator('#v-today .schedrow[data-qid="b"]')).toHaveCount(1);
-    await expect(page.locator('#v-today .list [data-qid="b"], #v-today .list [data-qid="d"]')).toHaveCount(0);
-    await page.click('#v-today [data-up="c"]');
-    expect(await order(page)).toBe('cabde');
-    expect(await listed(page)).toBe('cae');
-    // (down: to just after the next one listed; Bravo, hidden, keeps its place after Alpha)
-    await page.click('#v-today [data-down="c"]');
-    expect(await order(page)).toBe('acbde');
-    await page.click('#v-today [data-down="a"]');
-    expect(await order(page)).toBe('cabde');
-    await page.click('#v-today [data-top="e"]');
-    expect(await order(page)).toBe('ecabd');
-    expect(await listed(page)).toBe('eca');
-    await page.reload();
-    expect(await order(page)).toBe('ecabd');
-  });
 
-  test('rapid moves, a tick, and tasks coming back into the list mid-reorder', async ({ app, page }) => {
-    await plain(app, page, mixed);
+  test('rapid moves, a tick, and a reply coming in mid-reorder', async ({ app, page }) => {
+    await plain(app, page);
+    await app.openQuest('Project');
     await page.click('#reorder');
-    // Rapid: three downs on Alpha in one go, each on the button as redrawn by the one before
-    // (the last is disabled by then); it lands last among the listed, nothing lost or doubled.
+    expect(await listed(page)).toBe('abcde');
+    // Rapid: five downs on Alpha in one go, each on the button as redrawn by the one before
+    // (the last is disabled by then); it lands last, nothing lost or doubled.
     // (Clicked in the page, not through the pointer: the row can sit under the fixed tab bar.)
     await page.evaluate(() => {
-      for (let i = 0; i < 3; i++) document.querySelector('#v-today [data-down="a"]').click();
+      for (let i = 0; i < 5; i++) document.querySelector('#v-today [data-down="a"]').click();
     });
-    expect(await listed(page)).toBe('cea');
-    expect((await order(page)).split('').sort().join('')).toBe('abcde');
-    // A tick while reordering: Charlie done, still in place, still movable below the open ones.
+    expect(await listed(page)).toBe('bcdea');
+    expect(await order(page)).toBe('bcdea');
+    await expect(page.locator('#v-today [data-down="a"]')).toBeDisabled();
+    // A tick while reordering: Charlie done, still listed.
     await page.click('#v-today .list [data-toggle="c"]');
     expect(await listed(page)).toContain('c');
-    // Delta's reply comes, Bravo is unscheduled: both come back into the list at their places.
-    await elsewhere(page, () => {
-      // (a task's own wait is kept as its "Hear back" step: the reply clears that)
-      delete S.quests.find(q => q.id === 'd').children[0].wait;
-      delete S.quests.find(q => q.id === 'b').scheduled;
-    });
+    await expect(page.locator('#v-today .list .row.done[data-qid="c"]')).toHaveCount(1);
+    // Delta's reply comes: it stays in the list at its place, waiting no more.
+    await expect(page.locator('#v-today .list .row.waiting[data-qid="d"]')).toHaveCount(1);
+    await elsewhere(page, () => delete S.quests[0].children.find(n => n.id === 'd').wait);
+    await expect(page.locator('#v-today .list .row.waiting')).toHaveCount(0);
     const o = await order(page);
     expect(await listed(page)).toBe(o);
-    expect(o.length).toBe(5);
-  });
-
-  test('from the board back to the list, Reorder lists the same tasks', async ({ app, page }) => {
-    await plain(app, page, mixed);
-    await page.click('[data-tview="board"]');
-    await expect(page.locator('#reorder')).toHaveCount(0);
-    await page.click('[data-tview="list"]');
-    await page.click('#reorder');
-    expect(await listed(page)).toBe('ace');
+    expect(o.split('').sort().join('')).toBe('abcde');
+    await expect(page.locator('#reorder')).toHaveText('Done');
+    await page.reload();
+    expect(await order(page)).toBe(o);
   });
 });
 
@@ -480,25 +269,37 @@ test.describe('Android scenarios (390 × 844)', () => {
     page,
   }) => {
     await day(app, page);
-    await page.click('#v-today .schedrow[data-qid="m2"] .qmore');
+    const card = page.locator('#v-projects .project-card[data-qid="m2"]');
+    await expect(card.locator('.project-meta .tag.sched')).toHaveText('Scheduled 14:00');
+    await app.openQuest('Supplier review call');
+    await page.click('#v-today .qfoot .qmore');
     await page.click('#sheet [data-schedset="m2"]');
     await page.fill('#schedtime', '16:30');
     await page.click('#sheetok');
-    await expect(page.locator('#v-today .schedrow[data-qid="m2"] .stime')).toHaveText('16:30');
+    await expect(page.locator('#v-today .schedpick')).toHaveText('Scheduled 16:30');
     let s = await app.state();
     const m2 = s.quests.find(q => q.id === 'm2');
     expect(m2.done).toBe(false);
     expect(m2.scheduled).toEqual({ date: '2026-11-04', time: '16:30' });
-    // Not Focus work, not offered for Top 3, not the header's next task.
+    // Not Focus work (on its page or in its actions), not the header's next task.
     expect(await page.evaluate(() => canAct(S.quests.find(q => q.id === 'm2')))).toBe(false);
     expect(await page.evaluate(() => (recommend() || {}).q && recommend().q.id)).not.toBe('m2');
-    await page.click('[data-top3pick]');
-    await expect(page.locator('#sheet [data-t3tog="m2"]')).toHaveCount(0);
+    await expect(page.locator('#v-today .qfoot [data-zen]')).toHaveCount(0);
+    await page.click('#v-today .qfoot .qmore');
+    await expect(page.locator('#sheet [data-schedset="m2"]')).toHaveCount(1);
+    await expect(page.locator('#sheet [data-zen]')).toHaveCount(0);
     await page.keyboard.press('Escape');
-    // To tomorrow: off Today, on Upcoming with its schedule; it survives a reload and a sync copy.
+    await page.click('#v-today [data-crumb="-1"]');
+    await expect(card.locator('.project-meta .tag.sched')).toHaveText('Scheduled 16:30');
+    await expect(card.locator('[data-open="m2"]')).toHaveCount(1);
+    // To tomorrow: off today's projects, on Upcoming with its schedule; it survives a reload and a
+    // sync copy.
     await page.evaluate(() => setSchedule('m2', shift(today(), 1), '09:00'));
-    await expect(page.locator('#v-today .schedrow[data-qid="m2"]')).toHaveCount(0);
+    await expect(page.locator('#v-projects [data-open="m2"]')).toHaveCount(0);
+    await expect(card.locator('[data-upcoming-project="m2"]')).toHaveCount(1);
+    await expect(card.locator('.project-meta .tag.sched')).toHaveText('Scheduled 5 Nov 09:00');
     await page.reload();
+    await expect(card.locator('[data-upcoming-project="m2"]')).toHaveCount(1);
     s = await app.state();
     const up = s.later.find(q => q.id === 'm2');
     expect(up.scheduled).toEqual({ date: '2026-11-05', time: '09:00' });
@@ -511,103 +312,63 @@ test.describe('Android scenarios (390 × 844)', () => {
     });
   });
 
-  test('C: a follow-up is recorded, then the reply: it leaves Waiting and its task can be chosen', async ({
+  test('C: a follow-up is recorded, then the reply: it leaves Waiting and its task can be worked on', async ({
     app,
     page,
   }) => {
     await day(app, page);
-    const row = page.locator('#v-today .waitsec2 .wrow[data-wid="b1a"]');
-    await row.locator('[data-chase]').click();
+    const card = page.locator('#v-projects .project-card[data-qid="b1"]'),
+      actable = () => page.evaluate(() => canAct(S.quests.find(q => q.id === 'b1')));
+    await app.go('waiting');
+    const row = page.locator('#v-waiting .row[data-wid="b1a"]');
+    await row.locator('[data-wact]').click();
+    await page.click('#sheet [data-chase="b1a"]');
     await page.fill('#funote', 'Rang the IT desk');
     await page.click('#sheetok');
     // Still waiting (now chased again in two days), history kept.
     await expect(row).toHaveCount(1);
     let s = await app.state();
     expect(s.follows.filter(f => f.n === 'b1a').map(f => f.k)).toContain('chase');
-    await page.click('[data-top3pick]');
-    await expect(page.locator('#sheet [data-t3tog="b1"]')).toHaveCount(0);
-    await page.keyboard.press('Escape');
+    // Its task is nothing to work on yet: waiting on its card, no Focus on its page.
+    expect(await actable()).toBe(false);
+    await app.go('projects');
+    await expect(card.locator('.project-wait[data-wact="b1a"]')).toHaveText('Waiting on IT · Chase 6 Nov');
+    await expect(card.locator('.project-step[data-qid="b1a"] .check')).toHaveCount(0);
+    await app.openQuest('Finance system access');
+    await expect(page.locator('#v-today .qfoot [data-zen]')).toHaveCount(0);
+    await app.go('waiting');
     await row.locator('[data-waitclear]').click();
     await expect(row).toHaveCount(0);
     s = await app.state();
     expect(s.follows.filter(f => f.n === 'b1a').map(f => f.k)).toEqual(
       expect.arrayContaining(['chase', 'resolve']),
     );
-    // Its task is on the list now, and can be one of the Top 3.
-    await expect(page.locator('#v-today .list .row[data-qid="b1"]')).toHaveCount(1);
-    await page.click('[data-top3pick]');
-    await expect(page.locator('#sheet [data-t3tog="b1"]')).toHaveCount(1);
+    // Its task can be worked on now: its step has its tick on the card, and Focus on its page.
+    expect(await actable()).toBe(true);
+    await app.go('projects');
+    await expect(card.locator('.project-wait')).toHaveCount(0);
+    await expect(card.locator('.project-meta')).not.toContainText('Waiting');
+    await expect(card.locator('.project-step[data-qid="b1a"] .check')).toHaveCount(1);
+    await app.openQuest('Finance system access');
+    await expect(page.locator('#v-today .qfoot [data-zen][data-q="b1a"]')).toHaveCount(1);
   });
 });
 
 test.describe('Checkpoint 3: QA fixes', () => {
-  test('a returning choice never pushes out the one that took its place (scheduled, then done)', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page);
-    await elsewhere(page, () => (S.quests[1].scheduled = { date: today() }));
-    await page.click('[data-top3pick]');
-    await page.click('#sheet [data-t3tog="d"]');
-    await page.keyboard.press('Escape');
-    // Delta scheduled too; Bravo back: Bravo takes the free place, and keeps it.
-    await elsewhere(page, () => (S.quests[3].scheduled = { date: today() }));
-    await elsewhere(page, () => delete S.quests[1].scheduled);
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Bravo']);
-    // Delta back: offered back, nothing pushed out.
-    await elsewhere(page, () => delete S.quests[3].scheduled);
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Bravo']);
-    await expect(page.locator('#v-today .t3back')).toContainText('Delta can be worked on again');
-    // Or done instead: still nothing pushed out.
-    await elsewhere(page, () => (S.quests[3].done = true));
-    expect(await t3names(page)).toEqual(['Alpha', 'Charlie', 'Bravo']);
-  });
-
-  test('the open picker follows a sync, so a tap means what it shows; Take out takes out', async ({
-    app,
-    page,
-  }) => {
-    await plain(app, page);
-    await page.click('[data-top3pick]');
-    await expect(page.locator('#sheet [data-t3tog="d"]')).toHaveAttribute('aria-pressed', 'false');
-    // Another device takes Charlie out and chooses Delta; the picker shows it at once.
-    await elsewhere(page, () => (S.top3 = { day: today(), ids: ['a', 'b', 'd'] }));
-    await expect(page.locator('#sheet [data-t3tog="d"]')).toHaveAttribute('aria-pressed', 'true');
-    await page.click('#sheet [data-t3tog="d"]');
-    expect((await t3(page)).ids).toEqual(['a', 'b']);
-    await page.keyboard.press('Escape');
-    // A set-aside one that took a place meanwhile: Take out takes it out of the three too.
-    await elsewhere(page, () => {
-      S.top3 = { day: today(), ids: ['a', 'b', 'd'] };
-      S.quests[1].scheduled = { date: today() };
-    });
-    await page.click('[data-top3pick]');
-    await page.click('#sheet [data-t3tog="c"]');
-    await expect(page.locator('#sheet .t3kept')).toContainText('Bravo');
-    await elsewhere(page, () => delete S.quests[1].scheduled);
-    await page.evaluate(() => top3Click({ t3drop: 'b' }));
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'd', 'c'] });
-  });
-
-  test('a scheduled task chosen for Top 3 can be taken out from its actions', async ({ app, page }) => {
-    await plain(app, page);
-    await elsewhere(page, () => (S.quests[1].scheduled = { date: today(), time: '15:00' }));
-    await page.click('#v-today .schedrow[data-qid="b"] .qmore');
-    await page.click('#sheet [data-top3="b"]');
-    expect(await t3(page)).toEqual({ day: '2026-11-04', ids: ['a', 'c'] });
-  });
-
-  test('Reorder is offered only with two tasks in the list to reorder', async ({ app, page }) => {
+  test('Reorder is offered only with two steps to reorder', async ({ app, page }) => {
     await plain(app, page, s => {
       const k = (id, text, x = {}) => ({ id, text, done: false, children: [], ...x });
       s.quests = [
-        k('a', 'Alpha'),
-        k('b', 'Bravo', { scheduled: { date: today() } }),
-        k('d', 'Delta', { wait: { who: 'Sam', note: '', since: today() } }),
+        k('p', 'One step', { children: [k('a', 'Alpha')] }),
+        k('q', 'Two steps', { children: [k('b', 'Bravo'), k('c', 'Charlie')] }),
       ];
     });
+    await app.openQuest('One step');
     await expect(page.locator('#v-today .list .row')).toHaveCount(1);
     await expect(page.locator('#reorder')).toHaveCount(0);
+    await app.openQuest('Two steps');
+    await expect(page.locator('#v-today .list .row')).toHaveCount(2);
+    await expect(page.locator('#reorder')).toHaveCount(1);
   });
 });
 
@@ -627,7 +388,7 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
       [a, b],
     );
   for (const font of ['', 'large'])
-    test(`320px${font ? ', Larger text' : ''}: names on Scheduled, Waiting and Reorder rows keep their words`, async ({
+    test(`320px${font ? ', Larger text' : ''}: names on cards, Waiting and Reorder rows keep their words`, async ({
       app,
       page,
     }) => {
@@ -641,17 +402,40 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
       await app.setState(eDay);
       await page.reload();
       const widths = sel => page.$$eval(sel, x => x.map(e => Math.round(e.getBoundingClientRect().width)));
-      // (about 70px before: the name squeezed beside the time, Done and ⋯)
-      for (const w of await widths('#v-today .secrow .open > span')) expect(w).toBeGreaterThan(160);
+      // A card's name (a scheduled or waiting project's too) breaks between words, never inside
+      // one: each word is on one line.
+      const broken = await page.$$eval('#v-projects .project-card .project-open > span', x =>
+        x.flatMap(e => {
+          const t = e.firstChild,
+            out = [];
+          for (const m of t.data.matchAll(/\S+/g)) {
+            const r = document.createRange();
+            r.setStart(t, m.index);
+            r.setEnd(t, m.index + m[0].length);
+            if (new Set([...r.getClientRects()].map(b => Math.round(b.top))).size > 1) out.push(m[0]);
+          }
+          return out;
+        }),
+      );
+      expect(broken).toEqual([]);
+      expect(await page.locator('#v-projects .project-card').count()).toBeGreaterThan(20);
+      // A label is one line, never broken mid-word.
+      const tagH = sel => page.$$eval(sel, x => x.map(e => e.getBoundingClientRect().height));
+      for (const h of await tagH('#v-projects .project-meta .tag')) expect(h).toBeLessThan(26);
       await expect(page.locator('#searchBtn')).toBeInViewport();
       await expect(page.locator('#syncBtn')).toBeInViewport();
+      // (about 70px before: the name squeezed beside the time, Done and ⋯)
+      await app.go('waiting');
+      const waiting = await widths('#v-waiting .row .open > span');
+      expect(waiting.length).toBeGreaterThan(2);
+      for (const w of waiting) expect(w).toBeGreaterThan(160);
+      for (const h of await tagH('#v-waiting .row .tag')) expect(h).toBeLessThan(26);
+      await app.openQuest('Client onboarding');
       await page.click('#reorder');
-      for (const w of await widths('#v-today .list .row .open > span')) expect(w).toBeGreaterThan(160);
-      // A label is one line, never broken mid-word.
-      for (const h of await page.$$eval('#v-today .list .tag', x =>
-        x.map(e => e.getBoundingClientRect().height),
-      ))
-        expect(h).toBeLessThan(26);
+      const steps = await widths('#v-today .list .row .open > span');
+      expect(steps.length).toBeGreaterThan(2);
+      for (const w of steps) expect(w).toBeGreaterThan(160);
+      for (const h of await tagH('#v-today .list .tag')) expect(h).toBeLessThan(26);
     });
 
   test('Command Centre shows its whole name, also with Larger text and nothing needing attention', async ({
@@ -659,9 +443,10 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
     page,
   }) => {
     for (const [w, font, data] of [
-      [390, 'large', true],
+      // (the empty ones first: nothing from the busy day is left to need attention)
       [320, '', false],
       [320, 'large', false],
+      [390, 'large', true],
     ]) {
       await page.setViewportSize({ width: w, height: 800 });
       await page.clock.install({ time: new Date(2026, 10, 4, 11, 0) });
@@ -673,8 +458,13 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
       if (data) await app.setState(eDay);
       else await app.setState(s => (s.quests = []));
       await page.reload();
-      const cc = page.locator('#v-today .attcc');
+      // (its name is the page's title now: Today's chip to it went with Today)
+      await app.go('ops');
+      const cc = page.locator('#page-title');
+      await expect(cc).toHaveText('Command Centre');
+      await expect(cc).toBeInViewport({ ratio: 1 });
       expect(await cc.evaluate(e => e.scrollWidth <= e.clientWidth)).toBe(true);
+      await expect(page.locator(data ? '#v-ops .attlist .attrow' : '#v-ops .opsquiet').first()).toBeVisible();
     }
   });
 
@@ -711,19 +501,43 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
     page,
   }) => {
     await day(app, page);
-    expect(await page.$eval('#v-today .attsum > .attsumline', e => getComputedStyle(e).borderTopWidth)).toBe(
-      '3px',
-    );
-    const due = await page.$eval('#v-today .tag.now', e => getComputedStyle(e).backgroundColor);
-    const yellow = await page.$eval('header', e => getComputedStyle(e).backgroundColor);
-    expect(due).not.toBe(yellow);
+    // (the attention panel is the Command Centre's now)
+    await app.go('ops');
+    const edge = sel =>
+      page.$eval(sel, e => {
+        const cs = getComputedStyle(e);
+        return [cs.borderTopWidth, cs.borderTopStyle, cs.borderTopColor, cs.borderLeftWidth];
+      });
+    const att = await edge('#v-ops .attlist');
+    expect(parseFloat(att[0])).toBeGreaterThan(0);
+    expect(att[1]).toBe('solid');
+    expect(att).toEqual(await edge('#v-ops .opsec .list.box'));
+    await app.go('projects');
+    const due = await page.$eval('#v-projects .project-meta .tag.now', e => [
+      e.textContent,
+      getComputedStyle(e).backgroundColor,
+    ]);
+    expect(due[0]).toBe('Due today');
+    const header = await page.$eval('header', e => getComputedStyle(e).backgroundColor);
+    const yellow = await page.evaluate(() => {
+      const i = document.createElement('i');
+      i.style.background = 'var(--signal)';
+      document.body.append(i);
+      const c = getComputedStyle(i).backgroundColor;
+      i.remove();
+      return c;
+    });
+    expect(yellow).toBe('rgb(255, 214, 10)');
+    expect(due[1]).not.toBe(header);
+    expect(due[1]).not.toBe(yellow);
   });
 
-  test("Reorder's buttons say which task they move; the keyboard stays on the row after Top", async ({
+  test("Reorder's buttons say which step they move; the keyboard stays on the row after Top", async ({
     app,
     page,
   }) => {
     await plain(app, page);
+    await app.openQuest('Project');
     await page.click('#reorder');
     await expect(page.locator('#v-today [data-top="c"]')).toHaveAttribute(
       'aria-label',
@@ -732,7 +546,7 @@ test.describe('Checkpoint 5: UI and accessibility QA fixes', () => {
     await expect(page.locator('#v-today [data-up="c"]')).toHaveAttribute('aria-label', 'Move up: Charlie');
     await page.focus('#v-today [data-top="c"]');
     await page.keyboard.press('Enter');
-    expect(await page.evaluate(() => S.quests[0].id)).toBe('c');
+    expect(await page.evaluate(() => S.quests[0].children[0].id)).toBe('c');
     expect(
       await page.evaluate(() => {
         const a = document.activeElement;

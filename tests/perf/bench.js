@@ -9,7 +9,7 @@
 //   node tests/perf/bench.js                         everything (about 10 minutes)
 //   node tests/perf/bench.js --sizes=busy,heavy --throttle=4 --runs=3 --no-profile
 //   options: --sizes= --throttle= --runs= --port= --no-profile --no-instrument
-//            --out=<md file> (default docs/ux/release-g-perf-baseline.md; the generated part sits
+//            --out=<md file> (default tests/perf/baseline.md; the generated part sits
 //            between the bench:start and bench:end markers, so notes around it are kept)
 //            --json=<file> (also write the raw results there)
 //            --from-json=a.json,b.json (no run: the report again from saved results; given several,
@@ -48,7 +48,7 @@ const OPT = {
   port: Number(arg('port', 4231)),
   profile: !arg('no-profile', false),
   instrument: !arg('no-instrument', false),
-  out: path.resolve(ROOT, String(arg('out', 'docs/ux/release-g-perf-baseline.md'))),
+  out: path.resolve(ROOT, String(arg('out', 'tests/perf/baseline.md'))),
   json: arg('json', '') ? path.resolve(String(arg('json'))) : '',
   fromJson: arg('from-json', '') ? String(arg('from-json')).split(',') : [],
 };

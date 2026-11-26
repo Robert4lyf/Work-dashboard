@@ -7,7 +7,7 @@
    two measured things, and said so.
    Capacity: S.cap, minutes for each weekday (Sunday first); until set, CAP_DEFAULT, shown as
    assumed. The forecast (allocate) fills days in order: tasks sorted by due date (undated
-   last), today's top 3 first, then list order; each takes the first days with room between its
+   last), then list order; each takes the first days with room between its
    start and its due date, split across days when bigger than a day's room; what doesn't fit by
    its due date lands on that day as an overrun. Repeating tasks count on their days with the
    template's estimate and don't move. Tasks without an estimate are counted, not planned. */
@@ -62,7 +62,6 @@ function forecastDays(span) {
 function forecastItems(span) {
   const t = today(),
     end = shift(t, span - 1),
-    top3 = top3Ids(),
     items = [],
     none = [];
   S.quests.forEach((q, i) => {
@@ -79,7 +78,6 @@ function forecastItems(span) {
       from: q.scheduled ? q.scheduled.date : t,
       due: q.due && q.due < t ? t : q.due || '',
       late: !!(q.due && q.due < t),
-      top: top3.includes(q.id) ? 0 : 1,
       i,
       ...(q.scheduled ? { fixed: true, sched: q.scheduled } : {}),
     });
@@ -95,7 +93,6 @@ function forecastItems(span) {
       min,
       from,
       due: q.due || '',
-      top: 1,
       i: 1000 + i,
       later: true,
       ...(q.scheduled ? { fixed: true, sched: q.scheduled } : {}),
@@ -121,7 +118,6 @@ function forecastItems(span) {
           from: d,
           due: d,
           fixed: true,
-          top: 1,
           i: 2000,
         });
     }
@@ -131,7 +127,7 @@ function forecastItems(span) {
   items.sort((a, b) => {
     if (a.fixed !== b.fixed) return a.fixed ? -1 : 1;
     if (dueKey(a) !== dueKey(b)) return dueKey(a) < dueKey(b) ? -1 : 1;
-    return a.top - b.top || a.i - b.i;
+    return a.i - b.i;
   });
   return { items, none };
 }
@@ -349,7 +345,7 @@ function renderForecast() {
       `<label><span>${WD[wd]}</span><input class="fld" type="number" min="0" max="960" step="15" value="${capacity()[wd]}" data-cap="${wd}" aria-label="Capacity ${WD[wd]}, minutes"></label>`,
   ).join('')}</div></details>`;
   h += `<details id="accd"${panels.accd ? ' open' : ''}><summary>Estimates against focus time</summary><p class="hint">${esc(accuracyText(estimateAccuracy()))}</p></details>`;
-  h += `<details id="howd"${panels.howd ? ' open' : ''}><summary>How this forecast works</summary><p class="hint">Each day has its capacity. Tasks are taken in order of due date (undated last), today's top 3 first, then list order, and each takes the first days with room between its start and its due date, split across days when it's bigger than a day's room. A task that can't fit by its due date is placed on that day anyway and shown as an overrun. Repeating tasks count on their days with the template's estimate and don't move. A task's estimate is its steps' estimates when any step has one, else its own; what's left is the estimate less focus time on it. Tasks without an estimate are counted but not planned: they are not spare capacity. Nothing is moved for you: each move is a button that asks first. Coverage: “all relevant work estimated” when every task in view has an estimate; “some unestimated” when a quarter or fewer have none; “much incomplete” when more than a quarter have none; “assumed” when capacity hasn't been set.</p></details>`;
+  h += `<details id="howd"${panels.howd ? ' open' : ''}><summary>How this forecast works</summary><p class="hint">Each day has its capacity. Tasks are taken in order of due date (undated last), then list order, and each takes the first days with room between its start and its due date, split across days when it's bigger than a day's room. A task that can't fit by its due date is placed on that day anyway and shown as an overrun. Repeating tasks count on their days with the template's estimate and don't move. A task's estimate is its steps' estimates when any step has one, else its own; what's left is the estimate less focus time on it. Tasks without an estimate are counted but not planned: they are not spare capacity. Nothing is moved for you: each move is a button that asks first. Coverage: “all relevant work estimated” when every task in view has an estimate; “some unestimated” when a quarter or fewer have none; “much incomplete” when more than a quarter have none; “assumed” when capacity hasn't been set.</p></details>`;
   return h;
 }
 let forecastDay = '';

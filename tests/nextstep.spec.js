@@ -15,7 +15,7 @@ test.beforeEach(async ({ page, app }) => {
   await app.addSub('Draft');
 });
 
-test('ticking the last step asks; Not now keeps the task open, on Today and the next day', async ({
+test('ticking the last step asks; Not now keeps the task open, on Projects and the next day', async ({
   app,
   page,
 }) => {
@@ -26,11 +26,14 @@ test('ticking the last step asks; Not now keeps the task open, on Today and the 
   expect(s.log.map(x => x.text)).toEqual(['Draft']); // (the step, not the task)
   await page.click('#sheet button:has-text("Not now")');
   await expect(sheet(page)).toHaveCount(0);
-  // The task's page asks too; Today's row says so.
+  // The task's page asks too, and says so where its next step would be.
   await expect(page.locator('.nextask')).toBeVisible();
+  await expect(page.locator('#v-today .qnext b')).toHaveText("Every step is ticked: what's next?");
+  // On the board it's still among the open projects, not under Completed today.
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .row .tag.asknext')).toBeVisible();
-  await expect(page.locator('#donesec')).toHaveCount(0);
+  await expect(page.locator('#active-project-grid .project-card')).toContainText('Contract');
+  await expect(page.locator('#active-project-grid .project-meta')).toContainText('1 of 1 steps');
+  await expect(page.locator('details[data-project-completed]')).toHaveCount(0);
   await setDay(page, 2026, 9, 24);
   s = await app.state();
   expect(s.quests.map(q => q.text)).toEqual(['Contract']);
@@ -55,11 +58,17 @@ test('the sheet adds the next step, a reminder to work it out, or finishes the t
   await page.click('#sheet [data-sheetans="unsure"]');
   s = await app.state();
   expect(s.quests[0].children[0]).toMatchObject({ text: 'Work out the next step', done: false });
+  await expect(page.locator('#v-today .qnext')).toHaveText('NextWork out the next step');
   await page.click('[data-crumb="-1"]');
-  await expect(page.locator('#v-today .row small')).toContainText('Next: Work out the next step');
+  // (on its card, the step to do comes before the ticked ones)
+  await expect(page.locator('#v-projects .project-step .project-step-name')).toHaveText([
+    'Work out the next step',
+    'Fix clause 4',
+    'Draft',
+  ]);
 
   await app.openQuest('Contract');
-  await page.click('[aria-label="Mark done: Work out the next step"]');
+  await page.click('#v-today [aria-label="Mark done: Work out the next step"]');
   await page.click('#sheet [data-sheetans="finish"]');
   s = await app.state();
   expect(s.quests[0].done).toBe(true);
@@ -164,7 +173,7 @@ test('upgrading: a task finished by its last tick before stays finished; others 
     ['new', false, true],
     ['old', true, false],
   ]);
-  await expect(sheet(page)).toHaveCount(0); // (asks on the list, not with a sheet)
+  await expect(sheet(page)).toHaveCount(0); // (asks on the task's page, not with a sheet)
 });
 
 test('a task left asking stays open over reloads, after an earlier finish (via Inbox or Upcoming)', async ({
@@ -205,7 +214,8 @@ test('a task left asking stays open over reloads, after an earlier finish (via I
     S.log.find(x => x.id === S.quests[0].id).d = '2026-09-20';
     save();
   });
-  await page.evaluate(() => openPath([S.quests[0].id])); // (folded under Done today)
+  await page.click('#projects-done > summary'); // (folded under Completed today)
+  await app.openQuest('Contract');
   await page.click('[data-reopen]');
   // (open, and marked as asked, before the reload as after it)
   expect(await page.evaluate(() => [isDone(S.quests[0]), S.quests[0].asked, S.day, today()])).toEqual([
